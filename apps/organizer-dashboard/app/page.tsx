@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AppShell, KpiCard, GradientButton, PassPreview, HeatmapPoints, OndaSelect, OndaColorPicker, useOndaDialogs, api } from '@onda/shared-ui';
+import { AppShell, KpiCard, GradientButton, PassPreview, HeatmapPoints, OndaSelect, OndaColorPicker, useOndaDialogs, api, OndaIcons } from '@onda/shared-ui';
 import { displayPhone, derivePassPalette } from '@onda/shared-utils';
 import {
   BarChart,
@@ -30,15 +30,16 @@ export default function OrganizerPage() {
     () =>
       (
         [
-          ['analytics', 'Analítica'],
-          ['aliados', 'Aliados'],
-          ['evento', 'Evento'],
-          ['pase', 'Pase del evento'],
-          ['sorteos', 'Sorteos'],
+          ['analytics', 'Analítica', OndaIcons.chart],
+          ['aliados', 'Aliados', OndaIcons.users],
+          ['evento', 'Evento', OndaIcons.ticket],
+          ['pase', 'Pase del evento', OndaIcons.pass],
+          ['sorteos', 'Sorteos', OndaIcons.sparkle],
         ] as const
-      ).map(([href, label]) => ({
+      ).map(([href, label, icon]) => ({
         href: `#${href}`,
         label,
+        icon,
         active: tab === href,
       })),
     [tab]

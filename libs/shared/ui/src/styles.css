@@ -64,6 +64,41 @@ h3,
   background-image: var(--onda-gradient);
 }
 
+.onda-wa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 0;
+  background: #25d366;
+  color: #fff !important;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-decoration: none;
+  box-shadow: 0 6px 16px rgba(37, 211, 102, 0.28);
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.onda-wa-btn:hover {
+  background: #1ebe57;
+  color: #fff !important;
+  box-shadow: 0 8px 20px rgba(37, 211, 102, 0.35);
+}
+
+.onda-wa-btn:active {
+  transform: scale(0.98);
+}
+
+.onda-wa-btn svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  fill: currentColor;
+}
+
 .onda-card {
   background: var(--onda-card);
   border: 1px solid var(--onda-border);
@@ -87,11 +122,70 @@ h3,
   width: 260px;
   min-width: 260px;
   height: 100vh;
-  padding: 1.5rem 1rem;
+  padding: 1.25rem 0.85rem;
   background: #fff;
   border-right: 1px solid var(--onda-border);
   z-index: 40;
-  transition: transform 0.2s ease;
+  transition: width 0.2s ease, min-width 0.2s ease, padding 0.2s ease, transform 0.2s ease;
+}
+
+.onda-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin-bottom: 1.5rem;
+  min-height: 2.25rem;
+}
+
+.onda-sidebar-collapse {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--onda-border);
+  border-radius: 0.65rem;
+  background: #fff;
+  color: var(--onda-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.onda-sidebar-collapse:hover {
+  background: var(--onda-sky-soft);
+  color: var(--onda-ink);
+}
+
+.onda-sidebar.is-collapsed {
+  width: 4.5rem;
+  min-width: 4.5rem;
+  padding: 1.25rem 0.55rem;
+}
+
+.onda-sidebar.is-collapsed .onda-sidebar-header {
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
+}
+
+.onda-sidebar.is-collapsed .onda-nav-link {
+  justify-content: center;
+  padding: 0.7rem 0.5rem;
+  gap: 0;
+}
+
+.onda-sidebar.is-collapsed .onda-nav-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .onda-sidebar-nav {
@@ -103,6 +197,7 @@ h3,
 }
 
 .onda-nav-link {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -114,6 +209,26 @@ h3,
   text-decoration: none;
   white-space: nowrap;
   transition: background 0.15s ease, color 0.15s ease;
+}
+
+.onda-nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+}
+
+.onda-nav-icon svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.onda-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .onda-nav-link:hover {
@@ -171,6 +286,10 @@ h3,
   background: var(--onda-sky-soft);
 }
 
+.onda-menu-btn--desktop {
+  display: none;
+}
+
 .onda-nav-backdrop {
   display: none;
 }
@@ -212,6 +331,14 @@ h3,
     display: inline-flex;
   }
 
+  .onda-menu-btn--desktop {
+    display: none !important;
+  }
+
+  .onda-sidebar-collapse {
+    display: none !important;
+  }
+
   .onda-sidebar {
     position: fixed;
     left: 0;
@@ -223,6 +350,32 @@ h3,
     transform: translateX(-105%);
     box-shadow: none;
     border-right: 1px solid var(--onda-border);
+  }
+
+  .onda-sidebar.is-collapsed {
+    width: min(280px, 86vw);
+    min-width: 0;
+    padding: 1.25rem 0.85rem;
+  }
+
+  .onda-sidebar.is-collapsed .onda-sidebar-header {
+    flex-direction: row;
+  }
+
+  .onda-sidebar.is-collapsed .onda-nav-link {
+    justify-content: flex-start;
+    padding: 0.65rem 0.85rem;
+    gap: 0.75rem;
+  }
+
+  .onda-sidebar.is-collapsed .onda-nav-label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: nowrap;
   }
 
   .onda-sidebar.is-open {
@@ -258,6 +411,14 @@ h3,
 }
 
 @media (min-width: 768px) {
+  .onda-sidebar-collapse {
+    display: inline-flex;
+  }
+
+  .onda-menu-btn--desktop {
+    display: none;
+  }
+
   .onda-topbar {
     padding: 0.75rem 1.5rem;
   }

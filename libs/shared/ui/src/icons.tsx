@@ -236,6 +236,44 @@ export const OndaIcons = {
       <path d="M3.5 12.5h9" />
     </OndaIcon>
   ),
+  chart: (
+    <OndaIcon>
+      <path d="M3 13V8.5M6.5 13V5M10 13V7.5M13 13V3.5" />
+    </OndaIcon>
+  ),
+  activity: (
+    <OndaIcon>
+      <path d="M2.5 8h2.5l1.5-3.5L9 12l2-4.5L12.5 8H13.5" />
+    </OndaIcon>
+  ),
+  gear: (
+    <OndaIcon>
+      <circle cx="8" cy="8" r="2.2" />
+      <path d="M8 2.5v1.4M8 12.1v1.4M2.5 8h1.4M12.1 8h1.4M4.1 4.1l1 .95M10.95 10.95l1 .95M11.9 4.1l-1 .95M5.05 10.95l-1 .95" />
+    </OndaIcon>
+  ),
+  pass: (
+    <OndaIcon>
+      <rect x="2.5" y="4" width="11" height="8" rx="1.5" />
+      <path d="M2.5 7h11M5 10h3" />
+    </OndaIcon>
+  ),
+  panelLeft: (
+    <OndaIcon>
+      <rect x="2.5" y="3" width="11" height="10" rx="1.5" />
+      <path d="M6 3v10" />
+    </OndaIcon>
+  ),
+  chevronLeft: (
+    <OndaIcon>
+      <path d="M9.5 3.5 5 8l4.5 4.5" />
+    </OndaIcon>
+  ),
+  chevronRight: (
+    <OndaIcon>
+      <path d="M6.5 3.5 11 8l-4.5 4.5" />
+    </OndaIcon>
+  ),
 };
 
 export function badgeIcon(badge?: string | null): ReactNode {

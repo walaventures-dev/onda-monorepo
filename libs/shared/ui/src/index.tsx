@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { OndaIcons } from './icons';
 
 export { Button, Card, Chip, Avatar, Badge, Spinner, Form, TextField, Input, TextArea, InputOTP, Table, ColorPicker } from '@heroui/react';
 export { api, API_URL } from './api';
@@ -41,13 +42,21 @@ export type {
 } from './AnalyticsFilters';
 export { OndaIcon, OndaIcons, BadgePill, badgeIcon } from './icons';
 
-export function OndaLogo({ className = '' }: { className?: string }) {
+export function OndaLogo({
+  className = '',
+  compact = false,
+}: {
+  className?: string;
+  compact?: boolean;
+}) {
   return (
     <div className={`flex items-center gap-2 ${className}`}>
-      <div className="h-8 w-8 rounded-xl onda-gradient" aria-hidden />
-      <span className="font-display text-lg font-semibold tracking-tight text-[var(--onda-ink)]">
-        Onda
-      </span>
+      <div className="h-8 w-8 shrink-0 rounded-xl onda-gradient" aria-hidden />
+      {!compact ? (
+        <span className="onda-logo-text font-display text-lg font-semibold tracking-tight text-[var(--onda-ink)]">
+          Onda
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -223,6 +232,8 @@ export type NavItem = {
   label: string;
   icon?: React.ReactNode;
   active?: boolean;
+  /** Va al pie del sidebar (ej. Configuración), separado del menú principal */
+  footer?: boolean;
 };
 
 function MenuIcon({ open }: { open: boolean }) {
@@ -272,6 +283,23 @@ export function AppShell({
 }) {
   const Link = linkComponent || 'a';
   const [navOpen, setNavOpen] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState(false);
+
+  React.useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem('onda-sidebar-collapsed') === '1');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('onda-sidebar-collapsed', collapsed ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [collapsed]);
 
   React.useEffect(() => {
     if (!navOpen) return;
@@ -301,9 +329,32 @@ export function AppShell({
   }, []);
 
   const closeNav = () => setNavOpen(false);
+  const toggleCollapsed = () => setCollapsed((v) => !v);
+
+  const mainNav = nav.filter((item) => !item.footer);
+  const footerNav = nav.filter((item) => item.footer);
+
+  const renderLink = (item: NavItem) => (
+    <Link
+      key={item.href}
+      href={item.href}
+      className={`onda-nav-link${item.active ? ' is-active' : ''}`}
+      onClick={closeNav}
+      title={collapsed ? item.label : undefined}
+    >
+      <span className="onda-nav-icon" aria-hidden>
+        {item.icon || OndaIcons.all}
+      </span>
+      <span className="onda-nav-label">{item.label}</span>
+    </Link>
+  );
 
   return (
-    <div className={`onda-shell${navOpen ? ' is-nav-open' : ''}`}>
+    <div
+      className={`onda-shell${navOpen ? ' is-nav-open' : ''}${
+        collapsed ? ' is-sidebar-collapsed' : ''
+      }`}
+    >
       {navOpen ? (
         <button
           type="button"
@@ -312,21 +363,43 @@ export function AppShell({
           onClick={closeNav}
         />
       ) : null}
-      <aside className={`onda-sidebar${navOpen ? ' is-open' : ''}`} id="onda-sidebar-nav">
-        <OndaLogo className="mb-8 px-2" />
-        <nav className="onda-sidebar-nav">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`onda-nav-link${item.active ? ' is-active' : ''}`}
-              onClick={closeNav}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </Link>
-          ))}
+      <aside
+        className={`onda-sidebar${navOpen ? ' is-open' : ''}${
+          collapsed ? ' is-collapsed' : ''
+        }`}
+        id="onda-sidebar-nav"
+      >
+        <div className="onda-sidebar-header">
+          <OndaLogo
+            className={collapsed ? 'justify-center' : 'px-2'}
+            compact={collapsed}
+          />
+        </div>
+        <nav className="onda-sidebar-nav" aria-label="Principal">
+          {mainNav.map(renderLink)}
         </nav>
+        <div className="onda-sidebar-footer">
+          {footerNav.length > 0 ? (
+            <nav className="onda-sidebar-footer-nav" aria-label="Ajustes">
+              {footerNav.map(renderLink)}
+            </nav>
+          ) : null}
+          <button
+            type="button"
+            className="onda-sidebar-collapse"
+            aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
+            aria-pressed={collapsed}
+            title={collapsed ? 'Expandir' : 'Colapsar'}
+            onClick={toggleCollapsed}
+          >
+            <span className="onda-nav-icon" aria-hidden>
+              {collapsed ? OndaIcons.chevronRight : OndaIcons.chevronLeft}
+            </span>
+            <span className="onda-nav-label">
+              {collapsed ? 'Expandir' : 'Colapsar'}
+            </span>
+          </button>
+        </div>
       </aside>
       <div className="onda-shell-main">
         <header className="onda-topbar">

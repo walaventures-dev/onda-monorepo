@@ -464,17 +464,18 @@ export function MerchantWorkspace() {
     () =>
       (
         [
-          ["resumen", "Resumen"],
-          ["clientes", "Clientes"],
-          ["actividad", "Actividad"],
-          ["promos", "Promociones"],
-          ["eventos", "Eventos"],
-          ["pase", "Diseño del pase"],
-          ["config", "Configuración"],
+          ["resumen", "Resumen", OndaIcons.chart],
+          ["clientes", "Clientes", OndaIcons.users],
+          ["actividad", "Actividad", OndaIcons.activity],
+          ["promos", "Promociones", OndaIcons.redeem],
+          ["eventos", "Eventos", OndaIcons.ticket],
+          ["pase", "Diseño del pase", OndaIcons.pass],
+          ["config", "Configuración", OndaIcons.gear],
         ] as const
-      ).map(([href, label]) => ({
+      ).map(([href, label, icon]) => ({
         href: `/${href}`,
         label,
+        icon,
         active: tab === href,
       })),
     [tab],

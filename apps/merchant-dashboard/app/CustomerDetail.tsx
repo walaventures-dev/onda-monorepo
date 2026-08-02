@@ -117,7 +117,7 @@ export function CustomerDetail({
             href={whatsapp}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(37,211,102,0.28)] transition hover:bg-[#1ebe57] hover:shadow-[0_8px_20px_rgba(37,211,102,0.35)] active:scale-[0.98]"
+            className="onda-wa-btn"
           >
             {OndaIcons.whatsapp}
             Escribir por WhatsApp
