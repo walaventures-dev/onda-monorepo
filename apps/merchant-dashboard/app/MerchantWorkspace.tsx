@@ -31,6 +31,8 @@ import {
   api,
   type AnalyticsFiltersValue,
   type PromoTypeKey,
+  OndaIcons,
+  BadgePill,
 } from "@onda/shared-ui";
 import { displayPhone, derivePassPalette } from "@onda/shared-utils";
 import {
@@ -983,28 +985,45 @@ export function MerchantWorkspace() {
     }
   }
 
-  const segmentChips: { id: CustomerSegment; label: string; count?: number }[] =
-    [
-      { id: "todos", label: "Todos", count: customers.length },
-      { id: "nuevos", label: "Nuevos", count: overview?.segments?.nuevos },
-      { id: "activos", label: "Activos", count: overview?.segments?.activos },
-      {
-        id: "cercaCanje",
-        label: "Cerca de canje",
-        count: overview?.segments?.cercaCanje,
-      },
-      {
-        id: "enRiesgo",
-        label: "En riesgo",
-        count: overview?.segments?.enRiesgo,
-      },
-      { id: "vip", label: "VIP", count: overview?.segments?.vip },
-      {
-        id: "dormidos",
-        label: "Dormidos",
-        count: overview?.segments?.dormidos,
-      },
-    ];
+  const segmentChips: {
+    id: CustomerSegment;
+    label: string;
+    count?: number;
+    icon: ReactNode;
+  }[] = [
+    { id: "todos", label: "Todos", count: customers.length, icon: OndaIcons.all },
+    {
+      id: "nuevos",
+      label: "Nuevos",
+      count: overview?.segments?.nuevos,
+      icon: OndaIcons.sparkle,
+    },
+    {
+      id: "activos",
+      label: "Activos",
+      count: overview?.segments?.activos,
+      icon: OndaIcons.flame,
+    },
+    {
+      id: "cercaCanje",
+      label: "Cerca de canje",
+      count: overview?.segments?.cercaCanje,
+      icon: OndaIcons.target,
+    },
+    {
+      id: "enRiesgo",
+      label: "En riesgo",
+      count: overview?.segments?.enRiesgo,
+      icon: OndaIcons.alert,
+    },
+    { id: "vip", label: "VIP", count: overview?.segments?.vip, icon: OndaIcons.crown },
+    {
+      id: "dormidos",
+      label: "Dormidos",
+      count: overview?.segments?.dormidos,
+      icon: OndaIcons.moon,
+    },
+  ];
 
   const promoPreview = formatPromoBenefit({
     ...promoForm,
@@ -1037,8 +1056,8 @@ export function MerchantWorkspace() {
                 value={mode}
                 onChange={setMode}
                 options={[
-                  { id: "global", label: "Global" },
-                  { id: "event", label: "Evento" },
+                  { id: "global", label: "Global", icon: OndaIcons.globe },
+                  { id: "event", label: "Evento", icon: OndaIcons.ticket },
                 ]}
               />
             </div>
@@ -1079,9 +1098,17 @@ export function MerchantWorkspace() {
                             value={txTypeFilter}
                             onChange={setTxTypeFilter}
                             options={[
-                              { id: "ALL", label: "Todos" },
-                              { id: "ACCUMULATE", label: "Acumular" },
-                              { id: "REDEEM", label: "Canjear" },
+                              { id: "ALL", label: "Todos", icon: OndaIcons.all },
+                              {
+                                id: "ACCUMULATE",
+                                label: "Acumular",
+                                icon: OndaIcons.accumulate,
+                              },
+                              {
+                                id: "REDEEM",
+                                label: "Canjear",
+                                icon: OndaIcons.redeem,
+                              },
                             ]}
                           />
                         ),
@@ -1093,16 +1120,24 @@ export function MerchantWorkspace() {
                           id: "promo-status",
                           label: "Estado",
                           children: (
-                            <SegmentedControl
-                              aria-label="Estado de promoción"
-                              value={promoStatusFilter}
-                              onChange={setPromoStatusFilter}
-                              options={[
-                                { id: "active", label: "Activas" },
-                                { id: "inactive", label: "Inactivas" },
-                                { id: "all", label: "Todas" },
-                              ]}
-                            />
+                          <SegmentedControl
+                            aria-label="Estado de promoción"
+                            value={promoStatusFilter}
+                            onChange={setPromoStatusFilter}
+                            options={[
+                              {
+                                id: "active",
+                                label: "Activas",
+                                icon: OndaIcons.check,
+                              },
+                              {
+                                id: "inactive",
+                                label: "Inactivas",
+                                icon: OndaIcons.close,
+                              },
+                              { id: "all", label: "Todas", icon: OndaIcons.all },
+                            ]}
+                          />
                           ),
                         },
                       ]
@@ -1371,6 +1406,7 @@ export function MerchantWorkspace() {
                 <FilterChip
                   key={c.id}
                   selected={segment === c.id}
+                  icon={c.icon}
                   onClick={() => setSegment(c.id)}
                 >
                   {c.label}
@@ -1385,6 +1421,7 @@ export function MerchantWorkspace() {
                   CRM · {filteredCustomers.length} clientes
                 </h3>
                 <GradientButton type="button" onClick={exportCsv}>
+                  {OndaIcons.download}
                   Exportar CSV
                 </GradientButton>
               </div>
@@ -1426,13 +1463,7 @@ export function MerchantWorkspace() {
                         </td>
                         <td className="p-3">{c.visitsInRange}</td>
                         <td className="p-3">
-                          {c.badge ? (
-                            <span className="rounded-full bg-[var(--onda-violet-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--onda-violet)]">
-                              {c.badge}
-                            </span>
-                          ) : (
-                            "—"
-                          )}
+                          {c.badge ? <BadgePill badge={c.badge} /> : "—"}
                         </td>
                         <td className="p-3 text-xs">
                           {c.nearPromo
@@ -1521,6 +1552,7 @@ export function MerchantWorkspace() {
                   onChange={(e) => setPin(e.target.value)}
                 />
                 <GradientButton type="button" onClick={accumulate}>
+                  {OndaIcons.accumulate}
                   Acumular
                 </GradientButton>
               </div>
@@ -1679,7 +1711,8 @@ export function MerchantWorkspace() {
                   type="button"
                   onClick={() => setShowPromoForm((v) => !v)}
                 >
-                  {showPromoForm ? "Cerrar" : "+ Nueva promo"}
+                  {showPromoForm ? OndaIcons.close : OndaIcons.plus}
+                  {showPromoForm ? "Cerrar" : "Nueva promo"}
                 </GradientButton>
               </div>
             </div>
@@ -1705,6 +1738,7 @@ export function MerchantWorkspace() {
                       <FilterChip
                         key={t.id}
                         selected={promoForm.type === t.id}
+                        icon={t.icon}
                         onClick={() =>
                           setPromoForm((f) => ({ ...f, type: t.id }))
                         }
@@ -1848,6 +1882,7 @@ export function MerchantWorkspace() {
                     <div className="flex flex-wrap gap-1.5">
                       <FilterChip
                         selected={promoForm.expiryMode === "TIME"}
+                        icon={OndaIcons.calendar}
                         onClick={() =>
                           setPromoForm((f) => ({
                             ...f,
@@ -1860,6 +1895,7 @@ export function MerchantWorkspace() {
                       </FilterChip>
                       <FilterChip
                         selected={promoForm.expiryMode === "QUANTITY"}
+                        icon={OndaIcons.nXm}
                         onClick={() =>
                           setPromoForm((f) => ({
                             ...f,
@@ -1942,6 +1978,7 @@ export function MerchantWorkspace() {
                     </label>
                   </div>
                   <GradientButton type="submit" disabled={promoBusy}>
+                    {OndaIcons.plus}
                     {promoBusy ? "Guardando…" : "Crear promoción"}
                   </GradientButton>
                 </div>
@@ -2280,7 +2317,10 @@ export function MerchantWorkspace() {
                 </label>
 
                 <div className="flex justify-end pt-1">
-                  <GradientButton type="submit">Guardar preview</GradientButton>
+                  <GradientButton type="submit">
+                    {OndaIcons.save}
+                    Guardar preview
+                  </GradientButton>
                 </div>
               </div>
             </form>
@@ -2304,6 +2344,7 @@ export function MerchantWorkspace() {
               </p>
               {billing?.planType === "BASIC" ? (
                 <GradientButton type="button" onClick={upgrade}>
+                  {OndaIcons.upgrade}
                   Upgrade a PRO (Wompi sandbox)
                 </GradientButton>
               ) : null}

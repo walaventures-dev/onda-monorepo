@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { OndaSelect } from './OndaSelect';
+import { OndaIcons } from './icons';
 
 export type PromoTypeKey =
   | 'PERCENT_OFF'
@@ -10,21 +11,25 @@ export type PromoTypeKey =
   | 'PRODUCT'
   | 'OTHER';
 
-export const PROMO_TYPE_OPTIONS: { id: PromoTypeKey; label: string }[] = [
-  { id: 'PERCENT_OFF', label: '%' },
-  { id: 'AMOUNT_OFF', label: '$' },
-  { id: 'BUY_GET', label: 'NxM' },
-  { id: 'PRODUCT', label: 'Producto' },
-  { id: 'OTHER', label: 'Otro' },
+export const PROMO_TYPE_OPTIONS: {
+  id: PromoTypeKey;
+  label: string;
+  icon: React.ReactNode;
+}[] = [
+  { id: 'PERCENT_OFF', label: '%', icon: OndaIcons.percent },
+  { id: 'AMOUNT_OFF', label: '$', icon: OndaIcons.dollar },
+  { id: 'BUY_GET', label: 'NxM', icon: OndaIcons.nXm },
+  { id: 'PRODUCT', label: 'Producto', icon: OndaIcons.product },
+  { id: 'OTHER', label: 'Otro', icon: OndaIcons.other },
 ];
 
 export const DATE_PRESETS = [
-  { id: 'today', label: 'Hoy' },
-  { id: '7d', label: '7D' },
-  { id: '14d', label: '14D' },
-  { id: '30d', label: '30D' },
-  { id: 'month', label: 'Mes' },
-  { id: 'custom', label: 'Custom' },
+  { id: 'today', label: 'Hoy', icon: OndaIcons.day },
+  { id: '7d', label: '7D', icon: OndaIcons.week },
+  { id: '14d', label: '14D', icon: OndaIcons.calendar },
+  { id: '30d', label: '30D', icon: OndaIcons.calendar },
+  { id: 'month', label: 'Mes', icon: OndaIcons.calendar },
+  { id: 'custom', label: 'Custom', icon: OndaIcons.custom },
 ] as const;
 
 export type DatePreset = (typeof DATE_PRESETS)[number]['id'];
@@ -107,7 +112,7 @@ export function SegmentedControl<T extends string>({
   onChange,
   'aria-label': ariaLabel,
 }: {
-  options: { id: T; label: string }[];
+  options: { id: T; label: string; icon?: React.ReactNode }[];
   value: T;
   onChange: (id: T) => void;
   'aria-label'?: string;
@@ -126,13 +131,14 @@ export function SegmentedControl<T extends string>({
             type="button"
             role="radio"
             aria-checked={selected}
-            className={`cursor-pointer rounded-md px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition ${
+            className={`inline-flex cursor-pointer items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition ${
               selected
                 ? 'bg-white text-[var(--onda-ink)] shadow-[0_1px_2px_rgba(26,27,46,0.12)]'
                 : 'text-[var(--onda-muted)] hover:text-[var(--onda-ink)]'
             }`}
             onClick={() => onChange(opt.id)}
           >
+            {opt.icon}
             {opt.label}
           </button>
         );
@@ -147,18 +153,20 @@ export function FilterChip({
   onClick,
   children,
   muted,
+  icon,
 }: {
   selected: boolean;
   onClick: () => void;
   children: React.ReactNode;
   muted?: boolean;
+  icon?: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       aria-pressed={selected}
       onClick={onClick}
-      className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+      className={`inline-flex cursor-pointer items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition ${
         selected
           ? 'border-[var(--onda-ink)]/15 bg-[var(--onda-ink)] text-white'
           : muted
@@ -166,6 +174,7 @@ export function FilterChip({
             : 'border-[var(--onda-border)] bg-white text-[var(--onda-muted)] hover:border-[var(--onda-ink)]/25 hover:text-[var(--onda-ink)]'
       }`}
     >
+      {icon}
       {children}
     </button>
   );
@@ -241,7 +250,11 @@ export function AnalyticsFiltersBar({
         <FilterGroup label="Periodo" className="min-w-0 flex-1 basis-full sm:basis-auto sm:flex-none">
           <SegmentedControl
             aria-label="Rango de fechas"
-            options={[...DATE_PRESETS]}
+            options={DATE_PRESETS.map((p) => ({
+              id: p.id,
+              label: p.label,
+              icon: p.icon,
+            }))}
             value={value.preset}
             onChange={setPreset}
           />
@@ -286,6 +299,7 @@ export function AnalyticsFiltersBar({
               <FilterChip
                 selected={!hasTypeFilter}
                 muted={hasTypeFilter}
+                icon={OndaIcons.all}
                 onClick={() => onChange({ ...value, promoTypes: [] })}
               >
                 Todos
@@ -294,6 +308,7 @@ export function AnalyticsFiltersBar({
                 <FilterChip
                   key={t.id}
                   selected={value.promoTypes.includes(t.id)}
+                  icon={t.icon}
                   onClick={() => toggleType(t.id)}
                 >
                   {t.label}
@@ -320,20 +335,24 @@ export function AnalyticsFiltersBar({
       {hasTypeFilter ? (
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--onda-border)] px-4 py-2">
           <span className="text-[11px] text-[var(--onda-muted)]">Activos</span>
-          {value.promoTypes.map((t) => (
-            <button
-              key={t}
-              type="button"
-              className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-[var(--onda-violet-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--onda-violet)] hover:bg-[var(--onda-violet)]/15"
-              onClick={() => toggleType(t)}
-              aria-label={`Quitar filtro ${promoTypeLabel(t)}`}
-            >
-              {promoTypeLabel(t)}
-              <span aria-hidden className="text-[10px] opacity-70">
-                ×
-              </span>
-            </button>
-          ))}
+          {value.promoTypes.map((t) => {
+            const opt = PROMO_TYPE_OPTIONS.find((o) => o.id === t);
+            return (
+              <button
+                key={t}
+                type="button"
+                className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-[var(--onda-violet-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--onda-violet)] hover:bg-[var(--onda-violet)]/15"
+                onClick={() => toggleType(t)}
+                aria-label={`Quitar filtro ${promoTypeLabel(t)}`}
+              >
+                {opt?.icon}
+                {promoTypeLabel(t)}
+                <span aria-hidden className="text-[10px] opacity-70">
+                  ×
+                </span>
+              </button>
+            );
+          })}
           <button
             type="button"
             className="ml-auto cursor-pointer text-[11px] font-medium text-[var(--onda-muted)] hover:text-[var(--onda-ink)]"

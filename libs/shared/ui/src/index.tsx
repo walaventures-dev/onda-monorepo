@@ -39,6 +39,7 @@ export type {
   DatePreset,
   PromoTypeKey,
 } from './AnalyticsFilters';
+export { OndaIcon, OndaIcons, BadgePill, badgeIcon } from './icons';
 
 export function OndaLogo({ className = '' }: { className?: string }) {
   return (
@@ -98,7 +99,7 @@ export function GradientButton({
   return (
     <button
       {...props}
-      className={`onda-gradient inline-flex items-center justify-center rounded-full border-0 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50 ${className}`}
+      className={`onda-gradient inline-flex items-center justify-center gap-1.5 rounded-full border-0 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50 ${className}`}
     >
       {children}
     </button>

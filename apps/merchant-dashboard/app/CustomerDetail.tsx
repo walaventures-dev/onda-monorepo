@@ -3,6 +3,8 @@
 import {
   KpiCard,
   promoTypeLabel,
+  OndaIcons,
+  BadgePill,
 } from '@onda/shared-ui';
 import { displayPhone } from '@onda/shared-utils';
 import {
@@ -86,11 +88,7 @@ export function CustomerDetail({
             <h2 className="font-display text-2xl font-semibold text-[var(--onda-ink)]">
               {user.name}
             </h2>
-            {detail.badge ? (
-              <span className="rounded-full bg-[var(--onda-violet-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--onda-violet)]">
-                {detail.badge}
-              </span>
-            ) : null}
+            {detail.badge ? <BadgePill badge={detail.badge} /> : null}
           </div>
           <p className="mt-1 text-sm text-[var(--onda-muted)]">
             {displayPhone(user.phone)}
@@ -119,9 +117,10 @@ export function CustomerDetail({
             href={whatsapp}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex cursor-pointer items-center rounded-full border border-[var(--onda-border)] bg-white px-3.5 py-1.5 text-sm font-medium text-[var(--onda-ink)] transition hover:border-[var(--onda-violet)]/40 hover:bg-[var(--onda-violet-soft)] hover:text-[var(--onda-violet)]"
+            className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(37,211,102,0.28)] transition hover:bg-[#1ebe57] hover:shadow-[0_8px_20px_rgba(37,211,102,0.35)] active:scale-[0.98]"
           >
-            WhatsApp
+            {OndaIcons.whatsapp}
+            Escribir por WhatsApp
           </a>
         ) : null}
       </div>
@@ -322,11 +321,13 @@ export function CustomerDetail({
                   </p>
                 </div>
                 {p.ready ? (
-                  <span className="shrink-0 rounded-full bg-[var(--onda-success)]/15 px-2 py-0.5 text-[10px] font-medium text-[var(--onda-success)]">
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--onda-success)]/15 px-2 py-0.5 text-[10px] font-medium text-[var(--onda-success)]">
+                    {OndaIcons.check}
                     Lista
                   </span>
                 ) : (
-                  <span className="shrink-0 text-xs text-[var(--onda-muted)]">
+                  <span className="inline-flex shrink-0 items-center gap-1 text-xs text-[var(--onda-muted)]">
+                    {OndaIcons.target}
                     faltan {p.gap}
                   </span>
                 )}

@@ -11,6 +11,7 @@ import {
   PROMO_TYPE_OPTIONS,
   api,
   type PromoTypeKey,
+  OndaIcons,
 } from '@onda/shared-ui';
 import { displayPhone } from '@onda/shared-utils';
 import {
@@ -174,20 +175,24 @@ export function PromoDetail({
           </button>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="font-display text-xl font-semibold">{promo.title}</h2>
-            <span className="rounded-full bg-[var(--onda-violet-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--onda-violet)]">
+            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--onda-violet-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--onda-violet)]">
+              {PROMO_TYPE_OPTIONS.find((t) => t.id === promo.type)?.icon ||
+                OndaIcons.other}
               {promoTypeLabel(promo.type)}
             </span>
             <span
-              className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
                 promo.isActive
                   ? 'bg-[var(--onda-success)]/15 text-[var(--onda-success)]'
                   : 'bg-[var(--onda-bg)] text-[var(--onda-muted)]'
               }`}
             >
+              {promo.isActive ? OndaIcons.check : OndaIcons.close}
               {promo.isActive ? 'Activa' : 'Inactiva'}
             </span>
             {locked ? (
-              <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-medium text-amber-800">
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-medium text-amber-800">
+                {OndaIcons.lock}
                 Ya redimida · solo foto editable
               </span>
             ) : null}
@@ -204,30 +209,34 @@ export function PromoDetail({
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className="cursor-pointer rounded-full border border-[var(--onda-border)] bg-white px-3 py-1.5 text-xs font-medium"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-white px-3 py-1.5 text-xs font-medium"
             onClick={() => setEditing((v) => !v)}
           >
+            {editing ? OndaIcons.close : OndaIcons.edit}
             {editing ? 'Cerrar edición' : 'Editar'}
           </button>
           <button
             type="button"
-            className="cursor-pointer rounded-full border border-[var(--onda-border)] bg-white px-3 py-1.5 text-xs font-medium"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-white px-3 py-1.5 text-xs font-medium"
             onClick={() => onDuplicate(promo)}
           >
+            {OndaIcons.copy}
             Duplicar
           </button>
           <button
             type="button"
-            className="cursor-pointer rounded-full border border-[var(--onda-border)] bg-white px-3 py-1.5 text-xs font-medium"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-white px-3 py-1.5 text-xs font-medium"
             onClick={() => onToggle(promo.id, promo.isActive)}
           >
+            {OndaIcons.power}
             {promo.isActive ? 'Desactivar' : 'Activar'}
           </button>
           <button
             type="button"
-            className="cursor-pointer rounded-full px-3 py-1.5 text-xs font-medium text-[var(--onda-danger)]"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-[var(--onda-danger)]"
             onClick={() => onDelete(promo.id)}
           >
+            {OndaIcons.trash}
             Eliminar
           </button>
         </div>
@@ -256,6 +265,7 @@ export function PromoDetail({
                     <FilterChip
                       key={t.id}
                       selected={form.type === t.id}
+                      icon={t.icon}
                       onClick={() => setForm((f) => ({ ...f, type: t.id }))}
                     >
                       {t.label}
@@ -292,12 +302,14 @@ export function PromoDetail({
                 <div className="flex flex-wrap gap-1.5">
                   <FilterChip
                     selected={form.expiryMode === 'TIME'}
+                    icon={OndaIcons.calendar}
                     onClick={() => setForm((f) => ({ ...f, expiryMode: 'TIME' }))}
                   >
                     Por tiempo
                   </FilterChip>
                   <FilterChip
                     selected={form.expiryMode === 'QUANTITY'}
+                    icon={OndaIcons.nXm}
                     onClick={() => setForm((f) => ({ ...f, expiryMode: 'QUANTITY' }))}
                   >
                     Por cantidad
@@ -328,6 +340,7 @@ export function PromoDetail({
             )}
             {error ? <p className="text-sm text-[var(--onda-danger)]">{error}</p> : null}
             <GradientButton type="submit" disabled={busy}>
+              {OndaIcons.save}
               {busy ? 'Guardando…' : 'Guardar cambios'}
             </GradientButton>
           </div>
