@@ -37,6 +37,11 @@ enum PromotionType {
   OTHER
 }
 
+enum PromotionExpiryMode {
+  TIME
+  QUANTITY
+}
+
 enum StoreCategory {
   RESTAURANT
   SERVICE
@@ -149,23 +154,26 @@ model Feedback {
 }
 
 model Promotion {
-  id             String         @id @default(uuid())
+  id             String               @id @default(uuid())
   storeId        String?
   eventId        String?
   title          String
   description    String?
-  imageUrl       String?        @db.Text
+  imageUrl       String?              @db.Text
   pointsRequired Int
-  isActive       Boolean        @default(true)
-  type           PromotionType  @default(OTHER)
+  isActive       Boolean              @default(true)
+  type           PromotionType        @default(OTHER)
   value          Float?
   buyQuantity    Int?
   getQuantity    Int?
   productName    String?
-  store          Store?         @relation(fields: [storeId], references: [id])
-  event          Event?         @relation(fields: [eventId], references: [id])
+  expiryMode     PromotionExpiryMode  @default(QUANTITY)
+  endsAt         DateTime?
+  maxRedemptions Int?
+  store          Store?               @relation(fields: [storeId], references: [id])
+  event          Event?               @relation(fields: [eventId], references: [id])
   transactions   Transaction[]
-  createdAt      DateTime       @default(now())
+  createdAt      DateTime             @default(now())
 }
 
 model PassDesign {

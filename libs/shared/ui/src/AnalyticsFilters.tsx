@@ -20,11 +20,11 @@ export const PROMO_TYPE_OPTIONS: { id: PromoTypeKey; label: string }[] = [
 
 export const DATE_PRESETS = [
   { id: 'today', label: 'Hoy' },
-  { id: '7d', label: '7d' },
-  { id: '14d', label: '14d' },
-  { id: '30d', label: '30d' },
-  { id: 'month', label: 'Este mes' },
-  { id: 'custom', label: 'Personalizado' },
+  { id: '7d', label: '7D' },
+  { id: '14d', label: '14D' },
+  { id: '30d', label: '30D' },
+  { id: 'month', label: 'Mes' },
+  { id: 'custom', label: 'Custom' },
 ] as const;
 
 export type DatePreset = (typeof DATE_PRESETS)[number]['id'];
@@ -91,6 +91,104 @@ export function formatPromoBenefit(p: {
   }
 }
 
+function formatRangeLabel(from: string, to: string) {
+  const fmt = (s: string) => {
+    const d = new Date(`${s}T12:00:00`);
+    return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+  };
+  if (from === to) return fmt(from);
+  return `${fmt(from)} – ${fmt(to)}`;
+}
+
+/** Segmented control: una sola selección en track hundido (patrón Stripe / Linear) */
+export function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  'aria-label': ariaLabel,
+}: {
+  options: { id: T; label: string }[];
+  value: T;
+  onChange: (id: T) => void;
+  'aria-label'?: string;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      className="inline-flex rounded-lg bg-[#e8edf5] p-0.5"
+    >
+      {options.map((opt) => {
+        const selected = value === opt.id;
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            className={`cursor-pointer rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
+              selected
+                ? 'bg-white text-[var(--onda-ink)] shadow-[0_1px_2px_rgba(26,27,46,0.12)]'
+                : 'text-[var(--onda-muted)] hover:text-[var(--onda-ink)]'
+            }`}
+            onClick={() => onChange(opt.id)}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Chip toggle para multi-select (tipos de promo) */
+export function FilterChip({
+  selected,
+  onClick,
+  children,
+  muted,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  muted?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onClick}
+      className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+        selected
+          ? 'border-[var(--onda-ink)]/15 bg-[var(--onda-ink)] text-white'
+          : muted
+            ? 'border-transparent bg-transparent text-[var(--onda-muted)] hover:bg-white hover:text-[var(--onda-ink)]'
+            : 'border-[var(--onda-border)] bg-white text-[var(--onda-muted)] hover:border-[var(--onda-ink)]/25 hover:text-[var(--onda-ink)]'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Columna de dimensión con label + control */
+export function FilterGroup({
+  label,
+  children,
+  className = '',
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`flex min-w-0 flex-col gap-1.5 ${className}`}>
+      <span className="text-[11px] font-medium text-[var(--onda-muted)]">{label}</span>
+      <div className="flex flex-wrap items-center gap-1.5">{children}</div>
+    </div>
+  );
+}
+
 export type AnalyticsFiltersValue = {
   preset: DatePreset;
   from: string;
@@ -98,16 +196,23 @@ export type AnalyticsFiltersValue = {
   promoTypes: PromoTypeKey[];
 };
 
+export type AnalyticsFilterExtraGroup = {
+  id: string;
+  label: string;
+  children: React.ReactNode;
+};
+
 export function AnalyticsFiltersBar({
   value,
   onChange,
   showPromoTypes = true,
-  extra,
+  extraGroups,
 }: {
   value: AnalyticsFiltersValue;
   onChange: (next: AnalyticsFiltersValue) => void;
   showPromoTypes?: boolean;
-  extra?: React.ReactNode;
+  /** Dimensiones extra (Estado, Movimiento…) — columnas al lado de tipo promo */
+  extraGroups?: AnalyticsFilterExtraGroup[];
 }) {
   function setPreset(preset: DatePreset) {
     if (preset === 'custom') {
@@ -126,82 +231,117 @@ export function AnalyticsFiltersBar({
     onChange({ ...value, promoTypes });
   }
 
+  const hasTypeFilter = value.promoTypes.length > 0;
+  const showDimensions = showPromoTypes || (extraGroups && extraGroups.length > 0);
+
   return (
-    <div className="sticky top-0 z-10 mb-5 space-y-3 rounded-2xl border border-[var(--onda-border)] bg-white/95 p-3 shadow-sm backdrop-blur">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-[var(--onda-muted)]">
-          Rango
-        </span>
-        {DATE_PRESETS.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition ${
-              value.preset === p.id
-                ? 'bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]'
-                : 'bg-[var(--onda-bg)] text-[var(--onda-muted)] hover:text-[var(--onda-ink)]'
-            }`}
-            onClick={() => setPreset(p.id)}
-          >
-            {p.label}
-          </button>
-        ))}
-        {value.preset === 'custom' ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              className="rounded-lg border border-[var(--onda-border)] px-2 py-1 text-xs"
-              value={value.from}
-              onChange={(e) => onChange({ ...value, from: e.target.value })}
-            />
-            <span className="text-xs text-[var(--onda-muted)]">→</span>
-            <input
-              type="date"
-              className="rounded-lg border border-[var(--onda-border)] px-2 py-1 text-xs"
-              value={value.to}
-              onChange={(e) => onChange({ ...value, to: e.target.value })}
-            />
-          </div>
-        ) : null}
+    <div className="sticky top-0 z-10 mb-5 overflow-hidden rounded-xl border border-[var(--onda-border)] bg-white shadow-[0_1px_2px_rgba(26,27,46,0.04)]">
+      {/* Periodo — primario */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+        <FilterGroup label="Periodo">
+          <SegmentedControl
+            aria-label="Rango de fechas"
+            options={[...DATE_PRESETS]}
+            value={value.preset}
+            onChange={setPreset}
+          />
+        </FilterGroup>
+
+        <div className="hidden h-8 w-px bg-[var(--onda-border)] sm:block" aria-hidden />
+
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-[11px] font-medium text-[var(--onda-muted)]">Rango</span>
+          {value.preset === 'custom' ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <input
+                type="date"
+                className="cursor-pointer rounded-md border border-[var(--onda-border)] bg-[var(--onda-bg)] px-2 py-1 text-xs text-[var(--onda-ink)]"
+                value={value.from}
+                onChange={(e) => onChange({ ...value, from: e.target.value })}
+              />
+              <span className="text-xs text-[var(--onda-muted)]">→</span>
+              <input
+                type="date"
+                className="cursor-pointer rounded-md border border-[var(--onda-border)] bg-[var(--onda-bg)] px-2 py-1 text-xs text-[var(--onda-ink)]"
+                value={value.to}
+                onChange={(e) => onChange({ ...value, to: e.target.value })}
+              />
+            </div>
+          ) : (
+            <p className="text-sm font-medium text-[var(--onda-ink)]">
+              {formatRangeLabel(value.from, value.to)}
+              <span className="ml-2 text-xs font-normal text-[var(--onda-muted)]">
+                vs periodo anterior
+              </span>
+            </p>
+          )}
+        </div>
       </div>
 
-      {showPromoTypes ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium uppercase tracking-wide text-[var(--onda-muted)]">
-            Tipo promo
-          </span>
+      {/* Dimensiones — secundarias */}
+      {showDimensions ? (
+        <div className="flex flex-wrap items-start gap-x-6 gap-y-3 border-t border-[var(--onda-border)] bg-[var(--onda-bg)]/50 px-4 py-3">
+          {showPromoTypes ? (
+            <FilterGroup label="Tipo de promo">
+              <FilterChip
+                selected={!hasTypeFilter}
+                muted={hasTypeFilter}
+                onClick={() => onChange({ ...value, promoTypes: [] })}
+              >
+                Todos
+              </FilterChip>
+              {PROMO_TYPE_OPTIONS.map((t) => (
+                <FilterChip
+                  key={t.id}
+                  selected={value.promoTypes.includes(t.id)}
+                  onClick={() => toggleType(t.id)}
+                >
+                  {t.label}
+                </FilterChip>
+              ))}
+            </FilterGroup>
+          ) : null}
+
+          {extraGroups?.map((g, i) => (
+            <React.Fragment key={g.id}>
+              {(showPromoTypes || i > 0) && (
+                <div
+                  className="hidden h-10 w-px self-center bg-[var(--onda-border)] md:block"
+                  aria-hidden
+                />
+              )}
+              <FilterGroup label={g.label}>{g.children}</FilterGroup>
+            </React.Fragment>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Chips activos removibles */}
+      {hasTypeFilter ? (
+        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--onda-border)] px-4 py-2">
+          <span className="text-[11px] text-[var(--onda-muted)]">Activos</span>
+          {value.promoTypes.map((t) => (
+            <button
+              key={t}
+              type="button"
+              className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-[var(--onda-violet-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--onda-violet)] hover:bg-[var(--onda-violet)]/15"
+              onClick={() => toggleType(t)}
+              aria-label={`Quitar filtro ${promoTypeLabel(t)}`}
+            >
+              {promoTypeLabel(t)}
+              <span aria-hidden className="text-[10px] opacity-70">
+                ×
+              </span>
+            </button>
+          ))}
           <button
             type="button"
-            className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium ${
-              value.promoTypes.length === 0
-                ? 'bg-[var(--onda-sky-soft)] text-[var(--onda-sky)]'
-                : 'bg-[var(--onda-bg)] text-[var(--onda-muted)]'
-            }`}
+            className="ml-auto cursor-pointer text-[11px] font-medium text-[var(--onda-muted)] hover:text-[var(--onda-ink)]"
             onClick={() => onChange({ ...value, promoTypes: [] })}
           >
-            Todos
+            Limpiar
           </button>
-          {PROMO_TYPE_OPTIONS.map((t) => {
-            const on = value.promoTypes.includes(t.id);
-            return (
-              <button
-                key={t.id}
-                type="button"
-                className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition ${
-                  on
-                    ? 'bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]'
-                    : 'bg-[var(--onda-bg)] text-[var(--onda-muted)] hover:text-[var(--onda-ink)]'
-                }`}
-                onClick={() => toggleType(t.id)}
-              >
-                {t.label}
-              </button>
-            );
-          })}
-          {extra}
         </div>
-      ) : extra ? (
-        <div className="flex flex-wrap items-center gap-2">{extra}</div>
       ) : null}
     </div>
   );
@@ -234,7 +374,7 @@ export function InsightCard({
         <button
           type="button"
           onClick={onAction}
-          className="mt-3 text-xs font-semibold text-[var(--onda-violet)] hover:underline"
+          className="mt-3 cursor-pointer text-xs font-semibold text-[var(--onda-violet)] hover:underline"
         >
           {action} →
         </button>

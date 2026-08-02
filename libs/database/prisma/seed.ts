@@ -5,6 +5,7 @@ import {
   InvitationStatus,
   StoreCategory,
   PromotionType,
+  PromotionExpiryMode,
 } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -49,18 +50,24 @@ async function main() {
       pointsRequired: 3,
       type: PromotionType.PRODUCT,
       productName: 'Café americano',
+      expiryMode: PromotionExpiryMode.QUANTITY,
+      maxRedemptions: 5,
     },
     {
       title: 'Postre gratis',
       pointsRequired: 5,
       type: PromotionType.PRODUCT,
       productName: 'Postre del día',
+      expiryMode: PromotionExpiryMode.QUANTITY,
+      maxRedemptions: 20,
     },
     {
       title: '10% descuento',
       pointsRequired: 8,
       type: PromotionType.PERCENT_OFF,
       value: 10,
+      expiryMode: PromotionExpiryMode.TIME,
+      endsAt: new Date(Date.now() + 3 * 86400000),
     },
     {
       title: 'Entrada 2x1',
@@ -68,12 +75,16 @@ async function main() {
       type: PromotionType.BUY_GET,
       buyQuantity: 2,
       getQuantity: 1,
+      expiryMode: PromotionExpiryMode.QUANTITY,
+      maxRedemptions: 50,
     },
     {
       title: '$5.000 off',
       pointsRequired: 12,
       type: PromotionType.AMOUNT_OFF,
       value: 5000,
+      expiryMode: PromotionExpiryMode.TIME,
+      endsAt: new Date(Date.now() + 14 * 86400000),
     },
   ];
 
@@ -139,6 +150,8 @@ async function main() {
       isActive: true,
       type: PromotionType.OTHER,
       description: 'Participa por el premio mayor del circuito',
+      expiryMode: PromotionExpiryMode.TIME,
+      endsAt: new Date('2026-08-31'),
     },
   });
 
@@ -194,6 +207,27 @@ async function main() {
           points: promo.pointsRequired,
           promotionId: promo.id,
           createdAt: new Date(day.getTime() + 3600000),
+        },
+      });
+    }
+  }
+
+  // Agotar casi el cupo de “Café cortesía” (3 ondas) para insights
+  const cafePromo = promos.find((p) => p.pointsRequired === 3) || promos[0];
+  if (cafePromo) {
+    const existing = await prisma.transaction.count({
+      where: { promotionId: cafePromo.id, type: 'REDEEM' },
+    });
+    for (let i = existing; i < 4; i++) {
+      const pass = users[i % users.length].passes[0];
+      await prisma.transaction.create({
+        data: {
+          passId: pass.id,
+          storeId: store0.id,
+          type: 'REDEEM',
+          points: cafePromo.pointsRequired,
+          promotionId: cafePromo.id,
+          createdAt: new Date(now - i * 3600000),
         },
       });
     }

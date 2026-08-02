@@ -15,6 +15,8 @@ export type OndaSelectProps = {
   className?: string;
   'aria-label'?: string;
   isDisabled?: boolean;
+  /** Más estrecho — topbar / toolbars */
+  compact?: boolean;
 };
 
 /** Dropdown Hero UI (no nativo) — trigger pill + popover con check */
@@ -26,11 +28,12 @@ export function OndaSelect({
   className = '',
   'aria-label': ariaLabel = 'Seleccionar',
   isDisabled,
+  compact = false,
 }: OndaSelectProps) {
   return (
     <Select
       aria-label={ariaLabel}
-      className={`onda-select min-w-[300px] w-[min(100%,22rem)] ${className}`}
+      className={`onda-select ${compact ? 'onda-select--compact' : 'min-w-[300px] w-[min(100%,22rem)]'} ${className}`}
       placeholder={placeholder}
       selectedKey={value || null}
       isDisabled={isDisabled}

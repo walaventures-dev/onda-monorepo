@@ -23,6 +23,9 @@ export {
   AnalyticsFiltersBar,
   InsightCard,
   FilterSelect,
+  FilterChip,
+  FilterGroup,
+  SegmentedControl,
   PROMO_TYPE_OPTIONS,
   DATE_PRESETS,
   rangeFromPreset,
@@ -32,6 +35,7 @@ export {
 } from './AnalyticsFilters';
 export type {
   AnalyticsFiltersValue,
+  AnalyticsFilterExtraGroup,
   DatePreset,
   PromoTypeKey,
 } from './AnalyticsFilters';
@@ -252,13 +256,12 @@ export function AppShell({
       </aside>
       <div className="onda-shell-main">
         <header className="onda-topbar">
-          <div>
+          <div className="onda-topbar-brand">
             <p className="onda-topbar-sub">Panel Onda</p>
             <h1 className="onda-topbar-title">{title}</h1>
           </div>
           <div className="onda-topbar-actions">
             {toolbar}
-            <div className="onda-search-pill">Buscar…</div>
             <div className="onda-avatar">{userName.slice(0, 1).toUpperCase()}</div>
           </div>
         </header>
@@ -270,19 +273,21 @@ export function AppShell({
 
 export function ActivityTimeline({
   items,
+  className = '',
 }: {
   items: Array<{ id: string; title: string; subtitle: string; time: string }>;
+  className?: string;
 }) {
   return (
-    <div className="onda-card p-5">
-      <h3 className="font-display text-lg font-semibold">Actividad reciente</h3>
-      <ul className="mt-4 space-y-4">
+    <div className={`onda-card flex h-full min-h-0 flex-col p-5 ${className}`}>
+      <h3 className="font-display shrink-0 text-lg font-semibold">Actividad reciente</h3>
+      <ul className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
         {items.map((item) => (
           <li key={item.id} className="flex gap-3">
             <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--onda-sky)]" />
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-medium text-[var(--onda-ink)]">{item.title}</p>
-              <p className="text-sm text-[var(--onda-muted)]">{item.subtitle}</p>
+              <p className="truncate text-sm text-[var(--onda-muted)]">{item.subtitle}</p>
               <p className="mt-0.5 text-xs text-[var(--onda-muted)]">{item.time}</p>
             </div>
           </li>

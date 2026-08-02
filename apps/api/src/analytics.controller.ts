@@ -324,10 +324,102 @@ export class AnalyticsController {
       title: string;
       message: string;
       action?: string;
+      promoId?: string;
     }> = [];
 
     const ondasDelta = pctDelta(ondasVal, prevOndasVal);
     const redeemDelta = pctDelta(redenciones, prevRedenciones);
+
+    // Ops: last tx + promo stats (needed for stock insights)
+    const lastTx = await this.prisma.transaction.findFirst({
+      where: { storeId },
+      orderBy: { createdAt: 'desc' },
+    });
+    const hourAgo = new Date(Date.now() - 3600000);
+    const ondasLastHour = await this.prisma.transaction.aggregate({
+      where: {
+        storeId,
+        type: 'ACCUMULATE',
+        createdAt: { gte: hourAgo },
+      },
+      _sum: { points: true },
+    });
+
+    const promoStats = await Promise.all(
+      promos.map(async (p) => {
+        const [canjes, canjesAllTime] = await Promise.all([
+          this.prisma.transaction.count({
+            where: {
+              storeId,
+              type: 'REDEEM',
+              promotionId: p.id,
+              createdAt: { gte: from, lte: to },
+            },
+          }),
+          this.prisma.transaction.count({
+            where: { storeId, type: 'REDEEM', promotionId: p.id },
+          }),
+        ]);
+        const remaining =
+          p.expiryMode === 'QUANTITY' && p.maxRedemptions != null
+            ? Math.max(0, p.maxRedemptions - canjesAllTime)
+            : null;
+        const daysLeft =
+          p.expiryMode === 'TIME' && p.endsAt
+            ? Math.ceil((p.endsAt.getTime() - Date.now()) / 86400000)
+            : null;
+        return {
+          ...p,
+          canjesInRange: canjes,
+          canjesAllTime,
+          remaining,
+          daysLeft,
+          elegibles: customers.filter((c) => c.points >= p.pointsRequired).length,
+          locked: canjesAllTime > 0,
+        };
+      })
+    );
+
+    // Priorizar stock / caducidad de promos activas
+    for (const p of promoStats.filter((x) => x.isActive)) {
+      if (
+        p.expiryMode === 'QUANTITY' &&
+        p.maxRedemptions != null &&
+        p.remaining != null &&
+        (p.remaining <= 3 || p.remaining / p.maxRedemptions <= 0.2)
+      ) {
+        insights.push({
+          id: `promo-low-${p.id}`,
+          tone: p.remaining === 0 ? 'danger' : 'warning',
+          title:
+            p.remaining === 0
+              ? `Se agotó la promo de ${p.pointsRequired} ondas`
+              : `Ya casi se acaban las promos de ${p.pointsRequired} ondas`,
+          message:
+            p.remaining === 0
+              ? `“${p.title}” no tiene redenciones restantes. Duplica o crea una nueva.`
+              : `“${p.title}” tiene ${p.remaining} de ${p.maxRedemptions} canjes. Conviene duplicar o crear otra.`,
+          action: 'Duplicar promo',
+          promoId: p.id,
+        });
+      }
+      if (p.expiryMode === 'TIME' && p.daysLeft != null && p.daysLeft <= 3) {
+        insights.push({
+          id: `promo-expiring-${p.id}`,
+          tone: p.daysLeft <= 0 ? 'danger' : 'warning',
+          title:
+            p.daysLeft <= 0
+              ? `Caducó la promo de ${p.pointsRequired} ondas`
+              : `La promo de ${p.pointsRequired} ondas caduca pronto`,
+          message:
+            p.daysLeft <= 0
+              ? `“${p.title}” ya no está disponible. Duplica para renovarla.`
+              : `“${p.title}” vence en ${p.daysLeft} día${p.daysLeft === 1 ? '' : 's'}.`,
+          action: 'Duplicar promo',
+          promoId: p.id,
+        });
+      }
+    }
 
     if (redeemDelta <= -25 && ondasDelta >= -10) {
       insights.push({
@@ -419,39 +511,6 @@ export class AnalyticsController {
         yourOndas,
       };
     }
-
-    // Ops: last tx
-    const lastTx = await this.prisma.transaction.findFirst({
-      where: { storeId },
-      orderBy: { createdAt: 'desc' },
-    });
-    const hourAgo = new Date(Date.now() - 3600000);
-    const ondasLastHour = await this.prisma.transaction.aggregate({
-      where: {
-        storeId,
-        type: 'ACCUMULATE',
-        createdAt: { gte: hourAgo },
-      },
-      _sum: { points: true },
-    });
-
-    const promoStats = await Promise.all(
-      promos.map(async (p) => {
-        const canjes = await this.prisma.transaction.count({
-          where: {
-            storeId,
-            type: 'REDEEM',
-            promotionId: p.id,
-            createdAt: { gte: from, lte: to },
-          },
-        });
-        return {
-          ...p,
-          canjesInRange: canjes,
-          elegibles: customers.filter((c) => c.points >= p.pointsRequired).length,
-        };
-      })
-    );
 
     return {
       range: { from: from.toISOString(), to: to.toISOString() },

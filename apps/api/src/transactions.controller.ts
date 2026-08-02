@@ -133,6 +133,17 @@ export class TransactionsController {
     if (!promo.isActive) {
       throw new BadRequestException('Promoción inactiva');
     }
+    if (promo.expiryMode === 'TIME' && promo.endsAt && promo.endsAt < new Date()) {
+      throw new BadRequestException('Esta promoción ya caducó');
+    }
+    if (promo.expiryMode === 'QUANTITY' && promo.maxRedemptions != null) {
+      const used = await this.prisma.transaction.count({
+        where: { promotionId: promo.id, type: 'REDEEM' },
+      });
+      if (used >= promo.maxRedemptions) {
+        throw new BadRequestException('Se agotaron las redenciones de esta promo');
+      }
+    }
     const current = await this.prisma.pass.findUniqueOrThrow({
       where: { id: body.passId },
       include: { user: true },
