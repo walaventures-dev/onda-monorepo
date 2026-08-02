@@ -83,16 +83,16 @@ export function KpiCard({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="onda-card p-5">
-      <p className="text-sm text-[var(--onda-muted)]">{label}</p>
-      <div className="mt-2 flex items-end justify-between gap-3">
+    <div className="onda-card flex h-full w-full flex-col px-4 py-3.5">
+      <p className="text-xs text-[var(--onda-muted)]">{label}</p>
+      <div className="mt-1.5 flex flex-1 items-end justify-between gap-2">
         <div>
-          <p className="font-display text-3xl font-semibold text-[var(--onda-ink)]">
+          <p className="font-display text-2xl font-semibold tabular-nums text-[var(--onda-ink)]">
             {value}
           </p>
           {delta ? (
             <p
-              className={`mt-1 text-sm font-medium ${
+              className={`mt-0.5 text-xs font-medium ${
                 positive
                   ? 'text-[var(--onda-success)]'
                   : 'text-[var(--onda-danger)]'

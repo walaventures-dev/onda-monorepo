@@ -52,14 +52,19 @@ import {
 } from "recharts";
 import { PromoDetail } from "./PromoDetail";
 import { CustomerDetail } from "./CustomerDetail";
+import {
+  CompareStores,
+  type CompareResponse,
+} from "./CompareStores";
+import { BalancedGrid } from "./balancedGrid";
 
 type Tab =
   | "resumen"
+  | "comparativa"
   | "clientes"
   | "actividad"
   | "promos"
   | "eventos"
-  | "pase"
   | "config";
 
 type CustomerSegment =
@@ -73,11 +78,11 @@ type CustomerSegment =
 
 const SECTIONS: Tab[] = [
   "resumen",
+  "comparativa",
   "clientes",
   "actividad",
   "promos",
   "eventos",
-  "pase",
   "config",
 ];
 
@@ -406,7 +411,9 @@ function parseRoute(pathname: string): {
   customerPassId: string | null;
 } {
   const parts = pathname.split("/").filter(Boolean);
-  const section = (parts[0] || "resumen") as Tab;
+  const raw = parts[0] || "resumen";
+  // /pase quedó dentro de Configuración
+  const section = (raw === "pase" ? "config" : raw) as Tab;
   const tab = SECTIONS.includes(section) ? section : "resumen";
   const promoId = tab === "promos" && parts[1] ? parts[1] : null;
   const customerPassId = tab === "clientes" && parts[1] ? parts[1] : null;
@@ -418,6 +425,12 @@ export function MerchantWorkspace() {
   const router = useRouter();
   const { tab, promoId: selectedPromoId, customerPassId: selectedCustomerPassId } =
     parseRoute(pathname);
+
+  useEffect(() => {
+    if (pathname === "/pase" || pathname.startsWith("/pase/")) {
+      router.replace("/config");
+    }
+  }, [pathname, router]);
 
   const [stores, setStores] = useState<any[]>([]);
   const [storeId, setStoreId] = useState("");
@@ -447,6 +460,11 @@ export function MerchantWorkspace() {
   const [txTypeFilter, setTxTypeFilter] = useState<
     "ALL" | "ACCUMULATE" | "REDEEM"
   >("ALL");
+  const [compareStoreIds, setCompareStoreIds] = useState<string[]>([]);
+  const [compare, setCompare] = useState<CompareResponse | null>(null);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
+  const [storesReady, setStoresReady] = useState(false);
   const { confirm, alert, dialogs } = useOndaDialogs();
 
   const initialRange = rangeFromPreset("14d");
@@ -461,27 +479,28 @@ export function MerchantWorkspace() {
   const kpis = overview?.kpis;
   const customers = overview?.customers || [];
 
-  const nav = useMemo(
-    () =>
-      (
-        [
-          ["resumen", "Resumen", OndaIcons.chart, false],
-          ["clientes", "Clientes", OndaIcons.users, false],
-          ["actividad", "Actividad", OndaIcons.activity, false],
-          ["promos", "Promociones", OndaIcons.redeem, false],
-          ["eventos", "Eventos", OndaIcons.ticket, false],
-          ["pase", "Diseño del pase", OndaIcons.pass, false],
-          ["config", "Configuración", OndaIcons.gear, true],
-        ] as const
-      ).map(([href, label, icon, footer]) => ({
-        href: `/${href}`,
-        label,
-        icon,
-        footer,
-        active: tab === href,
-      })),
-    [tab],
-  );
+  const nav = useMemo(() => {
+    const items: Array<
+      readonly [Tab, string, ReactNode, boolean]
+    > = [
+      ["resumen", "Resumen", OndaIcons.chart, false],
+      ...(stores.length >= 2
+        ? ([["comparativa", "Comparativa", OndaIcons.target, false]] as const)
+        : []),
+      ["clientes", "Clientes", OndaIcons.users, false],
+      ["actividad", "Actividad", OndaIcons.activity, false],
+      ["promos", "Promociones", OndaIcons.redeem, false],
+      ["eventos", "Eventos", OndaIcons.ticket, false],
+      ["config", "Configuración", OndaIcons.gear, true],
+    ];
+    return items.map(([href, label, icon, footer]) => ({
+      href: `/${href}`,
+      label,
+      icon,
+      footer,
+      active: tab === href,
+    }));
+  }, [tab, stores.length]);
 
   const overviewQuery = useMemo(() => {
     const params = new URLSearchParams({
@@ -538,12 +557,55 @@ export function MerchantWorkspace() {
     api<any[]>("/stores").then((list) => {
       setStores(list);
       if (list[0]) setStoreId(list[0].id);
+      setCompareStoreIds(list.map((s) => s.id));
+      setStoresReady(true);
     });
     api<any[]>("/events").then((list) => {
       setEvents(list);
       if (list[0]) setEventId(list[0].id);
     });
   }, []);
+
+  useEffect(() => {
+    if (!storesReady) return;
+    if (tab === "comparativa" && stores.length < 2) {
+      router.replace("/resumen");
+    }
+  }, [tab, stores.length, storesReady, router]);
+
+  const loadCompare = useCallback(async () => {
+    if (!compareStoreIds.length) return;
+    setCompareLoading(true);
+    setCompareError(null);
+    try {
+      const params = new URLSearchParams({
+        storeIds: compareStoreIds.join(","),
+        from: filters.from,
+        to: filters.to,
+      });
+      const data = await api<CompareResponse>(
+        `/analytics/stores/compare?${params}`,
+      );
+      setCompare(data);
+    } catch (e) {
+      setCompare(null);
+      setCompareError(
+        e instanceof Error ? e.message : "No se pudo cargar la comparativa",
+      );
+    } finally {
+      setCompareLoading(false);
+    }
+  }, [compareStoreIds, filters.from, filters.to]);
+
+  useEffect(() => {
+    if (tab !== "comparativa") return;
+    loadCompare();
+  }, [tab, loadCompare]);
+
+  function openCompareStore(id: string) {
+    setStoreId(id);
+    router.push("/resumen");
+  }
 
   useEffect(() => {
     if (!storeId) return;
@@ -1075,18 +1137,18 @@ export function MerchantWorkspace() {
           </div>
         }
       >
-        {["resumen", "clientes", "actividad"].includes(tab) ||
+        {["resumen", "comparativa", "clientes", "actividad"].includes(tab) ||
         (tab === "promos" && !selectedPromoId) ? (
           <AnalyticsFiltersBar
             value={filters}
             onChange={setFilters}
             showPromoTypes={
-              selectedCustomerPassId
+              selectedCustomerPassId || tab === "comparativa"
                 ? false
                 : tab !== "actividad" || txTypeFilter !== "ACCUMULATE"
             }
             extraGroups={
-              selectedCustomerPassId
+              selectedCustomerPassId || tab === "comparativa"
                 ? undefined
                 : tab === "actividad"
                   ? [
@@ -1171,7 +1233,13 @@ export function MerchantWorkspace() {
             </div>
 
             {!emptyRange ? (
-              <div className="onda-kpi-grid">
+              <div
+                className={`grid grid-cols-2 gap-3 ${
+                  mode === "event" && overview?.eventMeta
+                    ? "lg:grid-cols-5"
+                    : "md:grid-cols-4"
+                } [&>*]:min-w-0`}
+              >
                 <KpiCard
                   label="Ondas en periodo"
                   value={kpis?.ondas ?? 0}
@@ -1216,7 +1284,7 @@ export function MerchantWorkspace() {
             ) : null}
 
             {(overview?.insights || []).length > 0 ? (
-              <div className="grid gap-3 md:grid-cols-3">
+              <BalancedGrid count={(overview?.insights || []).length}>
                 {overview.insights.map((ins: any) => (
                   <InsightCard
                     key={ins.id}
@@ -1227,7 +1295,7 @@ export function MerchantWorkspace() {
                     onAction={() => handleInsightAction(ins.id, ins.promoId)}
                   />
                 ))}
-              </div>
+              </BalancedGrid>
             ) : null}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:[grid-auto-rows:minmax(11rem,auto)]">
@@ -1375,6 +1443,19 @@ export function MerchantWorkspace() {
             </div>
           </div>
         )}
+
+        {tab === "comparativa" ? (
+          <CompareStores
+            stores={stores.map((s) => ({ id: s.id, name: s.name }))}
+            selectedIds={compareStoreIds}
+            onSelectedIdsChange={setCompareStoreIds}
+            data={compare}
+            loading={compareLoading}
+            error={compareError}
+            onRetry={loadCompare}
+            onOpenStore={openCompareStore}
+          />
+        ) : null}
 
         {tab === "clientes" && selectedCustomerPassId ? (
           <CustomerDetail
@@ -2241,120 +2322,145 @@ export function MerchantWorkspace() {
           </div>
         )}
 
-        {tab === "pase" && design && (
-          <div className="onda-pass-designer-layout">
-            <form
-              onSubmit={saveDesign}
-              className="onda-card onda-pass-designer p-6"
-            >
-              <h3 className="font-display text-lg font-semibold">
-                Pass Designer
-              </h3>
-
-              <div className="onda-pass-designer-brand">
-                <ImageUploadField
-                  label="Logo"
-                  hint="JPG, PNG o WEBP"
-                  aspectClass="aspect-square"
-                  className="onda-pass-designer-logo"
-                  value={design.logoUrl || ""}
-                  onChange={(logoUrl) => setDesign({ ...design, logoUrl })}
-                />
-                <div className="onda-pass-designer-brand-color">
-                  <OndaColorPicker
-                    label="Color de marca"
-                    value={design.backgroundColor || "#6E5AE6"}
-                    fallback="#6E5AE6"
-                    onChange={(backgroundColor) =>
-                      setDesign({
-                        ...design,
-                        ...derivePassPalette(backgroundColor),
-                      })
-                    }
-                  />
-                  <p className="mt-2 text-xs leading-snug text-[var(--onda-muted)]">
-                    El texto y las etiquetas se ajustan solos para contraste y
-                    jerarquía.
-                  </p>
-                </div>
-              </div>
-
-              <div className="onda-pass-designer-fields">
-                <div className="onda-pass-designer-row">
-                  <label>
-                    <span>Título</span>
-                    <input
-                      value={design.title || ""}
-                      onChange={(e) =>
-                        setDesign({ ...design, title: e.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>Subtítulo</span>
-                    <input
-                      value={design.subtitle || ""}
-                      onChange={(e) =>
-                        setDesign({ ...design, subtitle: e.target.value })
-                      }
-                    />
-                  </label>
-                </div>
-
-                <label>
-                  <span>Descripción</span>
-                  <textarea
-                    rows={3}
-                    value={design.description || ""}
-                    onChange={(e) =>
-                      setDesign({ ...design, description: e.target.value })
-                    }
-                  />
-                </label>
-
-                <div className="flex justify-end pt-1">
-                  <GradientButton type="submit">
-                    {OndaIcons.save}
-                    Guardar preview
-                  </GradientButton>
-                </div>
-              </div>
-            </form>
-
-            <div className="onda-pass-designer-preview">
-              <p className="onda-pass-designer-label mb-3">Vista previa</p>
-              <PassPreview {...design} points={12} memberName="Cliente demo" />
-            </div>
-          </div>
-        )}
-
         {tab === "config" && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="onda-card space-y-2 p-5">
-              <h3 className="font-display font-semibold">Sede</h3>
-              <p>Place ID: {store?.googlePlaceId || "—"}</p>
-              <p>Plan: {billing?.planType}</p>
-              <p>
-                WhatsApp atribuido: {billing?.whatsappUsed}/
-                {billing?.whatsappLimit} (excedente {billing?.overageCop} COP)
-              </p>
-              {billing?.planType === "BASIC" ? (
-                <GradientButton type="button" onClick={upgrade}>
-                  {OndaIcons.upgrade}
-                  Upgrade a PRO (Wompi sandbox)
-                </GradientButton>
-              ) : null}
+          <div className="space-y-6">
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="onda-card space-y-2 p-5">
+                <h3 className="font-display font-semibold">Sede</h3>
+                <p>Place ID: {store?.googlePlaceId || "—"}</p>
+                <p>Plan: {billing?.planType}</p>
+                <p>
+                  WhatsApp atribuido: {billing?.whatsappUsed}/
+                  {billing?.whatsappLimit} (excedente {billing?.overageCop} COP)
+                </p>
+                {billing?.planType === "BASIC" ? (
+                  <GradientButton type="button" onClick={upgrade}>
+                    {OndaIcons.upgrade}
+                    Upgrade a PRO (Wompi sandbox)
+                  </GradientButton>
+                ) : null}
+              </div>
+              <div className="onda-card p-5">
+                <h3 className="font-display font-semibold">Features PRO</h3>
+                <ul className="mt-3 space-y-1 text-sm text-[var(--onda-muted)]">
+                  <li>
+                    Review gating:{" "}
+                    {billing?.features?.reviewGating ? "Sí" : "No"}
+                  </li>
+                  <li>NPS: {billing?.features?.npsSurveys ? "Sí" : "No"}</li>
+                  <li>GPS: {billing?.features?.gpsProximity ? "Sí" : "No"}</li>
+                </ul>
+              </div>
             </div>
-            <div className="onda-card p-5">
-              <h3 className="font-display font-semibold">Features PRO</h3>
-              <ul className="mt-3 space-y-1 text-sm text-[var(--onda-muted)]">
-                <li>
-                  Review gating: {billing?.features?.reviewGating ? "Sí" : "No"}
-                </li>
-                <li>NPS: {billing?.features?.npsSurveys ? "Sí" : "No"}</li>
-                <li>GPS: {billing?.features?.gpsProximity ? "Sí" : "No"}</li>
-              </ul>
-            </div>
+
+            {design ? (
+              <div>
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="text-[var(--onda-violet)]" aria-hidden>
+                    {OndaIcons.pass}
+                  </span>
+                  <h3 className="font-display text-lg font-semibold">
+                    Diseño del pase
+                  </h3>
+                </div>
+                <div className="onda-pass-designer-layout">
+                  <form
+                    onSubmit={saveDesign}
+                    className="onda-card onda-pass-designer p-6"
+                  >
+                    <div className="onda-pass-designer-brand">
+                      <ImageUploadField
+                        label="Logo"
+                        hint="JPG, PNG o WEBP"
+                        aspectClass="aspect-square"
+                        className="onda-pass-designer-logo"
+                        value={design.logoUrl || ""}
+                        onChange={(logoUrl) =>
+                          setDesign({ ...design, logoUrl })
+                        }
+                      />
+                      <div className="onda-pass-designer-brand-color">
+                        <OndaColorPicker
+                          label="Color de marca"
+                          value={design.backgroundColor || "#6E5AE6"}
+                          fallback="#6E5AE6"
+                          onChange={(backgroundColor) =>
+                            setDesign({
+                              ...design,
+                              ...derivePassPalette(backgroundColor),
+                            })
+                          }
+                        />
+                        <p className="mt-2 text-xs leading-snug text-[var(--onda-muted)]">
+                          El texto y las etiquetas se ajustan solos para contraste
+                          y jerarquía.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="onda-pass-designer-fields">
+                      <div className="onda-pass-designer-row">
+                        <label>
+                          <span>Título</span>
+                          <input
+                            value={design.title || ""}
+                            onChange={(e) =>
+                              setDesign({ ...design, title: e.target.value })
+                            }
+                          />
+                        </label>
+                        <label>
+                          <span>Subtítulo</span>
+                          <input
+                            value={design.subtitle || ""}
+                            onChange={(e) =>
+                              setDesign({
+                                ...design,
+                                subtitle: e.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                      </div>
+
+                      <label>
+                        <span>Descripción</span>
+                        <textarea
+                          rows={3}
+                          value={design.description || ""}
+                          onChange={(e) =>
+                            setDesign({
+                              ...design,
+                              description: e.target.value,
+                            })
+                          }
+                        />
+                      </label>
+
+                      <div className="flex justify-end pt-1">
+                        <GradientButton type="submit">
+                          {OndaIcons.save}
+                          Guardar preview
+                        </GradientButton>
+                      </div>
+                    </div>
+                  </form>
+
+                  <div className="onda-pass-designer-preview">
+                    <p className="onda-pass-designer-label mb-3">Vista previa</p>
+                    <PassPreview
+                      {...design}
+                      points={12}
+                      memberName="Cliente demo"
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="onda-card p-5 text-sm text-[var(--onda-muted)]">
+                Cargando diseño del pase…
+              </div>
+            )}
           </div>
         )}
       </AppShell>

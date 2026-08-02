@@ -386,18 +386,24 @@ export function InsightCard({
     accent: 'border-[var(--onda-violet)]/25 bg-[var(--onda-violet-soft)]',
   };
   return (
-    <div className={`rounded-2xl border p-4 ${tones[tone] || tones.accent}`}>
-      <p className="font-display text-sm font-semibold text-[var(--onda-ink)]">{title}</p>
-      <p className="mt-1 text-sm text-[var(--onda-muted)]">{message}</p>
+    <div
+      className={`flex h-full w-full flex-col rounded-2xl border p-4 ${tones[tone] || tones.accent}`}
+    >
+      <p className="font-display text-sm font-semibold text-[var(--onda-ink)]">
+        {title}
+      </p>
+      <p className="mt-1 flex-1 text-sm text-[var(--onda-muted)]">{message}</p>
       {action ? (
         <button
           type="button"
           onClick={onAction}
-          className="mt-3 cursor-pointer text-xs font-semibold text-[var(--onda-violet)] hover:underline"
+          className="mt-3 cursor-pointer self-start text-xs font-semibold text-[var(--onda-violet)] hover:underline"
         >
           {action} →
         </button>
-      ) : null}
+      ) : (
+        <div className="mt-3 h-4" aria-hidden />
+      )}
     </div>
   );
 }
