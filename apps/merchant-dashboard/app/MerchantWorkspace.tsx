@@ -201,6 +201,201 @@ const promoBtnBase =
 const promoBtnNeutral = `${promoBtnBase} border-[var(--onda-border)] bg-white text-[var(--onda-ink)] hover:border-[var(--onda-violet)]/40 hover:bg-[var(--onda-violet-soft)] hover:text-[var(--onda-violet)]`;
 const promoBtnDanger = `${promoBtnBase} border-transparent bg-transparent text-[var(--onda-danger)] hover:border-[var(--onda-danger)]/25 hover:bg-[var(--onda-danger)]/10`;
 
+type PulseTone = "good" | "ok" | "warn" | "bad" | "neutral";
+
+/** Usa `{period}` para insertar el hint de fechas (hoy, esta semana…). */
+const PULSE_COPY: Record<
+  "good" | "ok" | "warn" | "bad" | "empty",
+  { titles: string[]; lines: string[] }
+> = {
+  good: {
+    titles: [
+      "Va viento en popa {period}",
+      "Qué buen ritmo {period}",
+      "El programa brilla {period}",
+      "Se nota el jalón {period}",
+      "Onda a todo vapor {period}",
+      "Cliente contento, tú contento {period}",
+      "Esto sí está prendido {period}",
+      "Números que dan gusto {period}",
+      "La lealtad está trabajando {period}",
+      "Buenas vibras en caja {period}",
+      "El pase se siente vivo {period}",
+      "Vas ganando terreno {period}",
+    ],
+    lines: [
+      "La gente está acumulando y canjeando. Sigue así, el programa se siente vivo.",
+      "Hay flujo de ondas y canjes. Mantén el QR a la vista y no aflojes el ritmo.",
+      "Acumulan, canjean y vuelven. Eso es un programa que ya enganchó.",
+      "Buen equilibrio entre sumar y redimir. Estás en zona saludable.",
+      "Se ve movimiento real, no solo números bonitos. Sigue empujando en caja.",
+      "Los clientes están jugando el juego. Cuida el catálogo para no perder el momentum.",
+      "Ondas y canjes al alza: el pase está haciendo su chamba.",
+      "Periodo sólido. Si quieres aún más canjes, un gancho de 3–5 ondas ayuda.",
+      "La dinámica se siente cálida. Buen momento para destacar una promo estrella.",
+      "Vas por buen camino: hay actividad y la gente responde.",
+      "El programa no está dormido. Celebra el ritmo y no cambies lo que funciona.",
+      "Hay tracción. Un WhatsApp suave a los más activos puede multiplicar canjes.",
+    ],
+  },
+  ok: {
+    titles: [
+      "Va tirando {period}",
+      "Ni fu ni fa {period}",
+      "Estable, sin drama {period}",
+      "En modo crucero {period}",
+      "Sin sorpresas {period}",
+      "Todo en promedio {period}",
+      "Marcha normal {period}",
+      "Se sostiene {period}",
+      "Ni pico ni valle {period}",
+      "Ritmo de diario {period}",
+      "Pasable {period}",
+      "En equilibrio flojo {period}",
+    ],
+    lines: [
+      "Números estables. Nada alarmante, tampoco un festín.",
+      "Hay movimiento, pero nada que grite victoria. Un empujoncito vendría bien.",
+      "Se mantiene a flote. Si quieres más brillo, prueba una promo fácil de canjear.",
+      "Periodo correcto, sin picos. Buen momento para experimentar sin miedo.",
+      "Ni sube fuerte ni se cae. El piso está firme; falta el impulso.",
+      "Actividad regular. Revisa si el catálogo motiva o solo acumulan por inercia.",
+      "Va en línea. Un recordatorio en caja puede convertir ondas en canjes.",
+      "Está vivo, pero en modo bajo. No está roto; está pidiendo atención.",
+      "Resultados tibios. No es mala señal, solo invitación a activar algo.",
+      "Se siente el día a día. Si buscas un salto, cambia el gancho de la promo.",
+      "Sin alarmas. Mantén el QR visible y mira qué promo responde mejor.",
+      "Equilibrio suave. Un empujón a clientes cerca de canje puede mover la aguja.",
+    ],
+  },
+  warn: {
+    titles: [
+      "Anda flojo {period}",
+      "Se enfría un poco {period}",
+      "Ojo, baja la temperatura {period}",
+      "Ritmo más apagado {period}",
+      "Hay señales de enfriamiento {period}",
+      "No está en su mejor día {period}",
+      "Le falta chispa {period}",
+      "Va a medio gas {period}",
+      "El impulso se afloja {period}",
+      "Periodo tibio-frío {period}",
+      "Conviene poner atención {period}",
+      "No lo dejes pasar {period}",
+    ],
+    lines: [
+      "Bajaron ondas y canjes. Revisa el QR/caja o lanza un gancho fácil de canjear.",
+      "Acumulan, pero casi no canjean. El catálogo puede no estar motivando.",
+      "Hay señales de enfriamiento. Un empujoncito (promo o WhatsApp) no estaría de más.",
+      "Menos tracción que antes. Confirma que el equipo está sumando en cada ticket.",
+      "El programa respira más despacio. Una promo corta y clara puede reactivar.",
+      "Se siente flojo. Revisa si alguna promo se quedó sin cupo o sin brillo.",
+      "Los números pedalean cuesta abajo. Activa algo simple de 3–5 ondas.",
+      "No es derrumbe, pero sí desaceleración. Mejor intervenir ya que después.",
+      "Menos canjes de lo esperado. Pregunta en caja qué están pidiendo los clientes.",
+      "El hábito se afloja. Un recordatorio a los dormidos puede ayudar.",
+      "Hay movimiento, pero flojo frente al periodo anterior. Empuja una promo visible.",
+      "Toca despertar el pase: QR a la vista, promo fácil y un empujón al equipo.",
+    ],
+  },
+  bad: {
+    titles: [
+      "Va mal {period}",
+      "Se siente apagado {period}",
+      "Periodo en rojo {period}",
+      "El programa está quieto {period}",
+      "Poco latido {period}",
+      "Esto pide reacción {period}",
+      "Anda en modo silencio {period}",
+      "Se cayó el ritmo {period}",
+      "Alerta en el tablero {period}",
+      "No está funcionando {period}",
+      "Hay que intervenir ya {period}",
+      "El pase casi no respira {period}",
+    ],
+    lines: [
+      "Poco movimiento y peores números que antes. Actúa en caja y en el catálogo.",
+      "Casi no hay ondas ni canjes. Revisa QR, PIN y que el equipo sume en cada venta.",
+      "Se siente apagado. Lanza algo inmediato: promo fácil y visible en mostrador.",
+      "Los números piden SOS. Duplica una promo que ya funcionó o crea un gancho nuevo.",
+      "Muy poca vida en el programa. Confirma que los clientes encuentran cómo acumular.",
+      "Periodo flojo de verdad. Prioriza reactivar canjes antes de inventar complejidad.",
+      "La lealtad no está pegando. Simplifica el beneficio y empuja en caja hoy.",
+      "Casi no hay tracción. Un WhatsApp a clientes con ondas puede destrabar canjes.",
+      "Los datos no mienten: hay que reaccionar. Empieza por lo más fácil de canjear.",
+      "El programa está frío. Revisa operación diaria y dale un empujón fuerte a promos.",
+      "Sin ritmo claro. Amplía fechas solo para contexto; si no, actúa ya en caja.",
+      "Se nota el vacío. Activa una promo estrella y asegúrate de que se ofrezca en cada ticket.",
+    ],
+  },
+  empty: {
+    titles: [
+      "Por acá no hay movimiento",
+      "Filtros sin historia",
+      "Todo en silencio",
+      "Nada que contar aún",
+      "Pantalla en blanco (casi)",
+      "Sin ondas ni canjes",
+      "Vacío en este recorte",
+      "No aparece actividad",
+      "Este rango está quieto",
+      "Cero movimiento útil",
+      "Sin señales en el radar",
+      "Aquí no hay pelea",
+    ],
+    lines: [
+      "Con estos filtros no aparece casi nada. Prueba ampliar las fechas o quitar filtros de promo.",
+      "El recorte quedó vacío. Afloja un filtro o mira un periodo más amplio.",
+      "No hay datos para este corte. Cambia fechas o tipos de promo y vuelve a mirar.",
+      "Silencio total en el rango. Puede ser filtro agresivo o un día sin operación.",
+      "Nada que graficar aquí. Amplía el periodo para ver si hay vida afuera.",
+      "Sin ondas ni canjes en esta vista. Revisa si el filtro de tipo promo está muy cerrado.",
+      "Este zoom no muestra historia. Abre el rango o quita chips de filtro.",
+      "Vacío útil: o no hubo actividad, o el filtro la escondió. Prueba otro preset.",
+      "No hay métricas en este recorte. Cambia a 7 o 14 días para tener contexto.",
+      "La consulta no trajo movimiento. Ajusta fechas antes de alarmarte.",
+      "Sin puntos en la serie. Prueba quitar filtros y comparar con el mes.",
+      "Aquí no hay pelea todavía. Amplía y vuelve: a veces el filtro es el culpable.",
+    ],
+  },
+};
+
+const PULSE_LOW_PROMO_LINES = [
+  (hint: string) =>
+    `No está mal, pero ojo: ${hint}. Conviene duplicar o crear otra.`,
+  (hint: string) =>
+    `Hay piso, aunque ${hint}. No dejes que se apague el catálogo.`,
+  (hint: string) =>
+    `Se sostiene, pero ${hint}. Un duplicado rápido evita el hueco.`,
+  (hint: string) =>
+    `Números correctos; igual ${hint}. Mejor adelantarte que improvisar.`,
+  (hint: string) =>
+    `Va tirando, y encima ${hint}. Toca preparar el relevo de esa promo.`,
+  (hint: string) =>
+    `Sin drama en KPIs, pero ${hint}. El stock de beneficios importa.`,
+  (hint: string) =>
+    `Estable… hasta que miras promos: ${hint}. Actúa antes del vacío.`,
+  (hint: string) =>
+    `El ritmo aguanta, aunque ${hint}. Duplica o crea algo fresco.`,
+  (hint: string) =>
+    `Ok en lo general, pero ${hint}. No esperes a que se acabe del todo.`,
+  (hint: string) =>
+    `Se siente apagado y además ${hint}. Reacciona: duplica o lanza otra ya.`,
+  (hint: string) =>
+    `Poco latido y ${hint}. Prioriza catálogo antes de perder canjes.`,
+  (hint: string) =>
+    `Hay que intervenir: ${hint}. Sin beneficio claro, el pase se enfría.`,
+];
+
+function pickPulse<T>(items: T[], seed: number, salt: number): T {
+  const i = Math.abs(Math.floor(seed * 10_000 + salt * 97)) % items.length;
+  return items[i]!;
+}
+
+function fillPeriod(template: string, periodHint: string) {
+  return template.replaceAll("{period}", periodHint);
+}
+
 function parseRoute(pathname: string): { tab: Tab; promoId: string | null } {
   const parts = pathname.split("/").filter(Boolean);
   const section = (parts[0] || "resumen") as Tab;
@@ -416,19 +611,42 @@ export function MerchantWorkspace() {
     (overview.kpis?.redenciones ?? 0) === 0 &&
     (overview.series || []).every((r: any) => !r.ondas && !r.canjes);
 
+  const filterPulseKey = `${filters.preset}|${filters.from}|${filters.to}|${filters.promoTypes.join(",")}`;
+  const [pulseSeed, setPulseSeed] = useState(() => Math.random());
+  const [pulseFilterKey, setPulseFilterKey] = useState(filterPulseKey);
+  if (pulseFilterKey !== filterPulseKey) {
+    setPulseFilterKey(filterPulseKey);
+    setPulseSeed(Math.random());
+  }
+
   const pulse = useMemo(() => {
     if (!overview) {
       return {
-        tone: "neutral" as const,
+        tone: "neutral" as PulseTone,
         title: "Cargando el panorama…",
         line: "Un momento mientras armamos el resumen.",
       };
     }
+
+    const periodHint =
+      filters.preset === "today"
+        ? "hoy"
+        : filters.preset === "7d"
+          ? "esta semana"
+          : filters.preset === "14d"
+            ? "estas dos semanas"
+            : filters.preset === "30d"
+              ? "este mes (aprox.)"
+              : filters.preset === "month"
+                ? "este mes"
+                : "este periodo";
+
     if (emptyRange) {
+      const pack = PULSE_COPY.empty;
       return {
-        tone: "neutral" as const,
-        title: "Por acá no hay movimiento",
-        line: "Con estos filtros no aparece casi nada. Prueba ampliar las fechas o quitar filtros de promo.",
+        tone: "neutral" as PulseTone,
+        title: pickPulse(pack.titles, pulseSeed, 1),
+        line: pickPulse(pack.lines, pulseSeed, 2),
       };
     }
 
@@ -459,60 +677,19 @@ export function MerchantWorkspace() {
     if (rate >= 20) score += 1;
     if (lowPromo) score -= 1;
 
-    const periodHint =
-      filters.preset === "today"
-        ? "hoy"
-        : filters.preset === "7d"
-          ? "esta semana"
-          : filters.preset === "14d"
-            ? "estas dos semanas"
-            : filters.preset === "30d"
-              ? "este mes (aprox.)"
-              : filters.preset === "month"
-                ? "este mes"
-                : "este periodo";
+    const tone: PulseTone =
+      score >= 3 ? "good" : score >= 0 ? "ok" : score >= -3 ? "warn" : "bad";
+    const pack = PULSE_COPY[tone];
+    const title = fillPeriod(pickPulse(pack.titles, pulseSeed, 3), periodHint);
 
-    if (score >= 3) {
-      return {
-        tone: "good" as const,
-        title: `Va viento en popa ${periodHint}`,
-        line:
-          redeemD >= ondasD
-            ? "La gente está acumulando y canjeando. Sigue así, el programa se siente vivo."
-            : "Hay buen flujo de ondas. Si quieres más canjes, empuja una promo de 3–5 ondas.",
-      };
+    let line = pickPulse(pack.lines, pulseSeed, 4);
+    if (lowPromo && (tone === "ok" || tone === "warn" || tone === "bad")) {
+      const hint = String(lowPromo.title || "se te acaban promos").toLowerCase();
+      line = pickPulse(PULSE_LOW_PROMO_LINES, pulseSeed, 5)(hint);
     }
-    if (score >= 0) {
-      return {
-        tone: "ok" as const,
-        title: `Va tirando ${periodHint}`,
-        line: lowPromo
-          ? `No está mal, pero ojo: ${lowPromo.title.toLowerCase()}. Conviene duplicar o crear otra.`
-          : redeemD < 0
-            ? "Hay movimiento, pero los canjes van un poco flojos frente al periodo anterior."
-            : "Números estables. Nada alarmante, tampoco un festín.",
-      };
-    }
-    if (score >= -3) {
-      return {
-        tone: "warn" as const,
-        title: `Anda flojo ${periodHint}`,
-        line:
-          ondasD < 0 && redeemD < 0
-            ? "Bajaron ondas y canjes. Revisa el QR/caja o lanza un gancho fácil de canjear."
-            : redeemD <= -25
-              ? "Acumulan, pero casi no canjean. El catálogo puede no estar motivando."
-              : "Hay señales de enfriamiento. Un empujoncito (promo o WhatsApp) no estaría de más.",
-      };
-    }
-    return {
-      tone: "bad" as const,
-      title: `Va mal ${periodHint}`,
-      line: lowPromo
-        ? "Se siente apagado y además se te acaban promos. Toca reaccionar: duplica o crea algo nuevo ya."
-        : "Poco movimiento y peores números que antes. Amplía fechas solo si quieres contexto; si no, actúa en caja y promos.",
-    };
-  }, [overview, emptyRange, kpis, filters.preset]);
+
+    return { tone, title, line };
+  }, [overview, emptyRange, kpis, filters.preset, pulseSeed]);
 
   async function accumulate() {
     try {
