@@ -5,6 +5,7 @@ import {
   promoTypeLabel,
   OndaIcons,
   BadgePill,
+  TxActivityRow,
 } from '@onda/shared-ui';
 import { displayPhone } from '@onda/shared-utils';
 import {
@@ -262,40 +263,23 @@ export function CustomerDetail({
               Actividad del periodo
             </h3>
           </div>
-          <ul className="max-h-80 space-y-0 overflow-auto">
+          <ul className="onda-tx-list max-h-80 overflow-auto px-4">
             {(detail.recent || []).map((t: any) => (
-              <li
+              <TxActivityRow
                 key={t.id}
-                className="flex items-start justify-between gap-3 border-b border-[var(--onda-border)] px-4 py-2.5 text-sm last:border-b-0"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-[var(--onda-ink)]">
-                    {t.type === 'ACCUMULATE' ? 'Acumulación' : 'Redención'}
-                  </p>
-                  <p className="truncate text-xs text-[var(--onda-muted)]">
-                    {t.promotion?.title ||
-                      (t.type === 'REDEEM'
-                        ? promoTypeLabel(t.promotion?.type)
-                        : 'Onda')}
-                  </p>
-                  <p className="mt-0.5 text-[10px] text-[var(--onda-muted)]">
-                    {new Date(t.createdAt).toLocaleString('es-CO')}
-                  </p>
-                </div>
-                <span
-                  className={`shrink-0 text-sm font-semibold ${
-                    t.type === 'ACCUMULATE'
-                      ? 'text-[var(--onda-sky)]'
-                      : 'text-[var(--onda-violet)]'
-                  }`}
-                >
-                  {t.type === 'ACCUMULATE' ? '+' : '−'}
-                  {t.points}
-                </span>
-              </li>
+                item={{
+                  id: t.id,
+                  type: t.type,
+                  points: t.points,
+                  promotion: t.promotion
+                    ? { title: t.promotion.title, type: t.promotion.type }
+                    : null,
+                  time: new Date(t.createdAt).toLocaleString('es-CO'),
+                }}
+              />
             ))}
             {!detail.recent?.length ? (
-              <li className="px-4 py-8 text-center text-sm text-[var(--onda-muted)]">
+              <li className="px-0 py-8 text-center text-sm text-[var(--onda-muted)]">
                 Sin movimientos en este periodo. Prueba ampliar las fechas.
               </li>
             ) : null}

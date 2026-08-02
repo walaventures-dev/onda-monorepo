@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { OndaIcons } from './icons';
+import { TxActivityRow, type TxActivityItem } from './TxActivity';
 
 export { Button, Card, Chip, Avatar, Badge, Spinner, Form, TextField, Input, TextArea, InputOTP, Table, ColorPicker } from '@heroui/react';
 export { api, API_URL } from './api';
@@ -41,6 +42,13 @@ export type {
   PromoTypeKey,
 } from './AnalyticsFilters';
 export { OndaIcon, OndaIcons, BadgePill, badgeIcon } from './icons';
+export {
+  TxActivityRow,
+  TxTypeBadge,
+  PromoTypeChip,
+  promoTypeIcon,
+} from './TxActivity';
+export type { TxActivityItem, TxKind } from './TxActivity';
 
 export function OndaLogo({
   className = '',
@@ -434,7 +442,7 @@ export function ActivityTimeline({
   items,
   className = '',
 }: {
-  items: Array<{ id: string; title: string; subtitle: string; time: string }>;
+  items: TxActivityItem[];
   className?: string;
 }) {
   return (
@@ -444,25 +452,14 @@ export function ActivityTimeline({
       <h3 className="font-display shrink-0 text-sm font-semibold">
         Actividad reciente
       </h3>
-      <ul className="mt-2 min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain pr-1">
+      <ul className="onda-tx-list mt-1 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
         {items.length === 0 ? (
-          <li className="text-xs text-[var(--onda-muted)]">Sin actividad aún.</li>
+          <li className="py-4 text-center text-xs text-[var(--onda-muted)]">
+            Sin actividad aún.
+          </li>
         ) : (
           items.map((item) => (
-            <li key={item.id} className="flex gap-2">
-              <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--onda-sky)]" />
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-[var(--onda-ink)]">
-                  {item.title}
-                </p>
-                <p className="truncate text-xs text-[var(--onda-muted)]">
-                  {item.subtitle}
-                </p>
-                <p className="mt-0.5 text-[10px] leading-tight text-[var(--onda-muted)]">
-                  {item.time}
-                </p>
-              </div>
-            </li>
+            <TxActivityRow key={item.id} item={item} dense />
           ))
         )}
       </ul>

@@ -33,6 +33,7 @@ import {
   type PromoTypeKey,
   OndaIcons,
   BadgePill,
+  TxActivityRow,
 } from "@onda/shared-ui";
 import { displayPhone, derivePassPalette } from "@onda/shared-utils";
 import {
@@ -464,18 +465,19 @@ export function MerchantWorkspace() {
     () =>
       (
         [
-          ["resumen", "Resumen", OndaIcons.chart],
-          ["clientes", "Clientes", OndaIcons.users],
-          ["actividad", "Actividad", OndaIcons.activity],
-          ["promos", "Promociones", OndaIcons.redeem],
-          ["eventos", "Eventos", OndaIcons.ticket],
-          ["pase", "Diseño del pase", OndaIcons.pass],
-          ["config", "Configuración", OndaIcons.gear],
+          ["resumen", "Resumen", OndaIcons.chart, false],
+          ["clientes", "Clientes", OndaIcons.users, false],
+          ["actividad", "Actividad", OndaIcons.activity, false],
+          ["promos", "Promociones", OndaIcons.redeem, false],
+          ["eventos", "Eventos", OndaIcons.ticket, false],
+          ["pase", "Diseño del pase", OndaIcons.pass, false],
+          ["config", "Configuración", OndaIcons.gear, true],
         ] as const
-      ).map(([href, label, icon]) => ({
+      ).map(([href, label, icon, footer]) => ({
         href: `/${href}`,
         label,
         icon,
+        footer,
         active: tab === href,
       })),
     [tab],
@@ -1042,7 +1044,7 @@ export function MerchantWorkspace() {
         userName={store?.name || "M"}
         linkComponent={Link}
         toolbar={
-          <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2">
+          <div className="onda-toolbar">
             <OndaSelect
               aria-label="Sede"
               value={storeId}
@@ -1051,17 +1053,15 @@ export function MerchantWorkspace() {
               compact
               options={stores.map((s) => ({ id: s.id, label: s.name }))}
             />
-            <div className="shrink-0">
-              <SegmentedControl
-                aria-label="Modo"
-                value={mode}
-                onChange={setMode}
-                options={[
-                  { id: "global", label: "Global", icon: OndaIcons.globe },
-                  { id: "event", label: "Evento", icon: OndaIcons.ticket },
-                ]}
-              />
-            </div>
+            <SegmentedControl
+              aria-label="Modo"
+              value={mode}
+              onChange={setMode}
+              options={[
+                { id: "global", label: "Global", icon: OndaIcons.globe },
+                { id: "event", label: "Evento", icon: OndaIcons.ticket },
+              ]}
+            />
             {mode === "event" ? (
               <OndaSelect
                 aria-label="Evento"
@@ -1280,13 +1280,11 @@ export function MerchantWorkspace() {
                 className="min-h-[11rem] lg:h-full"
                 items={(overview?.recent || []).slice(0, 12).map((t: any) => ({
                   id: t.id,
-                  title:
-                    t.type === "ACCUMULATE" ? "Acumulación" : "Redención",
-                  subtitle:
-                    t.promotion?.title ||
-                    (t.type === "REDEEM"
-                      ? promoTypeLabel(t.promotion?.type)
-                      : "Onda"),
+                  type: t.type,
+                  points: t.points,
+                  promotion: t.promotion
+                    ? { title: t.promotion.title, type: t.promotion.type }
+                    : null,
                   time: new Date(t.createdAt).toLocaleString("es-CO"),
                 }))}
               />
@@ -1561,30 +1559,27 @@ export function MerchantWorkspace() {
                 <h3 className="font-display font-semibold">
                   Auditoría filtrada
                 </h3>
-                <ul className="mt-3 max-h-80 space-y-2 overflow-auto text-sm">
+                <ul className="onda-tx-list mt-3 max-h-80 overflow-auto">
                   {txs.map((t: any) => (
-                    <li
+                    <TxActivityRow
                       key={t.id}
-                      className="flex min-w-0 justify-between gap-3 border-b border-[var(--onda-border)] py-2"
-                    >
-                      <span className="min-w-0 truncate">
-                        {t.type === "ACCUMULATE" ? "Acumular" : "Canjear"} ·{" "}
-                        {t.pass?.user?.name || "—"}
-                        {t.promotion ? (
-                          <span className="text-[var(--onda-muted)]">
-                            {" "}
-                            · {promoTypeLabel(t.promotion.type)}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="shrink-0 text-[var(--onda-muted)]">
-                        {t.type === "ACCUMULATE" ? "+" : "−"}
-                        {t.points}
-                      </span>
-                    </li>
+                      item={{
+                        id: t.id,
+                        type: t.type,
+                        points: t.points,
+                        person: t.pass?.user?.name,
+                        promotion: t.promotion
+                          ? {
+                              title: t.promotion.title,
+                              type: t.promotion.type,
+                            }
+                          : null,
+                        time: new Date(t.createdAt).toLocaleString("es-CO"),
+                      }}
+                    />
                   ))}
                   {!txs.length ? (
-                    <li className="py-4 text-[var(--onda-muted)]">
+                    <li className="py-4 text-center text-sm text-[var(--onda-muted)]">
                       Sin movimientos con estos filtros.
                     </li>
                   ) : null}
