@@ -283,19 +283,33 @@ export function ActivityTimeline({
   className?: string;
 }) {
   return (
-    <div className={`onda-card flex h-full min-h-0 flex-col p-5 ${className}`}>
-      <h3 className="font-display shrink-0 text-lg font-semibold">Actividad reciente</h3>
-      <ul className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-        {items.map((item) => (
-          <li key={item.id} className="flex gap-3">
-            <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--onda-sky)]" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-[var(--onda-ink)]">{item.title}</p>
-              <p className="truncate text-sm text-[var(--onda-muted)]">{item.subtitle}</p>
-              <p className="mt-0.5 text-xs text-[var(--onda-muted)]">{item.time}</p>
-            </div>
-          </li>
-        ))}
+    <div
+      className={`onda-card flex min-h-0 flex-col overflow-hidden p-4 ${className}`}
+    >
+      <h3 className="font-display shrink-0 text-sm font-semibold">
+        Actividad reciente
+      </h3>
+      <ul className="mt-2 min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain pr-1">
+        {items.length === 0 ? (
+          <li className="text-xs text-[var(--onda-muted)]">Sin actividad aún.</li>
+        ) : (
+          items.map((item) => (
+            <li key={item.id} className="flex gap-2">
+              <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--onda-sky)]" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-[var(--onda-ink)]">
+                  {item.title}
+                </p>
+                <p className="truncate text-xs text-[var(--onda-muted)]">
+                  {item.subtitle}
+                </p>
+                <p className="mt-0.5 text-[10px] leading-tight text-[var(--onda-muted)]">
+                  {item.time}
+                </p>
+              </div>
+            </li>
+          ))
+        )}
       </ul>
     </div>
   );

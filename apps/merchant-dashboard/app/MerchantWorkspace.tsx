@@ -1143,43 +1143,57 @@ export function MerchantWorkspace() {
               </div>
             ) : null}
 
-            <div className="grid gap-6 lg:grid-cols-3 lg:items-stretch">
-              <div className="onda-card flex flex-col p-5 lg:col-span-2">
-                <h3 className="font-display font-semibold">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:[grid-auto-rows:7.5rem]">
+              <div className="onda-card flex h-[7.5rem] min-h-0 flex-col overflow-hidden p-4 lg:col-span-2 lg:h-full">
+                <h3 className="font-display shrink-0 text-sm font-semibold">
                   Ondas y canjes por día
                 </h3>
-                <div className="mt-4 h-64 min-h-[16rem] flex-1">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={overview?.series || []}>
-                      <XAxis
-                        dataKey="date"
-                        tickFormatter={(v) => String(v).slice(5)}
-                        fontSize={11}
-                      />
-                      <YAxis fontSize={11} allowDecimals={false} />
-                      <Tooltip />
-                      <Legend />
-                      <Bar
-                        dataKey="ondas"
-                        name="Ondas"
-                        fill="#3DB9E8"
-                        radius={[6, 6, 0, 0]}
-                      />
-                      <Bar
-                        dataKey="canjes"
-                        name="Canjes"
-                        fill="#6E5AE6"
-                        radius={[6, 6, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                <div className="relative mt-2 min-h-0 flex-1">
+                  <div className="absolute inset-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={overview?.series || []}
+                        margin={{ top: 4, right: 4, left: -12, bottom: 0 }}
+                      >
+                        <XAxis
+                          dataKey="date"
+                          tickFormatter={(v) => String(v).slice(5)}
+                          fontSize={10}
+                          tickMargin={4}
+                        />
+                        <YAxis
+                          fontSize={10}
+                          allowDecimals={false}
+                          width={28}
+                        />
+                        <Tooltip />
+                        <Legend
+                          wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
+                          iconSize={8}
+                        />
+                        <Bar
+                          dataKey="ondas"
+                          name="Ondas"
+                          fill="#3DB9E8"
+                          radius={[4, 4, 0, 0]}
+                        />
+                        <Bar
+                          dataKey="canjes"
+                          name="Canjes"
+                          fill="#6E5AE6"
+                          radius={[4, 4, 0, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
               <ActivityTimeline
-                className="max-h-[22rem] lg:max-h-none lg:h-auto"
-                items={(overview?.recent || []).map((t: any) => ({
+                className="h-[7.5rem] lg:h-full"
+                items={(overview?.recent || []).slice(0, 12).map((t: any) => ({
                   id: t.id,
-                  title: t.type === "ACCUMULATE" ? "Acumulación" : "Redención",
+                  title:
+                    t.type === "ACCUMULATE" ? "Acumulación" : "Redención",
                   subtitle:
                     t.promotion?.title ||
                     (t.type === "REDEEM"
