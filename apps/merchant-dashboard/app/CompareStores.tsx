@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   KpiCard,
-  InsightCard,
+  InsightsPanel,
   FilterChip,
   FilterGroup,
   SegmentedControl,
@@ -20,7 +20,6 @@ import {
   BarChart,
   Bar,
 } from "recharts";
-import { BalancedGrid } from "./balancedGrid";
 
 export type CompareResponse = {
   range: { from: string; to: string };
@@ -92,6 +91,7 @@ export type CompareResponse = {
     message: string;
     action?: string;
     storeIds?: string[];
+    stat?: string;
   }>;
 };
 
@@ -288,19 +288,19 @@ export function CompareStores({
       ) : null}
 
       {loading && !data ? (
-        <BalancedGrid count={5} gapClassName="gap-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5 [&>*]:min-w-0">
           {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
-              className="h-24 animate-pulse rounded-2xl bg-[var(--onda-border)]/40"
+              className="h-20 animate-pulse rounded-2xl bg-[var(--onda-border)]/40"
             />
           ))}
-        </BalancedGrid>
+        </div>
       ) : null}
 
       {data && displayKpis ? (
         <>
-          <BalancedGrid count={5} gapClassName="gap-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5 [&>*]:min-w-0">
             <KpiCard
               label="Ondas del grupo"
               value={displayKpis.ondas}
@@ -333,25 +333,22 @@ export function CompareStores({
               label="Clientes activos"
               value={displayKpis.clientesActivos}
             />
-          </BalancedGrid>
+          </div>
 
           {(data.insights || []).length > 0 ? (
-            <BalancedGrid count={data.insights.length}>
-              {data.insights.map((ins) => (
-                <InsightCard
-                  key={ins.id}
-                  tone={ins.tone}
-                  title={ins.title}
-                  message={ins.message}
-                  action={ins.action}
-                  onAction={
-                    ins.storeIds?.[0]
-                      ? () => onOpenStore(ins.storeIds![0])
-                      : undefined
-                  }
-                />
-              ))}
-            </BalancedGrid>
+            <InsightsPanel
+              items={data.insights.map((ins) => ({
+                id: ins.id,
+                tone: ins.tone,
+                title: ins.title,
+                message: ins.message,
+                stat: ins.stat,
+                action: ins.action,
+                onAction: ins.storeIds?.[0]
+                  ? () => onOpenStore(ins.storeIds![0])
+                  : undefined,
+              }))}
+            />
           ) : null}
 
           <div className="onda-card p-4">

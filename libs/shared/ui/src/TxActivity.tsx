@@ -76,19 +76,19 @@ export function TxActivityRow({
             <>
               <span className="onda-tx-person">{item.person}</span>
               {isAcc ? (
-                <span className="onda-tx-muted"> · suma ondas</span>
+                <span className="onda-tx-muted"> · acumulación</span>
               ) : promoTitle ? (
                 <span className="onda-tx-muted"> · {promoTitle}</span>
               ) : (
-                <span className="onda-tx-muted"> · canje</span>
+                <span className="onda-tx-muted"> · redención</span>
               )}
             </>
           ) : isAcc ? (
-            <span className="onda-tx-muted">Suma de ondas al pase</span>
+            <span className="onda-tx-muted">Acumulación al pase</span>
           ) : promoTitle ? (
             <span className="onda-tx-title">{promoTitle}</span>
           ) : (
-            <span className="onda-tx-muted">Canje sin título</span>
+            <span className="onda-tx-muted">Redención sin título</span>
           )}
         </p>
         <p className="onda-tx-time">{item.time}</p>

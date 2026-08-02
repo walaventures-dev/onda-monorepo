@@ -21,7 +21,7 @@ import {
   ImageUploadField,
   useOndaDialogs,
   AnalyticsFiltersBar,
-  InsightCard,
+  InsightsPanel,
   FilterChip,
   SegmentedControl,
   rangeFromPreset,
@@ -54,7 +54,6 @@ import {
   CompareStores,
   type CompareResponse,
 } from "./CompareStores";
-import { BalancedGrid } from "./balancedGrid";
 import { ActivityHeatmap } from "./ActivityHeatmap";
 
 type Tab =
@@ -1276,48 +1275,47 @@ export function MerchantWorkspace() {
             ) : null}
 
             {(overview?.insights || []).length > 0 ? (
-              <BalancedGrid count={(overview?.insights || []).length}>
-                {overview.insights.map((ins: any) => (
-                  <InsightCard
-                    key={ins.id}
-                    tone={ins.tone}
-                    title={ins.title}
-                    message={ins.message}
-                    action={ins.action}
-                    onAction={() => handleInsightAction(ins.id, ins.promoId)}
-                  />
-                ))}
-              </BalancedGrid>
+              <InsightsPanel
+                items={(overview.insights as any[]).map((ins) => ({
+                  id: ins.id,
+                  tone: ins.tone,
+                  title: ins.title,
+                  message: ins.message,
+                  stat: ins.stat,
+                  action: ins.action,
+                  onAction: () => handleInsightAction(ins.id, ins.promoId),
+                }))}
+              />
             ) : null}
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:[grid-auto-rows:minmax(11rem,auto)]">
-              <div className="onda-card flex min-h-[11rem] flex-col overflow-hidden p-4 lg:col-span-2 lg:h-full lg:min-h-0">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:[grid-auto-rows:20rem]">
+              <div className="onda-card flex h-[20rem] min-h-0 flex-col overflow-hidden p-4 lg:col-span-2 lg:h-full">
                 <h3 className="font-display shrink-0 text-sm font-semibold">
                   Ondas y canjes por día
                 </h3>
-                <div className="relative mt-2 min-h-[9rem] flex-1">
+                <div className="relative mt-2 min-h-0 flex-1">
                   <div className="absolute inset-0">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={overview?.series || []}
-                        margin={{ top: 4, right: 4, left: -12, bottom: 0 }}
+                        margin={{ top: 8, right: 8, left: -8, bottom: 0 }}
                       >
                         <XAxis
                           dataKey="date"
                           tickFormatter={(v) => String(v).slice(5)}
-                          fontSize={10}
-                          tickMargin={4}
+                          fontSize={11}
+                          tickMargin={6}
                           interval="preserveStartEnd"
                         />
                         <YAxis
-                          fontSize={10}
+                          fontSize={11}
                           allowDecimals={false}
-                          width={28}
+                          width={32}
                         />
                         <Tooltip />
                         <Legend
-                          wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
-                          iconSize={8}
+                          wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                          iconSize={10}
                         />
                         <Bar
                           dataKey="ondas"
@@ -1337,7 +1335,7 @@ export function MerchantWorkspace() {
                 </div>
               </div>
               <ActivityTimeline
-                className="min-h-[11rem] lg:h-full"
+                className="h-[20rem] lg:h-full"
                 items={(overview?.recent || []).slice(0, 12).map((t: any) => ({
                   id: t.id,
                   type: t.type,
@@ -1418,19 +1416,24 @@ export function MerchantWorkspace() {
 
         {tab === "clientes" && !selectedCustomerPassId && (
           <div className="space-y-4">
-            {(overview?.insights || [])
-              .filter((i: any) => ["near-redeem", "at-risk"].includes(i.id))
-              .slice(0, 2)
-              .map((ins: any) => (
-                <InsightCard
-                  key={ins.id}
-                  tone={ins.tone}
-                  title={ins.title}
-                  message={ins.message}
-                  action={ins.action}
-                  onAction={() => handleInsightAction(ins.id, ins.promoId)}
-                />
-              ))}
+            {(overview?.insights || []).filter((i: any) =>
+              ["near-redeem", "at-risk"].includes(i.id),
+            ).length > 0 ? (
+              <InsightsPanel
+                items={(overview.insights as any[])
+                  .filter((i) => ["near-redeem", "at-risk"].includes(i.id))
+                  .slice(0, 2)
+                  .map((ins) => ({
+                    id: ins.id,
+                    tone: ins.tone,
+                    title: ins.title,
+                    message: ins.message,
+                    stat: ins.stat,
+                    action: ins.action,
+                    onAction: () => handleInsightAction(ins.id, ins.promoId),
+                  }))}
+              />
+            ) : null}
 
             <div className="flex flex-wrap gap-1.5">
               {segmentChips.map((c) => (
@@ -1557,11 +1560,17 @@ export function MerchantWorkspace() {
 
             {overview?.ops?.minutesSinceLastTx != null &&
             overview.ops.minutesSinceLastTx > 90 ? (
-              <InsightCard
-                tone="warning"
-                title="Caja fría"
-                message="Lleva más de 90 minutos sin movimientos. Revisa QR/NFC o el PIN de caja."
-                action="Ir a acumular"
+              <InsightsPanel
+                items={[
+                  {
+                    tone: "warning",
+                    title: "Caja fría",
+                    message:
+                      "Lleva más de 90 minutos sin movimientos. Revisa QR/NFC o el PIN de caja.",
+                    stat: `${overview.ops.minutesSinceLastTx}m`,
+                    action: "Ir a acumular",
+                  },
+                ]}
               />
             ) : null}
 

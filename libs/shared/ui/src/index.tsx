@@ -24,6 +24,7 @@ export { useOndaDialogs } from './OndaDialogs';
 export {
   AnalyticsFiltersBar,
   InsightCard,
+  InsightsPanel,
   FilterSelect,
   FilterChip,
   FilterGroup,
@@ -36,6 +37,8 @@ export {
   formatPromoBenefit,
 } from './AnalyticsFilters';
 export type {
+  InsightItem,
+  InsightTone,
   AnalyticsFiltersValue,
   AnalyticsFilterExtraGroup,
   DatePreset,

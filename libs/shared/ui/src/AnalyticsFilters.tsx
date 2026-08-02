@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { OndaSelect } from './OndaSelect';
 import { OndaIcons } from './icons';
 
@@ -366,46 +366,156 @@ export function AnalyticsFiltersBar({
   );
 }
 
-export function InsightCard({
+export type InsightTone = 'success' | 'warning' | 'danger' | 'accent';
+
+export type InsightItem = {
+  id?: string;
+  tone?: InsightTone;
+  title: string;
+  message: string;
+  /** Highlighted metric shown on the left (e.g. "−25%", "12") */
+  stat?: string;
+  action?: string;
+  onAction?: () => void;
+};
+
+const TONE_BAR: Record<InsightTone, string> = {
+  success: 'bg-[var(--onda-success)]',
+  warning: 'bg-amber-400',
+  danger: 'bg-[var(--onda-danger)]',
+  accent: 'bg-[var(--onda-violet)]',
+};
+
+const TONE_STAT: Record<InsightTone, string> = {
+  success: 'text-[var(--onda-success)]',
+  warning: 'text-amber-600',
+  danger: 'text-[var(--onda-danger)]',
+  accent: 'text-[var(--onda-violet)]',
+};
+
+function InsightRow({
   tone = 'accent',
   title,
   message,
+  stat,
   action,
   onAction,
-}: {
-  tone?: 'success' | 'warning' | 'danger' | 'accent';
-  title: string;
-  message: string;
-  action?: string;
-  onAction?: () => void;
-}) {
-  const tones: Record<string, string> = {
-    success: 'border-[var(--onda-success)]/30 bg-[var(--onda-success)]/8',
-    warning: 'border-amber-400/40 bg-amber-50',
-    danger: 'border-[var(--onda-danger)]/30 bg-[var(--onda-danger)]/8',
-    accent: 'border-[var(--onda-violet)]/25 bg-[var(--onda-violet-soft)]',
-  };
+}: InsightItem) {
   return (
-    <div
-      className={`flex h-full w-full flex-col rounded-2xl border p-4 ${tones[tone] || tones.accent}`}
-    >
-      <p className="font-display text-sm font-semibold text-[var(--onda-ink)]">
-        {title}
-      </p>
-      <p className="mt-1 flex-1 text-sm text-[var(--onda-muted)]">{message}</p>
+    <div className="grid grid-cols-[0.25rem_minmax(0,1fr)] gap-x-3 gap-y-1 py-3 first:pt-0 last:pb-0 sm:grid-cols-[0.25rem_4.5rem_minmax(0,1fr)_auto] sm:items-center sm:gap-x-3">
+      <div
+        className={`w-1 self-stretch rounded-full sm:min-h-[2.5rem] ${TONE_BAR[tone]}`}
+        aria-hidden
+      />
+      {stat ? (
+        <p
+          className={`hidden font-display text-xl font-semibold leading-none tabular-nums sm:block ${TONE_STAT[tone]}`}
+        >
+          {stat}
+        </p>
+      ) : (
+        <span className="hidden sm:block" aria-hidden />
+      )}
+      <div className="min-w-0 col-start-2 sm:col-start-3">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          {stat ? (
+            <p
+              className={`font-display text-base font-semibold tabular-nums sm:hidden ${TONE_STAT[tone]}`}
+            >
+              {stat}
+            </p>
+          ) : null}
+          <p className="font-display text-sm font-semibold text-[var(--onda-ink)]">
+            {title}
+          </p>
+        </div>
+        <p className="mt-0.5 text-sm leading-snug text-[var(--onda-muted)] line-clamp-2">
+          {message}
+        </p>
+      </div>
       {action ? (
         <button
           type="button"
           onClick={onAction}
-          className="mt-3 cursor-pointer self-start text-xs font-semibold text-[var(--onda-violet)] hover:underline"
+          className="col-start-2 mt-1 cursor-pointer justify-self-start text-xs font-semibold text-[var(--onda-violet)] hover:underline sm:col-start-4 sm:mt-0 sm:justify-self-end sm:whitespace-nowrap"
         >
           {action} →
         </button>
       ) : (
-        <div className="mt-3 h-4" aria-hidden />
+        <span className="hidden sm:block" aria-hidden />
       )}
     </div>
   );
+}
+
+const TONE_LEGEND: { tone: InsightTone; label: string }[] = [
+  { tone: 'danger', label: 'Urgente' },
+  { tone: 'warning', label: 'Atención' },
+  { tone: 'accent', label: 'Oportunidad' },
+  { tone: 'success', label: 'Bien' },
+];
+
+const INSIGHTS_PREVIEW = 3;
+
+/** Dense list of insights: stat + message + action in one card. */
+export function InsightsPanel({
+  items,
+  title = 'Recomendaciones',
+}: {
+  items: InsightItem[];
+  title?: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (!items.length) return null;
+
+  const hasMore = items.length > INSIGHTS_PREVIEW;
+  const visible = expanded || !hasMore ? items : items.slice(0, INSIGHTS_PREVIEW);
+
+  return (
+    <div className="onda-card overflow-hidden p-4">
+      <div className="mb-1 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
+          {title}
+        </h3>
+        <ul
+          className="flex flex-wrap items-center gap-x-2.5 gap-y-1"
+          aria-label="Significado de colores"
+        >
+          {TONE_LEGEND.map(({ tone, label }) => (
+            <li
+              key={tone}
+              className="flex items-center gap-1 text-[10px] font-medium text-[var(--onda-muted)]"
+            >
+              <span
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_BAR[tone]}`}
+                aria-hidden
+              />
+              {label}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="divide-y divide-[var(--onda-border)]">
+        {visible.map((item, i) => (
+          <InsightRow key={item.id ?? `${item.title}-${i}`} {...item} />
+        ))}
+      </div>
+      {hasMore ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-2 cursor-pointer text-xs font-semibold text-[var(--onda-violet)] hover:underline"
+        >
+          {expanded ? 'Ver menos' : `Ver todas (${items.length})`}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** @deprecated Prefer InsightsPanel — kept for single-insight call sites. */
+export function InsightCard(props: InsightItem) {
+  return <InsightsPanel items={[props]} />;
 }
 
 /** Compact select for small toolbar filters (narrower than OndaSelect default) */

@@ -366,6 +366,7 @@ export class AnalyticsController {
       message: string;
       action?: string;
       promoId?: string;
+      stat?: string;
     }> = [];
 
     const ondasDelta = pctDelta(ondasVal, prevOndasVal);
@@ -442,6 +443,7 @@ export class AnalyticsController {
               : `“${p.title}” tiene ${p.remaining} de ${p.maxRedemptions} canjes. Conviene duplicar o crear otra.`,
           action: 'Duplicar promo',
           promoId: p.id,
+          stat: String(p.remaining ?? 0),
         });
       }
       if (p.expiryMode === 'TIME' && p.daysLeft != null && p.daysLeft <= 3) {
@@ -458,6 +460,7 @@ export class AnalyticsController {
               : `“${p.title}” vence en ${p.daysLeft} día${p.daysLeft === 1 ? '' : 's'}.`,
           action: 'Duplicar promo',
           promoId: p.id,
+          stat: p.daysLeft <= 0 ? '0d' : `${p.daysLeft}d`,
         });
       }
     }
@@ -469,6 +472,7 @@ export class AnalyticsController {
         title: 'Redenciones a la baja',
         message: `Canjes ${redeemDelta}% vs periodo anterior con ondas estables. El catálogo puede no motivar.`,
         action: 'Revisar promos',
+        stat: `${redeemDelta}%`,
       });
     }
     if (segments.cercaCanje >= 3) {
@@ -478,6 +482,7 @@ export class AnalyticsController {
         title: 'Clientes cerca de canje',
         message: `${segments.cercaCanje} clientes están a ≤2 ondas de una promo activa.`,
         action: 'Ver segmento',
+        stat: String(segments.cercaCanje),
       });
     }
     if (segments.enRiesgo >= 3) {
@@ -487,6 +492,7 @@ export class AnalyticsController {
         title: 'Clientes en riesgo',
         message: `${segments.enRiesgo} no vuelven hace 21–45 días. Oportunidad de win-back.`,
         action: 'Ver en riesgo',
+        stat: String(segments.enRiesgo),
       });
     }
     const waPct = Math.round((store.whatsappUsed / LIMITS[store.planType]) * 100);
@@ -497,6 +503,7 @@ export class AnalyticsController {
         title: 'Cupo WhatsApp alto',
         message: `Usaste ${waPct}% del cupo (${store.whatsappUsed}/${LIMITS[store.planType]}).`,
         action: 'Ver plan',
+        stat: `${waPct}%`,
       });
     }
     if (activePromos.length <= 1) {
@@ -506,6 +513,7 @@ export class AnalyticsController {
         title: 'Poca variedad de promos',
         message: 'Solo hay pocas promos activas. Un gancho de 3–5 ondas suele subir canjes.',
         action: 'Crear promo',
+        stat: String(activePromos.length),
       });
     }
     if (!insights.length) {
@@ -514,6 +522,7 @@ export class AnalyticsController {
         tone: 'success',
         title: 'Programa estable',
         message: `En el rango: ${ondasVal} ondas, ${redenciones} canjes, tasa ${redeemRate}%.`,
+        stat: `${redeemRate}%`,
       });
     }
 
@@ -580,7 +589,7 @@ export class AnalyticsController {
       redemptionsByType,
       segments,
       customers,
-      insights: insights.slice(0, 3),
+      insights: insights.slice(0, 8),
       eventMeta,
       ops: {
         ondasLastHour: ondasLastHour._sum.points ?? 0,
@@ -1323,6 +1332,7 @@ export class AnalyticsController {
       action?: string;
       storeIds?: string[];
       metric?: string;
+      stat?: string;
     }> = [];
 
     if (n >= 2) {
@@ -1339,6 +1349,7 @@ export class AnalyticsController {
           action: 'Ver sede',
           storeIds: [laggard.storeId],
           metric: 'ondas',
+          stat: `${laggard.vsSet.ondasPctVsAvg}%`,
         });
       }
 
@@ -1358,6 +1369,7 @@ export class AnalyticsController {
           action: 'Ver sede',
           storeIds: [topOndas.storeId],
           metric: 'tasa',
+          stat: `−${Math.abs(topOndas.vsSet.tasaPpVsAvg)} pp`,
         });
       }
 
@@ -1369,14 +1381,16 @@ export class AnalyticsController {
         avgCanjesPorActivo > 0 &&
         star.kpis.canjesPorActivo >= avgCanjesPorActivo * 1.5
       ) {
+        const mult = (star.kpis.canjesPorActivo / avgCanjesPorActivo).toFixed(1);
         insights.push({
           id: 'conversion-star',
           tone: 'success',
           title: `${star.storeName} convierte mejor`,
-          message: `Canjea ${(star.kpis.canjesPorActivo / avgCanjesPorActivo).toFixed(1)}× más por cliente activo que el promedio. Vale copiar su mix de promos.`,
+          message: `Canjea ${mult}× más por cliente activo que el promedio. Vale copiar su mix de promos.`,
           action: 'Ver sede',
           storeIds: [star.storeId],
           metric: 'canjes',
+          stat: `${mult}×`,
         });
       }
 
@@ -1397,6 +1411,7 @@ export class AnalyticsController {
             action: 'Ver sede',
             storeIds: [r.storeId],
             metric: 'cercaCanje',
+            stat: `${Math.round(cercaPct)}%`,
           });
           break;
         }
@@ -1416,6 +1431,7 @@ export class AnalyticsController {
             action: 'Ver sede',
             storeIds: [r.storeId],
             metric: 'enRiesgo',
+            stat: String(r.segments.enRiesgo),
           });
           break;
         }
@@ -1431,6 +1447,7 @@ export class AnalyticsController {
             action: 'Ver sede',
             storeIds: [r.storeId],
             metric: 'promos',
+            stat: String(r.flags.zeroRedeemPromos),
           });
           break;
         }
@@ -1449,6 +1466,7 @@ export class AnalyticsController {
             action: 'Ver sede',
             storeIds: [r.storeId],
             metric: 'stock',
+            stat: String(r.flags.lowStockPromos),
           });
           break;
         }
@@ -1470,6 +1488,7 @@ export class AnalyticsController {
             action: 'Ver sede',
             storeIds: [topRedeem.storeId],
             metric: 'redenciones',
+            stat: `${share}%`,
           });
         }
       }
@@ -1485,6 +1504,7 @@ export class AnalyticsController {
           action: 'Ver sede',
           storeIds: [up[0].storeId, down[0].storeId],
           metric: 'ondas',
+          stat: `${up[0].kpis.ondasDelta > 0 ? '+' : ''}${up[0].kpis.ondasDelta}%`,
         });
       }
     }
@@ -1495,6 +1515,7 @@ export class AnalyticsController {
         tone: 'success',
         title: 'Grupo estable',
         message: `En el rango: ${sumOndas} ondas, ${sumRedeem} canjes, tasa ${setTasa}% entre ${n} sede${n === 1 ? '' : 's'}.`,
+        stat: `${setTasa}%`,
       });
     }
 
@@ -1544,7 +1565,7 @@ export class AnalyticsController {
       },
       stores: storeRows,
       series,
-      insights: insights.slice(0, 5),
+      insights: insights.slice(0, 8),
     };
   }
 
