@@ -230,27 +230,31 @@ export function AppShell({
   children,
   userName = 'Usuario',
   toolbar,
+  linkComponent,
 }: {
   title: string;
   nav: NavItem[];
   children: React.ReactNode;
   userName?: string;
   toolbar?: React.ReactNode;
+  /** p.ej. next/link para SPA navigation */
+  linkComponent?: React.ElementType;
 }) {
+  const Link = linkComponent || 'a';
   return (
     <div className="onda-shell">
       <aside className="onda-sidebar">
         <OndaLogo className="mb-8 px-2" />
         <nav className="onda-sidebar-nav">
           {nav.map((item) => (
-            <a
+            <Link
               key={item.href}
               href={item.href}
               className={`onda-nav-link${item.active ? ' is-active' : ''}`}
             >
               {item.icon}
               <span>{item.label}</span>
-            </a>
+            </Link>
           ))}
         </nav>
       </aside>

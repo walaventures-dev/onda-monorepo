@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   AppShell,
   KpiCard,
@@ -58,6 +67,16 @@ type CustomerSegment =
   | "vip"
   | "dormidos";
 
+const SECTIONS: Tab[] = [
+  "resumen",
+  "clientes",
+  "actividad",
+  "promos",
+  "eventos",
+  "pase",
+  "config",
+];
+
 const TYPE_COLORS: Record<string, string> = {
   PERCENT_OFF: "#6E5AE6",
   AMOUNT_OFF: "#3DB9E8",
@@ -88,8 +107,113 @@ function deltaLabel(n?: number | null) {
   return `${sign}${n}%`;
 }
 
-export default function MerchantPage() {
-  const [tab, setTab] = useState<Tab>("resumen");
+function Icon({
+  children,
+  className = "h-3 w-3",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`shrink-0 ${className}`}
+      aria-hidden
+    >
+      {children}
+    </svg>
+  );
+}
+
+const IcoTag = {
+  type: (
+    <Icon>
+      <path d="M2.5 8.5 8.5 2.5h4v4L6.5 12.5z" />
+      <circle cx="11" cy="5" r="0.8" fill="currentColor" stroke="none" />
+    </Icon>
+  ),
+  top: (
+    <Icon>
+      <path d="M8 2.5 9.6 6.2l4 .3-3.1 2.6.9 3.9L8 11.2l-3.4 1.8.9-3.9L2.4 6.5l4-.3z" />
+    </Icon>
+  ),
+  cold: (
+    <Icon>
+      <path d="M8 2.5v11M4.5 5.5 8 8l3.5-2.5M4.5 10.5 8 8l3.5 2.5" />
+    </Icon>
+  ),
+  on: (
+    <Icon>
+      <circle cx="8" cy="8" r="5" />
+      <path d="M8 5.5v5" />
+    </Icon>
+  ),
+  off: (
+    <Icon>
+      <circle cx="8" cy="8" r="5" />
+      <path d="M6 8h4" />
+    </Icon>
+  ),
+  eye: (
+    <Icon>
+      <path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z" />
+      <circle cx="8" cy="8" r="1.8" />
+    </Icon>
+  ),
+  power: (
+    <Icon>
+      <path d="M8 2.5v5.5M4.8 4.2a5 5 0 1 0 6.4 0" />
+    </Icon>
+  ),
+  trash: (
+    <Icon>
+      <path d="M3 4.5h10M6 4.5V3h4v1.5M5 4.5l.5 8.5h5l.5-8.5" />
+    </Icon>
+  ),
+};
+
+function PromoTag({
+  children,
+  icon,
+  className = "",
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${className}`}
+    >
+      {icon}
+      {children}
+    </span>
+  );
+}
+
+const promoBtnBase =
+  "inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition";
+const promoBtnNeutral = `${promoBtnBase} border-[var(--onda-border)] bg-white text-[var(--onda-ink)] hover:border-[var(--onda-violet)]/40 hover:bg-[var(--onda-violet-soft)] hover:text-[var(--onda-violet)]`;
+const promoBtnDanger = `${promoBtnBase} border-transparent bg-transparent text-[var(--onda-danger)] hover:border-[var(--onda-danger)]/25 hover:bg-[var(--onda-danger)]/10`;
+
+function parseRoute(pathname: string): { tab: Tab; promoId: string | null } {
+  const parts = pathname.split("/").filter(Boolean);
+  const section = (parts[0] || "resumen") as Tab;
+  const tab = SECTIONS.includes(section) ? section : "resumen";
+  const promoId = tab === "promos" && parts[1] ? parts[1] : null;
+  return { tab, promoId };
+}
+
+export function MerchantWorkspace() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { tab, promoId: selectedPromoId } = parseRoute(pathname);
+
   const [stores, setStores] = useState<any[]>([]);
   const [storeId, setStoreId] = useState("");
   const [mode, setMode] = useState<"global" | "event">("global");
@@ -110,7 +234,6 @@ export default function MerchantPage() {
   const [promoStatusFilter, setPromoStatusFilter] = useState<
     "all" | "active" | "inactive"
   >("active");
-  const [selectedPromoId, setSelectedPromoId] = useState<string | null>(null);
   const [promoDetail, setPromoDetail] = useState<any>(null);
   const [promoDetailLoading, setPromoDetailLoading] = useState(false);
   const [segment, setSegment] = useState<CustomerSegment>("todos");
@@ -144,7 +267,7 @@ export default function MerchantPage() {
           ["config", "Configuración"],
         ] as const
       ).map(([href, label]) => ({
-        href: `#${href}`,
+        href: `/${href}`,
         label,
         active: tab === href,
       })),
@@ -226,16 +349,6 @@ export default function MerchantPage() {
   }, [storeId, mode, eventId, loadOverview, loadTxs, loadPromos]);
 
   useEffect(() => {
-    const onHash = () => {
-      const h = (window.location.hash || "#resumen").slice(1) as Tab;
-      if (h) setTab(h);
-    };
-    onHash();
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-  }, []);
-
-  useEffect(() => {
     if (!selectedPromoId) {
       setPromoDetail(null);
       return;
@@ -261,18 +374,14 @@ export default function MerchantPage() {
     };
   }, [selectedPromoId, filters.from, filters.to]);
 
-  useEffect(() => {
-    if (tab !== "promos") setSelectedPromoId(null);
-  }, [tab]);
-
   function openPromoDetail(id: string) {
-    setSelectedPromoId(id);
     setShowPromoForm(false);
+    router.push(`/promos/${id}`);
   }
 
   function closePromoDetail() {
-    setSelectedPromoId(null);
     setPromoDetail(null);
+    router.push("/promos");
   }
 
   const filteredCustomers = useMemo(() => {
@@ -307,6 +416,104 @@ export default function MerchantPage() {
     (overview.kpis?.redenciones ?? 0) === 0 &&
     (overview.series || []).every((r: any) => !r.ondas && !r.canjes);
 
+  const pulse = useMemo(() => {
+    if (!overview) {
+      return {
+        tone: "neutral" as const,
+        title: "Cargando el panorama…",
+        line: "Un momento mientras armamos el resumen.",
+      };
+    }
+    if (emptyRange) {
+      return {
+        tone: "neutral" as const,
+        title: "Por acá no hay movimiento",
+        line: "Con estos filtros no aparece casi nada. Prueba ampliar las fechas o quitar filtros de promo.",
+      };
+    }
+
+    const ondasD = kpis?.ondasDelta ?? 0;
+    const redeemD = kpis?.redencionesDelta ?? 0;
+    const newD = kpis?.clientesNuevosDelta ?? 0;
+    const rate = kpis?.tasaRedencion ?? 0;
+    const lowPromo = (overview.insights || []).find(
+      (i: any) =>
+        String(i.id).startsWith("promo-low-") ||
+        String(i.id).startsWith("promo-expiring-"),
+    );
+
+    let score = 0;
+    if (ondasD >= 10) score += 2;
+    else if (ondasD >= 0) score += 1;
+    else if (ondasD <= -25) score -= 2;
+    else score -= 1;
+
+    if (redeemD >= 10) score += 2;
+    else if (redeemD >= 0) score += 1;
+    else if (redeemD <= -25) score -= 2;
+    else score -= 1;
+
+    if (newD >= 0) score += 1;
+    else score -= 1;
+
+    if (rate >= 20) score += 1;
+    if (lowPromo) score -= 1;
+
+    const periodHint =
+      filters.preset === "today"
+        ? "hoy"
+        : filters.preset === "7d"
+          ? "esta semana"
+          : filters.preset === "14d"
+            ? "estas dos semanas"
+            : filters.preset === "30d"
+              ? "este mes (aprox.)"
+              : filters.preset === "month"
+                ? "este mes"
+                : "este periodo";
+
+    if (score >= 3) {
+      return {
+        tone: "good" as const,
+        title: `Va viento en popa ${periodHint}`,
+        line:
+          redeemD >= ondasD
+            ? "La gente está acumulando y canjeando. Sigue así, el programa se siente vivo."
+            : "Hay buen flujo de ondas. Si quieres más canjes, empuja una promo de 3–5 ondas.",
+      };
+    }
+    if (score >= 0) {
+      return {
+        tone: "ok" as const,
+        title: `Va tirando ${periodHint}`,
+        line: lowPromo
+          ? `No está mal, pero ojo: ${lowPromo.title.toLowerCase()}. Conviene duplicar o crear otra.`
+          : redeemD < 0
+            ? "Hay movimiento, pero los canjes van un poco flojos frente al periodo anterior."
+            : "Números estables. Nada alarmante, tampoco un festín.",
+      };
+    }
+    if (score >= -3) {
+      return {
+        tone: "warn" as const,
+        title: `Anda flojo ${periodHint}`,
+        line:
+          ondasD < 0 && redeemD < 0
+            ? "Bajaron ondas y canjes. Revisa el QR/caja o lanza un gancho fácil de canjear."
+            : redeemD <= -25
+              ? "Acumulan, pero casi no canjean. El catálogo puede no estar motivando."
+              : "Hay señales de enfriamiento. Un empujoncito (promo o WhatsApp) no estaría de más.",
+      };
+    }
+    return {
+      tone: "bad" as const,
+      title: `Va mal ${periodHint}`,
+      line: lowPromo
+        ? "Se siente apagado y además se te acaban promos. Toca reaccionar: duplica o crea algo nuevo ya."
+        : "Poco movimiento y peores números que antes. Amplía fechas solo si quieres contexto; si no, actúa en caja y promos.",
+    };
+  }, [overview, emptyRange, kpis, filters.preset]);
+
   async function accumulate() {
     try {
       await api("/transactions/accumulate", {
@@ -328,7 +535,7 @@ export default function MerchantPage() {
     }
   }
 
-  async function saveDesign(e: React.FormEvent) {
+  async function saveDesign(e: FormEvent) {
     e.preventDefault();
     const payload = {
       ...design,
@@ -364,7 +571,7 @@ export default function MerchantPage() {
     });
   }
 
-  async function createPromo(e: React.FormEvent) {
+  async function createPromo(e: FormEvent) {
     e.preventDefault();
     if (!storeId || !promoForm.title.trim()) return;
     if (!promoForm.expiryMode) {
@@ -445,7 +652,6 @@ export default function MerchantPage() {
   }
 
   function duplicatePromo(source: any) {
-    setSelectedPromoId(null);
     setPromoDetail(null);
     setPromoForm({
       title: source.title || "",
@@ -465,7 +671,7 @@ export default function MerchantPage() {
       maxRedemptions: "",
     });
     setShowPromoForm(true);
-    window.location.hash = "#promos";
+    router.push("/promos");
   }
 
   async function togglePromo(id: string, isActive: boolean) {
@@ -536,21 +742,21 @@ export default function MerchantPage() {
         duplicatePromo(source);
         return;
       }
-      window.location.hash = "#promos";
       setShowPromoForm(true);
+      router.push("/promos");
       return;
     }
     if (id === "near-redeem") {
       setSegment("cercaCanje");
-      window.location.hash = "#clientes";
+      router.push("/clientes");
     } else if (id === "at-risk") {
       setSegment("enRiesgo");
-      window.location.hash = "#clientes";
+      router.push("/clientes");
     } else if (id === "few-promos" || id === "redeem-drop") {
-      window.location.hash = "#promos";
       setShowPromoForm(true);
+      router.push("/promos");
     } else if (id === "wa-limit") {
-      window.location.hash = "#config";
+      router.push("/config");
     }
   }
 
@@ -591,6 +797,7 @@ export default function MerchantPage() {
         title={store?.name || "Merchant"}
         nav={nav}
         userName={store?.name || "M"}
+        linkComponent={Link}
         toolbar={
           <div className="flex flex-nowrap items-center justify-end gap-2">
             <OndaSelect
@@ -678,59 +885,71 @@ export default function MerchantPage() {
 
         {tab === "resumen" && (
           <div className="space-y-6">
-            {emptyRange ? (
-              <div className="onda-card p-6 text-center">
-                <p className="font-display font-semibold">
-                  Sin datos en este rango
-                </p>
-                <p className="mt-1 text-sm text-[var(--onda-muted)]">
-                  Amplía las fechas o cambia el filtro de tipo de promo.
-                </p>
-              </div>
-            ) : null}
+            <div
+              className={`rounded-2xl border px-5 py-4 ${
+                pulse.tone === "good"
+                  ? "border-[var(--onda-success)]/30 bg-[var(--onda-success)]/10"
+                  : pulse.tone === "ok"
+                    ? "border-[var(--onda-sky)]/30 bg-[var(--onda-sky-soft)]"
+                    : pulse.tone === "warn"
+                      ? "border-amber-400/40 bg-amber-50"
+                      : pulse.tone === "bad"
+                        ? "border-[var(--onda-danger)]/30 bg-[var(--onda-danger)]/8"
+                        : "border-[var(--onda-border)] bg-white"
+              }`}
+            >
+              <p className="mt-1 font-display text-xl font-semibold text-[var(--onda-ink)]">
+                {pulse.title}
+              </p>
+              <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-[var(--onda-muted)]">
+                {pulse.line}
+              </p>
+            </div>
 
-            <div className="onda-kpi-grid">
-              <KpiCard
-                label="Ondas en periodo"
-                value={kpis?.ondas ?? 0}
-                delta={deltaLabel(kpis?.ondasDelta)}
-                positive={(kpis?.ondasDelta ?? 0) >= 0}
-              />
-              <KpiCard
-                label="Redenciones"
-                value={kpis?.redenciones ?? 0}
-                delta={deltaLabel(kpis?.redencionesDelta)}
-                positive={(kpis?.redencionesDelta ?? 0) >= 0}
-              />
-              <KpiCard
-                label="Clientes nuevos"
-                value={kpis?.clientesNuevos ?? 0}
-                delta={deltaLabel(kpis?.clientesNuevosDelta)}
-                positive={(kpis?.clientesNuevosDelta ?? 0) >= 0}
-              />
-              <KpiCard
-                label="Tasa redención"
-                value={`${kpis?.tasaRedencion ?? 0}%`}
-                delta={
-                  kpis?.tasaRedencionDelta != null
-                    ? `${kpis.tasaRedencionDelta > 0 ? "+" : ""}${kpis.tasaRedencionDelta} pp`
-                    : undefined
-                }
-                positive={(kpis?.tasaRedencionDelta ?? 0) >= 0}
-              />
-              {mode === "event" && overview?.eventMeta ? (
+            {!emptyRange ? (
+              <div className="onda-kpi-grid">
                 <KpiCard
-                  label="Meta evento"
-                  value={`${overview.eventMeta.progress}%`}
+                  label="Ondas en periodo"
+                  value={kpis?.ondas ?? 0}
+                  delta={deltaLabel(kpis?.ondasDelta)}
+                  positive={(kpis?.ondasDelta ?? 0) >= 0}
+                />
+                <KpiCard
+                  label="Redenciones"
+                  value={kpis?.redenciones ?? 0}
+                  delta={deltaLabel(kpis?.redencionesDelta)}
+                  positive={(kpis?.redencionesDelta ?? 0) >= 0}
+                />
+                <KpiCard
+                  label="Clientes nuevos"
+                  value={kpis?.clientesNuevos ?? 0}
+                  delta={deltaLabel(kpis?.clientesNuevosDelta)}
+                  positive={(kpis?.clientesNuevosDelta ?? 0) >= 0}
+                />
+                <KpiCard
+                  label="Tasa redención"
+                  value={`${kpis?.tasaRedencion ?? 0}%`}
                   delta={
-                    overview.eventMeta.rank
-                      ? `#${overview.eventMeta.rank} de ${overview.eventMeta.totalStores}`
+                    kpis?.tasaRedencionDelta != null
+                      ? `${kpis.tasaRedencionDelta > 0 ? "+" : ""}${kpis.tasaRedencionDelta} pp`
                       : undefined
                   }
-                  positive
+                  positive={(kpis?.tasaRedencionDelta ?? 0) >= 0}
                 />
-              ) : null}
-            </div>
+                {mode === "event" && overview?.eventMeta ? (
+                  <KpiCard
+                    label="Meta evento"
+                    value={`${overview.eventMeta.progress}%`}
+                    delta={
+                      overview.eventMeta.rank
+                        ? `#${overview.eventMeta.rank} de ${overview.eventMeta.totalStores}`
+                        : undefined
+                    }
+                    positive
+                  />
+                ) : null}
+              </div>
+            ) : null}
 
             {(overview?.insights || []).length > 0 ? (
               <div className="grid gap-3 md:grid-cols-3">
@@ -1511,30 +1730,35 @@ export default function MerchantPage() {
                         </div>
                       )}
                       <div className="absolute left-2 top-2 flex flex-wrap gap-1">
-                        <span className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-medium text-[var(--onda-violet)]">
+                        <PromoTag
+                          icon={IcoTag.type}
+                          className="bg-white/90 text-[var(--onda-violet)]"
+                        >
                           {promoTypeLabel(p.type)}
-                        </span>
+                        </PromoTag>
                         {badge ? (
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          <PromoTag
+                            icon={badge === "Top" ? IcoTag.top : IcoTag.cold}
+                            className={
                               badge === "Top"
                                 ? "bg-[var(--onda-success)] text-white"
                                 : "bg-amber-100 text-amber-800"
-                            }`}
+                            }
                           >
                             {badge}
-                          </span>
+                          </PromoTag>
                         ) : null}
                       </div>
-                      <span
-                        className={`absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      <PromoTag
+                        icon={p.isActive ? IcoTag.on : IcoTag.off}
+                        className={`absolute right-2 top-2 ${
                           p.isActive
                             ? "bg-[var(--onda-success)] text-white"
                             : "bg-white/90 text-[var(--onda-muted)]"
                         }`}
                       >
                         {p.isActive ? "Activa" : "Inactiva"}
-                      </span>
+                      </PromoTag>
                     </div>
                     <div className="space-y-1.5 p-3">
                       <h3 className="font-display text-sm font-semibold leading-snug line-clamp-2">
@@ -1554,32 +1778,35 @@ export default function MerchantPage() {
                       <div className="flex flex-wrap gap-1.5 pt-0.5">
                         <button
                           type="button"
-                          className="cursor-pointer rounded-full border border-[var(--onda-border)] px-2.5 py-1 text-[11px] font-medium"
+                          className={promoBtnNeutral}
                           onClick={(e) => {
                             e.stopPropagation();
                             openPromoDetail(p.id);
                           }}
                         >
+                          {IcoTag.eye}
                           Ver detalle
                         </button>
                         <button
                           type="button"
-                          className="cursor-pointer rounded-full border border-[var(--onda-border)] px-2.5 py-1 text-[11px] font-medium"
+                          className={promoBtnNeutral}
                           onClick={(e) => {
                             e.stopPropagation();
                             togglePromo(p.id, p.isActive);
                           }}
                         >
+                          {IcoTag.power}
                           {p.isActive ? "Desactivar" : "Activar"}
                         </button>
                         <button
                           type="button"
-                          className="cursor-pointer rounded-full px-2.5 py-1 text-[11px] font-medium text-[var(--onda-danger)]"
+                          className={promoBtnDanger}
                           onClick={(e) => {
                             e.stopPropagation();
                             deletePromo(p.id);
                           }}
                         >
+                          {IcoTag.trash}
                           Eliminar
                         </button>
                       </div>
@@ -1618,23 +1845,34 @@ export default function MerchantPage() {
                         <h3 className="truncate font-display text-sm font-semibold">
                           {p.title}
                         </h3>
-                        <span className="rounded-full bg-[var(--onda-violet-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--onda-violet)]">
+                        <PromoTag
+                          icon={IcoTag.type}
+                          className="bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]"
+                        >
                           {promoTypeLabel(p.type)}
-                        </span>
+                        </PromoTag>
                         {badge ? (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                          <PromoTag
+                            icon={badge === "Top" ? IcoTag.top : IcoTag.cold}
+                            className={
+                              badge === "Top"
+                                ? "bg-[var(--onda-success)] text-white"
+                                : "bg-amber-100 text-amber-800"
+                            }
+                          >
                             {badge}
-                          </span>
+                          </PromoTag>
                         ) : null}
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        <PromoTag
+                          icon={p.isActive ? IcoTag.on : IcoTag.off}
+                          className={
                             p.isActive
                               ? "bg-[var(--onda-success)]/15 text-[var(--onda-success)]"
                               : "bg-[var(--onda-bg)] text-[var(--onda-muted)]"
-                          }`}
+                          }
                         >
                           {p.isActive ? "Activa" : "Inactiva"}
-                        </span>
+                        </PromoTag>
                       </div>
                       <p className="mt-0.5 line-clamp-1 text-xs text-[var(--onda-muted)]">
                         {benefit} · {canjes} canjes · {stats?.elegibles ?? 0}{" "}
@@ -1644,32 +1882,35 @@ export default function MerchantPage() {
                     <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
                       <button
                         type="button"
-                        className="cursor-pointer rounded-full border border-[var(--onda-border)] px-2.5 py-1 text-[11px] font-medium"
+                        className={promoBtnNeutral}
                         onClick={(e) => {
                           e.stopPropagation();
                           openPromoDetail(p.id);
                         }}
                       >
+                        {IcoTag.eye}
                         Detalle
                       </button>
                       <button
                         type="button"
-                        className="cursor-pointer rounded-full border border-[var(--onda-border)] px-2.5 py-1 text-[11px] font-medium"
+                        className={promoBtnNeutral}
                         onClick={(e) => {
                           e.stopPropagation();
                           togglePromo(p.id, p.isActive);
                         }}
                       >
+                        {IcoTag.power}
                         {p.isActive ? "Desactivar" : "Activar"}
                       </button>
                       <button
                         type="button"
-                        className="cursor-pointer rounded-full px-2.5 py-1 text-[11px] font-medium text-[var(--onda-danger)]"
+                        className={promoBtnDanger}
                         onClick={(e) => {
                           e.stopPropagation();
                           deletePromo(p.id);
                         }}
                       >
+                        {IcoTag.trash}
                         Eliminar
                       </button>
                     </div>
