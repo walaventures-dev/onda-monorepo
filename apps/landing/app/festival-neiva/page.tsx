@@ -21,7 +21,7 @@ export default function FestivalNeivaPage() {
         </a>
       </header>
       <main className="mx-auto max-w-5xl px-6 py-10">
-        <div className="overflow-hidden rounded-3xl onda-gradient p-10 text-white">
+        <div className="overflow-hidden rounded-3xl onda-gradient p-6 text-white md:p-10">
           <p className="text-sm uppercase tracking-widest text-white/80">Evento oficial</p>
           <h1 className="font-display mt-2 text-4xl font-bold md:text-5xl">
             {event?.name || 'Festival a la Carta Neiva'}

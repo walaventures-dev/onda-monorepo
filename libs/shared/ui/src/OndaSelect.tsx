@@ -33,7 +33,7 @@ export function OndaSelect({
   return (
     <Select
       aria-label={ariaLabel}
-      className={`onda-select ${compact ? 'onda-select--compact' : 'min-w-[300px] w-[min(100%,22rem)]'} ${className}`}
+      className={`onda-select ${compact ? 'onda-select--compact' : ''} ${className}`}
       placeholder={placeholder}
       selectedKey={value || null}
       isDisabled={isDisabled}

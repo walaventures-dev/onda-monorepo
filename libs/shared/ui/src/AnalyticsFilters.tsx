@@ -116,7 +116,7 @@ export function SegmentedControl<T extends string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="inline-flex rounded-lg bg-[#e8edf5] p-0.5"
+      className="inline-flex max-w-full flex-wrap rounded-lg bg-[#e8edf5] p-0.5"
     >
       {options.map((opt) => {
         const selected = value === opt.id;
@@ -126,7 +126,7 @@ export function SegmentedControl<T extends string>({
             type="button"
             role="radio"
             aria-checked={selected}
-            className={`cursor-pointer rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
+            className={`cursor-pointer rounded-md px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition ${
               selected
                 ? 'bg-white text-[var(--onda-ink)] shadow-[0_1px_2px_rgba(26,27,46,0.12)]'
                 : 'text-[var(--onda-muted)] hover:text-[var(--onda-ink)]'
@@ -235,10 +235,10 @@ export function AnalyticsFiltersBar({
   const showDimensions = showPromoTypes || (extraGroups && extraGroups.length > 0);
 
   return (
-    <div className="sticky top-0 z-10 mb-5 overflow-hidden rounded-xl border border-[var(--onda-border)] bg-white shadow-[0_1px_2px_rgba(26,27,46,0.04)]">
+    <div className="sticky top-0 z-10 mb-5 overflow-x-auto rounded-xl border border-[var(--onda-border)] bg-white shadow-[0_1px_2px_rgba(26,27,46,0.04)]">
       {/* Periodo — primario */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-        <FilterGroup label="Periodo">
+        <FilterGroup label="Periodo" className="min-w-0 flex-1 basis-full sm:basis-auto sm:flex-none">
           <SegmentedControl
             aria-label="Rango de fechas"
             options={[...DATE_PRESETS]}

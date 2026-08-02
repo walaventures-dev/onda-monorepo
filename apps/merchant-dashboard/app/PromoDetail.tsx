@@ -444,8 +444,8 @@ export function PromoDetail({
               </span>
             </h3>
           </div>
-          <div className="max-h-80 overflow-auto">
-            <table className="w-full text-left text-sm">
+          <div className="max-h-80 overflow-x-auto overflow-y-auto">
+            <table className="w-full min-w-[28rem] text-left text-sm">
               <thead className="sticky top-0 bg-[var(--onda-bg)] text-[var(--onda-muted)]">
                 <tr>
                   <th className="p-3 font-medium">Cliente</th>

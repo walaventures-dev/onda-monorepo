@@ -224,6 +224,35 @@ export type NavItem = {
   active?: boolean;
 };
 
+function MenuIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden
+      className="onda-menu-icon"
+    >
+      {open ? (
+        <path
+          d="M5 5l10 10M15 5L5 15"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+        />
+      ) : (
+        <path
+          d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
+  );
+}
+
 export function AppShell({
   title,
   nav,
@@ -241,9 +270,48 @@ export function AppShell({
   linkComponent?: React.ElementType;
 }) {
   const Link = linkComponent || 'a';
+  const [navOpen, setNavOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setNavOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navOpen]);
+
+  React.useEffect(() => {
+    if (!navOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [navOpen]);
+
+  React.useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const onChange = () => {
+      if (mq.matches) setNavOpen(false);
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  const closeNav = () => setNavOpen(false);
+
   return (
-    <div className="onda-shell">
-      <aside className="onda-sidebar">
+    <div className={`onda-shell${navOpen ? ' is-nav-open' : ''}`}>
+      {navOpen ? (
+        <button
+          type="button"
+          className="onda-nav-backdrop"
+          aria-label="Cerrar menú"
+          onClick={closeNav}
+        />
+      ) : null}
+      <aside className={`onda-sidebar${navOpen ? ' is-open' : ''}`} id="onda-sidebar-nav">
         <OndaLogo className="mb-8 px-2" />
         <nav className="onda-sidebar-nav">
           {nav.map((item) => (
@@ -251,6 +319,7 @@ export function AppShell({
               key={item.href}
               href={item.href}
               className={`onda-nav-link${item.active ? ' is-active' : ''}`}
+              onClick={closeNav}
             >
               {item.icon}
               <span>{item.label}</span>
@@ -260,9 +329,21 @@ export function AppShell({
       </aside>
       <div className="onda-shell-main">
         <header className="onda-topbar">
-          <div className="onda-topbar-brand">
-            <p className="onda-topbar-sub">Panel Onda</p>
-            <h1 className="onda-topbar-title">{title}</h1>
+          <div className="onda-topbar-leading">
+            <button
+              type="button"
+              className="onda-menu-btn"
+              aria-label={navOpen ? 'Cerrar menú' : 'Abrir menú'}
+              aria-expanded={navOpen}
+              aria-controls="onda-sidebar-nav"
+              onClick={() => setNavOpen((v) => !v)}
+            >
+              <MenuIcon open={navOpen} />
+            </button>
+            <div className="onda-topbar-brand">
+              <p className="onda-topbar-sub">Panel Onda</p>
+              <h1 className="onda-topbar-title">{title}</h1>
+            </div>
           </div>
           <div className="onda-topbar-actions">
             {toolbar}

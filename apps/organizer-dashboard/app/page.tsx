@@ -176,6 +176,7 @@ export default function OrganizerPage() {
           value={eventId}
           onChange={setEventId}
           placeholder="Seleccionar evento"
+          compact
           options={events.map((ev) => ({ id: ev.id, label: ev.name }))}
         />
       }
@@ -193,7 +194,14 @@ export default function OrganizerPage() {
               <div className="mt-4 h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={macro?.ranking || []} margin={{ left: 8, right: 8 }}>
-                    <XAxis dataKey="storeName" tick={{ fontSize: 11 }} interval={0} />
+                    <XAxis
+                      dataKey="storeName"
+                      tick={{ fontSize: 11 }}
+                      interval="preserveStartEnd"
+                      angle={-25}
+                      textAnchor="end"
+                      height={56}
+                    />
                     <YAxis allowDecimals={false} width={32} />
                     <Tooltip />
                     <Bar dataKey="ondas" fill="#6E5AE6" radius={[8, 8, 0, 0]} maxBarSize={48} />
@@ -219,15 +227,15 @@ export default function OrganizerPage() {
           {memberships.map((m) => (
             <div
               key={m.id}
-              className="onda-card flex flex-wrap items-center justify-between gap-3 p-4"
+              className="onda-card flex min-w-0 flex-wrap items-center justify-between gap-3 p-4"
             >
-              <div>
-                <p className="font-medium">{m.store?.name}</p>
-                <p className="text-sm text-[var(--onda-muted)]">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{m.store?.name}</p>
+                <p className="truncate text-sm text-[var(--onda-muted)]">
                   {m.status} {m.nfcKitId ? `· Kit ${m.nfcKitId}` : ''}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   className="rounded-full bg-[var(--onda-sky-soft)] px-3 py-1 text-xs text-[var(--onda-sky)]"

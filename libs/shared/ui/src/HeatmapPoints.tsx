@@ -11,10 +11,10 @@ export function HeatmapPoints({
       {points.map((p, i) => (
         <div
           key={`${p.lat}-${p.lng}-${i}`}
-          className="flex items-center justify-between rounded-xl bg-[var(--onda-bg)] px-3 py-2 text-sm"
+          className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-[var(--onda-bg)] px-3 py-2 text-sm"
         >
-          <span className="font-medium">{p.name}</span>
-          <span className="text-[var(--onda-sky)]">
+          <span className="min-w-0 truncate font-medium">{p.name}</span>
+          <span className="shrink-0 text-[var(--onda-sky)]">
             {p.lat.toFixed(4)}, {p.lng.toFixed(4)}
             {p.weight != null ? ` · ${p.weight}` : ''}
           </span>

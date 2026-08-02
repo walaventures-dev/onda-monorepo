@@ -48,6 +48,7 @@ import {
   Cell,
 } from "recharts";
 import { PromoDetail } from "./PromoDetail";
+import { CustomerDetail } from "./CustomerDetail";
 
 type Tab =
   | "resumen"
@@ -396,18 +397,24 @@ function fillPeriod(template: string, periodHint: string) {
   return template.replaceAll("{period}", periodHint);
 }
 
-function parseRoute(pathname: string): { tab: Tab; promoId: string | null } {
+function parseRoute(pathname: string): {
+  tab: Tab;
+  promoId: string | null;
+  customerPassId: string | null;
+} {
   const parts = pathname.split("/").filter(Boolean);
   const section = (parts[0] || "resumen") as Tab;
   const tab = SECTIONS.includes(section) ? section : "resumen";
   const promoId = tab === "promos" && parts[1] ? parts[1] : null;
-  return { tab, promoId };
+  const customerPassId = tab === "clientes" && parts[1] ? parts[1] : null;
+  return { tab, promoId, customerPassId };
 }
 
 export function MerchantWorkspace() {
   const pathname = usePathname();
   const router = useRouter();
-  const { tab, promoId: selectedPromoId } = parseRoute(pathname);
+  const { tab, promoId: selectedPromoId, customerPassId: selectedCustomerPassId } =
+    parseRoute(pathname);
 
   const [stores, setStores] = useState<any[]>([]);
   const [storeId, setStoreId] = useState("");
@@ -431,6 +438,8 @@ export function MerchantWorkspace() {
   >("active");
   const [promoDetail, setPromoDetail] = useState<any>(null);
   const [promoDetailLoading, setPromoDetailLoading] = useState(false);
+  const [customerDetail, setCustomerDetail] = useState<any>(null);
+  const [customerDetailLoading, setCustomerDetailLoading] = useState(false);
   const [segment, setSegment] = useState<CustomerSegment>("todos");
   const [txTypeFilter, setTxTypeFilter] = useState<
     "ALL" | "ACCUMULATE" | "REDEEM"
@@ -569,6 +578,34 @@ export function MerchantWorkspace() {
     };
   }, [selectedPromoId, filters.from, filters.to]);
 
+  useEffect(() => {
+    if (!selectedCustomerPassId || !storeId) {
+      setCustomerDetail(null);
+      return;
+    }
+    let cancelled = false;
+    setCustomerDetailLoading(true);
+    const q = new URLSearchParams({
+      from: filters.from,
+      to: filters.to,
+    });
+    api(
+      `/analytics/store/${storeId}/customers/${selectedCustomerPassId}?${q}`,
+    )
+      .then((data) => {
+        if (!cancelled) setCustomerDetail(data);
+      })
+      .catch(() => {
+        if (!cancelled) setCustomerDetail(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCustomerDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCustomerPassId, storeId, filters.from, filters.to]);
+
   function openPromoDetail(id: string) {
     setShowPromoForm(false);
     router.push(`/promos/${id}`);
@@ -577,6 +614,15 @@ export function MerchantWorkspace() {
   function closePromoDetail() {
     setPromoDetail(null);
     router.push("/promos");
+  }
+
+  function openCustomerDetail(passId: string) {
+    router.push(`/clientes/${passId}`);
+  }
+
+  function closeCustomerDetail() {
+    setCustomerDetail(null);
+    router.push("/clientes");
   }
 
   const filteredCustomers = useMemo(() => {
@@ -976,7 +1022,7 @@ export function MerchantWorkspace() {
         userName={store?.name || "M"}
         linkComponent={Link}
         toolbar={
-          <div className="flex flex-nowrap items-center justify-end gap-2">
+          <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2">
             <OndaSelect
               aria-label="Sede"
               value={storeId}
@@ -1009,53 +1055,58 @@ export function MerchantWorkspace() {
           </div>
         }
       >
-        {["resumen", "clientes", "actividad", "promos"].includes(tab) ? (
+        {["resumen", "clientes", "actividad"].includes(tab) ||
+        (tab === "promos" && !selectedPromoId) ? (
           <AnalyticsFiltersBar
             value={filters}
             onChange={setFilters}
             showPromoTypes={
-              tab !== "actividad" || txTypeFilter !== "ACCUMULATE"
+              selectedCustomerPassId
+                ? false
+                : tab !== "actividad" || txTypeFilter !== "ACCUMULATE"
             }
             extraGroups={
-              tab === "actividad"
-                ? [
-                    {
-                      id: "tx-type",
-                      label: "Movimiento",
-                      children: (
-                        <SegmentedControl
-                          aria-label="Tipo de movimiento"
-                          value={txTypeFilter}
-                          onChange={setTxTypeFilter}
-                          options={[
-                            { id: "ALL", label: "Todos" },
-                            { id: "ACCUMULATE", label: "Acumular" },
-                            { id: "REDEEM", label: "Canjear" },
-                          ]}
-                        />
-                      ),
-                    },
-                  ]
-                : tab === "promos"
+              selectedCustomerPassId
+                ? undefined
+                : tab === "actividad"
                   ? [
                       {
-                        id: "promo-status",
-                        label: "Estado",
+                        id: "tx-type",
+                        label: "Movimiento",
                         children: (
                           <SegmentedControl
-                            aria-label="Estado de promoción"
-                            value={promoStatusFilter}
-                            onChange={setPromoStatusFilter}
+                            aria-label="Tipo de movimiento"
+                            value={txTypeFilter}
+                            onChange={setTxTypeFilter}
                             options={[
-                              { id: "active", label: "Activas" },
-                              { id: "inactive", label: "Inactivas" },
-                              { id: "all", label: "Todas" },
+                              { id: "ALL", label: "Todos" },
+                              { id: "ACCUMULATE", label: "Acumular" },
+                              { id: "REDEEM", label: "Canjear" },
                             ]}
                           />
                         ),
                       },
                     ]
-                  : undefined
+                  : tab === "promos"
+                    ? [
+                        {
+                          id: "promo-status",
+                          label: "Estado",
+                          children: (
+                            <SegmentedControl
+                              aria-label="Estado de promoción"
+                              value={promoStatusFilter}
+                              onChange={setPromoStatusFilter}
+                              options={[
+                                { id: "active", label: "Activas" },
+                                { id: "inactive", label: "Inactivas" },
+                                { id: "all", label: "Todas" },
+                              ]}
+                            />
+                          ),
+                        },
+                      ]
+                    : undefined
             }
           />
         ) : null}
@@ -1143,12 +1194,12 @@ export function MerchantWorkspace() {
               </div>
             ) : null}
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:[grid-auto-rows:7.5rem]">
-              <div className="onda-card flex h-[7.5rem] min-h-0 flex-col overflow-hidden p-4 lg:col-span-2 lg:h-full">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:[grid-auto-rows:minmax(11rem,auto)]">
+              <div className="onda-card flex min-h-[11rem] flex-col overflow-hidden p-4 lg:col-span-2 lg:h-full lg:min-h-0">
                 <h3 className="font-display shrink-0 text-sm font-semibold">
                   Ondas y canjes por día
                 </h3>
-                <div className="relative mt-2 min-h-0 flex-1">
+                <div className="relative mt-2 min-h-[9rem] flex-1">
                   <div className="absolute inset-0">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
@@ -1160,6 +1211,7 @@ export function MerchantWorkspace() {
                           tickFormatter={(v) => String(v).slice(5)}
                           fontSize={10}
                           tickMargin={4}
+                          interval="preserveStartEnd"
                         />
                         <YAxis
                           fontSize={10}
@@ -1189,7 +1241,7 @@ export function MerchantWorkspace() {
                 </div>
               </div>
               <ActivityTimeline
-                className="h-[7.5rem] lg:h-full"
+                className="min-h-[11rem] lg:h-full"
                 items={(overview?.recent || []).slice(0, 12).map((t: any) => ({
                   id: t.id,
                   title:
@@ -1290,7 +1342,15 @@ export function MerchantWorkspace() {
           </div>
         )}
 
-        {tab === "clientes" && (
+        {tab === "clientes" && selectedCustomerPassId ? (
+          <CustomerDetail
+            detail={customerDetail}
+            loading={customerDetailLoading}
+            onBack={closeCustomerDetail}
+          />
+        ) : null}
+
+        {tab === "clientes" && !selectedCustomerPassId && (
           <div className="space-y-4">
             {(overview?.insights || [])
               .filter((i: any) => ["near-redeem", "at-risk"].includes(i.id))
@@ -1320,8 +1380,8 @@ export function MerchantWorkspace() {
             </div>
 
             <div className="onda-card overflow-hidden">
-              <div className="flex items-center justify-between border-b border-[var(--onda-border)] p-4">
-                <h3 className="font-display font-semibold">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--onda-border)] p-4">
+                <h3 className="font-display min-w-0 font-semibold">
                   CRM · {filteredCustomers.length} clientes
                 </h3>
                 <GradientButton type="button" onClick={exportCsv}>
@@ -1329,7 +1389,7 @@ export function MerchantWorkspace() {
                 </GradientButton>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
+                <table className="w-full min-w-[40rem] text-left text-sm">
                   <thead className="bg-[var(--onda-bg)] text-[var(--onda-muted)]">
                     <tr>
                       <th className="p-3">Nombre</th>
@@ -1345,9 +1405,18 @@ export function MerchantWorkspace() {
                     {filteredCustomers.map((c: any) => (
                       <tr
                         key={c.passId}
-                        className="border-t border-[var(--onda-border)]"
+                        role="link"
+                        tabIndex={0}
+                        className="cursor-pointer border-t border-[var(--onda-border)] transition hover:bg-[var(--onda-violet-soft)]/40"
+                        onClick={() => openCustomerDetail(c.passId)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openCustomerDetail(c.passId);
+                          }
+                        }}
                       >
-                        <td className="p-3">{c.user.name}</td>
+                        <td className="p-3 font-medium">{c.user.name}</td>
                         <td className="p-3">{displayPhone(c.user.phone)}</td>
                         <td className="p-3">{c.points}</td>
                         <td className="p-3 text-xs text-[var(--onda-muted)]">
@@ -1463,9 +1532,9 @@ export function MerchantWorkspace() {
                   {txs.map((t: any) => (
                     <li
                       key={t.id}
-                      className="flex justify-between gap-3 border-b border-[var(--onda-border)] py-2"
+                      className="flex min-w-0 justify-between gap-3 border-b border-[var(--onda-border)] py-2"
                     >
-                      <span>
+                      <span className="min-w-0 truncate">
                         {t.type === "ACCUMULATE" ? "Acumular" : "Canjear"} ·{" "}
                         {t.pass?.user?.name || "—"}
                         {t.promotion ? (
@@ -1882,7 +1951,7 @@ export function MerchantWorkspace() {
             <div
               className={
                 promoView === "grid"
-                  ? "grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+                  ? "grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
                   : "flex flex-col gap-2"
               }
             >
@@ -2123,15 +2192,15 @@ export function MerchantWorkspace() {
             {memberships.map((m) => (
               <div
                 key={m.id}
-                className="onda-card flex items-center justify-between p-4"
+                className="onda-card flex min-w-0 flex-wrap items-center justify-between gap-3 p-4"
               >
-                <div>
-                  <p className="font-medium">{m.event?.name}</p>
-                  <p className="text-sm text-[var(--onda-muted)]">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{m.event?.name}</p>
+                  <p className="truncate text-sm text-[var(--onda-muted)]">
                     {m.customPromo || "Sin promo"}
                   </p>
                 </div>
-                <span className="rounded-full bg-[var(--onda-violet-soft)] px-3 py-1 text-xs text-[var(--onda-violet)]">
+                <span className="shrink-0 rounded-full bg-[var(--onda-violet-soft)] px-3 py-1 text-xs text-[var(--onda-violet)]">
                   {m.status}
                 </span>
               </div>

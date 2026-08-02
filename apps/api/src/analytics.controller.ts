@@ -1,4 +1,4 @@
-import { Inject, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Inject, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { PlanType, PromotionType, Prisma } from '@prisma/client';
 import { PrismaService } from './prisma.service';
 
@@ -560,6 +560,221 @@ export class AnalyticsController {
           createdAt: t.createdAt,
           promotion: t.promotion,
         })),
+    };
+  }
+
+  @Get('store/:storeId/customers/:passId')
+  async customerDetail(
+    @Param('storeId') storeId: string,
+    @Param('passId') passId: string,
+    @Query('from') fromQ?: string,
+    @Query('to') toQ?: string,
+  ) {
+    const pass = await this.prisma.pass.findFirst({
+      where: { id: passId, storeId },
+      include: { user: true },
+    });
+    if (!pass) throw new NotFoundException('Cliente no encontrado');
+
+    const to =
+      parseDateEnd(toQ) ||
+      (() => {
+        const d = new Date();
+        d.setHours(23, 59, 59, 999);
+        return d;
+      })();
+    const from =
+      parseDateStart(fromQ) ||
+      (() => {
+        const d = new Date(to);
+        d.setDate(d.getDate() - 13);
+        d.setHours(0, 0, 0, 0);
+        return d;
+      })();
+    const { prevFrom, prevTo } = previousPeriod(from, to);
+
+    const [txs, prevTxs, lastTx, allTimeAgg, activePromos] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where: { passId, storeId, createdAt: { gte: from, lte: to } },
+        include: { promotion: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.transaction.findMany({
+        where: { passId, storeId, createdAt: { gte: prevFrom, lte: prevTo } },
+        select: { type: true, points: true },
+      }),
+      this.prisma.transaction.findFirst({
+        where: { passId, storeId },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.transaction.groupBy({
+        by: ['type'],
+        where: { passId, storeId },
+        _count: { _all: true },
+        _sum: { points: true },
+      }),
+      this.prisma.promotion.findMany({
+        where: { storeId, isActive: true },
+        orderBy: { pointsRequired: 'asc' },
+      }),
+    ]);
+
+    const sumAccumulate = (rows: { type: string; points: number }[]) =>
+      rows
+        .filter((t) => t.type === 'ACCUMULATE')
+        .reduce((s, t) => s + t.points, 0);
+    const countRedeem = (rows: { type: string }[]) =>
+      rows.filter((t) => t.type === 'REDEEM').length;
+
+    const ondas = sumAccumulate(txs);
+    const canjes = countRedeem(txs);
+    const visitas = txs.length;
+    const prevOndas = sumAccumulate(prevTxs);
+    const prevCanjes = countRedeem(prevTxs);
+    const prevVisitas = prevTxs.length;
+
+    const daysSinceVisit = lastTx
+      ? Math.floor((Date.now() - lastTx.createdAt.getTime()) / 86400000)
+      : null;
+
+    const accumulateTxs = txs.filter((t) => t.type === 'ACCUMULATE');
+    const ticketMedioOndas =
+      accumulateTxs.length > 0
+        ? Math.round(ondas / accumulateTxs.length)
+        : 0;
+
+    const seriesMap = new Map<
+      string,
+      { date: string; ondas: number; canjes: number }
+    >();
+    for (let t = from.getTime(); t <= to.getTime(); t += 86400000) {
+      const key = dayKey(new Date(t));
+      seriesMap.set(key, { date: key, ondas: 0, canjes: 0 });
+    }
+    for (const tx of txs) {
+      const key = dayKey(tx.createdAt);
+      const row = seriesMap.get(key) || { date: key, ondas: 0, canjes: 0 };
+      if (tx.type === 'ACCUMULATE') row.ondas += tx.points;
+      else row.canjes += 1;
+      seriesMap.set(key, row);
+    }
+    const series = [...seriesMap.values()];
+
+    const hourly = Array.from({ length: 24 }, (_, h) => ({
+      hour: h,
+      ondas: 0,
+      canjes: 0,
+    }));
+    for (const tx of txs) {
+      const h = tx.createdAt.getHours();
+      if (tx.type === 'ACCUMULATE') hourly[h].ondas += tx.points;
+      else hourly[h].canjes += 1;
+    }
+
+    const byType: Record<string, number> = {};
+    for (const tx of txs) {
+      if (tx.type !== 'REDEEM') continue;
+      const t = tx.promotion?.type || 'OTHER';
+      byType[t] = (byType[t] || 0) + 1;
+    }
+    const redemptionsByType = Object.entries(byType).map(([type, count]) => ({
+      type,
+      count,
+    }));
+
+    const nearPromo = activePromos
+      .filter((pr) => pass.points < pr.pointsRequired)
+      .sort((a, b) => a.pointsRequired - b.pointsRequired)[0];
+    const gap = nearPromo ? nearPromo.pointsRequired - pass.points : null;
+
+    let badge: string | null = null;
+    if (pass.user.createdAt >= from && pass.user.createdAt <= to) badge = 'Nuevo';
+    if (gap != null && gap <= 2 && gap >= 0) badge = badge || 'Cerca';
+    if (daysSinceVisit != null && daysSinceVisit >= 21 && daysSinceVisit <= 45) {
+      badge = 'En riesgo';
+    }
+    if (daysSinceVisit != null && daysSinceVisit > 45) {
+      badge = badge || 'Dormido';
+    }
+
+    const eligiblePromos = activePromos.map((p) => ({
+      id: p.id,
+      title: p.title,
+      type: p.type,
+      pointsRequired: p.pointsRequired,
+      gap: p.pointsRequired - pass.points,
+      ready: pass.points >= p.pointsRequired,
+    }));
+
+    const allTimeOndas =
+      allTimeAgg.find((g) => g.type === 'ACCUMULATE')?._sum.points ?? 0;
+    const allTimeCanjes =
+      allTimeAgg.find((g) => g.type === 'REDEEM')?._count._all ?? 0;
+    const allTimeVisitas = allTimeAgg.reduce(
+      (s, g) => s + (g._count._all ?? 0),
+      0,
+    );
+
+    return {
+      pass: {
+        id: pass.id,
+        points: pass.points,
+        serialNumber: pass.serialNumber,
+        createdAt: pass.user.createdAt,
+      },
+      user: {
+        id: pass.user.id,
+        name: pass.user.name,
+        phone: pass.user.phone,
+        createdAt: pass.user.createdAt,
+      },
+      badge,
+      nearPromo: nearPromo
+        ? {
+            id: nearPromo.id,
+            title: nearPromo.title,
+            type: nearPromo.type,
+            gap,
+            pointsRequired: nearPromo.pointsRequired,
+          }
+        : null,
+      range: { from: from.toISOString(), to: to.toISOString() },
+      previousRange: {
+        from: prevFrom.toISOString(),
+        to: prevTo.toISOString(),
+      },
+      kpis: {
+        ondas,
+        ondasDelta: pctDelta(ondas, prevOndas),
+        canjes,
+        canjesDelta: pctDelta(canjes, prevCanjes),
+        visitas,
+        visitasDelta: pctDelta(visitas, prevVisitas),
+        puntosActuales: pass.points,
+        diasDesdeVisita: daysSinceVisit,
+        ticketMedioOndas,
+        ondasAllTime: allTimeOndas,
+        canjesAllTime: allTimeCanjes,
+        visitasAllTime: allTimeVisitas,
+      },
+      series,
+      hourly,
+      redemptionsByType,
+      eligiblePromos,
+      recent: txs.map((t) => ({
+        id: t.id,
+        type: t.type,
+        points: t.points,
+        createdAt: t.createdAt,
+        promotion: t.promotion
+          ? {
+              id: t.promotion.id,
+              title: t.promotion.title,
+              type: t.promotion.type,
+            }
+          : null,
+      })),
+      lastVisit: lastTx?.createdAt || null,
     };
   }
 

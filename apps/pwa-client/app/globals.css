@@ -13,6 +13,9 @@
   display: flex;
   min-height: 100dvh;
   flex-direction: column;
+  width: 100%;
+  max-width: 28rem;
+  margin-inline: auto;
   background: var(--onda-bg);
   padding-bottom: env(safe-area-inset-bottom, 0);
 }

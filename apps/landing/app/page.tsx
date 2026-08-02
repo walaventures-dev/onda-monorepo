@@ -29,6 +29,7 @@ const plans = [
 
 export default function LandingPage() {
   const [roiVisits, setRoiVisits] = useState(200);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [lead, setLead] = useState({
     name: '',
     email: '',
@@ -40,6 +41,14 @@ export default function LandingPage() {
   const [leadError, setLeadError] = useState('');
 
   const roi = Math.round(roiVisits * 0.18 * 25000);
+
+  const navLinks = [
+    { href: '#features', label: 'Producto' },
+    { href: '#pricing', label: 'Planes' },
+    { href: '#roi', label: 'ROI' },
+    { href: '/festival-neiva', label: 'Eventos' },
+    { href: '#contact', label: 'Contacto' },
+  ];
 
   async function submitLead(e: React.FormEvent) {
     e.preventDefault();
@@ -63,18 +72,76 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
+      <header className="relative mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-6">
         <OndaLogo />
         <nav className="hidden gap-6 text-sm text-[var(--onda-muted)] md:flex">
-          <a href="#features">Producto</a>
-          <a href="#pricing">Planes</a>
-          <a href="#roi">ROI</a>
-          <a href="/festival-neiva">Eventos</a>
-          <a href="#contact">Contacto</a>
+          {navLinks.map((l) => (
+            <a key={l.href} href={l.href}>
+              {l.label}
+            </a>
+          ))}
         </nav>
-        <GradientButton type="button" onClick={() => (window.location.href = '#contact')}>
-          Hablar con ventas
-        </GradientButton>
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:block">
+            <GradientButton
+              type="button"
+              onClick={() => (window.location.href = '#contact')}
+            >
+              Hablar con ventas
+            </GradientButton>
+          </div>
+          <button
+            type="button"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--onda-border)] bg-white text-[var(--onda-ink)] md:hidden"
+            aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
+              {menuOpen ? (
+                <path
+                  d="M5 5l10 10M15 5L5 15"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                />
+              ) : (
+                <path
+                  d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                />
+              )}
+            </svg>
+          </button>
+        </div>
+        {menuOpen ? (
+          <div className="absolute inset-x-4 top-full z-50 rounded-2xl border border-[var(--onda-border)] bg-white p-4 shadow-lg md:hidden">
+            <nav className="flex flex-col gap-1 text-sm">
+              {navLinks.map((l) => (
+                <a
+                  key={l.href}
+                  href={l.href}
+                  className="rounded-xl px-3 py-2.5 text-[var(--onda-ink)] hover:bg-[var(--onda-sky-soft)]"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {l.label}
+                </a>
+              ))}
+            </nav>
+            <GradientButton
+              type="button"
+              className="mt-3 w-full"
+              onClick={() => {
+                setMenuOpen(false);
+                window.location.href = '#contact';
+              }}
+            >
+              Hablar con ventas
+            </GradientButton>
+          </div>
+        ) : null}
       </header>
 
       <section className="relative overflow-hidden">
