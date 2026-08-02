@@ -1,0 +1,205 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PlanType {
+  BASIC
+  PRO
+}
+
+enum EventStatus {
+  DRAFT
+  ACTIVE
+  FINISHED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum TransactionType {
+  ACCUMULATE
+  REDEEM
+}
+
+enum PromotionType {
+  PERCENT_OFF
+  AMOUNT_OFF
+  BUY_GET
+  PRODUCT
+  OTHER
+}
+
+enum StoreCategory {
+  RESTAURANT
+  SERVICE
+  HOSPITALITY
+}
+
+model Store {
+  id               String                 @id @default(uuid())
+  name             String
+  category         StoreCategory          @default(RESTAURANT)
+  googlePlaceId    String?
+  pinCode          String
+  planType         PlanType               @default(BASIC)
+  billingStatus    String                 @default("ACTIVE")
+  whatsappUsed     Int                    @default(0)
+  lat              Float?
+  lng              Float?
+  ownerEmail       String?
+  passes           Pass[]
+  transactions     Transaction[]
+  feedbacks        Feedback[]
+  promotions       Promotion[]
+  eventMemberships StoreEventMembership[]
+  passDesign       PassDesign?
+  createdAt        DateTime               @default(now())
+}
+
+model Event {
+  id           String                 @id @default(uuid())
+  name         String
+  slug         String                 @unique
+  startDate    DateTime
+  endDate      DateTime
+  status       EventStatus            @default(DRAFT)
+  globalTarget Int                    @default(10)
+  stores       StoreEventMembership[]
+  passes       Pass[]
+  promotions   Promotion[]
+  passDesign   PassDesign?
+  draws        Draw[]
+  createdAt    DateTime               @default(now())
+}
+
+model StoreEventMembership {
+  id          String           @id @default(uuid())
+  storeId     String
+  eventId     String
+  status      InvitationStatus @default(PENDING)
+  customPromo String?
+  nfcKitId    String?
+  store       Store            @relation(fields: [storeId], references: [id])
+  event       Event            @relation(fields: [eventId], references: [id])
+
+  @@unique([storeId, eventId])
+}
+
+model User {
+  id        String     @id @default(uuid())
+  name      String
+  phone     String     @unique
+  passes    Pass[]
+  feedbacks Feedback[]
+  createdAt DateTime   @default(now())
+}
+
+model Pass {
+  id           String        @id @default(uuid())
+  userId       String
+  storeId      String?
+  eventId      String?
+  serialNumber String        @unique
+  points       Int           @default(0)
+  pushToken    String?
+  walletRef    String?
+  user         User          @relation(fields: [userId], references: [id])
+  store        Store?        @relation(fields: [storeId], references: [id])
+  event        Event?        @relation(fields: [eventId], references: [id])
+  transactions Transaction[]
+
+  @@index([userId, storeId])
+  @@index([userId, eventId])
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  passId      String
+  storeId     String
+  type        TransactionType
+  points      Int             @default(1)
+  promotionId String?
+  createdAt   DateTime        @default(now())
+  pass        Pass            @relation(fields: [passId], references: [id])
+  store       Store           @relation(fields: [storeId], references: [id])
+  promotion   Promotion?      @relation(fields: [promotionId], references: [id])
+
+  @@index([storeId, createdAt])
+  @@index([promotionId])
+}
+
+model Feedback {
+  id                 String   @id @default(uuid())
+  userId             String
+  storeId            String
+  rating             Int
+  comment            String?
+  redirectedToGoogle Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  user               User     @relation(fields: [userId], references: [id])
+  store              Store    @relation(fields: [storeId], references: [id])
+}
+
+model Promotion {
+  id             String         @id @default(uuid())
+  storeId        String?
+  eventId        String?
+  title          String
+  description    String?
+  imageUrl       String?        @db.Text
+  pointsRequired Int
+  isActive       Boolean        @default(true)
+  type           PromotionType  @default(OTHER)
+  value          Float?
+  buyQuantity    Int?
+  getQuantity    Int?
+  productName    String?
+  store          Store?         @relation(fields: [storeId], references: [id])
+  event          Event?         @relation(fields: [eventId], references: [id])
+  transactions   Transaction[]
+  createdAt      DateTime       @default(now())
+}
+
+model PassDesign {
+  id              String  @id @default(uuid())
+  storeId         String? @unique
+  eventId         String? @unique
+  backgroundColor String  @default("#6E5AE6")
+  foregroundColor String  @default("#FFFFFF")
+  labelColor      String? @default("#E5F6FC")
+  logoUrl         String?
+  stripImageUrl   String?
+  title           String
+  subtitle        String?
+  description     String?
+  updatedAt       DateTime @updatedAt
+  store           Store?  @relation(fields: [storeId], references: [id])
+  event           Event?  @relation(fields: [eventId], references: [id])
+}
+
+model Lead {
+  id           String   @id @default(uuid())
+  name         String
+  email        String
+  phone        String?
+  businessName String?
+  message      String?
+  createdAt    DateTime @default(now())
+}
+
+model Draw {
+  id        String   @id @default(uuid())
+  eventId   String
+  winnerId  String?
+  note      String?
+  createdAt DateTime @default(now())
+  event     Event    @relation(fields: [eventId], references: [id])
+}

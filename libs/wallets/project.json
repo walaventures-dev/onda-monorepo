@@ -1,0 +1,7 @@
+{
+  "name": "wallets",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/wallets/src",
+  "projectType": "library",
+  "tags": ["type:lib"]
+}

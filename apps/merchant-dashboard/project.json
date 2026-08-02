@@ -1,0 +1,26 @@
+{
+  "name": "merchant-dashboard",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/merchant-dashboard",
+  "projectType": "application",
+  "tags": [
+    "scope:client",
+    "type:app"
+  ],
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "PORT=4202 pnpm exec next dev apps/merchant-dashboard -p 4202",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec next build apps/merchant-dashboard",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

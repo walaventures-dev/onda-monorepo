@@ -1,0 +1,26 @@
+{
+  "name": "landing",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/landing",
+  "projectType": "application",
+  "tags": [
+    "scope:client",
+    "type:app"
+  ],
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "PORT=4200 pnpm exec next dev apps/landing -p 4200",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec next build apps/landing",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

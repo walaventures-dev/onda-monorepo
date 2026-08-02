@@ -1,3 +1,4 @@
-autoInstallPeers: true
-onlyBuiltDependencies:
-  - nx
+packages:
+  - 'apps/*'
+  - 'libs/*'
+  - 'libs/shared/*'

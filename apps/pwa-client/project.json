@@ -1,0 +1,26 @@
+{
+  "name": "pwa-client",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/pwa-client",
+  "projectType": "application",
+  "tags": [
+    "scope:client",
+    "type:app"
+  ],
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "PORT=4201 pnpm exec next dev apps/pwa-client -p 4201",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec next build apps/pwa-client",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "kapso": {
+      "url": "https://api.kapso.ai/mcp",
+      "headers": {
+        "X-API-Key": "${KAPSO_API_KEY}"
+      }
+    },
+    "kapso-docs": {
+      "url": "https://docs.kapso.ai/mcp"
+    }
+  }
+}

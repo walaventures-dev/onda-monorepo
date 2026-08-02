@@ -1,0 +1,26 @@
+{
+  "name": "organizer-dashboard",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/organizer-dashboard",
+  "projectType": "application",
+  "tags": [
+    "scope:client",
+    "type:app"
+  ],
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "PORT=4203 pnpm exec next dev apps/organizer-dashboard -p 4203",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec next build apps/organizer-dashboard",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

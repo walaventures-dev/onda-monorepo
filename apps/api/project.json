@@ -1,0 +1,26 @@
+{
+  "name": "api",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/api/src",
+  "projectType": "application",
+  "tags": [
+    "scope:api",
+    "type:app"
+  ],
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec tsx --tsconfig apps/api/tsconfig.json watch apps/api/src/main.ts",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec tsc -p apps/api/tsconfig.json --outDir dist/apps/api",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}
