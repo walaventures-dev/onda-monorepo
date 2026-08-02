@@ -37,14 +37,12 @@ import {
 } from "@onda/shared-ui";
 import { displayPhone, derivePassPalette } from "@onda/shared-utils";
 import {
-  LineChart,
-  Line,
+  BarChart,
+  Bar,
   ResponsiveContainer,
   XAxis,
   YAxis,
   Tooltip,
-  BarChart,
-  Bar,
   Legend,
   PieChart,
   Pie,
@@ -57,6 +55,7 @@ import {
   type CompareResponse,
 } from "./CompareStores";
 import { BalancedGrid } from "./balancedGrid";
+import { ActivityHeatmap } from "./ActivityHeatmap";
 
 type Tab =
   | "resumen"
@@ -710,13 +709,6 @@ export function MerchantWorkspace() {
     for (const p of overview?.promoStats || []) map.set(p.id, p);
     return map;
   }, [overview?.promoStats]);
-
-  const showHourly =
-    filters.preset === "today" ||
-    filters.preset === "7d" ||
-    (new Date(filters.to).getTime() - new Date(filters.from).getTime()) /
-      86400000 <=
-      7;
 
   const emptyRange =
     overview &&
@@ -1398,48 +1390,7 @@ export function MerchantWorkspace() {
                   )}
                 </div>
               </div>
-              {showHourly ? (
-                <div className="onda-card p-5">
-                  <h3 className="font-display font-semibold">
-                    Heat horario (último día)
-                  </h3>
-                  <div className="mt-4 h-56">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={overview?.hourly || []}>
-                        <XAxis dataKey="hour" fontSize={11} />
-                        <YAxis fontSize={11} />
-                        <Tooltip />
-                        <Line
-                          type="monotone"
-                          dataKey="ondas"
-                          stroke="#3DB9E8"
-                          strokeWidth={2}
-                          name="Ondas"
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="canjes"
-                          stroke="#6E5AE6"
-                          strokeWidth={2}
-                          name="Canjes"
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              ) : (
-                <div className="onda-card p-5">
-                  <h3 className="font-display font-semibold">
-                    Cobertura de catálogo
-                  </h3>
-                  <p className="mt-4 font-display text-4xl font-semibold">
-                    {kpis?.coberturaCatalogo ?? 0}%
-                  </p>
-                  <p className="mt-2 text-sm text-[var(--onda-muted)]">
-                    Clientes que ya alcanzan ≥1 promo activa del filtro.
-                  </p>
-                </div>
-              )}
+              <ActivityHeatmap data={overview?.heatmap} />
             </div>
           </div>
         )}

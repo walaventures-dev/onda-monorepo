@@ -256,10 +256,10 @@ export class AnalyticsController {
       const hour = tx.createdAt.getHours();
       const cell = heatmapCells[dow * 24 + hour];
       if (tx.type === 'ACCUMULATE') {
-        cell.ondas += tx.points;
+        cell.ondas += 1; // acumulaciones (movimientos)
         cell.freq += 1;
       } else {
-        cell.canjes += 1;
+        cell.canjes += 1; // redenciones
         cell.freq += 1;
       }
     }
@@ -576,6 +576,7 @@ export class AnalyticsController {
       },
       series,
       hourly,
+      heatmap,
       redemptionsByType,
       segments,
       customers,
