@@ -240,7 +240,7 @@ h3,
 
 .onda-tx-list {
   margin: 0;
-  padding: 0;
+  padding-inline-start: 0;
   list-style: none;
 }
 

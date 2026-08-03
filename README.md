@@ -12,6 +12,8 @@ Nx + Next.js + NestJS + Prisma + Hero UI v3.
 
 ## Quick start
 
+Guía completa (requisitos, Docker, env, DB y todas las apps): [GETTING_STARTED.md](./GETTING_STARTED.md).
+
 ```bash
 pnpm install
 pnpm docker:up

@@ -263,7 +263,7 @@ export function CustomerDetail({
               Actividad del periodo
             </h3>
           </div>
-          <ul className="onda-tx-list max-h-80 overflow-auto px-4">
+          <ul className="onda-tx-list max-h-80 overflow-auto px-4 py-1">
             {(detail.recent || []).map((t: any) => (
               <TxActivityRow
                 key={t.id}
@@ -279,7 +279,7 @@ export function CustomerDetail({
               />
             ))}
             {!detail.recent?.length ? (
-              <li className="px-0 py-8 text-center text-sm text-[var(--onda-muted)]">
+              <li className="py-8 text-center text-sm text-[var(--onda-muted)]">
                 Sin movimientos en este periodo. Prueba ampliar las fechas.
               </li>
             ) : null}
