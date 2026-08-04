@@ -74,9 +74,12 @@ type CustomerSegment =
   | "vip"
   | "dormidos";
 
+// Oculto temporalmente: poner en true para reactivar el módulo.
+const COMPARATIVA_ENABLED = false;
+
 const SECTIONS: Tab[] = [
   "resumen",
-  "comparativa",
+  ...(COMPARATIVA_ENABLED ? (["comparativa"] as const) : []),
   "clientes",
   "actividad",
   "promos",
@@ -482,7 +485,7 @@ export function MerchantWorkspace() {
       readonly [Tab, string, ReactNode, boolean]
     > = [
       ["resumen", "Resumen", OndaIcons.chart, false],
-      ...(stores.length >= 2
+      ...(COMPARATIVA_ENABLED && stores.length >= 2
         ? ([["comparativa", "Comparativa", OndaIcons.target, false]] as const)
         : []),
       ["clientes", "Clientes", OndaIcons.users, false],
