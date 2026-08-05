@@ -156,6 +156,8 @@ export function PassPreview({
   description = 'Acumula ondas en cada visita',
   logoUrl,
   points = 0,
+  maxStamps = 12,
+  milestoneStamps = [],
   memberName,
   compact = false,
 }: {
@@ -167,6 +169,8 @@ export function PassPreview({
   description?: string | null;
   logoUrl?: string | null;
   points?: number;
+  maxStamps?: number;
+  milestoneStamps?: number[];
   /** Nombre del miembro (como en Wallet) */
   memberName?: string | null;
   compact?: boolean;
@@ -228,8 +232,35 @@ export function PassPreview({
           >
             Ondas
           </p>
-          <p className={`font-display font-bold ${compact ? 'text-2xl' : 'text-3xl'}`}>{points}</p>
+          <p className={`font-display font-bold ${compact ? 'text-2xl' : 'text-3xl'}`}>
+            {points}/{maxStamps}
+          </p>
         </div>
+      </div>
+
+      <div
+        className={`flex flex-wrap gap-1.5 ${compact ? 'px-4 pb-3' : 'px-5 pb-4'}`}
+        aria-label="Progreso de sellos"
+      >
+        {Array.from({ length: maxStamps }).map((_, i) => {
+          const stampNumber = i + 1;
+          const filled = stampNumber <= points;
+          const hasMilestone = milestoneStamps.includes(stampNumber);
+          return (
+            <span
+              key={stampNumber}
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+              style={{
+                backgroundColor: filled ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.18)',
+                color: filled ? backgroundColor : foregroundColor,
+                border: hasMilestone ? `1.5px solid ${foregroundColor}` : 'none',
+              }}
+              title={hasMilestone ? `Premio en el sello ${stampNumber}` : undefined}
+            >
+              {hasMilestone ? '★' : ''}
+            </span>
+          );
+        })}
       </div>
 
       {!compact && description ? (
