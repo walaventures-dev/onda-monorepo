@@ -1,4 +1,5 @@
 import { Inject, Body,
+  BadRequestException,
   Controller,
   Get,
   Param,
@@ -67,7 +68,7 @@ export class StoresController {
   }
 
   @Patch(':id')
-  update(
+  async update(
     @Param('id') id: string,
     @Body()
     body: Partial<{
@@ -78,9 +79,28 @@ export class StoresController {
       lng: number;
       planType: 'BASIC' | 'PRO';
       billingStatus: string;
+      maxStamps: number;
     }>
   ) {
-    return this.prisma.store.update({ where: { id }, data: body });
+    let maxStamps: number | undefined;
+    if (body.maxStamps != null) {
+      maxStamps = Number(body.maxStamps);
+      if (!Number.isInteger(maxStamps) || maxStamps < 1 || maxStamps > 12) {
+        throw new BadRequestException('El tope de sellos debe ser un número entre 1 y 12');
+      }
+      const finalPromo = await this.prisma.promotion.findFirst({
+        where: { storeId: id, pointsRequired: maxStamps, isActive: true },
+      });
+      if (!finalPromo) {
+        throw new BadRequestException(
+          `Debes tener una promoción activa en el sello ${maxStamps} antes de guardar este tope`
+        );
+      }
+    }
+    return this.prisma.store.update({
+      where: { id },
+      data: { ...body, maxStamps },
+    });
   }
 
   @Post(':id/validate-pin')
