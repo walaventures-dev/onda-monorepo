@@ -26,6 +26,7 @@ import { WalletService } from './wallet.service';
 import { WhatsappService } from './whatsapp.service';
 import { CustomerAuthService } from './customer-auth.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
+import { PendingRequestsController } from './pending-requests.controller';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { PendingRequestsSseService } from './pending-requests-sse.service';
     FeedbackController,
     WebhooksController,
     UploadsController,
+    PendingRequestsController,
   ],
   providers: [PrismaService, WalletService, WhatsappService, CustomerAuthService, PendingRequestsSseService],
 })
