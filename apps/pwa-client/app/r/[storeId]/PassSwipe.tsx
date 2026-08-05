@@ -16,6 +16,8 @@ export type PassSwipeCard = {
     logoUrl?: string | null;
   };
   points: number;
+  maxStamps: number;
+  milestoneStamps: number[];
 };
 
 export function PassSwipe({
@@ -63,6 +65,8 @@ export function PassSwipe({
           compact={compact}
           {...only.design}
           points={only.points}
+          maxStamps={only.maxStamps}
+          milestoneStamps={only.milestoneStamps}
           memberName={memberName}
         />
       </div>
@@ -79,6 +83,8 @@ export function PassSwipe({
               compact={compact}
               {...card.design}
               points={card.points}
+              maxStamps={card.maxStamps}
+              milestoneStamps={card.milestoneStamps}
               memberName={memberName}
             />
           </div>
