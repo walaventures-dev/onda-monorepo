@@ -89,6 +89,22 @@ export interface PassDto {
   design?: PassDesignDto | null;
 }
 
+export interface OndaCardDto {
+  id: string;
+  userId: string;
+  serialNumber: string;
+  memberName: string;
+  totalPoints: number;
+}
+
+export interface RestaurantCardDto {
+  storeId: string;
+  storeName: string;
+  points: number;
+  design: PassDesignDto | null;
+  rewards: PromotionDto[];
+}
+
 export interface TransactionDto {
   id: string;
   passId: string;
