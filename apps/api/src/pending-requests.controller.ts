@@ -193,22 +193,23 @@ export class PendingRequestsController {
       throw new BadRequestException('Código expirado, el cliente debe pedir uno nuevo');
     }
 
-    let resolved: { count: number };
     if (pending.type === 'ACCUMULATE') {
-      const [, , updateResult] = await this.prisma.$transaction([
-        this.prisma.pass.update({
-          where: { id: pending.passId },
-          data: { points: { increment: 1 } },
-        }),
-        this.prisma.transaction.create({
-          data: { passId: pending.passId, storeId: pending.storeId, type: 'ACCUMULATE', points: 1 },
-        }),
-        this.prisma.pendingRequest.updateMany({
+      await this.prisma.$transaction(async (tx) => {
+        const claimed = await tx.pendingRequest.updateMany({
           where: { id, status: 'PENDING' },
           data: { status: 'CONFIRMED', resolvedAt: new Date() },
-        }),
-      ]);
-      resolved = updateResult;
+        });
+        if (claimed.count === 0) {
+          throw new BadRequestException('Esta solicitud ya no está pendiente');
+        }
+        await tx.pass.update({
+          where: { id: pending.passId },
+          data: { points: { increment: 1 } },
+        });
+        await tx.transaction.create({
+          data: { passId: pending.passId, storeId: pending.storeId, type: 'ACCUMULATE', points: 1 },
+        });
+      });
     } else {
       if (!pending.promotionId) {
         throw new BadRequestException('Solicitud de reclamo sin promoción asociada');
@@ -218,8 +219,15 @@ export class PendingRequestsController {
       });
       const isFinalReward = promotion.pointsRequired === store.maxStamps;
 
-      const [, , updateResult] = await this.prisma.$transaction([
-        this.prisma.transaction.create({
+      await this.prisma.$transaction(async (tx) => {
+        const claimed = await tx.pendingRequest.updateMany({
+          where: { id, status: 'PENDING' },
+          data: { status: 'CONFIRMED', resolvedAt: new Date() },
+        });
+        if (claimed.count === 0) {
+          throw new BadRequestException('Esta solicitud ya no está pendiente');
+        }
+        await tx.transaction.create({
           data: {
             passId: pending.passId,
             storeId: pending.storeId,
@@ -227,21 +235,12 @@ export class PendingRequestsController {
             points: promotion.pointsRequired,
             promotionId: promotion.id,
           },
-        }),
-        this.prisma.pass.update({
+        });
+        await tx.pass.update({
           where: { id: pending.passId },
           data: isFinalReward ? { points: 0, cycleStartedAt: new Date() } : {},
-        }),
-        this.prisma.pendingRequest.updateMany({
-          where: { id, status: 'PENDING' },
-          data: { status: 'CONFIRMED', resolvedAt: new Date() },
-        }),
-      ]);
-      resolved = updateResult;
-    }
-
-    if (resolved.count === 0) {
-      throw new BadRequestException('Esta solicitud ya no está pendiente');
+        });
+      });
     }
 
     return { ok: true as const };
