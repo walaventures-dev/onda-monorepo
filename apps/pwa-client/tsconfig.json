@@ -6,6 +6,7 @@
     "noEmit": true,
     "incremental": true,
     "isolatedModules": true,
+    "baseUrl": ".",
     "plugins": [
       {
         "name": "next"
