@@ -1,5 +1,5 @@
 import type { OndaCardDto, RestaurantCardDto, PromotionDto } from '@onda/shared-types';
-import { getSession } from '../../lib/session';
+import { getPortalSession, type PortalSession } from './mockAuth';
 
 export type CatalogReward = PromotionDto & { storeName: string };
 
@@ -66,20 +66,34 @@ const MOCK_RESTAURANT_CARDS: RestaurantCardDto[] = [
   },
 ];
 
+// Cuenta existente (Dante): ya tiene ondas en los restaurantes demo AA y BB.
+const PERSONA_RESTAURANTS: Record<string, RestaurantCardDto[]> = {
+  '+573202331295': MOCK_RESTAURANT_CARDS,
+};
+
+// Cuenta nueva: simula que se creó escaneando el QR de Restaurante AA,
+// que le acredita el bono de bienvenida de 1 onda ahí.
+function restaurantsForSession(session: PortalSession | null): RestaurantCardDto[] {
+  if (!session) return [];
+  if (session.isNew) return [MOCK_RESTAURANT_CARDS[0]];
+  return PERSONA_RESTAURANTS[session.phone] ?? [];
+}
+
 export async function getOndaCard(): Promise<OndaCardDto> {
-  const memberName = getSession()?.user?.name || 'Cliente Onda';
-  const totalPoints = MOCK_RESTAURANT_CARDS.reduce((sum, c) => sum + c.points, 0);
+  const session = getPortalSession();
+  const cards = restaurantsForSession(session);
+  const totalPoints = cards.reduce((sum, c) => sum + c.points, 0);
   return {
     id: 'mock-onda-card-1',
     userId: 'mock-user-1',
     serialNumber: 'ONDA-DEMO0001',
-    memberName,
+    memberName: session?.name || 'Cliente Onda',
     totalPoints,
   };
 }
 
 export async function getRestaurantCards(): Promise<RestaurantCardDto[]> {
-  return MOCK_RESTAURANT_CARDS;
+  return restaurantsForSession(getPortalSession());
 }
 
 export async function getRewardsCatalog(): Promise<CatalogReward[]> {

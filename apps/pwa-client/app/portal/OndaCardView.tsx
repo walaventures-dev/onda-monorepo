@@ -9,7 +9,7 @@ export function OndaCardView({ card }: { card: OndaCardDto }) {
       labelColor="#E5F6FC"
       title="Tarjeta Onda"
       subtitle="Tu identidad en todos los restaurantes"
-      description="Acumula ondas en cualquier restaurante Onda"
+      description="Acumula ondas en cualquier restaurante que esté a la Onda"
       points={card.totalPoints}
       memberName={card.memberName}
     />

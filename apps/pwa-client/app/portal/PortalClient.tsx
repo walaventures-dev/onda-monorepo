@@ -3,16 +3,24 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getOndaCard, getRestaurantCards } from './lib/mockData';
+import { getPortalSession, clearPortalSession } from './lib/mockAuth';
 import { OndaCardView } from './OndaCardView';
 import { RestaurantCardList } from './RestaurantCardList';
+import { PortalLoginView } from './PortalLoginView';
 import type { OndaCardDto, RestaurantCardDto } from '@onda/shared-types';
 
 export default function PortalClient() {
+  const [authed, setAuthed] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [ondaCard, setOndaCard] = useState<OndaCardDto | null>(null);
   const [restaurantCards, setRestaurantCards] = useState<RestaurantCardDto[]>([]);
 
   useEffect(() => {
+    setAuthed(!!getPortalSession());
+  }, []);
+
+  useEffect(() => {
+    if (!authed) return;
     let cancelled = false;
 
     async function load() {
@@ -27,7 +35,27 @@ export default function PortalClient() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authed]);
+
+  function handleLogout() {
+    clearPortalSession();
+    setOndaCard(null);
+    setRestaurantCards([]);
+    setLoading(true);
+    setAuthed(false);
+  }
+
+  if (authed === null) {
+    return (
+      <div className="onda-pwa-shell items-center justify-center gap-3">
+        <div className="onda-pwa-avatar onda-pwa-avatar--pulse" aria-hidden />
+      </div>
+    );
+  }
+
+  if (!authed) {
+    return <PortalLoginView onSuccess={() => setAuthed(true)} />;
+  }
 
   if (loading || !ondaCard) {
     return (
@@ -59,6 +87,10 @@ export default function PortalClient() {
         <Link href="/portal/recompensas" className="onda-pwa-secondary block text-center">
           Explorar recompensas
         </Link>
+
+        <button type="button" className="onda-pwa-secondary" onClick={handleLogout}>
+          Cerrar sesión
+        </button>
       </div>
     </div>
   );
