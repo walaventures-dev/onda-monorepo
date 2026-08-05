@@ -26,7 +26,7 @@ export class CustomerAuthService {
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
     await this.prisma.otpCode.create({ data: { phone, code, expiresAt } });
 
-    const devMode = !process.env.KAPSO_API_KEY;
+    const devMode = process.env.NODE_ENV !== 'production' && !process.env.KAPSO_API_KEY;
     if (!devMode) {
       await this.whatsapp.enqueue({
         to: phone,

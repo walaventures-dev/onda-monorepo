@@ -184,13 +184,11 @@ export default function StoreEntryPage() {
     () => promotions.map((p: any) => p.pointsRequired as number),
     [promotions]
   );
-  const claimablePromotion = useMemo(() => {
-    if (!pass) return null;
+  const claimablePromotions = useMemo(() => {
+    if (!pass) return [];
     const claimed: string[] = pass.claimedPromotionIdsThisCycle || [];
-    return (
-      promotions.find(
-        (p: any) => p.pointsRequired === pass.points && !claimed.includes(p.id)
-      ) || null
+    return promotions.filter(
+      (p: any) => p.pointsRequired <= pass.points && !claimed.includes(p.id)
     );
   }, [pass, promotions]);
 
@@ -300,16 +298,17 @@ export default function StoreEntryPage() {
               >
                 Acumular onda
               </button>
-              {claimablePromotion ? (
+              {claimablePromotions.map((promo: any) => (
                 <button
+                  key={promo.id}
                   type="button"
                   className="onda-pwa-secondary"
                   disabled={busy}
-                  onClick={() => startPendingRequest('CLAIM', claimablePromotion.id)}
+                  onClick={() => startPendingRequest('CLAIM', promo.id)}
                 >
-                  Reclamar {claimablePromotion.title}
+                  Reclamar {promo.title}
                 </button>
-              ) : null}
+              ))}
               {promotions.length >= 2 ? (
                 <button
                   type="button"

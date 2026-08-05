@@ -7,6 +7,9 @@ import { join } from 'path';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  if (process.env.NODE_ENV === 'production' && !process.env.KAPSO_API_KEY) {
+    throw new Error('KAPSO_API_KEY is required when NODE_ENV=production (OTP dev-mode bypass would otherwise be active)');
+  }
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
     bodyParser: false,

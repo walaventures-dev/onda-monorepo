@@ -1,12 +1,17 @@
 import { Inject, Body,
   BadRequestException,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   Patch,
   Post,
   Query, } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+
+const pinAttempts = new Map<string, { count: number; resetAt: number }>();
+const PIN_ATTEMPT_LIMIT = 5;
+const PIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 
 @Controller('stores')
 export class StoresController {
@@ -17,7 +22,21 @@ export class StoresController {
   @Get()
   list() {
     return this.prisma.store.findMany({
-      include: { passDesign: true, promotions: true },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        googlePlaceId: true,
+        planType: true,
+        billingStatus: true,
+        whatsappUsed: true,
+        maxStamps: true,
+        lat: true,
+        lng: true,
+        createdAt: true,
+        passDesign: true,
+        promotions: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -26,7 +45,22 @@ export class StoresController {
   get(@Param('id') id: string) {
     return this.prisma.store.findUniqueOrThrow({
       where: { id },
-      include: { passDesign: true, promotions: true, eventMemberships: true },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        googlePlaceId: true,
+        planType: true,
+        billingStatus: true,
+        whatsappUsed: true,
+        maxStamps: true,
+        lat: true,
+        lng: true,
+        createdAt: true,
+        passDesign: true,
+        promotions: true,
+        eventMemberships: true,
+      },
     });
   }
 
@@ -80,11 +114,18 @@ export class StoresController {
       planType: 'BASIC' | 'PRO';
       billingStatus: string;
       maxStamps: number;
+      currentPinCode: string;
     }>
   ) {
+    const existingStore = await this.prisma.store.findUniqueOrThrow({ where: { id } });
+    if (existingStore.pinCode !== body.currentPinCode) {
+      throw new ForbiddenException('PIN de tienda inválido');
+    }
+    const { currentPinCode, ...updateFields } = body;
+
     let maxStamps: number | undefined;
-    if (body.maxStamps != null) {
-      maxStamps = Number(body.maxStamps);
+    if (updateFields.maxStamps != null) {
+      maxStamps = Number(updateFields.maxStamps);
       if (!Number.isInteger(maxStamps) || maxStamps < 1 || maxStamps > 12) {
         throw new BadRequestException('El tope de sellos debe ser un número entre 1 y 12');
       }
@@ -99,14 +140,27 @@ export class StoresController {
     }
     return this.prisma.store.update({
       where: { id },
-      data: { ...body, maxStamps },
+      data: { ...updateFields, maxStamps },
     });
   }
 
   @Post(':id/validate-pin')
   async validatePin(@Param('id') id: string, @Body() body: { pinCode: string }) {
+    const now = Date.now();
+    const entry = pinAttempts.get(id);
+    if (entry && entry.resetAt > now && entry.count >= PIN_ATTEMPT_LIMIT) {
+      throw new ForbiddenException('Demasiados intentos, espera unos minutos');
+    }
     const store = await this.prisma.store.findUniqueOrThrow({ where: { id } });
-    return { valid: store.pinCode === body.pinCode };
+    const valid = store.pinCode === body.pinCode;
+    if (!valid) {
+      const current = entry && entry.resetAt > now ? entry : { count: 0, resetAt: now + PIN_ATTEMPT_WINDOW_MS };
+      current.count += 1;
+      pinAttempts.set(id, current);
+    } else {
+      pinAttempts.delete(id);
+    }
+    return { valid };
   }
 
   @Get(':id/customers')

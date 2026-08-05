@@ -820,6 +820,19 @@ export function MerchantWorkspace() {
     }
   }
 
+  function dashboardPinStorageKey(storeId: string) {
+    return `onda_dashboard_pin_${storeId}`;
+  }
+
+  function getOrPromptDashboardPin(storeId: string): string | null {
+    const existing = localStorage.getItem(dashboardPinStorageKey(storeId));
+    if (existing) return existing;
+    const entered = window.prompt("PIN de la tienda para guardar el tope de sellos");
+    if (!entered) return null;
+    localStorage.setItem(dashboardPinStorageKey(storeId), entered);
+    return entered;
+  }
+
   async function saveDesign(e: FormEvent) {
     e.preventDefault();
     const payload = {
@@ -832,13 +845,25 @@ export function MerchantWorkspace() {
     });
     setDesign(saved);
     if (store?.maxStamps != null) {
+      const currentPinCode = getOrPromptDashboardPin(storeId);
+      if (!currentPinCode) {
+        await alert({
+          title: "PIN requerido",
+          message: "Necesitas el PIN de la tienda para guardar el tope de sellos.",
+          tone: "warning",
+        });
+        return;
+      }
       try {
         const updatedStore = await api(`/stores/${storeId}`, {
           method: "PATCH",
-          body: JSON.stringify({ maxStamps: store.maxStamps }),
+          body: JSON.stringify({ maxStamps: store.maxStamps, currentPinCode }),
         });
         setStores((prev) => prev.map((s) => (s.id === storeId ? updatedStore : s)));
       } catch (err: any) {
+        if (err.message === "PIN de tienda inválido") {
+          localStorage.removeItem(dashboardPinStorageKey(storeId));
+        }
         await alert({
           title: "Diseño guardado, pero el tope de sellos no se actualizó",
           message: err.message || "Intenta de nuevo.",

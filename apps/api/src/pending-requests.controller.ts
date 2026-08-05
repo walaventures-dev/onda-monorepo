@@ -15,6 +15,7 @@ import {
 import { Observable } from 'rxjs';
 import { PrismaService } from './prisma.service';
 import { WhatsappService } from './whatsapp.service';
+import { WalletService } from './wallet.service';
 import { CustomerAuthService } from './customer-auth.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
 
@@ -36,6 +37,7 @@ export class PendingRequestsController {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(WhatsappService) private whatsapp: WhatsappService,
+    @Inject(WalletService) private wallet: WalletService,
     @Inject(CustomerAuthService) private auth: CustomerAuthService,
     @Inject(PendingRequestsSseService) private sse: PendingRequestsSseService
   ) {}
@@ -96,6 +98,11 @@ export class PendingRequestsController {
     if (pass.userId !== user.id) throw new ForbiddenException('Este pase no es tuyo');
     if (!pass.storeId) throw new BadRequestException('Pase sin negocio asociado');
     const storeId = pass.storeId;
+    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
+
+    if (body.type === 'ACCUMULATE' && pass.points >= store.maxStamps) {
+      throw new BadRequestException('Ya alcanzaste el máximo de sellos de este ciclo, reclama tu premio primero');
+    }
 
     const existing = await this.prisma.pendingRequest.findFirst({
       where: {
@@ -116,12 +123,35 @@ export class PendingRequestsController {
       });
     }
 
-    let promotion: { id: string; title: string; pointsRequired: number; storeId: string | null } | null = null;
+    let promotion: {
+      id: string;
+      title: string;
+      pointsRequired: number;
+      storeId: string | null;
+      isActive: boolean;
+      expiryMode: string;
+      endsAt: Date | null;
+      maxRedemptions: number | null;
+    } | null = null;
     if (body.type === 'CLAIM') {
       if (!body.promotionId) throw new BadRequestException('Falta la promoción a reclamar');
       promotion = await this.prisma.promotion.findUniqueOrThrow({ where: { id: body.promotionId } });
       if (promotion.storeId !== storeId) {
         throw new BadRequestException('Promoción no pertenece a este negocio');
+      }
+      if (!promotion.isActive) {
+        throw new BadRequestException('Promoción inactiva');
+      }
+      if (promotion.expiryMode === 'TIME' && promotion.endsAt && promotion.endsAt < new Date()) {
+        throw new BadRequestException('Esta promoción ya caducó');
+      }
+      if (promotion.expiryMode === 'QUANTITY' && promotion.maxRedemptions != null) {
+        const used = await this.prisma.transaction.count({
+          where: { promotionId: promotion.id, type: 'REDEEM' },
+        });
+        if (used >= promotion.maxRedemptions) {
+          throw new BadRequestException('Se agotaron las redenciones de esta promo');
+        }
       }
       if (pass.points < promotion.pointsRequired) {
         throw new BadRequestException('Aún no alcanzas este premio');
@@ -152,7 +182,7 @@ export class PendingRequestsController {
       },
     });
 
-    const devMode = !process.env.KAPSO_API_KEY;
+    const devMode = process.env.NODE_ENV !== 'production' && !process.env.KAPSO_API_KEY;
     if (!devMode) {
       await this.whatsapp.enqueue({
         to: pass.user.phone,
@@ -202,12 +232,14 @@ export class PendingRequestsController {
         if (claimed.count === 0) {
           throw new BadRequestException('Esta solicitud ya no está pendiente');
         }
+        const current = await tx.pass.findUniqueOrThrow({ where: { id: pending.passId } });
+        const delta = Math.max(0, Math.min(1, store.maxStamps - current.points));
         await tx.pass.update({
           where: { id: pending.passId },
-          data: { points: { increment: 1 } },
+          data: { points: { increment: delta } },
         });
         await tx.transaction.create({
-          data: { passId: pending.passId, storeId: pending.storeId, type: 'ACCUMULATE', points: 1 },
+          data: { passId: pending.passId, storeId: pending.storeId, type: 'ACCUMULATE', points: delta },
         });
       });
     } else {
@@ -217,6 +249,20 @@ export class PendingRequestsController {
       const promotion = await this.prisma.promotion.findUniqueOrThrow({
         where: { id: pending.promotionId },
       });
+      if (!promotion.isActive) {
+        throw new BadRequestException('Promoción inactiva');
+      }
+      if (promotion.expiryMode === 'TIME' && promotion.endsAt && promotion.endsAt < new Date()) {
+        throw new BadRequestException('Esta promoción ya caducó');
+      }
+      if (promotion.expiryMode === 'QUANTITY' && promotion.maxRedemptions != null) {
+        const used = await this.prisma.transaction.count({
+          where: { promotionId: promotion.id, type: 'REDEEM' },
+        });
+        if (used >= promotion.maxRedemptions) {
+          throw new BadRequestException('Se agotaron las redenciones de esta promo');
+        }
+      }
       const isFinalReward = promotion.pointsRequired === store.maxStamps;
 
       await this.prisma.$transaction(async (tx) => {
@@ -240,6 +286,26 @@ export class PendingRequestsController {
           where: { id: pending.passId },
           data: isFinalReward ? { points: 0, cycleStartedAt: new Date() } : {},
         });
+      });
+    }
+
+    const updatedPass = await this.prisma.pass.findUniqueOrThrow({
+      where: { id: pending.passId },
+      include: { user: true },
+    });
+    if (updatedPass.walletRef) {
+      await this.wallet.updatePoints(updatedPass.walletRef, updatedPass.points);
+    }
+    if (pending.type === 'ACCUMULATE') {
+      await this.whatsapp.enqueue({
+        to: updatedPass.user.phone,
+        template: 'onda_puntos',
+        variables: {
+          name: updatedPass.user.name,
+          points: String(updatedPass.points),
+          store: store.name,
+        },
+        storeId: pending.storeId,
       });
     }
 
