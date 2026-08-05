@@ -19,6 +19,7 @@ import {
   WebhooksController,
 } from './analytics.controller';
 import { AuthController } from './auth.controller';
+import { CustomerAuthController } from './customer-auth.controller';
 import { UploadsController } from './uploads.controller';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
@@ -37,6 +38,7 @@ import { CustomerAuthService } from './customer-auth.service';
   controllers: [
     HealthController,
     AuthController,
+    CustomerAuthController,
     StoresController,
     EventsController,
     UsersController,
