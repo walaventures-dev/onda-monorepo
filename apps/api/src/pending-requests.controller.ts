@@ -41,12 +41,23 @@ export class PendingRequestsController {
   ) {}
 
   @Sse('stream')
-  stream(@Query('storeId') storeId: string): Observable<MessageEvent> {
+  async stream(
+    @Query('storeId') storeId: string,
+    @Query('pinCode') pinCode: string
+  ): Promise<Observable<MessageEvent>> {
+    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
+    if (store.pinCode !== pinCode) {
+      throw new ForbiddenException('PIN de tienda inválido');
+    }
     return this.sse.stream(storeId);
   }
 
   @Get('pending')
-  listPending(@Query('storeId') storeId: string) {
+  async listPending(@Query('storeId') storeId: string, @Query('pinCode') pinCode: string) {
+    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
+    if (store.pinCode !== pinCode) {
+      throw new ForbiddenException('PIN de tienda inválido');
+    }
     return this.prisma.pendingRequest.findMany({
       where: { storeId, status: 'PENDING' },
       include: { pass: { include: { user: true } }, promotion: true },
@@ -67,6 +78,7 @@ export class PendingRequestsController {
     // de la misma fila para saber cómo se resolvió, no solo que ya no está pendiente.
     return this.prisma.pendingRequest.findFirst({
       where: { passId },
+      include: { promotion: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -86,7 +98,12 @@ export class PendingRequestsController {
     const storeId = pass.storeId;
 
     const existing = await this.prisma.pendingRequest.findFirst({
-      where: { passId: pass.id, status: 'PENDING' },
+      where: {
+        passId: pass.id,
+        status: 'PENDING',
+        type: body.type,
+        ...(body.type === 'CLAIM' ? { promotionId: body.promotionId } : {}),
+      },
       orderBy: { createdAt: 'desc' },
     });
     if (existing) {
@@ -106,7 +123,7 @@ export class PendingRequestsController {
       if (promotion.storeId !== storeId) {
         throw new BadRequestException('Promoción no pertenece a este negocio');
       }
-      if (promotion.pointsRequired !== pass.points) {
+      if (pass.points < promotion.pointsRequired) {
         throw new BadRequestException('Aún no alcanzas este premio');
       }
       const alreadyClaimed = await this.prisma.transaction.findFirst({
@@ -159,8 +176,12 @@ export class PendingRequestsController {
   }
 
   @Post(':id/confirm')
-  async confirm(@Param('id') id: string) {
+  async confirm(@Param('id') id: string, @Body() body: { pinCode: string }) {
     const pending = await this.prisma.pendingRequest.findUniqueOrThrow({ where: { id } });
+    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: pending.storeId } });
+    if (store.pinCode !== body.pinCode) {
+      throw new ForbiddenException('PIN de tienda inválido');
+    }
     if (pending.status !== 'PENDING') {
       throw new BadRequestException('Esta solicitud ya no está pendiente');
     }
@@ -172,8 +193,9 @@ export class PendingRequestsController {
       throw new BadRequestException('Código expirado, el cliente debe pedir uno nuevo');
     }
 
+    let resolved: { count: number };
     if (pending.type === 'ACCUMULATE') {
-      await this.prisma.$transaction([
+      const [, , updateResult] = await this.prisma.$transaction([
         this.prisma.pass.update({
           where: { id: pending.passId },
           data: { points: { increment: 1 } },
@@ -181,19 +203,22 @@ export class PendingRequestsController {
         this.prisma.transaction.create({
           data: { passId: pending.passId, storeId: pending.storeId, type: 'ACCUMULATE', points: 1 },
         }),
-        this.prisma.pendingRequest.update({
-          where: { id },
+        this.prisma.pendingRequest.updateMany({
+          where: { id, status: 'PENDING' },
           data: { status: 'CONFIRMED', resolvedAt: new Date() },
         }),
       ]);
+      resolved = updateResult;
     } else {
+      if (!pending.promotionId) {
+        throw new BadRequestException('Solicitud de reclamo sin promoción asociada');
+      }
       const promotion = await this.prisma.promotion.findUniqueOrThrow({
-        where: { id: pending.promotionId as string },
+        where: { id: pending.promotionId },
       });
-      const store = await this.prisma.store.findUniqueOrThrow({ where: { id: pending.storeId } });
       const isFinalReward = promotion.pointsRequired === store.maxStamps;
 
-      await this.prisma.$transaction([
+      const [, , updateResult] = await this.prisma.$transaction([
         this.prisma.transaction.create({
           data: {
             passId: pending.passId,
@@ -207,26 +232,38 @@ export class PendingRequestsController {
           where: { id: pending.passId },
           data: isFinalReward ? { points: 0, cycleStartedAt: new Date() } : {},
         }),
-        this.prisma.pendingRequest.update({
-          where: { id },
+        this.prisma.pendingRequest.updateMany({
+          where: { id, status: 'PENDING' },
           data: { status: 'CONFIRMED', resolvedAt: new Date() },
         }),
       ]);
+      resolved = updateResult;
+    }
+
+    if (resolved.count === 0) {
+      throw new BadRequestException('Esta solicitud ya no está pendiente');
     }
 
     return { ok: true as const };
   }
 
   @Post(':id/reject')
-  async reject(@Param('id') id: string) {
+  async reject(@Param('id') id: string, @Body() body: { pinCode: string }) {
     const pending = await this.prisma.pendingRequest.findUniqueOrThrow({ where: { id } });
+    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: pending.storeId } });
+    if (store.pinCode !== body.pinCode) {
+      throw new ForbiddenException('PIN de tienda inválido');
+    }
     if (pending.status !== 'PENDING') {
       throw new BadRequestException('Esta solicitud ya no está pendiente');
     }
-    await this.prisma.pendingRequest.update({
-      where: { id },
+    const updateResult = await this.prisma.pendingRequest.updateMany({
+      where: { id, status: 'PENDING' },
       data: { status: 'REJECTED', resolvedAt: new Date() },
     });
+    if (updateResult.count === 0) {
+      throw new BadRequestException('Esta solicitud ya no está pendiente');
+    }
     return { ok: true as const };
   }
 }
