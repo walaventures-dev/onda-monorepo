@@ -55,6 +55,7 @@ import {
   type CompareResponse,
 } from "./CompareStores";
 import { ActivityHeatmap } from "./ActivityHeatmap";
+import { PendingRequestsPanel } from "./PendingRequestsPanel";
 
 type Tab =
   | "resumen"
@@ -830,6 +831,13 @@ export function MerchantWorkspace() {
       body: JSON.stringify(payload),
     });
     setDesign(saved);
+    if (store?.maxStamps != null) {
+      const updatedStore = await api(`/stores/${storeId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ maxStamps: store.maxStamps }),
+      });
+      setStores((prev) => prev.map((s) => (s.id === storeId ? updatedStore : s)));
+    }
     await alert({
       title: "Diseño guardado",
       message: "La vista previa del pase quedó actualizada.",
@@ -1579,28 +1587,7 @@ export function MerchantWorkspace() {
               />
             ) : null}
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="onda-card space-y-3 p-5">
-                <h3 className="font-display font-semibold">
-                  Agregar ondas a un cliente (Pin caja)
-                </h3>
-                <input
-                  className="w-full rounded-xl border px-3 py-2"
-                  placeholder="Pass ID"
-                  value={passId}
-                  onChange={(e) => setPassId(e.target.value)}
-                />
-                <input
-                  className="w-full rounded-xl border px-3 py-2"
-                  placeholder="PIN"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                />
-                <GradientButton type="button" onClick={accumulate}>
-                  {OndaIcons.accumulate}
-                  Agregar 1 onda
-                </GradientButton>
-              </div>
+            <div className="grid gap-6 lg:grid-cols-1">
               <div className="onda-card p-5">
                 <h3 className="font-display font-semibold">
                   Historial de movimientos
@@ -1993,6 +1980,7 @@ export function MerchantWorkspace() {
                       <input
                         type="number"
                         min={1}
+                        max={store?.maxStamps ?? 12}
                         required
                         className="ml-2 w-24 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
                         value={promoForm.pointsRequired}
@@ -2004,6 +1992,9 @@ export function MerchantWorkspace() {
                         }
                       />
                     </label>
+                    <span className="text-xs text-[var(--onda-muted)]">
+                      de {store?.maxStamps ?? 12} sellos del ciclo
+                    </span>
                     <label className="flex items-center gap-2 text-sm text-[var(--onda-muted)]">
                       <input
                         type="checkbox"
@@ -2402,6 +2393,23 @@ export function MerchantWorkspace() {
                         />
                       </label>
 
+                      <label>
+                        <span>Número de sellos del ciclo</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={12}
+                          required
+                          value={store?.maxStamps ?? 12}
+                          onChange={(e) => {
+                            const maxStamps = Number(e.target.value);
+                            setStores((prev) =>
+                              prev.map((s) => (s.id === storeId ? { ...s, maxStamps } : s))
+                            );
+                          }}
+                        />
+                      </label>
+
                       <div className="flex justify-end pt-1">
                         <GradientButton type="submit">
                           {OndaIcons.save}
@@ -2415,7 +2423,11 @@ export function MerchantWorkspace() {
                     <p className="onda-pass-designer-label mb-3">Vista previa</p>
                     <PassPreview
                       {...design}
-                      points={12}
+                      points={Math.min(3, store?.maxStamps ?? 12)}
+                      maxStamps={store?.maxStamps ?? 12}
+                      milestoneStamps={promos
+                        .filter((p: any) => p.isActive)
+                        .map((p: any) => p.pointsRequired)}
                       memberName="Cliente demo"
                     />
                   </div>
@@ -2429,6 +2441,7 @@ export function MerchantWorkspace() {
           </div>
         )}
       </AppShell>
+      <PendingRequestsPanel storeId={storeId} />
       {dialogs}
     </>
   );
