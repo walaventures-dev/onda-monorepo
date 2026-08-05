@@ -23,6 +23,7 @@ import { UploadsController } from './uploads.controller';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { WhatsappService } from './whatsapp.service';
+import { CustomerAuthService } from './customer-auth.service';
 
 @Module({
   imports: [
@@ -52,6 +53,6 @@ import { WhatsappService } from './whatsapp.service';
     WebhooksController,
     UploadsController,
   ],
-  providers: [PrismaService, WalletService, WhatsappService],
+  providers: [PrismaService, WalletService, WhatsappService, CustomerAuthService],
 })
 export class AppModule {}
