@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "dev:api": "pnpm exec tsx --tsconfig apps/api/tsconfig.json watch apps/api/src/main.ts",
+    "dev:api": "pnpm exec tsx watch --tsconfig apps/api/tsconfig.json apps/api/src/main.ts",
     "dev:landing": "pnpm exec next dev apps/landing -p 4200",
     "dev:pwa": "pnpm exec next dev apps/pwa-client -p 4201",
     "dev:merchant": "pnpm exec next dev apps/merchant-dashboard -p 4202",

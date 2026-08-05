@@ -72,22 +72,43 @@ export function OndaLogo({
   );
 }
 
+export function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="group relative inline-flex" tabIndex={0}>
+      <span className="cursor-help text-[var(--onda-muted)] hover:text-[var(--onda-ink)] focus-visible:text-[var(--onda-ink)]">
+        {OndaIcons.info}
+      </span>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 w-max max-w-[220px] -translate-x-1/2 rounded-lg bg-[var(--onda-ink)] px-2.5 py-1.5 text-xs font-normal leading-snug text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+      >
+        {text}
+      </span>
+    </span>
+  );
+}
+
 export function KpiCard({
   label,
   value,
   delta,
   positive,
+  hint,
   children,
 }: {
   label: string;
   value: string | number;
   delta?: string;
   positive?: boolean;
+  hint?: string;
   children?: React.ReactNode;
 }) {
   return (
     <div className="onda-card flex h-full w-full flex-col px-4 py-3.5">
-      <p className="text-xs text-[var(--onda-muted)]">{label}</p>
+      <p className="flex items-center gap-1 text-xs text-[var(--onda-muted)]">
+        {label}
+        {hint ? <InfoTooltip text={hint} /> : null}
+      </p>
       <div className="mt-1.5 flex flex-1 items-end justify-between gap-2">
         <div>
           <p className="font-display text-2xl font-semibold tabular-nums text-[var(--onda-ink)]">

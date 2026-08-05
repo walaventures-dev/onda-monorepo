@@ -1235,7 +1235,8 @@ export function MerchantWorkspace() {
                 } [&>*]:min-w-0`}
               >
                 <KpiCard
-                  label="Ondas en periodo"
+                  label="Ondas acumuladas"
+                  hint="Onda = punto que el cliente gana en cada compra."
                   value={kpis?.ondas ?? 0}
                   delta={deltaLabel(kpis?.ondasDelta)}
                   positive={(kpis?.ondasDelta ?? 0) >= 0}
@@ -1254,6 +1255,7 @@ export function MerchantWorkspace() {
                 />
                 <KpiCard
                   label="Tasa redención"
+                  hint="Compara cuántas veces canjearon una promo contra cuántas veces sumaron ondas. Puede superar 100% si canjean ondas que ya tenían acumuladas."
                   value={`${kpis?.tasaRedencion ?? 0}%`}
                   delta={
                     kpis?.tasaRedencionDelta != null
@@ -1530,15 +1532,15 @@ export function MerchantWorkspace() {
           <div className="space-y-5">
             <div className="onda-kpi-grid">
               <KpiCard
-                label="Ondas última hora"
+                label="Ondas acumuladas en la última hora"
                 value={overview?.ops?.ondasLastHour ?? 0}
               />
               <KpiCard
-                label="Acumular / Canjear"
+                label="Acumulaciones / Canjes"
                 value={`${overview?.ops?.accumulateInRange ?? 0} / ${overview?.ops?.redeemInRange ?? 0}`}
               />
               <KpiCard
-                label="Desde última tx"
+                label="Desde última transacción"
                 value={
                   overview?.ops?.minutesSinceLastTx == null
                     ? "—"
@@ -1580,7 +1582,7 @@ export function MerchantWorkspace() {
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="onda-card space-y-3 p-5">
                 <h3 className="font-display font-semibold">
-                  Sumar onda (PIN caja)
+                  Agregar ondas a un cliente (Pin caja)
                 </h3>
                 <input
                   className="w-full rounded-xl border px-3 py-2"
@@ -1596,12 +1598,12 @@ export function MerchantWorkspace() {
                 />
                 <GradientButton type="button" onClick={accumulate}>
                   {OndaIcons.accumulate}
-                  Acumular
+                  Agregar 1 onda
                 </GradientButton>
               </div>
               <div className="onda-card p-5">
                 <h3 className="font-display font-semibold">
-                  Auditoría filtrada
+                  Historial de movimientos
                 </h3>
                 <ul className="onda-tx-list mt-3 max-h-80 overflow-auto">
                   {txs.map((t: any) => (

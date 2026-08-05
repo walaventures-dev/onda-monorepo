@@ -303,6 +303,7 @@ export function CompareStores({
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5 [&>*]:min-w-0">
             <KpiCard
               label="Ondas del grupo"
+              hint="Onda = punto que el cliente gana en cada compra."
               value={displayKpis.ondas}
               delta={deltaLabel(displayKpis.ondasDelta)}
               positive={(displayKpis.ondasDelta ?? 0) >= 0}
@@ -315,6 +316,7 @@ export function CompareStores({
             />
             <KpiCard
               label="Tasa redención"
+              hint="Compara cuántas veces canjearon una promo contra cuántas veces sumaron ondas. Puede superar 100% si canjean ondas que ya tenían acumuladas."
               value={`${displayKpis.tasaRedencion}%`}
               delta={
                 displayKpis.tasaRedencionDelta != null

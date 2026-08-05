@@ -65,6 +65,12 @@ export const OndaIcons = {
       <path d="M8 6.5v3.5M8 11.5h.01" />
     </OndaIcon>
   ),
+  info: (
+    <OndaIcon>
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="M8 7.2v3.6M8 5.2h.01" />
+    </OndaIcon>
+  ),
   crown: (
     <OndaIcon>
       <path d="M2.5 11.5h11l-1-7L9.5 7 8 3.5 6.5 7l-3-2.5z" />
@@ -297,6 +303,27 @@ export function badgeIcon(badge?: string | null): ReactNode {
   }
 }
 
+export function badgeDescription(badge?: string | null): string {
+  switch (badge) {
+    case 'Nuevo':
+      return 'Se unió al programa en este periodo';
+    case 'Cerca':
+      return 'Le faltan pocas ondas para canjear una promoción';
+    case 'En riesgo':
+      return 'No visita hace un tiempo y podría dejar de venir';
+    case 'Dormido':
+      return 'No ha vuelto hace mucho tiempo';
+    case 'VIP':
+      return 'Está entre los clientes con más ondas acumuladas';
+    case 'Top':
+      return 'Es de las promociones con mejor desempeño';
+    case 'Fría':
+      return 'Es de las promociones con menos actividad';
+    default:
+      return '';
+  }
+}
+
 export function BadgePill({
   badge,
   className = 'rounded-full bg-[var(--onda-violet-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--onda-violet)]',
@@ -305,7 +332,10 @@ export function BadgePill({
   className?: string;
 }) {
   return (
-    <span className={`inline-flex items-center gap-1 ${className}`}>
+    <span
+      className={`inline-flex items-center gap-1 ${className}`}
+      title={badgeDescription(badge)}
+    >
       {badgeIcon(badge)}
       {badge}
     </span>

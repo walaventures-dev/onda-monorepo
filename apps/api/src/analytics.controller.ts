@@ -435,12 +435,12 @@ export class AnalyticsController {
           tone: p.remaining === 0 ? 'danger' : 'warning',
           title:
             p.remaining === 0
-              ? `Se agotó la promo de ${p.pointsRequired} ondas`
-              : `Ya casi se acaban las promos de ${p.pointsRequired} ondas`,
+              ? `Se agotó “${p.title}”`
+              : `Se está por agotar “${p.title}”`,
           message:
             p.remaining === 0
-              ? `“${p.title}” no tiene redenciones restantes. Duplica o crea una nueva.`
-              : `“${p.title}” tiene ${p.remaining} de ${p.maxRedemptions} canjes. Conviene duplicar o crear otra.`,
+              ? 'Ya no tiene canjes restantes. Duplícala o crea una nueva.'
+              : `Queda ${p.remaining} de ${p.maxRedemptions} canjes. Duplícala antes de que se agote.`,
           action: 'Duplicar promo',
           promoId: p.id,
           stat: String(p.remaining ?? 0),
@@ -452,12 +452,12 @@ export class AnalyticsController {
           tone: p.daysLeft <= 0 ? 'danger' : 'warning',
           title:
             p.daysLeft <= 0
-              ? `Caducó la promo de ${p.pointsRequired} ondas`
-              : `La promo de ${p.pointsRequired} ondas caduca pronto`,
+              ? `Caducó “${p.title}”`
+              : `“${p.title}” vence en ${p.daysLeft} día${p.daysLeft === 1 ? '' : 's'}`,
           message:
             p.daysLeft <= 0
-              ? `“${p.title}” ya no está disponible. Duplica para renovarla.`
-              : `“${p.title}” vence en ${p.daysLeft} día${p.daysLeft === 1 ? '' : 's'}.`,
+              ? 'Ya no está disponible para tus clientes. Duplícala para reactivarla.'
+              : 'Duplícala para tenerla lista antes de que expire.',
           action: 'Duplicar promo',
           promoId: p.id,
           stat: p.daysLeft <= 0 ? '0d' : `${p.daysLeft}d`,
@@ -479,8 +479,8 @@ export class AnalyticsController {
       insights.push({
         id: 'near-redeem',
         tone: 'accent',
-        title: 'Clientes cerca de canje',
-        message: `${segments.cercaCanje} clientes están a ≤2 ondas de una promo activa.`,
+        title: `${segments.cercaCanje} clientes a punto de canjear`,
+        message: 'Les faltan 2 ondas o menos para alcanzar una promo activa.',
         action: 'Ver segmento',
         stat: String(segments.cercaCanje),
       });

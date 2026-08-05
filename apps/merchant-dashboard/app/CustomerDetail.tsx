@@ -128,7 +128,8 @@ export function CustomerDetail({
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6 [&>*]:min-w-0">
         <KpiCard
-          label="Ondas en periodo"
+          label="Ondas acumuladas"
+          hint="Onda = punto que el cliente gana en cada compra."
           value={k?.ondas ?? 0}
           delta={deltaLabel(k?.ondasDelta)}
           positive={(k?.ondasDelta ?? 0) >= 0}
