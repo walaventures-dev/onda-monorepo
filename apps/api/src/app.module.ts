@@ -25,6 +25,7 @@ import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { WhatsappService } from './whatsapp.service';
 import { CustomerAuthService } from './customer-auth.service';
+import { PendingRequestsSseService } from './pending-requests-sse.service';
 
 @Module({
   imports: [
@@ -55,6 +56,6 @@ import { CustomerAuthService } from './customer-auth.service';
     WebhooksController,
     UploadsController,
   ],
-  providers: [PrismaService, WalletService, WhatsappService, CustomerAuthService],
+  providers: [PrismaService, WalletService, WhatsappService, CustomerAuthService, PendingRequestsSseService],
 })
 export class AppModule {}
