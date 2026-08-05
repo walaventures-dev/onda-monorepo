@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { PhoneInput, api } from '@onda/shared-ui';
 import { toE164Colombia, isCompletePhoneMask } from '@onda/shared-utils';
 import { PassSwipe, type PassSwipeCard } from './PassSwipe';
@@ -355,6 +356,9 @@ export default function StoreEntryPage() {
               >
                 Ver recompensas
               </button>
+              <Link href="/portal" className="onda-pwa-secondary block text-center">
+                Ver mi tarjeta Onda
+              </Link>
               {walletLinks ? (
                 <p className="onda-pwa-legal">
                   Si no se abrió,{' '}
