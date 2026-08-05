@@ -22,6 +22,22 @@ export class PassesController {
     @Inject(CustomerAuthService) private auth: CustomerAuthService
   ) {}
 
+  private async withClaimedThisCycle<T extends { id: string; cycleStartedAt: Date }>(pass: T) {
+    const claimedThisCycle = await this.prisma.transaction.findMany({
+      where: {
+        passId: pass.id,
+        type: 'REDEEM',
+        createdAt: { gte: pass.cycleStartedAt },
+        promotionId: { not: null },
+      },
+      select: { promotionId: true },
+    });
+    return {
+      ...pass,
+      claimedPromotionIdsThisCycle: claimedThisCycle.map((t) => t.promotionId as string),
+    };
+  }
+
   @Get(':id')
   async get(@Param('id') id: string) {
     const pass = await this.prisma.pass.findUniqueOrThrow({
@@ -33,32 +49,19 @@ export class PassesController {
         transactions: { orderBy: { createdAt: 'desc' }, take: 20 },
       },
     });
-
-    const claimedThisCycle = await this.prisma.transaction.findMany({
-      where: {
-        passId: id,
-        type: 'REDEEM',
-        createdAt: { gte: pass.cycleStartedAt },
-        promotionId: { not: null },
-      },
-      select: { promotionId: true },
-    });
-
-    return {
-      ...pass,
-      claimedPromotionIdsThisCycle: claimedThisCycle.map((t) => t.promotionId as string),
-    };
+    return this.withClaimedThisCycle(pass);
   }
 
   @Get()
-  byUser(@Query('userId') userId: string, @Query('storeId') storeId?: string) {
-    return this.prisma.pass.findMany({
+  async byUser(@Query('userId') userId: string, @Query('storeId') storeId?: string) {
+    const passes = await this.prisma.pass.findMany({
       where: { userId, ...(storeId ? { storeId } : {}) },
       include: {
         store: { include: { passDesign: true } },
         event: { include: { passDesign: true } },
       },
     });
+    return Promise.all(passes.map((p) => this.withClaimedThisCycle(p)));
   }
 
   @Post(':id/issue')
@@ -118,9 +121,10 @@ export class PassesController {
       });
     }
 
-    return this.prisma.pass.findUniqueOrThrow({
+    const fullPass = await this.prisma.pass.findUniqueOrThrow({
       where: { id: pass.id },
       include: { store: { include: { passDesign: true, promotions: true } } },
     });
+    return this.withClaimedThisCycle(fullPass);
   }
 }

@@ -13,6 +13,7 @@ import {
   Sse,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
+import { PlanType } from '@prisma/client';
 import { PrismaService } from './prisma.service';
 import { WhatsappService } from './whatsapp.service';
 import { WalletService } from './wallet.service';
@@ -20,6 +21,11 @@ import { CustomerAuthService } from './customer-auth.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
 
 const CODE_TTL_MS = 10 * 60 * 1000;
+
+const LIMITS: Record<PlanType, number> = {
+  BASIC: 150,
+  PRO: 350,
+};
 
 function randomCode(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -101,7 +107,12 @@ export class PendingRequestsController {
     const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
 
     if (body.type === 'ACCUMULATE' && pass.points >= store.maxStamps) {
-      throw new BadRequestException('Ya alcanzaste el máximo de sellos de este ciclo, reclama tu premio primero');
+      const hasFinalPromo = await this.prisma.promotion.findFirst({
+        where: { storeId, pointsRequired: store.maxStamps, isActive: true },
+      });
+      if (hasFinalPromo) {
+        throw new BadRequestException('Ya alcanzaste el máximo de sellos de este ciclo, reclama tu premio primero');
+      }
     }
 
     const existing = await this.prisma.pendingRequest.findFirst({
@@ -273,6 +284,21 @@ export class PendingRequestsController {
         if (claimed.count === 0) {
           throw new BadRequestException('Esta solicitud ya no está pendiente');
         }
+        const currentPass = await tx.pass.findUniqueOrThrow({ where: { id: pending.passId } });
+        if (currentPass.points < promotion.pointsRequired) {
+          throw new BadRequestException('Aún no alcanzas este premio');
+        }
+        const alreadyClaimed = await tx.transaction.findFirst({
+          where: {
+            passId: pending.passId,
+            promotionId: promotion.id,
+            type: 'REDEEM',
+            createdAt: { gte: currentPass.cycleStartedAt },
+          },
+        });
+        if (alreadyClaimed) {
+          throw new BadRequestException('Ya reclamaste este premio en este ciclo');
+        }
         await tx.transaction.create({
           data: {
             passId: pending.passId,
@@ -307,6 +333,12 @@ export class PendingRequestsController {
         },
         storeId: pending.storeId,
       });
+      if (store.whatsappUsed < LIMITS[store.planType]) {
+        await this.prisma.store.update({
+          where: { id: store.id },
+          data: { whatsappUsed: { increment: 1 } },
+        });
+      }
     }
 
     return { ok: true as const };
