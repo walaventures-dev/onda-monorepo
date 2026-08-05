@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import { MisTarjetasClient } from './MisTarjetasClient';
 
 export default function Home() {
-  redirect('/r/demo');
+  return <MisTarjetasClient />;
 }
