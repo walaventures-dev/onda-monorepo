@@ -42,6 +42,17 @@ enum PromotionExpiryMode {
   QUANTITY
 }
 
+enum PendingRequestType {
+  ACCUMULATE
+  CLAIM
+}
+
+enum PendingRequestStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
 enum StoreCategory {
   RESTAURANT
   SERVICE
@@ -57,6 +68,7 @@ model Store {
   planType         PlanType               @default(BASIC)
   billingStatus    String                 @default("ACTIVE")
   whatsappUsed     Int                    @default(0)
+  maxStamps        Int                    @default(12)
   lat              Float?
   lng              Float?
   ownerEmail       String?
@@ -66,6 +78,7 @@ model Store {
   promotions       Promotion[]
   eventMemberships StoreEventMembership[]
   passDesign       PassDesign?
+  pendingRequests  PendingRequest[]
   createdAt        DateTime               @default(now())
 }
 
@@ -104,6 +117,7 @@ model User {
   phone     String     @unique
   passes    Pass[]
   feedbacks Feedback[]
+  sessions  Session[]
   createdAt DateTime   @default(now())
 }
 
@@ -114,12 +128,14 @@ model Pass {
   eventId      String?
   serialNumber String        @unique
   points       Int           @default(0)
+  cycleStartedAt DateTime    @default(now())
   pushToken    String?
   walletRef    String?
   user         User          @relation(fields: [userId], references: [id])
   store        Store?        @relation(fields: [storeId], references: [id])
   event        Event?        @relation(fields: [eventId], references: [id])
   transactions Transaction[]
+  pendingRequests PendingRequest[]
 
   @@index([userId, storeId])
   @@index([userId, eventId])
@@ -173,6 +189,7 @@ model Promotion {
   store          Store?               @relation(fields: [storeId], references: [id])
   event          Event?               @relation(fields: [eventId], references: [id])
   transactions   Transaction[]
+  pendingRequests PendingRequest[]
   createdAt      DateTime             @default(now())
 }
 
@@ -210,4 +227,46 @@ model Draw {
   note      String?
   createdAt DateTime @default(now())
   event     Event    @relation(fields: [eventId], references: [id])
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  token     String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([userId])
+}
+
+model OtpCode {
+  id         String    @id @default(uuid())
+  phone      String
+  code       String
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  consumedAt DateTime?
+
+  @@index([phone])
+}
+
+model PendingRequest {
+  id          String               @id @default(uuid())
+  type        PendingRequestType
+  code        String
+  passId      String
+  storeId     String
+  promotionId String?
+  status      PendingRequestStatus @default(PENDING)
+  createdAt   DateTime             @default(now())
+  expiresAt   DateTime
+  resolvedAt  DateTime?
+  pass        Pass                 @relation(fields: [passId], references: [id])
+  store       Store                @relation(fields: [storeId], references: [id])
+  promotion   Promotion?           @relation(fields: [promotionId], references: [id])
+
+  @@index([storeId, status])
+  @@index([passId, status])
 }
