@@ -6,10 +6,12 @@ import Link from 'next/link';
 import { PhoneInput, api } from '@onda/shared-ui';
 import { toE164Colombia, isCompletePhoneMask } from '@onda/shared-utils';
 import { PassSwipe, type PassSwipeCard } from './PassSwipe';
+import {
+  getSession as readStoredSession,
+  setSession as persistSession,
+} from '../../lib/session';
 
 type Step = 'loading' | 'enroll' | 'home' | 'rewards';
-
-const SESSION_KEY = 'onda_pwa_session';
 
 function isAppleDevice() {
   if (typeof navigator === 'undefined') return false;
@@ -79,9 +81,9 @@ export default function StoreEntryPage() {
           }
         }
 
-        const raw = localStorage.getItem(SESSION_KEY);
-        if (raw) {
-          setSession(JSON.parse(raw));
+        const storedSession = readStoredSession();
+        if (storedSession) {
+          setSession(storedSession);
           setStep('home');
         } else {
           setStep('enroll');
@@ -145,7 +147,7 @@ export default function StoreEntryPage() {
           tableId,
         }),
       });
-      localStorage.setItem(SESSION_KEY, JSON.stringify(res));
+      persistSession(res);
       setSession(res);
       setStep('home');
       await openWallet(res.pass?.id);

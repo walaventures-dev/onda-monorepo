@@ -1,4 +1,5 @@
 import type { OndaCardDto, RestaurantCardDto, PromotionDto } from '@onda/shared-types';
+import { getSession } from '../../lib/session';
 
 export type CatalogReward = PromotionDto & { storeName: string };
 
@@ -65,7 +66,8 @@ const MOCK_RESTAURANT_CARDS: RestaurantCardDto[] = [
   },
 ];
 
-export async function getOndaCard(memberName: string): Promise<OndaCardDto> {
+export async function getOndaCard(): Promise<OndaCardDto> {
+  const memberName = getSession()?.user?.name || 'Cliente Onda';
   const totalPoints = MOCK_RESTAURANT_CARDS.reduce((sum, c) => sum + c.points, 0);
   return {
     id: 'mock-onda-card-1',

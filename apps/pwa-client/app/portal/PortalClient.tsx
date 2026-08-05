@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getSession } from '../lib/session';
 import { getOndaCard, getRestaurantCards } from './lib/mockData';
 import { OndaCardView } from './OndaCardView';
 import { RestaurantCardList } from './RestaurantCardList';
@@ -17,12 +16,7 @@ export default function PortalClient() {
     let cancelled = false;
 
     async function load() {
-      const session = getSession();
-      const memberName = session?.user?.name || 'Cliente Onda';
-      const [card, cards] = await Promise.all([
-        getOndaCard(memberName),
-        getRestaurantCards(),
-      ]);
+      const [card, cards] = await Promise.all([getOndaCard(), getRestaurantCards()]);
       if (cancelled) return;
       setOndaCard(card);
       setRestaurantCards(cards);
