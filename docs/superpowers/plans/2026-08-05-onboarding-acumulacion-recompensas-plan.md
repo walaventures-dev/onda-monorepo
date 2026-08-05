@@ -773,6 +773,14 @@ git add apps/api/src/pending-requests.controller.ts apps/api/src/app.module.ts
 git commit -m "Add PendingRequest endpoints for accumulate/claim confirmation and SSE"
 ```
 
+**Enmienda post-revisión (decidida por el usuario durante la ejecución del plan):** el diseño original de este task no exigía autenticación en `confirm`, `reject`, `listPending` (`GET /pending-requests/pending`) ni `stream`. Dado que `storeId` es público (va en la URL del QR), esto permitía que cualquiera con el QR de una tienda confirmara acumulaciones/reclamos ajenos sin pasar por caja. Se corrigió así:
+
+- `confirm` y `reject` ahora exigen `{ pinCode }` en el body — se valida contra `store.pinCode` de la tienda dueña del `PendingRequest` (mismo campo que ya existe, sin cambio de esquema) y responden `403 ForbiddenException` si no coincide.
+- `listPending` (`GET /pending-requests/pending?storeId=&pinCode=`) exige `pinCode` como query param, validado igual.
+- `stream` (`GET /pending-requests/stream?storeId=&pinCode=`) intenta el mismo chequeo async antes de devolver el observable; si la validación async no es compatible con el handler `@Sse()` de Nest, queda como canal de solo lectura sin `pinCode` (el vector de abuso real —poder confirmar/rechazar— ya queda cerrado por los dos puntos anteriores).
+
+**Esto cambia lo que las Tareas 17 y 18 (merchant-dashboard, todavía no implementadas al momento de esta enmienda) deben construir:** el dashboard debe pedir el PIN de la tienda una sola vez por sesión de navegador (no en cada acción), guardarlo (p.ej. `localStorage` con clave `onda_dashboard_pin_<storeId>`), y enviarlo como `pinCode` en las 4 llamadas (`pending`, `stream`, `confirm`, `reject`). Ver la nota correspondiente en el Task 17.
+
 ---
 
 ## Fase 4 — Backend: validación de ciclo de sellos y promociones
@@ -2147,8 +2155,10 @@ git commit -m "Add missing onda-pwa-secondary style if absent"
 - Create: `apps/merchant-dashboard/app/PendingRequestsPanel.tsx`
 
 **Interfaces:**
-- Consumes: `api`, `getApiUrl` (`@onda/shared-ui`), `GET /pending-requests/pending?storeId=`, `GET /pending-requests/stream?storeId=` (EventSource), `POST /pending-requests/:id/confirm`, `POST /pending-requests/:id/reject`.
+- Consumes: `api`, `getApiUrl` (`@onda/shared-ui`), `GET /pending-requests/pending?storeId=&pinCode=`, `GET /pending-requests/stream?storeId=&pinCode=` (EventSource; falls back to no `pinCode` if Task 5's async SSE guard turned out not to be feasible — check Task 5's final report before wiring this), `POST /pending-requests/:id/confirm` (body `{ pinCode }`), `POST /pending-requests/:id/reject` (body `{ pinCode }`).
 - Produces: `<PendingRequestsPanel storeId={string} />`, usado por Task 18.
+
+**Nota de implementación (PIN de caja, decisión del usuario tomada durante la revisión del Task 5):** el backend ahora exige el PIN de la tienda (`Store.pinCode`) en `confirm`, `reject`, y `listPending` (y en `stream` si el guard async resultó viable — confirmar contra el reporte final del Task 5). El dashboard debe pedirlo **una sola vez por sesión de navegador**, no en cada acción: al montar el panel, buscar el PIN guardado en `localStorage` bajo la clave `onda_dashboard_pin_<storeId>`; si no existe, pedirlo con `window.prompt(...)` y guardarlo. Si cualquier llamada falla con el mensaje `"PIN de tienda inválido"`, borrar el PIN guardado y volver a pedirlo (no reintentar silenciosamente con el mismo PIN incorrecto).
 
 - [ ] **Step 1: Escribir el componente**
 
@@ -2177,24 +2187,51 @@ type SsePayload = {
   createdAt: string;
 };
 
+function pinStorageKey(storeId: string) {
+  return `onda_dashboard_pin_${storeId}`;
+}
+
+function getOrPromptPin(storeId: string): string | null {
+  const existing = localStorage.getItem(pinStorageKey(storeId));
+  if (existing) return existing;
+  const entered = window.prompt('PIN de la tienda para confirmar acciones de caja');
+  if (!entered) return null;
+  localStorage.setItem(pinStorageKey(storeId), entered);
+  return entered;
+}
+
+function clearStoredPin(storeId: string) {
+  localStorage.removeItem(pinStorageKey(storeId));
+}
+
 export function PendingRequestsPanel({ storeId }: { storeId: string }) {
   const [items, setItems] = useState<PendingItem[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [pin, setPin] = useState<string | null>(null);
 
   useEffect(() => {
     if (!storeId) return;
+    setPin(getOrPromptPin(storeId));
+  }, [storeId]);
+
+  useEffect(() => {
+    if (!storeId || !pin) return;
     let cancelled = false;
 
-    api<PendingItem[]>(`/pending-requests/pending?storeId=${storeId}`)
+    api<PendingItem[]>(`/pending-requests/pending?storeId=${storeId}&pinCode=${encodeURIComponent(pin)}`)
       .then((list) => {
         if (!cancelled) setItems(list);
       })
-      .catch(() => {
-        /* la conexión SSE de abajo seguirá empujando novedades */
+      .catch((err: any) => {
+        if (err.message === 'PIN de tienda inválido') {
+          clearStoredPin(storeId);
+          setPin(getOrPromptPin(storeId));
+        }
+        /* si no es error de PIN, la conexión SSE de abajo seguirá empujando novedades */
       });
 
     const source = new EventSource(
-      `${getApiUrl()}/api/pending-requests/stream?storeId=${storeId}`
+      `${getApiUrl()}/api/pending-requests/stream?storeId=${storeId}&pinCode=${encodeURIComponent(pin)}`
     );
     source.onmessage = (event) => {
       const payload = JSON.parse(event.data) as SsePayload;
@@ -2215,13 +2252,22 @@ export function PendingRequestsPanel({ storeId }: { storeId: string }) {
       cancelled = true;
       source.close();
     };
-  }, [storeId]);
+  }, [storeId, pin]);
 
   async function resolve(id: string, action: 'confirm' | 'reject') {
+    if (!pin) return;
     setBusyId(id);
     try {
-      await api(`/pending-requests/${id}/${action}`, { method: 'POST' });
+      await api(`/pending-requests/${id}/${action}`, {
+        method: 'POST',
+        body: JSON.stringify({ pinCode: pin }),
+      });
       setItems((prev) => prev.filter((i) => i.id !== id));
+    } catch (err: any) {
+      if (err.message === 'PIN de tienda inválido' && storeId) {
+        clearStoredPin(storeId);
+        setPin(getOrPromptPin(storeId));
+      }
     } finally {
       setBusyId(null);
     }
