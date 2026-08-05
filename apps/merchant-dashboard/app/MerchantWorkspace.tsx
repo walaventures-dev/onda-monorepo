@@ -832,11 +832,20 @@ export function MerchantWorkspace() {
     });
     setDesign(saved);
     if (store?.maxStamps != null) {
-      const updatedStore = await api(`/stores/${storeId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ maxStamps: store.maxStamps }),
-      });
-      setStores((prev) => prev.map((s) => (s.id === storeId ? updatedStore : s)));
+      try {
+        const updatedStore = await api(`/stores/${storeId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ maxStamps: store.maxStamps }),
+        });
+        setStores((prev) => prev.map((s) => (s.id === storeId ? updatedStore : s)));
+      } catch (err: any) {
+        await alert({
+          title: "Diseño guardado, pero el tope de sellos no se actualizó",
+          message: err.message || "Intenta de nuevo.",
+          tone: "danger",
+        });
+        return;
+      }
     }
     await alert({
       title: "Diseño guardado",
