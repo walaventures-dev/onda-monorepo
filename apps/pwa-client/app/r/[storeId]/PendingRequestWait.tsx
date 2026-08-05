@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@onda/shared-ui';
-import type { CustomerSession } from '@/lib/session';
+import type { CustomerSession } from '../../../lib/session';
 
 export type PendingRequestDto = {
   id: string;
