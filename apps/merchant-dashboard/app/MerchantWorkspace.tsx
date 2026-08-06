@@ -26,6 +26,7 @@ import {
   SegmentedControl,
   rangeFromPreset,
   promoTypeLabel,
+  promoTypeIcon,
   formatPromoBenefit,
   PROMO_TYPE_OPTIONS,
   api,
@@ -2025,10 +2026,7 @@ export function MerchantWorkspace() {
                       )}
                       <div className="absolute left-2 top-2 flex flex-wrap gap-1">
                         <PromoTag
-                          icon={
-                            PROMO_TYPE_OPTIONS.find((o) => o.id === p.type)
-                              ?.icon || OndaIcons.other
-                          }
+                          icon={promoTypeIcon(p.type)}
                           className="bg-white/90 text-[var(--onda-violet)]"
                         >
                           {promoTypeLabel(p.type)}
@@ -2147,10 +2145,7 @@ export function MerchantWorkspace() {
                           {p.title}
                         </h3>
                         <PromoTag
-                          icon={
-                            PROMO_TYPE_OPTIONS.find((o) => o.id === p.type)
-                              ?.icon || OndaIcons.other
-                          }
+                          icon={promoTypeIcon(p.type)}
                           className="bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]"
                         >
                           {promoTypeLabel(p.type)}
