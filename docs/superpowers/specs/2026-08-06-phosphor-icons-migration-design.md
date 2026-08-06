@@ -14,7 +14,7 @@ Auditando el uso real se encontraron varias inconsistencias visuales:
 - El estado activo/inactivo de una promo se representa con dos pares de íconos distintos: check/x en `PromoDetail` y un círculo lleno/vacío (`IcoTag.on`/`off`) en la tarjeta de `MerchantWorkspace`.
 - El badge "Fría" usa luna (`moon`) para clientes fríos pero un reloj de arena (`IcoTag.cold`) para promos frías.
 - El badge "Top" usa `sparkle` para clientes pero un path distinto (`IcoTag.top`) para promos.
-- Tres claves de `OndaIcons` (`eye`, `near`, `panelLeft`) no tienen ningún uso detectado en el código fuente actual.
+- Dos claves de `OndaIcons` (`near`, `panelLeft`) no tienen ningún uso detectado en el código fuente actual. (`eye` sí se usa hoy, vía `IcoTag.eye` en los botones "Ver detalle" de la tarjeta de promo — ver tabla de mapeo.)
 
 ## Objetivo
 
@@ -28,6 +28,9 @@ No es un reemplazo puramente 1:1: se corrigen las inconsistencias listadas arrib
 - **Importante:** el repo de GitHub (`master`) ya documenta una v3 no publicada aún, con un breaking change de nomenclatura (todos los componentes pasarán a llevar sufijo `Icon`, ej. `WhatsappLogoIcon` en vez de `WhatsappLogo`). Fijar la versión evita que un `npm install` futuro rompa todos los imports cuando esa v3 se publique.
 - Weight fijo: **`regular`** en todos los usos, para no mezclar grosores de trazo.
 - Se preserva el tamaño visual actual por contexto (mayoría a 12px / `h-3 w-3` como hoy; casos puntuales como WhatsApp que ya usaban `h-4 w-4` se mantienen en 16px). Phosphor por defecto renderiza a 1em/32px si no se le pasa `size`/`className` — hay que pasarlo explícito en cada entrada para no romper el layout.
+- **El tamaño se hornea una sola vez, en la definición de cada entrada de `OndaIcons`**, no en los call sites. Cada valor del objeto es un elemento ya instanciado (ej. `check: <Check size={16} weight="regular" className="h-3 w-3 shrink-0" />`), así que los 60+ lugares que hoy escriben `{OndaIcons.check}` siguen exactamente igual — ningún desarrollador toca props de tamaño fuera de `icons.tsx`.
+- Los íconos se importan por subpath individual (`@phosphor-icons/react/dist/csr/<Nombre>`) en vez del barrel completo (`@phosphor-icons/react`). El paquete expone `sideEffects: false` y un módulo ESM por ícono, así que el barrel también se tree-shakea correctamente — pero importar por subpath evita que el bundler tenga que parsear los ~3024 módulos del barrel para descartar los que no usamos (usamos ~41 de 3024).
+- SSR/hidratación: el paquete no trae ninguna directiva `'use client'` propia — sus componentes usan `forwardRef` y Context internamente, lo cual requiere un boundary de cliente. Esto ya lo cubre el `'use client'` que `icons.tsx` tiene en su primera línea hoy: los elementos se instancian dentro de ese módulo de cliente, así que cualquier Server Component que importe y renderice `OndaIcons.*` recibe una referencia a Client Component ya resuelta por Next.js — el mismo patrón que existe hoy con los SVGs a mano, sin riesgo nuevo.
 
 ## Arquitectura
 
@@ -72,15 +75,15 @@ No es un reemplazo puramente 1:1: se corrigen las inconsistencias listadas arrib
 | accumulate | `PlusCircle` | |
 | redeem | `Gift` | |
 | save | `FloppyDisk` | |
-| eye | `Eye` | sin uso detectado hoy, se mantiene definida |
+| eye | `Eye` | también reemplaza `IcoTag.eye` (botón "Ver detalle" de la tarjeta de promo) |
 | close | `X` | también reemplaza `IcoTag.off` (estado "Inactiva" de promo) |
-| near | `MapPin` | sin uso detectado hoy, se mantiene definida |
+| near | `MapPin` | sin uso detectado hoy, se mantiene definida por decisión explícita |
 | upgrade | `TrendUp` | |
 | chart | `ChartBar` | |
 | activity | `Waveform` | |
 | gear | `Gear` | |
 | pass | `IdentificationCard` | |
-| panelLeft | `SidebarSimple` | sin uso detectado hoy, se mantiene definida |
+| panelLeft | `SidebarSimple` | sin uso detectado hoy, se mantiene definida por decisión explícita |
 | chevronLeft | `CaretLeft` | |
 | chevronRight | `CaretRight` | |
 
@@ -100,6 +103,10 @@ No es un reemplazo puramente 1:1: se corrigen las inconsistencias listadas arrib
 1. `badgeIcon()` en `icons.tsx` — el case `'Fría'` pasa de `OndaIcons.moon` a `OndaIcons.snowflake`.
 2. Tarjeta de promo en `MerchantWorkspace.tsx` — el badge de tipo (hoy `icon={IcoTag.type}`, siempre el mismo ícono genérico sin importar el tipo de la promo) pasa a mostrar el ícono real del tipo (`percent`/`dollar`/`nXm`/`product`/`other`), igual que ya hace `AnalyticsFilters`. Esto corrige la inconsistencia visual observada entre la tarjeta y el panel de filtros.
 3. El badge "Top"/"Fría" y el toggle activo/inactivo de la tarjeta de promo pasan de `IcoTag.*` a `OndaIcons.*` (`sparkle`/`snowflake`/`check`/`close`).
+
+## Seguridad de layout en badges
+
+`BadgePill` y `PromoTag` (los componentes que renderizan los badges "Fría"/"Top"/tipo/estado) son un `<span className="inline-flex items-center gap-1 ...">{icon}{texto}</span>`. El tamaño de la caja del ícono lo controla únicamente el `className` fijo que trae cada entrada de `OndaIcons` (`h-3 w-3 shrink-0`), no el path SVG interno del glifo. Como todas las entradas comparten el mismo `className`, cambiar `moon`→`snowflake` (o cualquier otro swap de glifo) no puede desalinear el flex — la caja ocupa el mismo espacio sin importar qué ícono haya adentro.
 
 ## Alcance
 
