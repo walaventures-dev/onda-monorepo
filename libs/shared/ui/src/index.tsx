@@ -44,7 +44,7 @@ export type {
   DatePreset,
   PromoTypeKey,
 } from './AnalyticsFilters';
-export { OndaIcon, OndaIcons, BadgePill, badgeIcon } from './icons';
+export { OndaIcons, BadgePill, badgeIcon } from './icons';
 export {
   TxActivityRow,
   TxTypeBadge,
@@ -266,26 +266,6 @@ export function PassPreview({
       {!compact && description ? (
         <p className="px-5 pb-3 text-sm opacity-80">{description}</p>
       ) : null}
-
-      {/* Franja tipo código de barras / QR strip de Wallet */}
-      <div
-        className={`mx-4 mb-4 flex items-end justify-center gap-[2px] overflow-hidden rounded-lg bg-white/95 px-3 py-2.5 ${
-          compact ? 'mx-3 mb-3' : ''
-        }`}
-        aria-hidden
-      >
-        {Array.from({ length: 28 }).map((_, i) => (
-          <span
-            key={i}
-            className="rounded-[1px] bg-[#1a1b2e]"
-            style={{
-              width: i % 5 === 0 ? 3 : 1.5,
-              height: 22 + ((i * 7) % 14),
-              opacity: 0.85,
-            }}
-          />
-        ))}
-      </div>
     </div>
   );
 }

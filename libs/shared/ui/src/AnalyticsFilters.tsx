@@ -29,7 +29,7 @@ export const DATE_PRESETS = [
   { id: '14d', label: '14D', icon: OndaIcons.calendar },
   { id: '30d', label: '30D', icon: OndaIcons.calendar },
   { id: 'month', label: 'Mes', icon: OndaIcons.calendar },
-  { id: 'custom', label: 'Custom', icon: OndaIcons.custom },
+  { id: 'custom', label: 'Custom', icon: OndaIcons.edit },
 ] as const;
 
 export type DatePreset = (typeof DATE_PRESETS)[number]['id'];
