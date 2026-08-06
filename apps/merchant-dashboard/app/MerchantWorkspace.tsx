@@ -118,76 +118,6 @@ function deltaLabel(n?: number | null) {
   return `${sign}${n}%`;
 }
 
-function Icon({
-  children,
-  className = "h-3 w-3",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={`shrink-0 ${className}`}
-      aria-hidden
-    >
-      {children}
-    </svg>
-  );
-}
-
-const IcoTag = {
-  type: (
-    <Icon>
-      <path d="M2.5 8.5 8.5 2.5h4v4L6.5 12.5z" />
-      <circle cx="11" cy="5" r="0.8" fill="currentColor" stroke="none" />
-    </Icon>
-  ),
-  top: (
-    <Icon>
-      <path d="M8 2.5 9.6 6.2l4 .3-3.1 2.6.9 3.9L8 11.2l-3.4 1.8.9-3.9L2.4 6.5l4-.3z" />
-    </Icon>
-  ),
-  cold: (
-    <Icon>
-      <path d="M8 2.5v11M4.5 5.5 8 8l3.5-2.5M4.5 10.5 8 8l3.5 2.5" />
-    </Icon>
-  ),
-  on: (
-    <Icon>
-      <circle cx="8" cy="8" r="5" />
-      <path d="M8 5.5v5" />
-    </Icon>
-  ),
-  off: (
-    <Icon>
-      <circle cx="8" cy="8" r="5" />
-      <path d="M6 8h4" />
-    </Icon>
-  ),
-  eye: (
-    <Icon>
-      <path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z" />
-      <circle cx="8" cy="8" r="1.8" />
-    </Icon>
-  ),
-  power: (
-    <Icon>
-      <path d="M8 2.5v5.5M4.8 4.2a5 5 0 1 0 6.4 0" />
-    </Icon>
-  ),
-  trash: (
-    <Icon>
-      <path d="M3 4.5h10M6 4.5V3h4v1.5M5 4.5l.5 8.5h5l.5-8.5" />
-    </Icon>
-  ),
-};
-
 function PromoTag({
   children,
   icon,
@@ -2095,14 +2025,21 @@ export function MerchantWorkspace() {
                       )}
                       <div className="absolute left-2 top-2 flex flex-wrap gap-1">
                         <PromoTag
-                          icon={IcoTag.type}
+                          icon={
+                            PROMO_TYPE_OPTIONS.find((o) => o.id === p.type)
+                              ?.icon || OndaIcons.other
+                          }
                           className="bg-white/90 text-[var(--onda-violet)]"
                         >
                           {promoTypeLabel(p.type)}
                         </PromoTag>
                         {badge ? (
                           <PromoTag
-                            icon={badge === "Top" ? IcoTag.top : IcoTag.cold}
+                            icon={
+                              badge === "Top"
+                                ? OndaIcons.sparkle
+                                : OndaIcons.snowflake
+                            }
                             className={
                               badge === "Top"
                                 ? "bg-[var(--onda-success)] text-white"
@@ -2114,7 +2051,7 @@ export function MerchantWorkspace() {
                         ) : null}
                       </div>
                       <PromoTag
-                        icon={p.isActive ? IcoTag.on : IcoTag.off}
+                        icon={p.isActive ? OndaIcons.check : OndaIcons.close}
                         className={`absolute right-2 top-2 ${
                           p.isActive
                             ? "bg-[var(--onda-success)] text-white"
@@ -2148,7 +2085,7 @@ export function MerchantWorkspace() {
                             openPromoDetail(p.id);
                           }}
                         >
-                          {IcoTag.eye}
+                          {OndaIcons.eye}
                           Ver detalle
                         </button>
                         <button
@@ -2159,7 +2096,7 @@ export function MerchantWorkspace() {
                             togglePromo(p.id, p.isActive);
                           }}
                         >
-                          {IcoTag.power}
+                          {OndaIcons.power}
                           {p.isActive ? "Desactivar" : "Activar"}
                         </button>
                         <button
@@ -2170,7 +2107,7 @@ export function MerchantWorkspace() {
                             deletePromo(p.id);
                           }}
                         >
-                          {IcoTag.trash}
+                          {OndaIcons.trash}
                           Eliminar
                         </button>
                       </div>
@@ -2210,14 +2147,21 @@ export function MerchantWorkspace() {
                           {p.title}
                         </h3>
                         <PromoTag
-                          icon={IcoTag.type}
+                          icon={
+                            PROMO_TYPE_OPTIONS.find((o) => o.id === p.type)
+                              ?.icon || OndaIcons.other
+                          }
                           className="bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]"
                         >
                           {promoTypeLabel(p.type)}
                         </PromoTag>
                         {badge ? (
                           <PromoTag
-                            icon={badge === "Top" ? IcoTag.top : IcoTag.cold}
+                            icon={
+                              badge === "Top"
+                                ? OndaIcons.sparkle
+                                : OndaIcons.snowflake
+                            }
                             className={
                               badge === "Top"
                                 ? "bg-[var(--onda-success)] text-white"
@@ -2228,7 +2172,7 @@ export function MerchantWorkspace() {
                           </PromoTag>
                         ) : null}
                         <PromoTag
-                          icon={p.isActive ? IcoTag.on : IcoTag.off}
+                          icon={p.isActive ? OndaIcons.check : OndaIcons.close}
                           className={
                             p.isActive
                               ? "bg-[var(--onda-success)]/15 text-[var(--onda-success)]"
@@ -2252,7 +2196,7 @@ export function MerchantWorkspace() {
                           openPromoDetail(p.id);
                         }}
                       >
-                        {IcoTag.eye}
+                        {OndaIcons.eye}
                         Detalle
                       </button>
                       <button
@@ -2263,7 +2207,7 @@ export function MerchantWorkspace() {
                           togglePromo(p.id, p.isActive);
                         }}
                       >
-                        {IcoTag.power}
+                        {OndaIcons.power}
                         {p.isActive ? "Desactivar" : "Activar"}
                       </button>
                       <button
@@ -2274,7 +2218,7 @@ export function MerchantWorkspace() {
                           deletePromo(p.id);
                         }}
                       >
-                        {IcoTag.trash}
+                        {OndaIcons.trash}
                         Eliminar
                       </button>
                     </div>
