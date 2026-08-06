@@ -12,7 +12,7 @@ El proyecto tiene hoy dos sets de íconos SVG dibujados a mano:
 Auditando el uso real se encontraron varias inconsistencias visuales:
 - El badge "NxM" de la tarjeta de promo usa siempre el mismo ícono genérico (`IcoTag.type`, un lápiz/etiqueta) sin importar el tipo de promo, mientras que `AnalyticsFilters` sí muestra un ícono distinto por tipo (`%`, `$`, `NxM`, `Producto`, `Otro`).
 - El estado activo/inactivo de una promo se representa con dos pares de íconos distintos: check/x en `PromoDetail` y un círculo lleno/vacío (`IcoTag.on`/`off`) en la tarjeta de `MerchantWorkspace`.
-- El badge "Fría" usa luna (`moon`) para clientes fríos pero un reloj de arena (`IcoTag.cold`) para promos frías.
+- `IcoTag.cold` (reloj de arena) se usa en la tarjeta de promo junto al texto **"Sin tracción"** (no "Fría" — corregido tras revisar el código real: `badge = canjes >= 3 ? "Top" : canjes === 0 ? "Sin tracción" : null`). Por separado, `badgeIcon()`/`badgeDescription()` en `icons.tsx` tienen un case `'Fría'` (con `moon` como ícono) que hoy es código muerto: ningún lugar del repo, frontend ni backend, produce ese string. Son dos cosas independientes, no el mismo badge en dos contextos.
 - El badge "Top" usa `sparkle` para clientes pero un path distinto (`IcoTag.top`) para promos.
 - Dos claves de `OndaIcons` (`near`, `panelLeft`) no tienen ningún uso detectado en el código fuente actual. (`eye` sí se usa hoy, vía `IcoTag.eye` en los botones "Ver detalle" de la tarjeta de promo — ver tabla de mapeo.)
 
@@ -91,40 +91,35 @@ No es un reemplazo puramente 1:1: se corrigen las inconsistencias listadas arrib
 
 | Clave | Componente Phosphor | Reemplaza |
 |---|---|---|
-| snowflake | `Snowflake` | `OndaIcons.moon` (cuando el badge era "Fría") y `IcoTag.cold` |
+| snowflake | `Snowflake` | `IcoTag.cold` (badge "Sin tracción" de promo) y el case `'Fría'` de `badgeIcon()` (hoy inalcanzable — ver nota abajo) |
 
 ### Eliminaciones
 
 - `custom` — se borra; `AnalyticsFilters` pasa a usar `OndaIcons.edit` (mismo path que ya compartían).
-- `IcoTag` completo — sus 8 claves se resuelven contra `OndaIcons` como se detalla en la tabla de arriba.
+- `IcoTag` completo (y su helper local `Icon`, usado solo por `IcoTag`) — sus 8 claves se resuelven contra `OndaIcons` como se detalla en la tabla de arriba.
 
 ## Cambios de comportamiento (no son solo swap de ícono)
 
-1. `badgeIcon()` en `icons.tsx` — el case `'Fría'` pasa de `OndaIcons.moon` a `OndaIcons.snowflake`.
+1. `badgeIcon()` en `icons.tsx` — el case `'Fría'` pasa de `OndaIcons.moon` a `OndaIcons.snowflake`. **Corrección tras revisión:** este case es código muerto hoy (ningún productor real emite el string `'Fría'`); se actualiza igual por consistencia a futuro, decisión explícita, no porque corrija algo visible ahora.
 2. Tarjeta de promo en `MerchantWorkspace.tsx` — el badge de tipo (hoy `icon={IcoTag.type}`, siempre el mismo ícono genérico sin importar el tipo de la promo) pasa a mostrar el ícono real del tipo (`percent`/`dollar`/`nXm`/`product`/`other`), igual que ya hace `AnalyticsFilters`. Esto corrige la inconsistencia visual observada entre la tarjeta y el panel de filtros.
-3. El badge "Top"/"Fría" y el toggle activo/inactivo de la tarjeta de promo pasan de `IcoTag.*` a `OndaIcons.*` (`sparkle`/`snowflake`/`check`/`close`).
+3. El badge "Top"/"Sin tracción" y el toggle activo/inactivo de la tarjeta de promo pasan de `IcoTag.*` a `OndaIcons.*` (`sparkle`/`snowflake`/`check`/`close`). Esta sí es una corrección visible: hoy "Sin tracción" se ve con un reloj de arena inconsistente con el resto del set.
 
 ## Seguridad de layout en badges
 
-`BadgePill` y `PromoTag` (los componentes que renderizan los badges "Fría"/"Top"/tipo/estado) son un `<span className="inline-flex items-center gap-1 ...">{icon}{texto}</span>`. El tamaño de la caja del ícono lo controla únicamente el `className` fijo que trae cada entrada de `OndaIcons` (`h-3 w-3 shrink-0`), no el path SVG interno del glifo. Como todas las entradas comparten el mismo `className`, cambiar `moon`→`snowflake` (o cualquier otro swap de glifo) no puede desalinear el flex — la caja ocupa el mismo espacio sin importar qué ícono haya adentro.
+`BadgePill` y `PromoTag` (los componentes que renderizan los badges de cliente/promo, tipo y estado) son un `<span className="inline-flex items-center gap-1 ...">{icon}{texto}</span>`. El tamaño de la caja del ícono lo controla únicamente el `className` fijo que trae cada entrada de `OndaIcons` (`h-3 w-3 shrink-0`), no el path SVG interno del glifo. Como todas las entradas comparten el mismo `className`, cambiar de glifo (ej. reloj de arena → `snowflake`) no puede desalinear el flex — la caja ocupa el mismo espacio sin importar qué ícono haya adentro.
 
 ## Alcance
 
 - `libs/shared/ui/src/icons.tsx` — reescritura completa del contenido de `OndaIcons`.
-- `apps/merchant-dashboard/app/MerchantWorkspace.tsx` — elimina `IcoTag`, actualiza sus call sites, agrega el ícono dinámico por tipo de promo.
+- `apps/merchant-dashboard/app/MerchantWorkspace.tsx` — elimina `IcoTag` y su helper local `Icon` (líneas 121-189), actualiza sus call sites (ambas variantes de tarjeta de promo, grid y lista), agrega el ícono dinámico por tipo de promo.
 - `libs/shared/ui/src/AnalyticsFilters.tsx` — cambia referencia de `OndaIcons.custom` a `OndaIcons.edit`.
 - `apps/pwa-client` — sin cambios de código (no consume `OndaIcons` hoy); queda alineado para cuando lo necesite, ya que importará del mismo `OndaIcons`.
 - `package.json` raíz — agrega `@phosphor-icons/react@^2.1.10`.
 
 ## Plan de verificación
 
+**Restricción de esta implementación:** sin Playwright ni pruebas E2E. La verificación se limita a mostrar los cambios realizados (diff) y compilar.
+
 1. Type-check y build de `merchant-dashboard` deben pasar limpios.
 2. Grep de cierre: cero referencias a `IcoTag`, cero `<svg` de íconos hechos a mano en `icons.tsx`/`MerchantWorkspace.tsx`.
-3. QA visual manual corriendo la app (es un cambio puramente visual, corresponde probarlo en navegador, no solo compilando):
-   - Sidebar de navegación (Resumen/Clientes/Actividad/Promociones/Eventos/Config), colapsado y expandido.
-   - Segmentos de clientes (Todos/Nuevos/Activos/Cerca de canje/En riesgo/VIP/Dormidos) y badges en la tabla de clientes.
-   - `PromoDetail`: estado check/x, editar, copiar, activar/desactivar, eliminar, guardar.
-   - Tarjetas de promo: badge de tipo (ahora dinámico), badge Top/Fría, badge Activa/Inactiva, botones Ver detalle/Desactivar/Eliminar.
-   - `AnalyticsFilters`: tipo de promo, rango de fechas, estado.
-   - `TxActivity`: acumular vs canjear.
-4. Comparación visual contra el estado "antes" para confirmar que ningún ícono cambió de tamaño o quedó descentrado.
+3. `git diff`/`git show` de cada archivo tocado, mostrado al final de cada tarea para revisión humana — no hay QA visual en navegador en esta pasada.
