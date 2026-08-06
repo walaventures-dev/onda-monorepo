@@ -10,28 +10,27 @@ Fuera de alcance: generación real de códigos QR (merchant-dashboard), lectura 
 
 ## 2. Solución
 
-Agregar un punto de entrada "Simular escaneo QR" al estado vacío de "Mis tarjetas" (se muestra tanto sin sesión como con sesión pero sin tarjetas, ya que ambos casos hoy muestran el mismo mensaje). Al tocarlo:
+Cuando "Mis tarjetas" está vacía (sin sesión, o con sesión pero sin ninguna tarjeta), en vez de mostrar el mensaje "Aún no tienes tarjetas. Escanea el QR..." y quedarse ahí, la app navega automáticamente a la pantalla que se vería justo después de escanear el QR de un negocio — sin lista, sin botón intermedio, sin clic extra.
 
-1. Se hace `GET /stores` (endpoint público existente en `apps/api/src/stores.controller.ts`, ya devuelve `id`, `name`, `category` sin autenticación).
-2. Se muestra una lista simple de negocios (nombre + categoría).
-3. Al tocar un negocio, se navega a `/r/{storeId}` — el mismo destino al que llevaría escanear el QR real de ese negocio.
+Mecánica:
+
+1. Se hace `GET /stores` (endpoint público existente en `apps/api/src/stores.controller.ts`, ya devuelve `id`, `name`, `category` sin autenticación) y se toma el primero de la lista (orden ya viene por `createdAt desc` desde el backend).
+2. Se navega con `router.replace('/r/' + store.id)` — `replace` (no `push`) para que "Mis tarjetas" no quede en el historial y el botón "atrás" no regrese a una pantalla intermedia que el usuario nunca vio conscientemente.
+3. Esa ruta (`/r/[storeId]`) ya es exactamente "la pantalla que sale después de leer el QR": corre `StoreEntryClient`, que evalúa sesión/OTP/preview/tarjeta existente como si el QR real hubiera sido escaneado.
 
 No hay cambios de backend (el endpoint ya existe y ya es público). No se genera ni decodifica ningún QR real; es un atajo de navegación para pruebas.
 
-## 3. Componentes
+## 3. Dónde aplica
 
-- Nuevo componente `SimulateQrScan` en `apps/pwa-client/app/SimulateQrScan.tsx`:
-  - Botón/enlace "Simular escaneo QR" en el estado vacío.
-  - Al presionarlo, despliega inline la lista de negocios (fetch on-demand, no en cada carga de la página).
-  - Cada ítem es un `Link` a `/r/{store.id}` (mismo patrón que usa `PassPreview` hoy en `MisTarjetasClient.tsx:69`).
-  - Estado de carga y error simple (ej. "No se pudieron cargar los negocios").
-- Se integra en `MisTarjetasClient.tsx`, reemplazando el bloque de texto plano del estado vacío (las dos ocurrencias: sin sesión y con sesión sin tarjetas) por el mismo texto + este componente debajo.
+- **Sin sesión** (`MisTarjetasClient.tsx:47-56`): hoy muestra el mensaje inmediatamente después de cargar. Pasa a redirigir.
+- **Con sesión pero sin tarjetas** (`MisTarjetasClient.tsx:79-83`, dentro del render con passes vacío): mismo mensaje hoy: pasa a redirigir también, ya que "no tener tarjetas" es la misma situación aunque haya sesión activa.
+- **Con sesión y con tarjetas**: sin cambios — se sigue mostrando la lista de tarjetas normalmente.
 
-## 4. Visibilidad
+## 4. Casos borde
 
-Se renderiza solo cuando `process.env.NODE_ENV !== 'production'`. Esto evita que quede un botón de "simular" visible si el proyecto pasa a producción antes de que exista un flujo real de QR — se cae solo, sin necesidad de recordar quitarlo.
+- `GET /stores` devuelve lista vacía (sin negocios creados en la base): no hay a dónde redirigir. Se mantiene el mensaje original de "Aún no tienes tarjetas..." como fallback.
+- Error de red al pedir `/stores`: mismo fallback — se muestra el mensaje original en vez de dejar la pantalla en blanco o colgada en loading.
 
-## 5. Casos borde
+## 5. Visibilidad
 
-- `GET /stores` vacío (sin negocios creados aún): mostrar mensaje "No hay negocios disponibles todavía" en vez de una lista vacía silenciosa.
-- Error de red al pedir `/stores`: mostrar mensaje de error simple, sin romper el resto de la pantalla "Mis tarjetas".
+El auto-redirect corre solo cuando `process.env.NODE_ENV !== 'production'`. En producción (cuando exista un flujo real de QR) el comportamiento vuelve a ser el mensaje actual sin redirect — así este atajo de prototipo se cae solo sin tener que recordar quitarlo del código.
