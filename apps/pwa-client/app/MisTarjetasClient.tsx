@@ -2,25 +2,63 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { api, PassPreview } from '@onda/shared-ui';
 import { loadSession, clearSession, type CustomerSession } from '../lib/session';
 
+const SIMULATE_QR_SCAN = process.env.NODE_ENV !== 'production';
+
+async function simulateQrScan(router: ReturnType<typeof useRouter>): Promise<boolean> {
+  try {
+    const stores = await api<{ id: string }[]>('/stores');
+    if (stores[0]) {
+      router.replace(`/r/${stores[0].id}`);
+      return true;
+    }
+  } catch {
+    // No hay negocios disponibles o falló la red: se cae al mensaje vacío normal.
+  }
+  return false;
+}
+
 export function MisTarjetasClient() {
+  const router = useRouter();
   const [session, setSession] = useState<CustomerSession | null>(null);
   const [passes, setPasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const existing = loadSession();
-    setSession(existing);
-    if (!existing) {
-      setLoading(false);
-      return;
+    let cancelled = false;
+
+    async function boot() {
+      const existing = loadSession();
+      if (cancelled) return;
+      setSession(existing);
+
+      let userPasses: any[] = [];
+      if (existing) {
+        try {
+          userPasses = await api<any[]>(`/passes?userId=${existing.user.id}`);
+        } catch {
+          userPasses = [];
+        }
+        if (cancelled) return;
+        setPasses(userPasses);
+      }
+
+      if ((!existing || !userPasses.length) && SIMULATE_QR_SCAN) {
+        const redirected = await simulateQrScan(router);
+        if (redirected || cancelled) return;
+      }
+
+      if (!cancelled) setLoading(false);
     }
-    api<any[]>(`/passes?userId=${existing.user.id}`)
-      .then(setPasses)
-      .finally(() => setLoading(false));
-  }, []);
+
+    void boot();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   async function logout() {
     if (!session) return;
