@@ -19,11 +19,24 @@
 }
 
 :root {
+  /* Primary — escala 50–900, ancla en 500 (#052DDE) */
+  --onda-primary-50: #f1f5fe;
+  --onda-primary-100: #e2eafd;
+  --onda-primary-200: #c0cffc;
+  --onda-primary-300: #8ea6fa;
+  --onda-primary-400: #3e63f9;
+  --onda-primary-500: #052dde;
+  --onda-primary-600: #0623b7;
+  --onda-primary-700: #081c91;
+  --onda-primary-800: #09166d;
+  --onda-primary-900: #080f44;
+
   --onda-sky: #3db9e8;
   --onda-sky-soft: #e5f6fc;
-  --onda-violet: #6e5ae6;
-  --onda-violet-soft: #eeeaff;
+  --onda-violet: var(--onda-primary-500);
+  --onda-violet-soft: var(--onda-primary-100);
   --onda-bridge: #5b8af0;
+  --onda-lime: #ddf24e;
   --onda-ink: #1a1b2e;
   --onda-muted: #6b7289;
   --onda-bg: #f3f6fb;
@@ -35,7 +48,7 @@
     135deg,
     #3db9e8 0%,
     #5b8af0 48%,
-    #6e5ae6 100%
+    var(--onda-primary-500) 100%
   );
 
   --accent: var(--onda-violet);
