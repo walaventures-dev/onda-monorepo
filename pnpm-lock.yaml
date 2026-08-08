@@ -65,6 +65,9 @@ importers:
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
       framer-motion:
         specifier: ^12.43.0
         version: 12.43.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -141,6 +144,9 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
       '@types/leaflet':
         specifier: ^1.9.22
         version: 1.9.22

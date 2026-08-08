@@ -11,7 +11,7 @@
     "serve": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm exec tsx --tsconfig apps/api/tsconfig.json watch apps/api/src/main.ts",
+        "command": "pnpm exec tsx watch --tsconfig apps/api/tsconfig.json apps/api/src/main.ts",
         "cwd": "{workspaceRoot}"
       }
     },
