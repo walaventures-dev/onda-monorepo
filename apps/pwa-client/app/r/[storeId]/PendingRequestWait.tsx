@@ -17,15 +17,23 @@ export function PendingRequestWait({
   request,
   passId,
   session,
+  storeName,
   onResolved,
+  onCancel,
 }: {
   request: PendingRequestDto;
   passId: string;
   session: CustomerSession;
+  storeName: string;
   onResolved: (status: 'CONFIRMED' | 'REJECTED' | 'EXPIRED') => void;
+  onCancel?: () => void;
 }) {
   const [secondsLeft, setSecondsLeft] = useState(() =>
     Math.max(0, Math.round((new Date(request.expiresAt).getTime() - Date.now()) / 1000))
+  );
+  // Duración total capturada una sola vez al montar, solo para dibujar el anillo de progreso.
+  const [totalSeconds] = useState(() =>
+    Math.max(1, Math.round((new Date(request.expiresAt).getTime() - Date.now()) / 1000))
   );
 
   useEffect(() => {
@@ -68,14 +76,82 @@ export function PendingRequestWait({
 
   const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
   const ss = String(secondsLeft % 60).padStart(2, '0');
+  const code = request.devCode || request.code;
+  const ringRadius = 34;
+  const ringCircumference = 2 * Math.PI * ringRadius;
+  const ringOffset = ringCircumference * (1 - secondsLeft / totalSeconds);
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-      <p className="onda-pwa-sub">Muéstrale este código a caja</p>
-      <p className="font-display text-5xl font-bold tracking-[0.2em] text-[var(--onda-violet)]">
-        {request.devCode || request.code}
-      </p>
-      <p className="text-sm text-[var(--onda-muted)]">Expira en {mm}:{ss}</p>
+    <div className="-mx-5 -mb-2 flex flex-1 flex-col bg-[var(--onda-violet)] px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-[calc(1.75rem+env(safe-area-inset-top,0px))] text-white">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex items-center gap-1.5 text-sm font-semibold text-white"
+        >
+          <span aria-hidden>←</span> Cancelar
+        </button>
+        <div className="flex items-center gap-1.5 text-sm font-bold tracking-wide text-white uppercase">
+          <span aria-hidden>✺</span> {storeName}
+        </div>
+      </div>
+
+      <div className="mt-16">
+        <p className="onda-pwa-label" style={{ color: 'rgba(255,255,255,0.85)' }}>
+          Muéstrale esto a caja
+        </p>
+        <h2 className="text-4xl font-extrabold tracking-tight mt-2 leading-none" style={{ color: '#fff' }}>
+          Sumemos
+          <br />
+          tu onda.
+        </h2>
+        <p className="text-sm mt-4" style={{ color: 'rgba(255,255,255,0.7)' }}>
+          La persona en caja confirmará tu compra.
+        </p>
+      </div>
+
+      <div className="onda-card mt-7 flex flex-col items-center gap-6 px-5 py-8 text-center">
+        <p className="onda-pwa-label">Código de confirmación</p>
+        <p className="font-display flex gap-3 text-4xl font-bold tracking-[0.05em] text-[var(--onda-violet)] sm:gap-4 sm:text-5xl">
+          {code.split('').map((digit, i) => (
+            <span key={i}>{digit}</span>
+          ))}
+        </p>
+        <div className="relative flex h-28 w-28 items-center justify-center">
+          <svg className="absolute inset-0 -rotate-90" viewBox="0 0 80 80">
+            <circle
+              cx="40"
+              cy="40"
+              r={ringRadius}
+              fill="none"
+              stroke="var(--onda-violet-soft)"
+              strokeWidth="6"
+            />
+            <circle
+              cx="40"
+              cy="40"
+              r={ringRadius}
+              fill="none"
+              stroke="var(--onda-bridge)"
+              strokeWidth="6"
+              strokeLinecap="round"
+              strokeDasharray={ringCircumference}
+              strokeDashoffset={ringOffset}
+            />
+          </svg>
+          <span className="text-base font-bold text-[var(--onda-ink)]">
+            {mm}:{ss}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-7 flex items-center gap-3">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-white" aria-hidden />
+        <div>
+          <p className="text-sm font-semibold text-white">Esperando confirmación</p>
+          <p className="text-xs text-white/60">Esta pantalla se actualiza sola</p>
+        </div>
+      </div>
     </div>
   );
 }

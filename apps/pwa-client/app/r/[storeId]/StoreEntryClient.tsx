@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { api } from '@onda/shared-ui';
 import { loadSession, saveSession, type CustomerSession } from '../../../lib/session';
 import { PassSwipe, type PassSwipeCard } from './PassSwipe';
@@ -14,6 +15,13 @@ type Step = 'loading' | 'otp' | 'name' | 'preview' | 'home' | 'pendingWait' | 'r
 function isAppleDevice() {
   if (typeof navigator === 'undefined') return false;
   return /iPhone|iPad|iPod|Mac/.test(navigator.userAgent);
+}
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Buenos días';
+  if (hour < 19) return 'Buenas tardes';
+  return 'Buenas noches';
 }
 
 export default function StoreEntryPage() {
@@ -191,12 +199,45 @@ export default function StoreEntryPage() {
       (p: any) => p.pointsRequired <= pass.points && !claimed.includes(p.id)
     );
   }, [pass, promotions]);
+  const nextReward = useMemo(() => {
+    if (!pass) return null;
+    const claimed: string[] = pass.claimedPromotionIdsThisCycle || [];
+    const upcoming = promotions
+      .filter((p: any) => !claimed.includes(p.id) && p.pointsRequired > pass.points)
+      .sort((a: any, b: any) => a.pointsRequired - b.pointsRequired);
+    return upcoming[0] || null;
+  }, [pass, promotions]);
+  const promotionsWithStatus = useMemo(() => {
+    if (!pass) return [];
+    const claimed: string[] = pass.claimedPromotionIdsThisCycle || [];
+    return [...promotions]
+      .sort((a: any, b: any) => a.pointsRequired - b.pointsRequired)
+      .map((p: any) => ({
+        ...p,
+        status: claimed.includes(p.id)
+          ? 'claimed'
+          : p.pointsRequired <= pass.points
+            ? 'available'
+            : 'locked',
+      }));
+  }, [pass, promotions]);
 
   const storeDesign = store?.passDesign;
   const storeName = store?.name || 'tu visita';
-  const walletLabel = isAppleDevice() ? 'Agregar a Apple Wallet' : 'Añadir a Google Wallet';
+  const walletLabel = 'Agregar a tu billetera digital';
   const logoUrl = storeDesign?.logoUrl as string | undefined;
   const storeInitial = (storeName.trim().charAt(0) || 'O').toUpperCase();
+  const userName = session?.user.name?.trim();
+  const userInitial = (userName?.charAt(0) || 'O').toUpperCase();
+  const maxStamps = store?.maxStamps ?? 12;
+  const nextRewardText = (() => {
+    if (!nextReward) return null;
+    const stampsRemaining = nextReward.pointsRequired - (pass?.points ?? 0);
+    if (nextReward.pointsRequired === maxStamps) {
+      return `Reclama ${nextReward.title} al completar todos los sellos`;
+    }
+    return `Te faltan ${stampsRemaining} sello${stampsRemaining === 1 ? '' : 's'} para ${nextReward.title}`;
+  })();
 
   const swipeCards: PassSwipeCard[] = useMemo(() => {
     if (!storeDesign && !store) return [];
@@ -231,43 +272,80 @@ export default function StoreEntryPage() {
 
   return (
     <div className="onda-pwa-shell">
-      <header className="onda-pwa-hero">
-        <div className="onda-pwa-avatar" aria-hidden>
-          {logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt="" />
+      {step !== 'pendingWait' && step !== 'rewards' && (
+        <header
+          className={`onda-pwa-hero${step === 'home' && userName ? ' onda-pwa-hero--split' : ''}${step === 'name' ? ' onda-pwa-hero--hola' : ''}`}
+        >
+          {step === 'home' && userName ? (
+            <Link
+              href="/"
+              className="onda-pwa-avatar onda-pwa-avatar--user no-underline"
+              aria-label="Ver mis tarjetas"
+            >
+              <span aria-hidden>{userInitial}</span>
+            </Link>
           ) : (
-            <span>{storeInitial}</span>
+            <div className="onda-pwa-avatar" aria-hidden>
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt="" />
+              ) : (
+                <span>{storeInitial}</span>
+              )}
+            </div>
           )}
-        </div>
-        <div className="onda-pwa-hero-copy">
-          <p className="onda-pwa-eyebrow">Onda</p>
-          <h1 className="onda-pwa-title">
-            {step === 'rewards' ? 'Recompensas' : storeName}
-          </h1>
-        </div>
-      </header>
+          <div className="onda-pwa-hero-copy">
+            {step === 'home' && userName ? (
+              <>
+                <p className="onda-pwa-eyebrow">{getGreeting()}</p>
+                <h1 className="onda-pwa-title">{userName}</h1>
+              </>
+            ) : (
+              <>
+                <p className="onda-pwa-eyebrow">Onda</p>
+                <h1 className="onda-pwa-title">{storeName}</h1>
+              </>
+            )}
+          </div>
+        </header>
+      )}
 
       <div className="onda-pwa-body onda-pwa-fade">
         {step === 'otp' && <OtpStep onVerified={onOtpVerified} />}
 
         {step === 'name' && (
-          <form className="flex flex-1 flex-col justify-center gap-3" onSubmit={submitName}>
-            <p className="onda-pwa-sub">¿Cómo te llamas?</p>
-            <input
-              required
-              autoFocus
-              autoComplete="given-name"
-              placeholder="Tu nombre en el pase"
-              className="onda-pwa-field"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            {error ? <p className="text-sm text-[var(--onda-danger)]">{error}</p> : null}
-            <button type="submit" className="onda-pwa-cta" disabled={name.trim().length < 2 || busy}>
-              {busy ? 'Guardando…' : 'Continuar'}
-            </button>
-          </form>
+          <div className="flex flex-1 flex-col">
+            <div className="onda-pwa-hola-banner onda-pwa-hola-banner--merged">
+              <h1>HOLA</h1>
+            </div>
+            <div className="onda-pwa-hola-card flex flex-1 flex-col">
+              <div className="mb-1">
+                <p className="onda-pwa-label">Un último detalle</p>
+                <h2 className="onda-pwa-headline mt-1">¿Cómo te llamas?</h2>
+                <p className="onda-pwa-sub mt-2">Así te saludaremos cada vez que vuelvas.</p>
+              </div>
+              <form className="mt-auto flex flex-col gap-3" onSubmit={submitName}>
+                <p className="onda-pwa-label">Tu nombre</p>
+                <input
+                  required
+                  autoFocus
+                  autoComplete="given-name"
+                  placeholder="Escribe tu nombre"
+                  className="onda-pwa-field"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+                {error ? <p className="text-sm text-[var(--onda-danger)]">{error}</p> : null}
+                <button
+                  type="submit"
+                  className="onda-pwa-cta"
+                  disabled={name.trim().length < 2 || busy}
+                >
+                  {busy ? 'Guardando…' : 'Guardar y seguir →'}
+                </button>
+              </form>
+            </div>
+          </div>
         )}
 
         {step === 'preview' && (
@@ -290,6 +368,12 @@ export default function StoreEntryPage() {
               <button type="button" className="onda-pwa-cta" disabled={busy} onClick={openWallet}>
                 {busy ? 'Abriendo Wallet…' : walletLabel}
               </button>
+              {nextRewardText ? (
+                <div className="onda-pwa-next-reward">
+                  <p className="onda-pwa-label">Siguiente premio</p>
+                  <p className="onda-pwa-next-reward-text">{nextRewardText}</p>
+                </div>
+              ) : null}
               <button
                 type="button"
                 className="onda-pwa-secondary"
@@ -310,11 +394,7 @@ export default function StoreEntryPage() {
                 </button>
               ))}
               {promotions.length >= 2 ? (
-                <button
-                  type="button"
-                  className="onda-pwa-secondary"
-                  onClick={() => setStep('rewards')}
-                >
+                <button type="button" className="onda-pwa-link" onClick={() => setStep('rewards')}>
                   Ver premios del ciclo
                 </button>
               ) : null}
@@ -339,43 +419,90 @@ export default function StoreEntryPage() {
             request={pendingRequest}
             passId={pass.id}
             session={session}
+            storeName={storeName}
             onResolved={onPendingResolved}
+            onCancel={() => setStep('home')}
           />
         )}
 
-        {step === 'rewards' && (
-          <div className="flex flex-1 flex-col gap-3">
-            <button
-              type="button"
-              className="self-start text-sm font-medium text-[var(--onda-violet)]"
-              onClick={() => setStep('home')}
-            >
-              ← Volver al pase
-            </button>
+        {step === 'rewards' && pass && (
+          <div className="flex flex-1 flex-col gap-6 pt-[calc(1.1rem+env(safe-area-inset-top,0))]">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                aria-label="Volver al pase"
+                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-white text-lg text-[var(--onda-ink)] shadow-sm"
+                onClick={() => setStep('home')}
+              >
+                ←
+              </button>
+              <span className="text-sm font-semibold text-[var(--onda-ink)]">Atrás</span>
+            </div>
+
+            <div>
+              <p className="onda-pwa-label">Lo que te espera</p>
+              <h2 className="onda-pwa-headline mt-1">Premios con buena Onda.</h2>
+              <p className="onda-pwa-sub mt-2">
+                Completa {maxStamps} sello{maxStamps === 1 ? '' : 's'} y vuelve a empezar.
+              </p>
+            </div>
+
             <div className="flex flex-col gap-3 pb-6">
-              {promotions.map((p: any) => (
-                <div key={p.id} className="overflow-hidden rounded-2xl bg-white shadow-sm">
-                  {p.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.imageUrl}
-                      alt={p.title}
-                      className="aspect-[16/9] w-full object-cover"
-                    />
-                  ) : (
-                    <div className="aspect-[16/9] bg-[var(--onda-violet-soft)]" />
-                  )}
-                  <div className="p-4">
-                    <p className="font-semibold">{p.title}</p>
-                    {p.description ? (
-                      <p className="mt-1 text-sm text-[var(--onda-muted)]">{p.description}</p>
-                    ) : null}
-                    <p className="mt-2 text-sm font-semibold text-[var(--onda-violet)]">
-                      Sello {p.pointsRequired} de {store?.maxStamps ?? 12}
-                    </p>
+              {promotionsWithStatus.map((p: any) => {
+                const stampsRemaining = p.pointsRequired - pass.points;
+                const isLit = p.status === 'claimed' || p.status === 'available';
+                const statusClasses =
+                  p.status === 'available'
+                    ? 'inline-flex items-center rounded-full bg-[var(--onda-lime)] px-2 py-0.5 text-[var(--onda-ink)]'
+                    : 'text-[var(--onda-muted)]';
+
+                return (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-sm"
+                  >
+                    <div
+                      className={`flex h-16 w-16 flex-shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl ${
+                        isLit ? 'bg-[var(--onda-ink)]' : 'bg-[var(--onda-border)]'
+                      }`}
+                    >
+                      <span
+                        className={`text-[0.6rem] font-semibold tracking-wide ${
+                          isLit ? 'text-[var(--onda-lime)]' : 'text-[var(--onda-muted)]'
+                        }`}
+                      >
+                        SELLO
+                      </span>
+                      <span
+                        className={`text-xl font-bold ${
+                          isLit ? 'text-[var(--onda-lime)]' : 'text-[var(--onda-muted)]'
+                        }`}
+                      >
+                        {String(p.pointsRequired).padStart(2, '0')}
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={`font-semibold ${
+                          isLit ? 'text-[var(--onda-ink)]' : 'text-[var(--onda-muted)]'
+                        }`}
+                      >
+                        {p.title}
+                      </p>
+                      {p.description ? (
+                        <p className="mt-0.5 text-sm text-[var(--onda-muted)]">{p.description}</p>
+                      ) : null}
+                      <p className={`mt-2 text-[0.7rem] font-bold uppercase tracking-wide ${statusClasses}`}>
+                        {p.status === 'claimed'
+                          ? '✓ Reclamado'
+                          : p.status === 'available'
+                            ? 'Disponible'
+                            : `Faltan ${stampsRemaining} sello${stampsRemaining === 1 ? '' : 's'}`}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

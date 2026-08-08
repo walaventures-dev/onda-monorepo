@@ -20,7 +20,7 @@ import { WalletService } from './wallet.service';
 import { CustomerAuthService } from './customer-auth.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
 
-const CODE_TTL_MS = 10 * 60 * 1000;
+const CODE_TTL_MS = 60 * 1000;
 
 const LIMITS: Record<PlanType, number> = {
   BASIC: 150,
