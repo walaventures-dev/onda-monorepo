@@ -1,17 +1,46 @@
-import { Inject, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Inject, Body, Controller, Get, Headers, Param, Post, Query } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
+import { CustomerAuthService } from './customer-auth.service';
+
+function randomSerial() {
+  return `ONDA-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+}
+
+function bearerToken(header?: string): string {
+  if (!header?.startsWith('Bearer ')) {
+    throw new Error('Falta token de sesión');
+  }
+  return header.slice('Bearer '.length);
+}
 
 @Controller('passes')
 export class PassesController {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
-    @Inject(WalletService) private wallet: WalletService
+    @Inject(WalletService) private wallet: WalletService,
+    @Inject(CustomerAuthService) private auth: CustomerAuthService
   ) {}
 
+  private async withClaimedThisCycle<T extends { id: string; cycleStartedAt: Date }>(pass: T) {
+    const claimedThisCycle = await this.prisma.transaction.findMany({
+      where: {
+        passId: pass.id,
+        type: 'REDEEM',
+        createdAt: { gte: pass.cycleStartedAt },
+        promotionId: { not: null },
+      },
+      select: { promotionId: true },
+    });
+    return {
+      ...pass,
+      claimedPromotionIdsThisCycle: claimedThisCycle.map((t) => t.promotionId as string),
+    };
+  }
+
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.prisma.pass.findUniqueOrThrow({
+  async get(@Param('id') id: string) {
+    const pass = await this.prisma.pass.findUniqueOrThrow({
       where: { id },
       include: {
         user: true,
@@ -20,17 +49,19 @@ export class PassesController {
         transactions: { orderBy: { createdAt: 'desc' }, take: 20 },
       },
     });
+    return this.withClaimedThisCycle(pass);
   }
 
   @Get()
-  byUser(@Query('userId') userId: string, @Query('storeId') storeId?: string) {
-    return this.prisma.pass.findMany({
+  async byUser(@Query('userId') userId: string, @Query('storeId') storeId?: string) {
+    const passes = await this.prisma.pass.findMany({
       where: { userId, ...(storeId ? { storeId } : {}) },
       include: {
         store: { include: { passDesign: true } },
         event: { include: { passDesign: true } },
       },
     });
+    return Promise.all(passes.map((p) => this.withClaimedThisCycle(p)));
   }
 
   @Post(':id/issue')
@@ -69,5 +100,31 @@ export class PassesController {
     });
 
     return issued;
+  }
+
+  @Post('store/:storeId/claim')
+  async claimStorePass(
+    @Param('storeId') storeId: string,
+    @Headers('authorization') authHeader: string
+  ) {
+    const user = await this.auth.requireSession(bearerToken(authHeader));
+
+    let pass = await this.prisma.pass.findFirst({ where: { userId: user.id, storeId } });
+    if (!pass) {
+      pass = await this.prisma.pass.create({
+        data: {
+          userId: user.id,
+          storeId,
+          serialNumber: randomSerial(),
+          points: 0,
+        },
+      });
+    }
+
+    const fullPass = await this.prisma.pass.findUniqueOrThrow({
+      where: { id: pass.id },
+      include: { store: { include: { passDesign: true, promotions: true } } },
+    });
+    return this.withClaimedThisCycle(fullPass);
   }
 }

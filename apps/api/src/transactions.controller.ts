@@ -75,19 +75,24 @@ export class TransactionsController {
     if (store.pinCode !== body.pinCode) {
       throw new ForbiddenException('PIN inválido');
     }
-    const points = body.points ?? 1;
-    const pass = await this.prisma.pass.update({
-      where: { id: body.passId },
-      data: { points: { increment: points } },
-      include: { user: true },
-    });
-    const tx = await this.prisma.transaction.create({
-      data: {
-        passId: pass.id,
-        storeId: store.id,
-        type: 'ACCUMULATE',
-        points,
-      },
+    const requestedPoints = body.points ?? 1;
+    const { pass, tx } = await this.prisma.$transaction(async (trx) => {
+      const current = await trx.pass.findUniqueOrThrow({ where: { id: body.passId } });
+      const delta = Math.max(0, Math.min(requestedPoints, store.maxStamps - current.points));
+      const updated = await trx.pass.update({
+        where: { id: body.passId },
+        data: { points: { increment: delta } },
+        include: { user: true },
+      });
+      const created = await trx.transaction.create({
+        data: {
+          passId: updated.id,
+          storeId: store.id,
+          type: 'ACCUMULATE',
+          points: delta,
+        },
+      });
+      return { pass: updated, tx: created };
     });
     if (pass.walletRef) {
       await this.wallet.updatePoints(pass.walletRef, pass.points);

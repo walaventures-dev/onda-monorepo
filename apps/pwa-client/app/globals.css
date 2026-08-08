@@ -57,6 +57,12 @@
   animation: ondaPwaPulse 1.1s ease-in-out infinite;
 }
 
+.onda-pwa-avatar--user {
+  background: var(--onda-lime);
+  border-color: var(--onda-ink);
+  color: var(--onda-ink);
+}
+
 @keyframes ondaPwaPulse {
   0%,
   100% {
@@ -69,6 +75,30 @@
 
 .onda-pwa-hero-copy {
   min-width: 0;
+}
+
+.onda-pwa-hero--split {
+  justify-content: space-between;
+}
+
+.onda-pwa-hero--split .onda-pwa-hero-copy {
+  order: 1;
+}
+
+.onda-pwa-hero--split .onda-pwa-avatar {
+  order: 2;
+}
+
+.onda-pwa-hero--hola {
+  background: var(--onda-violet);
+}
+
+.onda-pwa-hero--hola .onda-pwa-eyebrow {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.onda-pwa-hero--hola .onda-pwa-title {
+  color: #fff;
 }
 
 .onda-pwa-eyebrow {
@@ -239,7 +269,7 @@
   color: #fff;
   font-size: 1.05rem;
   font-weight: 600;
-  box-shadow: 0 12px 28px rgba(110, 90, 230, 0.28);
+  box-shadow: 0 12px 28px rgba(5, 45, 222, 0.28);
   transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
@@ -261,6 +291,32 @@
   font-weight: 600;
   color: var(--onda-violet);
   box-shadow: 0 4px 16px rgba(26, 27, 46, 0.06);
+}
+
+.onda-pwa-next-reward {
+  border-radius: 1rem;
+  background: var(--onda-violet-soft);
+  padding: 0.75rem 1rem;
+}
+
+.onda-pwa-next-reward-text {
+  margin: 0.15rem 0 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--onda-ink);
+}
+
+.onda-pwa-link {
+  align-self: center;
+  border: 0;
+  background: none;
+  padding: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--onda-violet);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .onda-pwa-legal {
@@ -289,4 +345,113 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.onda-pwa-label {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--onda-muted);
+}
+
+.onda-pwa-headline {
+  font-family: "Sora", "Manrope", system-ui, sans-serif;
+  margin: 0;
+  font-size: clamp(1.6rem, 7vw, 2.1rem);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--onda-ink);
+}
+
+.onda-pwa-devcode {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 1rem;
+  background: var(--onda-violet-soft);
+  padding: 0.7rem 1rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--onda-violet);
+}
+
+.onda-pwa-devcode strong {
+  font-size: 0.95rem;
+  letter-spacing: 0.15em;
+}
+
+.onda-pwa-otp-group {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.onda-pwa-otp-slot {
+  display: flex;
+  height: 3.5rem;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(26, 27, 46, 0.06);
+  font-family: "Sora", "Manrope", system-ui, sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--onda-ink);
+}
+
+.onda-pwa-otp-slot[data-active="true"] {
+  box-shadow: 0 0 0 3px var(--onda-violet-soft), 0 8px 24px rgba(26, 27, 46, 0.06);
+}
+
+.onda-pwa-resend {
+  align-self: center;
+  border: 0;
+  background: none;
+  padding: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--onda-violet);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.onda-pwa-resend:disabled {
+  color: var(--onda-muted);
+  text-decoration: none;
+}
+
+.onda-pwa-hola-banner {
+  margin: 0 -1.25rem;
+  border-radius: 1.5rem;
+  padding: 1.5rem 1.5rem 2.75rem;
+  background: var(--onda-violet);
+}
+
+.onda-pwa-hola-banner--merged {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.onda-pwa-hola-banner h1 {
+  font-family: "Sora", "Manrope", system-ui, sans-serif;
+  margin: 0;
+  font-size: clamp(2rem, 10vw, 2.6rem);
+  font-weight: 700;
+  color: #fff;
+}
+
+.onda-pwa-hola-card {
+  margin: -1.75rem -1.25rem 0;
+  border-radius: 1.5rem 1.5rem 0 0;
+  background: var(--onda-bg);
+  padding: 1.5rem 1.25rem 0;
+  box-shadow: 0 -12px 24px rgba(26, 27, 46, 0.04);
+  position: relative;
 }

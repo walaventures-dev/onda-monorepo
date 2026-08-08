@@ -59,6 +59,7 @@
     "@onda/shared-utils": "workspace:*",
     "@onda/wallets": "workspace:*",
     "@onda/whatsapp": "workspace:*",
+    "@phosphor-icons/react": "^2.1.10",
     "@prisma/client": "^5.22.0",
     "bullmq": "^5.81.3",
     "class-transformer": "^0.5.1",

@@ -287,7 +287,7 @@ export class PromotionsController {
   }
 
   @Post()
-  create(
+  async create(
     @Body()
     body: {
       title: string;
@@ -308,6 +308,14 @@ export class PromotionsController {
     }
   ) {
     assertExpiryBody(body);
+    if (body.storeId) {
+      const store = await this.prisma.store.findUniqueOrThrow({ where: { id: body.storeId } });
+      if (Number(body.pointsRequired) > store.maxStamps) {
+        throw new BadRequestException(
+          `El sello no puede superar el tope de ${store.maxStamps} de esta tienda`
+        );
+      }
+    }
     return this.prisma.promotion.create({
       data: {
         title: body.title,
@@ -355,6 +363,18 @@ export class PromotionsController {
       maxRedemptions: number | null;
     }>
   ) {
+    if (body.pointsRequired != null) {
+      const existing = await this.prisma.promotion.findUniqueOrThrow({ where: { id } });
+      if (existing.storeId) {
+        const store = await this.prisma.store.findUniqueOrThrow({ where: { id: existing.storeId } });
+        if (Number(body.pointsRequired) > store.maxStamps) {
+          throw new BadRequestException(
+            `El sello no puede superar el tope de ${store.maxStamps} de esta tienda`
+          );
+        }
+      }
+    }
+
     const redemptionCount = await this.prisma.transaction.count({
       where: { promotionId: id, type: 'REDEEM' },
     });

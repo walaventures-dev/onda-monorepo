@@ -1,11 +1,11 @@
 'use client';
 
 import React from 'react';
-import { OndaIcons } from './icons';
+import { OndaIcons, OndaMark } from './icons';
 import { TxActivityRow, type TxActivityItem } from './TxActivity';
 
 export { Button, Card, Chip, Avatar, Badge, Spinner, Form, TextField, Input, TextArea, InputOTP, Table, ColorPicker } from '@heroui/react';
-export { api, API_URL } from './api';
+export { api, API_URL, getApiUrl } from './api';
 export { HeatmapPoints } from './HeatmapPoints';
 export { PhoneInput } from './PhoneInput';
 export type { PhoneInputProps } from './PhoneInput';
@@ -44,7 +44,7 @@ export type {
   DatePreset,
   PromoTypeKey,
 } from './AnalyticsFilters';
-export { OndaIcon, OndaIcons, BadgePill, badgeIcon } from './icons';
+export { OndaIcons, BadgePill, badgeIcon } from './icons';
 export {
   TxActivityRow,
   TxTypeBadge,
@@ -156,6 +156,8 @@ export function PassPreview({
   description = 'Acumula ondas en cada visita',
   logoUrl,
   points = 0,
+  maxStamps = 12,
+  milestoneStamps = [],
   memberName,
   compact = false,
 }: {
@@ -167,6 +169,8 @@ export function PassPreview({
   description?: string | null;
   logoUrl?: string | null;
   points?: number;
+  maxStamps?: number;
+  milestoneStamps?: number[];
   /** Nombre del miembro (como en Wallet) */
   memberName?: string | null;
   compact?: boolean;
@@ -174,9 +178,37 @@ export function PassPreview({
   const displayName = memberName?.trim() || 'Tu nombre';
   const hasName = Boolean(memberName?.trim());
 
+  const stampRowCounts =
+    maxStamps <= 5 ? [maxStamps] : [Math.ceil(maxStamps / 2), Math.floor(maxStamps / 2)];
+  const stampRows: number[][] = [];
+  let stampCursor = 0;
+  for (const count of stampRowCounts) {
+    stampRows.push(Array.from({ length: count }, (_, i) => stampCursor + i + 1));
+    stampCursor += count;
+  }
+
+  const renderStamp = (stampNumber: number) => {
+    const filled = stampNumber <= points;
+    const hasMilestone = milestoneStamps.includes(stampNumber);
+    return (
+      <span
+        key={stampNumber}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-semibold"
+        style={{
+          backgroundColor: filled ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.18)',
+          color: filled ? backgroundColor : foregroundColor,
+          border: hasMilestone ? `1.5px solid ${foregroundColor}` : 'none',
+        }}
+        title={hasMilestone ? `Premio en el sello ${stampNumber}` : undefined}
+      >
+        {hasMilestone ? <OndaMark className="h-8 w-8 shrink-0" /> : null}
+      </span>
+    );
+  };
+
   return (
     <div
-      className={`relative mx-auto w-full max-w-sm overflow-hidden rounded-[1.35rem] shadow-[0_20px_50px_rgba(26,27,46,0.22)] ${
+      className={`relative mx-auto w-full max-w-sm overflow-hidden rounded-[.85rem] shadow-[0_20px_50px_rgba(26,27,46,0.22)] ${
         compact ? '' : ''
       }`}
       style={{ backgroundColor, color: foregroundColor }}
@@ -184,12 +216,12 @@ export function PassPreview({
     >
       <div className={`flex items-start justify-between ${compact ? 'p-4' : 'p-5'}`}>
         <div className="min-w-0 pr-3">
-          <p
+          {/*<p
             className="text-[10px] font-medium uppercase tracking-[0.14em]"
             style={{ color: labelColor ?? undefined }}
           >
             Pase de lealtad
-          </p>
+          </p>*/}
           <h3 className={`font-display mt-1 font-semibold leading-tight ${compact ? 'text-lg' : 'text-xl'}`}>
             {title}
           </h3>
@@ -228,15 +260,31 @@ export function PassPreview({
           >
             Ondas
           </p>
-          <p className={`font-display font-bold ${compact ? 'text-2xl' : 'text-3xl'}`}>{points}</p>
+          <p className={`font-display font-bold ${compact ? 'text-2xl' : 'text-3xl'}`}>
+            {points}/{maxStamps}
+          </p>
         </div>
       </div>
 
-      {!compact && description ? (
+      <div
+        className={`flex flex-col gap-1.5 ${compact ? 'px-4 pb-3' : 'px-5 pb-4'}`}
+        aria-label="Progreso de sellos"
+      >
+        {stampRows.map((row, rowIndex) => (
+          <div
+            key={rowIndex}
+            className={`flex gap-1.5 ${row.length > 1 ? 'justify-between' : 'justify-center'}`}
+          >
+            {row.map((stampNumber) => renderStamp(stampNumber))}
+          </div>
+        ))}
+      </div>
+
+      {/*{!compact && description ? (
         <p className="px-5 pb-3 text-sm opacity-80">{description}</p>
       ) : null}
 
-      {/* Franja tipo código de barras / QR strip de Wallet */}
+      {/* Franja tipo código de barras / QR strip de Wallet 
       <div
         className={`mx-4 mb-4 flex items-end justify-center gap-[2px] overflow-hidden rounded-lg bg-white/95 px-3 py-2.5 ${
           compact ? 'mx-3 mb-3' : ''
@@ -254,7 +302,7 @@ export function PassPreview({
             }}
           />
         ))}
-      </div>
+      </div> */}
     </div>
   );
 }

@@ -1,233 +1,303 @@
-'use client';
+// apps/pwa-client/app/r/[storeId]/StoreEntryClient.tsx
+"use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
-import { PhoneInput, api } from '@onda/shared-ui';
-import { toE164Colombia, isCompletePhoneMask } from '@onda/shared-utils';
-import { PassSwipe, type PassSwipeCard } from './PassSwipe';
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import { api } from "@onda/shared-ui";
 import {
-  getSession as readStoredSession,
-  setSession as persistSession,
-} from '../../lib/session';
+  loadSession,
+  saveSession,
+  type CustomerSession,
+} from "../../../lib/session";
+import { PassSwipe, type PassSwipeCard } from "./PassSwipe";
+import { OtpStep } from "./OtpStep";
+import {
+  PendingRequestWait,
+  type PendingRequestDto,
+} from "./PendingRequestWait";
 
-type Step = 'loading' | 'enroll' | 'home' | 'rewards';
+type Step =
+  | "loading"
+  | "otp"
+  | "name"
+  | "preview"
+  | "home"
+  | "pendingWait"
+  | "rewards";
 
 function isAppleDevice() {
-  if (typeof navigator === 'undefined') return false;
+  if (typeof navigator === "undefined") return false;
   return /iPhone|iPad|iPod|Mac/.test(navigator.userAgent);
 }
 
-function looksLikeUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value
-  );
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Buenos días";
+  if (hour < 19) return "Buenas tardes";
+  return "Buenas noches";
 }
 
 export default function StoreEntryPage() {
   const params = useParams<{ storeId: string }>();
-  const search = useSearchParams();
-  const storeIdParam = params.storeId;
-  const eventParam = search.get('event') || undefined;
-  const tableId = search.get('table') || undefined;
+  const storeId = params.storeId;
 
-  const nameRef = useRef<HTMLInputElement>(null);
-  const [step, setStep] = useState<Step>('loading');
+  const [step, setStep] = useState<Step>("loading");
   const [store, setStore] = useState<any>(null);
-  const [stores, setStores] = useState<any[]>([]);
-  const [event, setEvent] = useState<any>(null);
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [error, setError] = useState('');
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<CustomerSession | null>(null);
+  const [pass, setPass] = useState<any>(null);
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [walletLinks, setWalletLinks] = useState<{
     appleUrl?: string;
     googleUrl?: string;
   } | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const resolvedStoreId = useMemo(() => {
-    if (storeIdParam && storeIdParam !== 'demo') return storeIdParam;
-    return stores[0]?.id as string | undefined;
-  }, [storeIdParam, stores]);
-
-  const resolvedEventId = event?.id as string | undefined;
-  const isFirstVisit = step === 'enroll';
-  const canStart = name.trim().length >= 2 && isCompletePhoneMask(phone) && !busy;
+  const [pendingRequest, setPendingRequest] =
+    useState<PendingRequestDto | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function boot() {
       try {
-        const list = await api<any[]>('/stores');
+        const s = await api<any>(`/stores/${storeId}`);
         if (cancelled) return;
-        setStores(list);
-        const s =
-          storeIdParam && storeIdParam !== 'demo'
-            ? list.find((x) => x.id === storeIdParam)
-            : list[0];
-        setStore(s || null);
+        setStore(s);
 
-        if (eventParam) {
-          try {
-            const path = looksLikeUuid(eventParam)
-              ? `/events/${eventParam}`
-              : `/events/slug/${eventParam}`;
-            const ev = await api<any>(path);
-            if (!cancelled) setEvent(ev);
-          } catch {
-            if (!cancelled) setEvent(null);
-          }
+        const existing = loadSession();
+        if (!existing) {
+          setStep("otp");
+          return;
         }
-
-        const storedSession = readStoredSession();
-        if (storedSession) {
-          setSession(storedSession);
-          setStep('home');
-        } else {
-          setStep('enroll');
-        }
+        setSession(existing);
+        await loadOrPreview(existing, s);
       } catch (err: any) {
         if (!cancelled) {
-          setError(err.message || 'No se pudo conectar');
-          setStep('enroll');
+          setError(err.message || "No se pudo conectar");
+          setStep("otp");
         }
       }
+    }
+
+    async function loadOrPreview(sess: CustomerSession, s: any) {
+      const passes = await api<any[]>(
+        `/passes?userId=${sess.user.id}&storeId=${storeId}`,
+      );
+      if (passes[0]) {
+        setPass(passes[0]);
+        setStep("home");
+      } else {
+        setStep("preview");
+      }
+      void s;
     }
 
     void boot();
     return () => {
       cancelled = true;
     };
-  }, [storeIdParam, eventParam]);
+  }, [storeId]);
 
-  useEffect(() => {
-    if (step === 'enroll') {
-      const t = setTimeout(() => nameRef.current?.focus(), 320);
-      return () => clearTimeout(t);
+  async function onOtpVerified(result: {
+    token: string;
+    user: CustomerSession["user"];
+    isNewUser: boolean;
+  }) {
+    const sess: CustomerSession = { token: result.token, user: result.user };
+    saveSession(sess);
+    setSession(sess);
+    if (result.isNewUser) {
+      setStep("name");
+      return;
     }
-  }, [step]);
+    const passes = await api<any[]>(
+      `/passes?userId=${sess.user.id}&storeId=${storeId}`,
+    );
+    if (passes[0]) {
+      setPass(passes[0]);
+      setStep("home");
+    } else {
+      setStep("preview");
+    }
+  }
 
-  async function openWallet(passId?: string) {
-    const id = passId || session?.pass?.id;
-    if (!id) return;
+  async function submitName(e: FormEvent) {
+    e.preventDefault();
+    if (!session || name.trim().length < 2) return;
+    setBusy(true);
+    setError("");
+    try {
+      const updated = await api<CustomerSession["user"]>(
+        "/customer-auth/profile",
+        {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${session.token}` },
+          body: JSON.stringify({ name: name.trim() }),
+        },
+      );
+      const sess: CustomerSession = { token: session.token, user: updated };
+      saveSession(sess);
+      setSession(sess);
+      setStep("preview");
+    } catch (err: any) {
+      setError(err.message || "No se pudo guardar tu nombre");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function claimCard() {
+    if (!session) return;
+    setBusy(true);
+    setError("");
+    try {
+      const created = await api<any>(`/passes/store/${storeId}/claim`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      setPass(created);
+      setStep("home");
+    } catch (err: any) {
+      setError(err.message || "No se pudo reclamar tu tarjeta");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openWallet() {
+    if (!pass?.id) return;
+    setBusy(true);
     try {
       const links = await api<{ appleUrl?: string; googleUrl?: string }>(
-        `/passes/${id}/issue`,
-        { method: 'POST' }
+        `/passes/${pass.id}/issue`,
+        { method: "POST" },
       );
       setWalletLinks(links);
       const target = isAppleDevice() ? links.appleUrl : links.googleUrl;
-      if (target && typeof window !== 'undefined') {
-        window.open(target, '_blank', 'noopener,noreferrer');
+      if (target && typeof window !== "undefined") {
+        window.open(target, "_blank", "noopener,noreferrer");
       }
     } catch (err: any) {
-      setError(err.message || 'No se pudo abrir Wallet');
+      setError(err.message || "No se pudo abrir Wallet");
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function enroll(e?: FormEvent) {
-    e?.preventDefault();
-    if (!canStart) return;
-    if (!resolvedStoreId) {
-      setError('Negocio no disponible ahora');
-      return;
-    }
+  async function startPendingRequest(
+    type: "ACCUMULATE" | "CLAIM",
+    promotionId?: string,
+  ) {
+    if (!session || !pass) return;
     setBusy(true);
-    setError('');
+    setError("");
     try {
-      const res = await api<any>('/enroll', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: name.trim(),
-          phone: toE164Colombia(phone),
-          storeId: resolvedStoreId,
-          eventId: resolvedEventId,
-          tableId,
-        }),
+      const created = await api<PendingRequestDto>("/pending-requests", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ passId: pass.id, type, promotionId }),
       });
-      persistSession(res);
-      setSession(res);
-      setStep('home');
-      await openWallet(res.pass?.id);
+      setPendingRequest(created);
+      setStep("pendingWait");
     } catch (err: any) {
-      setError(err.message || 'No se pudo crear tu pase');
+      setError(err.message || "No se pudo iniciar la solicitud");
     } finally {
       setBusy(false);
     }
   }
 
-  async function issueWallet() {
-    setBusy(true);
-    setError('');
-    try {
-      await openWallet();
-    } finally {
-      setBusy(false);
+  async function onPendingResolved(
+    status: "CONFIRMED" | "REJECTED" | "EXPIRED",
+  ) {
+    if (status === "CONFIRMED" && pass) {
+      const refreshed = await api<any>(`/passes/${pass.id}`);
+      setPass(refreshed);
     }
+    setPendingRequest(null);
+    setStep("home");
   }
 
-  const storeDesign = store?.passDesign || session?.pass?.store?.passDesign;
-  const eventDesign = event?.passDesign || session?.pass?.event?.passDesign;
-  const points = session?.pass?.points ?? 0;
-  const storePromos = store?.promotions?.filter((p: any) => p.isActive) || [];
-  const eventPromos = event?.promotions?.filter((p: any) => p.isActive) || [];
-  const promotions = [...storePromos, ...eventPromos];
-  const storeName = store?.name || 'tu visita';
-  const eventName = event?.name || eventDesign?.title || 'Evento';
-  const memberName = isFirstVisit ? name : session?.user?.name || name;
-  const walletLabel = isAppleDevice() ? 'Agregar a Apple Wallet' : 'Añadir a Google Wallet';
+  const promotions = useMemo(
+    () => (store?.promotions || []).filter((p: any) => p.isActive),
+    [store],
+  );
+  const milestoneStamps = useMemo(
+    () => promotions.map((p: any) => p.pointsRequired as number),
+    [promotions],
+  );
+  const claimablePromotions = useMemo(() => {
+    if (!pass) return [];
+    const claimed: string[] = pass.claimedPromotionIdsThisCycle || [];
+    return promotions.filter(
+      (p: any) => p.pointsRequired <= pass.points && !claimed.includes(p.id),
+    );
+  }, [pass, promotions]);
+  const nextReward = useMemo(() => {
+    if (!pass) return null;
+    const claimed: string[] = pass.claimedPromotionIdsThisCycle || [];
+    const upcoming = promotions
+      .filter(
+        (p: any) => !claimed.includes(p.id) && p.pointsRequired > pass.points,
+      )
+      .sort((a: any, b: any) => a.pointsRequired - b.pointsRequired);
+    return upcoming[0] || null;
+  }, [pass, promotions]);
+  const promotionsWithStatus = useMemo(() => {
+    if (!pass) return [];
+    const claimed: string[] = pass.claimedPromotionIdsThisCycle || [];
+    return [...promotions]
+      .sort((a: any, b: any) => a.pointsRequired - b.pointsRequired)
+      .map((p: any) => ({
+        ...p,
+        status: claimed.includes(p.id)
+          ? "claimed"
+          : p.pointsRequired <= pass.points
+            ? "available"
+            : "locked",
+      }));
+  }, [pass, promotions]);
+
+  const storeDesign = store?.passDesign;
+  const storeName = store?.name || "tu visita";
+  const walletLabel = "Agregar a tu billetera digital";
   const logoUrl = storeDesign?.logoUrl as string | undefined;
-  const storeInitial = (storeName.trim().charAt(0) || 'O').toUpperCase();
+  const storeInitial = (storeName.trim().charAt(0) || "O").toUpperCase();
+  const userName = session?.user.name?.trim();
+  const userInitial = (userName?.charAt(0) || "O").toUpperCase();
+  const maxStamps = store?.maxStamps ?? 12;
+  const nextRewardText = (() => {
+    if (!nextReward) return null;
+    const stampsRemaining = nextReward.pointsRequired - (pass?.points ?? 0);
+    if (nextReward.pointsRequired === maxStamps) {
+      return `Reclama ${nextReward.title} al completar todos los sellos`;
+    }
+    return `Te faltan ${stampsRemaining} sello${stampsRemaining === 1 ? "" : "s"} para ${nextReward.title}`;
+  })();
 
-  const swipeCards = useMemo(() => {
-    const cards: PassSwipeCard[] = [];
-    if (storeDesign || store) {
-      cards.push({
-        key: 'store',
-        badge: 'Pase del negocio',
+  const swipeCards: PassSwipeCard[] = useMemo(() => {
+    if (!storeDesign && !store) return [];
+    return [
+      {
+        key: "store",
+        badge: "Pase del negocio",
         design: {
           backgroundColor: storeDesign?.backgroundColor,
           foregroundColor: storeDesign?.foregroundColor,
           labelColor: storeDesign?.labelColor,
           title: storeDesign?.title || storeName,
-          subtitle: storeDesign?.subtitle || 'Onda Rewards',
+          subtitle: storeDesign?.subtitle || "Onda Rewards",
           description: storeDesign?.description,
           logoUrl: storeDesign?.logoUrl,
         },
-        points: isFirstVisit ? 1 : points,
-      });
-    }
-    if (event && (eventDesign || eventName)) {
-      cards.push({
-        key: 'event',
-        badge: 'Pase del evento',
-        design: {
-          backgroundColor: eventDesign?.backgroundColor || '#6E5AE6',
-          foregroundColor: eventDesign?.foregroundColor || '#FFFFFF',
-          labelColor: eventDesign?.labelColor || '#E5F6FC',
-          title: eventDesign?.title || eventName,
-          subtitle: eventDesign?.subtitle || eventName,
-          description: eventDesign?.description,
-          logoUrl: eventDesign?.logoUrl,
-        },
-        points: isFirstVisit ? 1 : Math.max(points, event?.globalTarget ? 1 : points),
-      });
-    }
-    return cards;
-  }, [
-    storeDesign,
-    store,
-    storeName,
-    event,
-    eventDesign,
-    eventName,
-    isFirstVisit,
-    points,
-  ]);
+        points: pass?.points ?? 0,
+        maxStamps: store?.maxStamps ?? 12,
+        milestoneStamps,
+      },
+    ];
+  }, [storeDesign, store, storeName, pass, milestoneStamps]);
 
-  if (step === 'loading') {
+  if (step === "loading") {
     return (
       <div className="onda-pwa-shell items-center justify-center gap-3">
         <div className="onda-pwa-avatar onda-pwa-avatar--pulse" aria-hidden />
@@ -238,134 +308,178 @@ export default function StoreEntryPage() {
 
   return (
     <div className="onda-pwa-shell">
-      <header className="onda-pwa-hero">
-        <div className="onda-pwa-avatar" aria-hidden>
-          {logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt="" />
+      {step !== "pendingWait" && step !== "rewards" && (
+        <header
+          className={`onda-pwa-hero${step === "home" && userName ? " onda-pwa-hero--split" : ""}${step === "name" ? " onda-pwa-hero--hola" : ""}`}
+        >
+          {step === "home" && userName ? (
+            <Link
+              href="/"
+              className="onda-pwa-avatar onda-pwa-avatar--user no-underline"
+              aria-label="Ver mis tarjetas"
+            >
+              <span aria-hidden>{userInitial}</span>
+            </Link>
           ) : (
-            <span>{storeInitial}</span>
+            <div className="onda-pwa-avatar" aria-hidden>
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt="" />
+              ) : (
+                <span>{storeInitial}</span>
+              )}
+            </div>
           )}
-        </div>
-        <div className="onda-pwa-hero-copy">
-          <p className="onda-pwa-eyebrow">Onda</p>
-          <h1 className="onda-pwa-title">
-            {step === 'enroll'
-              ? event
-                ? 'Tus pases'
-                : 'Tu pase'
-              : step === 'rewards'
-                ? 'Recompensas'
-                : storeName}
-          </h1>
-          <p className="onda-pwa-sub">
-            {step === 'enroll'
-              ? event
-                ? `${storeName} · ${eventName}${tableId ? ` · Mesa ${tableId}` : ''}`
-                : `${storeName}${tableId ? ` · Mesa ${tableId}` : ''} · +1 onda`
-              : step === 'home'
-                ? event
-                  ? 'Negocio + evento'
-                  : 'Listo para Wallet'
-                : storeName}
-          </p>
-        </div>
-      </header>
+          <div className="onda-pwa-hero-copy">
+            {step === "home" && userName ? (
+              <>
+                <p className="onda-pwa-eyebrow">{getGreeting()}</p>
+                <h1 className="onda-pwa-title">{userName}</h1>
+              </>
+            ) : (
+              <>
+                <p className="onda-pwa-eyebrow">Onda</p>
+                <h1 className="onda-pwa-title">{storeName}</h1>
+              </>
+            )}
+          </div>
+        </header>
+      )}
 
       <div className="onda-pwa-body onda-pwa-fade">
-        {step === 'enroll' && (
-          <form className="flex flex-1 flex-col" onSubmit={enroll}>
-            <PassSwipe cards={swipeCards} memberName={name} compact />
+        {step === "otp" && <OtpStep onVerified={onOtpVerified} />}
 
-            <div className="onda-pwa-bottom">
-              <div className="onda-pwa-fields">
+        {step === "name" && (
+          <div className="flex flex-1 flex-col">
+            <div className="onda-pwa-hola-banner onda-pwa-hola-banner--merged">
+              <h1>HOLA</h1>
+            </div>
+            <div className="onda-pwa-hola-card flex flex-1 flex-col">
+              <div className="mb-1">
+                <p className="onda-pwa-label">Un último detalle</p>
+                <h2 className="onda-pwa-headline mt-1">¿Cómo te llamas?</h2>
+                <p className="onda-pwa-sub mt-2">
+                  Así te saludaremos cada vez que vuelvas.
+                </p>
+              </div>
+              <form
+                className="mt-auto flex flex-col gap-3"
+                onSubmit={submitName}
+              >
+                <p className="onda-pwa-label">Tu nombre</p>
                 <input
-                  ref={nameRef}
                   required
+                  autoFocus
                   autoComplete="given-name"
-                  enterKeyHint="next"
-                  placeholder="Tu nombre en el pase"
+                  placeholder="Escribe tu nombre"
                   className="onda-pwa-field"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      (
-                        document.querySelector(
-                          'input[inputmode="numeric"]'
-                        ) as HTMLInputElement | null
-                      )?.focus();
-                    }
-                  }}
-                />
-                <PhoneInput
-                  required
-                  enterKeyHint="go"
-                  placeholder="WhatsApp"
-                  className="onda-pwa-field"
-                  value={phone}
-                  onChange={setPhone}
-                  onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-                    if (e.key === 'Enter' && canStart) {
-                      e.preventDefault();
-                      void enroll();
-                    }
-                  }}
                 />
                 {error ? (
-                  <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-[var(--onda-danger)]">
-                    {error}
-                  </p>
+                  <p className="text-sm text-[var(--onda-danger)]">{error}</p>
                 ) : null}
-              </div>
-
-              <button type="submit" className="onda-pwa-cta" disabled={!canStart}>
-                {busy
-                  ? 'Creando tus pases…'
-                  : event
-                    ? `${walletLabel} · 2 pases`
-                    : `${walletLabel} · +1`}
-              </button>
-              <p className="onda-pwa-legal">
-                Al continuar aceptas{' '}
-                <a href="/privacidad">Privacidad</a> y <a href="/terminos">Términos</a>.
-              </p>
+                <button
+                  type="submit"
+                  className="onda-pwa-cta"
+                  disabled={name.trim().length < 2 || busy}
+                >
+                  {busy ? "Guardando…" : "Guardar y seguir →"}
+                </button>
+              </form>
             </div>
-          </form>
+          </div>
         )}
 
-        {step === 'home' && session && (
+        {step === "preview" && (
           <div className="flex flex-1 flex-col">
-            <PassSwipe cards={swipeCards} memberName={memberName} compact={false} />
-
+            <PassSwipe
+              cards={swipeCards}
+              memberName={session?.user.name}
+              compact
+            />
             <div className="onda-pwa-bottom">
               {error ? (
-                <p className="mb-2 text-sm text-[var(--onda-danger)]">{error}</p>
+                <p className="mb-2 text-sm text-[var(--onda-danger)]">
+                  {error}
+                </p>
               ) : null}
               <button
                 type="button"
                 className="onda-pwa-cta"
                 disabled={busy}
-                onClick={issueWallet}
+                onClick={claimCard}
               >
-                {busy ? 'Abriendo Wallet…' : walletLabel}
+                {busy ? "Reclamando…" : "Reclamar onda"}
               </button>
+            </div>
+          </div>
+        )}
+
+        {step === "home" && pass && (
+          <div className="flex flex-1 flex-col">
+            <PassSwipe
+              cards={swipeCards}
+              memberName={session?.user.name}
+              compact={false}
+            />
+            <div className="onda-pwa-bottom">
+              {error ? (
+                <p className="mb-2 text-sm text-[var(--onda-danger)]">
+                  {error}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                className="onda-pwa-cta"
+                disabled={busy}
+                onClick={openWallet}
+              >
+                {busy ? "Abriendo Wallet…" : walletLabel}
+              </button>
+              {nextRewardText ? (
+                <div className="onda-pwa-next-reward">
+                  <p className="onda-pwa-label">Siguiente premio</p>
+                  <p className="onda-pwa-next-reward-text">{nextRewardText}</p>
+                </div>
+              ) : null}
               <button
                 type="button"
                 className="onda-pwa-secondary"
-                onClick={() => setStep('rewards')}
+                disabled={busy}
+                onClick={() => startPendingRequest("ACCUMULATE")}
               >
-                Ver recompensas
+                Acumular onda
               </button>
-              <Link href="/portal" className="onda-pwa-secondary block text-center">
-                Ver mi tarjeta Onda
-              </Link>
+              {claimablePromotions.map((promo: any) => (
+                <button
+                  key={promo.id}
+                  type="button"
+                  className="onda-pwa-secondary"
+                  disabled={busy}
+                  onClick={() => startPendingRequest("CLAIM", promo.id)}
+                >
+                  Reclamar {promo.title}
+                </button>
+              ))}
+              {promotions.length >= 2 ? (
+                <button
+                  type="button"
+                  className="onda-pwa-link"
+                  onClick={() => setStep("rewards")}
+                >
+                  Ver premios del ciclo
+                </button>
+              ) : null}
               {walletLinks ? (
                 <p className="onda-pwa-legal">
-                  Si no se abrió,{' '}
+                  Si no se abrió,{" "}
                   <a
-                    href={isAppleDevice() ? walletLinks.appleUrl : walletLinks.googleUrl}
+                    href={
+                      isAppleDevice()
+                        ? walletLinks.appleUrl
+                        : walletLinks.googleUrl
+                    }
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -377,42 +491,113 @@ export default function StoreEntryPage() {
           </div>
         )}
 
-        {step === 'rewards' && (
-          <div className="flex flex-1 flex-col gap-3">
-            <button
-              type="button"
-              className="self-start text-sm font-medium text-[var(--onda-violet)]"
-              onClick={() => setStep('home')}
-            >
-              ← Volver al pase
-            </button>
+        {step === "pendingWait" && pendingRequest && session && pass && (
+          <PendingRequestWait
+            request={pendingRequest}
+            passId={pass.id}
+            session={session}
+            storeName={storeName}
+            onResolved={onPendingResolved}
+            onCancel={() => setStep("home")}
+          />
+        )}
+
+        {step === "rewards" && pass && (
+          <div className="flex flex-1 flex-col gap-6 pt-[calc(1.1rem+env(safe-area-inset-top,0))]">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                aria-label="Volver al pase"
+                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-white text-lg text-[var(--onda-ink)] shadow-sm"
+                onClick={() => setStep("home")}
+              >
+                ←
+              </button>
+              <span className="text-sm font-semibold text-[var(--onda-ink)]">
+                Atrás
+              </span>
+            </div>
+
+            <div>
+              <p className="onda-pwa-label">Lo que te espera</p>
+              <h2 className="onda-pwa-headline mt-1">
+                Premios con buena Onda.
+              </h2>
+              <p className="onda-pwa-sub mt-2">
+                Completa {maxStamps} sello{maxStamps === 1 ? "" : "s"} y vuelve
+                a empezar.
+              </p>
+            </div>
+
             <div className="flex flex-col gap-3 pb-6">
-              {promotions.map((p: any) => (
-                <div key={p.id} className="overflow-hidden rounded-2xl bg-white shadow-sm">
-                  {p.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.imageUrl}
-                      alt={p.title}
-                      className="aspect-[16/9] w-full object-cover"
-                    />
-                  ) : (
-                    <div className="aspect-[16/9] bg-[var(--onda-violet-soft)]" />
-                  )}
-                  <div className="p-4">
-                    <p className="font-semibold">{p.title}</p>
-                    {p.description ? (
-                      <p className="mt-1 text-sm text-[var(--onda-muted)]">{p.description}</p>
-                    ) : null}
-                    <p className="mt-2 text-sm font-semibold text-[var(--onda-violet)]">
-                      {p.pointsRequired} ondas
-                    </p>
+              {promotionsWithStatus.map((p: any) => {
+                const stampsRemaining = p.pointsRequired - pass.points;
+                const isLit =
+                  p.status === "claimed" || p.status === "available";
+                const statusClasses =
+                  p.status === "available"
+                    ? "inline-flex items-center rounded-full bg-[var(--onda-lime)] px-2 py-0.5 text-[var(--onda-ink)]"
+                    : "text-[var(--onda-muted)]";
+
+                return (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-sm"
+                  >
+                    <div
+                      className={`flex h-16 w-16 flex-shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl ${
+                        isLit
+                          ? "bg-[var(--onda-ink)]"
+                          : "bg-[var(--onda-border)]"
+                      }`}
+                    >
+                      <span
+                        className={`text-[0.6rem] font-semibold tracking-wide ${
+                          isLit
+                            ? "text-[var(--onda-lime)]"
+                            : "text-[var(--onda-muted)]"
+                        }`}
+                      >
+                        SELLO
+                      </span>
+                      <span
+                        className={`text-xl font-bold ${
+                          isLit
+                            ? "text-[var(--onda-lime)]"
+                            : "text-[var(--onda-muted)]"
+                        }`}
+                      >
+                        {String(p.pointsRequired).padStart(2, "0")}
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={`font-semibold ${
+                          isLit
+                            ? "text-[var(--onda-ink)]"
+                            : "text-[var(--onda-muted)]"
+                        }`}
+                      >
+                        {p.title}
+                      </p>
+                      {p.description ? (
+                        <p className="mt-0.5 text-sm text-[var(--onda-muted)]">
+                          {p.description}
+                        </p>
+                      ) : null}
+                      <p
+                        className={`mt-2 text-[0.7rem] font-bold uppercase tracking-wide ${statusClasses}`}
+                      >
+                        {p.status === "claimed"
+                          ? "✓ Reclamado"
+                          : p.status === "available"
+                            ? "Disponible"
+                            : `Faltan ${stampsRemaining} sello${stampsRemaining === 1 ? "" : "s"}`}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
-              {!promotions.length ? (
-                <p className="text-[var(--onda-muted)]">Pronto habrá recompensas aquí.</p>
-              ) : null}
+                );
+              })}
             </div>
           </div>
         )}

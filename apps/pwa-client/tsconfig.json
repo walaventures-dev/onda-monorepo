@@ -20,9 +20,6 @@
       ],
       "@onda/shared-utils": [
         "../../libs/shared/utils/src/index.tsx"
-      ],
-      "@/*": [
-        "./*"
       ]
     }
   },

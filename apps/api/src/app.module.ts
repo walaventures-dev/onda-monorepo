@@ -19,10 +19,14 @@ import {
   WebhooksController,
 } from './analytics.controller';
 import { AuthController } from './auth.controller';
+import { CustomerAuthController } from './customer-auth.controller';
 import { UploadsController } from './uploads.controller';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { WhatsappService } from './whatsapp.service';
+import { CustomerAuthService } from './customer-auth.service';
+import { PendingRequestsSseService } from './pending-requests-sse.service';
+import { PendingRequestsController } from './pending-requests.controller';
 
 @Module({
   imports: [
@@ -36,6 +40,7 @@ import { WhatsappService } from './whatsapp.service';
   controllers: [
     HealthController,
     AuthController,
+    CustomerAuthController,
     StoresController,
     EventsController,
     UsersController,
@@ -51,7 +56,8 @@ import { WhatsappService } from './whatsapp.service';
     FeedbackController,
     WebhooksController,
     UploadsController,
+    PendingRequestsController,
   ],
-  providers: [PrismaService, WalletService, WhatsappService],
+  providers: [PrismaService, WalletService, WhatsappService, CustomerAuthService, PendingRequestsSseService],
 })
 export class AppModule {}
