@@ -51,7 +51,7 @@ Nueva ruta `apps/pwa-client/app/perfil/page.tsx` + `ProfileClient.tsx`.
 - Usa `useSession()` para leer `name`/`phone`. Si `session` es `null` (acceso directo a la URL sin sesión), redirige a `/`.
 - **Nombre**: texto + ícono de editar (`OndaIcons.edit`, ya existe). Al tocar, cambia a modo edición inline (input) → al guardar, llama `PATCH /customer-auth/profile` (ya existe en `customer-auth.controller.ts`), y con la respuesta llama `saveSession()` (dispara el evento de 2.1, así que si el nombre se ve en otro lado se actualiza).
 - **Teléfono**: solo lectura, sin ícono de editar.
-- **Cerrar sesión**: mismo botón y misma llamada (`POST /customer-auth/logout`) que hoy tiene `MisTarjetasClient.tsx` — se mueve el comportamiento, no se cambia. Sin diálogo de confirmación (paridad con el comportamiento actual). Tras cerrar sesión, `clearSession()` dispara el evento → `AppShell` oculta la barra automáticamente y el usuario queda en `/perfil` sin barra hasta que navegue (mismo patrón de fallback que ya usa `MisTarjetasClient.tsx` tras logout).
+- **Cerrar sesión**: mismo botón y misma llamada (`POST /customer-auth/logout`) que hoy tiene `MisTarjetasClient.tsx` — se mueve el comportamiento, no se cambia. Sin diálogo de confirmación (paridad con el comportamiento actual). Tras cerrar sesión, `clearSession()` dispara el evento → `session` pasa a `null` → el mismo `useEffect` que maneja "acceso directo sin sesión" (ver más abajo) redirige a `/`, y `AppShell` deja de mostrar la barra porque ya no hay sesión.
 
 ### 2.5 Íconos
 
@@ -70,7 +70,7 @@ No se define ningún ícono dentro de `apps/pwa-client` directamente — se reut
 
 - Usuario con sesión activa navega directo a `/r/[storeId]` de un negocio donde no tiene tarjeta (vía QR, no vía tab bar): sigue funcionando igual que hoy (`StoreEntryClient.tsx` sin cambios); la barra se muestra porque ya hay sesión, con "Mis tarjetas" marcada como activa.
 - Usuario nuevo en medio de `step: 'otp'` o `step: 'name'` dentro de `/r/[storeId]`: sin sesión todavía → sin barra. En cuanto `submitName`/`onOtpVerified` llaman `saveSession()`, el evento dispara y la barra aparece sin recargar ni navegar.
-- Acceso directo a `/perfil` sin sesión (URL escrita a mano, sesión expirada): `ProfileClient` redirige a `/`.
+- Acceso directo a `/perfil` sin sesión (URL escrita a mano, sesión expirada), y también justo después de cerrar sesión desde el propio `/perfil`: `ProfileClient` redirige a `/` en cuanto `session` es `null` (mismo camino de código para ambos casos).
 - Nombre editado en `/perfil`: al volver a `/` con 1 sola tarjeta, el saludo en `StoreEntryClient.tsx` ya lee `session.user.name` actualizado porque `saveSession()` sobrescribió `localStorage`.
 
 ## 5. Verificación
