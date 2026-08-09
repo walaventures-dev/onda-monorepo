@@ -479,6 +479,10 @@
   border-top: 1px solid var(--onda-border);
 }
 
+.onda-pwa-tabbar[hidden] {
+  display: none;
+}
+
 .onda-pwa-tab {
   display: flex;
   flex-direction: column;
