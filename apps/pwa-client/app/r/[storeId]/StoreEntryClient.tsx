@@ -10,7 +10,7 @@ import { PassSwipe, type PassSwipeCard } from './PassSwipe';
 import { OtpStep } from './OtpStep';
 import { PendingRequestWait, type PendingRequestDto } from './PendingRequestWait';
 
-type Step = 'loading' | 'otp' | 'name' | 'preview' | 'home' | 'pendingWait' | 'rewards';
+type Step = 'loading' | 'otp' | 'name' | 'home' | 'pendingWait' | 'rewards';
 
 function isAppleDevice() {
   if (typeof navigator === 'undefined') return false;
@@ -38,6 +38,25 @@ export default function StoreEntryPage() {
   const [walletLinks, setWalletLinks] = useState<{ appleUrl?: string; googleUrl?: string } | null>(null);
   const [pendingRequest, setPendingRequest] = useState<PendingRequestDto | null>(null);
 
+  async function loadOrClaim(sess: CustomerSession) {
+    try {
+      const passes = await api<any[]>(`/passes?userId=${sess.user.id}&storeId=${storeId}`);
+      if (passes[0]) {
+        setPass(passes[0]);
+      } else {
+        const created = await api<any>(`/passes/store/${storeId}/claim`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${sess.token}` },
+        });
+        setPass(created);
+      }
+    } catch (err: any) {
+      setError(err.message || 'No se pudo cargar tu tarjeta');
+    } finally {
+      setStep('home');
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -53,24 +72,13 @@ export default function StoreEntryPage() {
           return;
         }
         setSession(existing);
-        await loadOrPreview(existing, s);
+        await loadOrClaim(existing);
       } catch (err: any) {
         if (!cancelled) {
           setError(err.message || 'No se pudo conectar');
           setStep('otp');
         }
       }
-    }
-
-    async function loadOrPreview(sess: CustomerSession, s: any) {
-      const passes = await api<any[]>(`/passes?userId=${sess.user.id}&storeId=${storeId}`);
-      if (passes[0]) {
-        setPass(passes[0]);
-        setStep('home');
-      } else {
-        setStep('preview');
-      }
-      void s;
     }
 
     void boot();
@@ -87,13 +95,7 @@ export default function StoreEntryPage() {
       setStep('name');
       return;
     }
-    const passes = await api<any[]>(`/passes?userId=${sess.user.id}&storeId=${storeId}`);
-    if (passes[0]) {
-      setPass(passes[0]);
-      setStep('home');
-    } else {
-      setStep('preview');
-    }
+    await loadOrClaim(sess);
   }
 
   async function submitName(e: FormEvent) {
@@ -110,27 +112,9 @@ export default function StoreEntryPage() {
       const sess: CustomerSession = { token: session.token, user: updated };
       saveSession(sess);
       setSession(sess);
-      setStep('preview');
+      await loadOrClaim(sess);
     } catch (err: any) {
       setError(err.message || 'No se pudo guardar tu nombre');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function claimCard() {
-    if (!session) return;
-    setBusy(true);
-    setError('');
-    try {
-      const created = await api<any>(`/passes/store/${storeId}/claim`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.token}` },
-      });
-      setPass(created);
-      setStep('home');
-    } catch (err: any) {
-      setError(err.message || 'No se pudo reclamar tu tarjeta');
     } finally {
       setBusy(false);
     }
@@ -348,19 +332,7 @@ export default function StoreEntryPage() {
           </div>
         )}
 
-        {step === 'preview' && (
-          <div className="flex flex-1 flex-col">
-            <PassSwipe cards={swipeCards} memberName={session?.user.name} compact />
-            <div className="onda-pwa-bottom">
-              {error ? <p className="mb-2 text-sm text-[var(--onda-danger)]">{error}</p> : null}
-              <button type="button" className="onda-pwa-cta" disabled={busy} onClick={claimCard}>
-                {busy ? 'Reclamando…' : 'Reclamar onda'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 'home' && pass && (
+        {step === 'home' && (
           <div className="flex flex-1 flex-col">
             <PassSwipe cards={swipeCards} memberName={session?.user.name} compact={false} />
             <div className="onda-pwa-bottom">
