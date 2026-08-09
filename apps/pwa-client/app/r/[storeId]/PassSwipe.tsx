@@ -24,10 +24,16 @@ export function PassSwipe({
   cards,
   memberName,
   compact = true,
+  onAddToWallet,
+  walletBusy,
+  walletLabel,
 }: {
   cards: PassSwipeCard[];
   memberName?: string;
   compact?: boolean;
+  onAddToWallet?: () => void;
+  walletBusy?: boolean;
+  walletLabel?: string;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
@@ -68,6 +74,9 @@ export function PassSwipe({
           maxStamps={only.maxStamps}
           milestoneStamps={only.milestoneStamps}
           memberName={memberName}
+          onAddToWallet={onAddToWallet}
+          walletBusy={walletBusy}
+          walletLabel={walletLabel}
         />
       </div>
     );
@@ -86,6 +95,9 @@ export function PassSwipe({
               maxStamps={card.maxStamps}
               milestoneStamps={card.milestoneStamps}
               memberName={memberName}
+              onAddToWallet={onAddToWallet}
+              walletBusy={walletBusy}
+              walletLabel={walletLabel}
             />
           </div>
         ))}

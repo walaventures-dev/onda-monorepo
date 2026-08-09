@@ -32,12 +32,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             if (pathname !== '/') router.push('/');
           }}
         >
-          {OndaIcons.wallet}
-          <span>Mis tarjetas</span>
+          <span className="onda-pwa-tab-icon">{OndaIcons.wallet}</span>
+          <span className="onda-pwa-tab-label">Tarjetas</span>
         </Tabs.Tab>
         <Tabs.Tab id="perfil" className="onda-pwa-tab">
-          {OndaIcons.profile}
-          <span>Perfil</span>
+          <span className="onda-pwa-tab-icon">{OndaIcons.profile}</span>
+          <span className="onda-pwa-tab-label">Perfil</span>
         </Tabs.Tab>
       </Tabs.List>
       <Tabs.Panel id={selectedKey} className={showTabs ? 'onda-pwa-tabbed-content' : undefined}>

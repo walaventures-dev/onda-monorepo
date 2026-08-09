@@ -251,6 +251,8 @@ No uses `import { Tag } from '@phosphor-icons/react'` (importa todo el barrel) n
   - `h-4 w-4` (16px) — íconos con más protagonismo, p. ej. WhatsApp (`CLASS_LG`)
 - `aria-hidden="true"` siempre en el ícono cuando va acompañado de texto visible (accesibilidad — el texto ya comunica el significado).
 
+**Pendiente:** evaluar ampliar esta escala de 2 tamaños a una escala completa (8/12/16/20/24/28/32/36/40px, alineada a `w-2`–`w-10` de Tailwind). Implica convertir `OndaIcons` (hoy JSX pre-instanciado con tamaño fijo) en algo parametrizable por `size`, definir reglas de uso por tamaño, y validar legibilidad de Phosphor `regular` en los extremos (8px y 36–40px) antes de adoptarlo.
+
 ### 5.3 Ícono centralizado — `OndaIcons`
 
 Todos los íconos de producto están centralizados en `libs/shared/ui/src/icons.tsx` como `OndaIcons.<nombre>` (ya instanciados como JSX, no como componentes). **Antes de importar un ícono de Phosphor directamente en un componente nuevo, revisa si ya existe una entrada equivalente en `OndaIcons`** — hay ~40 íconos ya mapeados a conceptos de producto (`OndaIcons.accumulate`, `OndaIcons.redeem`, `OndaIcons.pass`, `OndaIcons.gear`, etc.). Reutilízalos por su rol semántico en vez de crear una nueva instancia del mismo ícono de Phosphor.

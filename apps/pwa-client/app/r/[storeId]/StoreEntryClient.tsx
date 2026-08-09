@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { api } from '@onda/shared-ui';
+import { api, Button } from '@onda/shared-ui';
 import { loadSession, saveSession, type CustomerSession } from '../../../lib/session';
 import { PassSwipe, type PassSwipeCard } from './PassSwipe';
 import { OtpStep } from './OtpStep';
@@ -208,7 +208,7 @@ export default function StoreEntryPage() {
 
   const storeDesign = store?.passDesign;
   const storeName = store?.name || 'tu visita';
-  const walletLabel = 'Agregar a tu billetera digital';
+  const walletLabel = 'Agregar a billetera digital';
   const logoUrl = storeDesign?.logoUrl as string | undefined;
   const storeInitial = (storeName.trim().charAt(0) || 'O').toUpperCase();
   const userName = session?.user.name?.trim();
@@ -334,26 +334,31 @@ export default function StoreEntryPage() {
 
         {step === 'home' && (
           <div className="flex flex-1 flex-col">
-            <PassSwipe cards={swipeCards} memberName={session?.user.name} compact={false} />
+            <PassSwipe
+              cards={swipeCards}
+              memberName={session?.user.name}
+              compact={false}
+              onAddToWallet={openWallet}
+              walletBusy={busy}
+              walletLabel={walletLabel}
+            />
+            {promotions.length >= 2 ? (
+              <button
+                type="button"
+                className="onda-pwa-link mt-3"
+                onClick={() => setStep('rewards')}
+              >
+                Ver premios
+              </button>
+            ) : null}
             <div className="onda-pwa-bottom">
               {error ? <p className="mb-2 text-sm text-[var(--onda-danger)]">{error}</p> : null}
-              <button type="button" className="onda-pwa-cta" disabled={busy} onClick={openWallet}>
-                {busy ? 'Abriendo Wallet…' : walletLabel}
-              </button>
               {nextRewardText ? (
                 <div className="onda-pwa-next-reward">
                   <p className="onda-pwa-label">Siguiente premio</p>
                   <p className="onda-pwa-next-reward-text">{nextRewardText}</p>
                 </div>
               ) : null}
-              <button
-                type="button"
-                className="onda-pwa-secondary"
-                disabled={busy}
-                onClick={() => startPendingRequest('ACCUMULATE')}
-              >
-                Acumular onda
-              </button>
               {claimablePromotions.map((promo: any) => (
                 <button
                   key={promo.id}
@@ -365,11 +370,14 @@ export default function StoreEntryPage() {
                   Reclamar {promo.title}
                 </button>
               ))}
-              {promotions.length >= 2 ? (
-                <button type="button" className="onda-pwa-link" onClick={() => setStep('rewards')}>
-                  Ver premios del ciclo
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="onda-pwa-cta"
+                disabled={busy}
+                onClick={() => startPendingRequest('ACCUMULATE')}
+              >
+                Acumular una onda
+              </button>
               {walletLinks ? (
                 <p className="onda-pwa-legal">
                   Si no se abrió,{' '}
@@ -412,10 +420,10 @@ export default function StoreEntryPage() {
             </div>
 
             <div>
-              <p className="onda-pwa-label">Lo que te espera</p>
+              <p className="onda-pwa-label pb-3">Lo que te espera</p>
               <h2 className="onda-pwa-headline mt-1">Premios con buena Onda.</h2>
               <p className="onda-pwa-sub mt-2">
-                Completa {maxStamps} sello{maxStamps === 1 ? '' : 's'} y vuelve a empezar.
+                Completa {maxStamps} onda{maxStamps === 1 ? '' : 's'} y vuelve a empezar.
               </p>
             </div>
 
@@ -428,10 +436,27 @@ export default function StoreEntryPage() {
                     ? 'inline-flex items-center rounded-full bg-[var(--onda-lime)] px-2 py-0.5 text-[var(--onda-ink)]'
                     : 'text-[var(--onda-muted)]';
 
+                const isAvailable = p.status === 'available';
+
                 return (
                   <div
                     key={p.id}
-                    className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-sm"
+                    role={isAvailable ? 'button' : undefined}
+                    tabIndex={isAvailable ? 0 : undefined}
+                    onClick={isAvailable && !busy ? () => startPendingRequest('CLAIM', p.id) : undefined}
+                    onKeyDown={
+                      isAvailable
+                        ? (e) => {
+                            if ((e.key === 'Enter' || e.key === ' ') && !busy) {
+                              e.preventDefault();
+                              startPendingRequest('CLAIM', p.id);
+                            }
+                          }
+                        : undefined
+                    }
+                    className={`flex items-center gap-4 rounded-2xl bg-white p-4 shadow-sm ${
+                      isAvailable ? 'cursor-pointer active:scale-[0.99]' : ''
+                    } ${busy ? 'opacity-60' : ''}`}
                   >
                     <div
                       className={`flex h-16 w-16 flex-shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl ${
@@ -469,9 +494,28 @@ export default function StoreEntryPage() {
                           ? '✓ Reclamado'
                           : p.status === 'available'
                             ? 'Disponible'
-                            : `Faltan ${stampsRemaining} sello${stampsRemaining === 1 ? '' : 's'}`}
+                            : `Te faltan ${stampsRemaining} onda${stampsRemaining === 1 ? '' : 's'}`}
                       </p>
                     </div>
+                    {isAvailable ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        excludeFromTabOrder
+                        isDisabled={busy}
+                        className="ml-auto shrink-0 text-xs"
+                        style={
+                          {
+                            '--button-bg': 'transparent',
+                            '--button-bg-hover': 'var(--onda-violet-soft)',
+                            '--button-fg': 'var(--onda-violet)',
+                            borderColor: 'var(--onda-violet)',
+                          } as React.CSSProperties
+                        }
+                      >
+                        Reclamar
+                      </Button>
+                    ) : null}
                   </div>
                 );
               })}
