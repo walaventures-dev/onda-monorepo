@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { AppShell } from './AppShell';
 
 export const metadata: Metadata = {
   title: 'Onda',
@@ -26,7 +27,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className="onda-pwa min-h-dvh antialiased">{children}</body>
+      <body className="onda-pwa min-h-dvh antialiased">
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }

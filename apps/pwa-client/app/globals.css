@@ -455,3 +455,48 @@
   box-shadow: 0 -12px 24px rgba(26, 27, 46, 0.04);
   position: relative;
 }
+
+.onda-pwa-appshell--tabbed .onda-pwa-shell {
+  padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0));
+}
+
+.onda-pwa-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem calc(0.6rem + env(safe-area-inset-bottom, 0));
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--onda-border);
+}
+
+.onda-pwa-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 6.5rem;
+  padding: 0.5rem 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--onda-muted);
+  outline: none;
+  cursor: pointer;
+}
+
+.onda-pwa-tab[data-selected='true'] {
+  background: var(--onda-violet);
+  color: #fff;
+}
+
+.onda-pwa-tab[data-focus-visible='true'] {
+  box-shadow: 0 0 0 3px var(--onda-violet-soft);
+}

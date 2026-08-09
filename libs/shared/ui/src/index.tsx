@@ -4,7 +4,7 @@ import React from 'react';
 import { OndaIcons, OndaMark } from './icons';
 import { TxActivityRow, type TxActivityItem } from './TxActivity';
 
-export { Button, Card, Chip, Avatar, Badge, Spinner, Form, TextField, Input, TextArea, InputOTP, Table, ColorPicker } from '@heroui/react';
+export { Button, Card, Chip, Avatar, Badge, Spinner, Form, TextField, Input, TextArea, InputOTP, Table, ColorPicker, Tabs } from '@heroui/react';
 export { api, API_URL, getApiUrl } from './api';
 export { HeatmapPoints } from './HeatmapPoints';
 export { PhoneInput } from './PhoneInput';
