@@ -38,7 +38,7 @@
   justify-content: center;
   overflow: hidden;
   border-radius: 999px;
-  background: #fff;
+  background: var(--onda-card);
   box-shadow: 0 6px 18px rgba(26, 27, 46, 0.08);
   border: 1px solid var(--onda-border);
   color: var(--onda-violet);
@@ -228,7 +228,7 @@
   width: 100%;
   border: 0;
   border-radius: 1rem;
-  background: #fff;
+  background: var(--onda-card);
   box-shadow: 0 8px 24px rgba(26, 27, 46, 0.06);
   padding: 1rem 1.1rem;
   font-size: 17px;
@@ -248,7 +248,7 @@
   flex-direction: column;
   gap: 0.65rem;
   padding: 0.85rem 0 calc(0.85rem + env(safe-area-inset-bottom, 0));
-  background: linear-gradient(to top, var(--onda-bg) 78%, transparent);
+  background: var(--onda-bg);
 }
 
 .onda-pwa-fields {
@@ -285,7 +285,7 @@
   width: 100%;
   border: 0;
   border-radius: 999px;
-  background: #fff;
+  background: var(--onda-card);
   padding: 0.85rem 1rem;
   font-size: 0.9rem;
   font-weight: 600;
@@ -398,7 +398,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 1rem;
-  background: #fff;
+  background: var(--onda-card);
   box-shadow: 0 8px 24px rgba(26, 27, 46, 0.06);
   font-family: "Sora", "Manrope", system-ui, sans-serif;
   font-size: 1.35rem;

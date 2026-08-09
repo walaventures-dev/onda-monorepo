@@ -32,21 +32,64 @@ export class ReferralsController {
         name: true,
         referralCode: true,
         freeMonthsBalance: true,
+        createdAt: true,
       },
     });
 
     const referredStores = await this.prisma.store.findMany({
       where: { referredByStoreId: storeId },
       select: { id: true, name: true, createdAt: true, slug: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'asc' },
     });
+
+    const fromReferrals = referredStores.length;
+    const welcomeMonths = Math.max(0, store.freeMonthsBalance - fromReferrals);
+
+    const freeMonthCredits: Array<{
+      id: string;
+      type: 'WELCOME' | 'REFERRAL';
+      label: string;
+      months: number;
+      earnedAt: string;
+      storeId?: string;
+      slug?: string;
+    }> = [];
+
+    if (welcomeMonths > 0) {
+      freeMonthCredits.push({
+        id: `welcome-${store.id}`,
+        type: 'WELCOME',
+        label: 'Mes de bienvenida',
+        months: welcomeMonths,
+        earnedAt: store.createdAt.toISOString(),
+      });
+    }
+
+    for (const s of referredStores) {
+      freeMonthCredits.push({
+        id: `referral-${s.id}`,
+        type: 'REFERRAL',
+        label: s.name,
+        months: 1,
+        earnedAt: s.createdAt.toISOString(),
+        storeId: s.id,
+        slug: s.slug,
+      });
+    }
 
     return {
       storeId: store.id,
       storeName: store.name,
+      storeCreatedAt: store.createdAt.toISOString(),
       referralCode: store.referralCode,
       freeMonthsBalance: store.freeMonthsBalance,
-      referredStores,
+      freeMonthsBreakdown: {
+        welcome: welcomeMonths,
+        fromReferrals,
+        total: store.freeMonthsBalance,
+      },
+      freeMonthCredits,
+      referredStores: [...referredStores].reverse(),
     };
   }
 }

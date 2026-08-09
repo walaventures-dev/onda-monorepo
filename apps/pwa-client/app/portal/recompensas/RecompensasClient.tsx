@@ -45,7 +45,7 @@ export default function RecompensasClient() {
         ) : (
           <div className="flex flex-col gap-3 pb-6">
             {rewards.map((r) => (
-              <div key={r.id} className="overflow-hidden rounded-2xl bg-white shadow-sm">
+              <div key={r.id} className="overflow-hidden rounded-2xl bg-[var(--onda-card)] shadow-sm">
                 <div className="p-4">
                   <p className="text-xs font-medium text-[var(--onda-violet)]">{r.storeName}</p>
                   <p className="mt-0.5 font-semibold">{r.title}</p>

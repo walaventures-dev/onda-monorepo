@@ -14,8 +14,8 @@ Onda es una plataforma de fidelización (sellos/puntos) para comercios y eventos
 
 Pilares:
 
-- **Gradiente como firma de marca.** El degradado celeste → azul-puente → azul primario (`--onda-gradient`) es el elemento más distintivo de Onda: se usa en el logo, en el ícono de la app y en CTAs destacados. No lo reproduzcas como fondo de página completa — su fuerza está en usarse en superficies pequeñas (badges, logo, botones puntuales).
-- **Superficies claras y "flotantes".** Fondo general gris-azulado muy claro (`--onda-bg: #f3f6fb`), tarjetas blancas con sombra difusa y suave (nunca dura ni oscura). Sensación de tarjetas de papel livianas sobre una mesa, no de paneles con bordes duros.
+- **Azul sólido como firma de marca.** El azul primario (`--onda-primary-500`, `#052DDE`) es el elemento más distintivo de Onda: se usa en el logo, en el ícono de la app y en CTAs destacados — siempre sólido, **sin degradados**. Hover/active de CTAs usa `--onda-primary-600` (`#041DB2`).
+- **Superficies claras y neutras.** Fondo general en gris de marca (`--onda-bg: #F2F2F2`), tarjetas blancas puras (`--onda-card: #FFFFFF`) y bordes `#E4E4E4`. Misma familia fría que el azul primario — sin beige/crema que choque con gris y blanco.
 - **Formas redondeadas consistentes.** Casi nada es rectangular puro: botones y chips son `pill` (radio total), tarjetas e inputs usan radios grandes (`0.85rem`–`1.5rem`). Esto es intencional y central a la identidad — un componente con esquinas a 90° o `rounded-md` se ve "fuera de marca" salvo excepciones puntuales (badges de estado en tablas, algún ícono contenedor).
 - **Dos temperaturas de azul con roles fijos.** Celeste (`--onda-sky`, `#3DB9E8`) = "acumulación / entrada de datos / información neutra". Azul primario (`--onda-primary-500` / `--onda-violet`, `#052DDE`) = "acción principal / canje / marca". Son de la misma familia cromática (azul) pero con temperatura y saturación distintas — el primario es notablemente más profundo y saturado que el celeste, nunca los uses como si fueran intercambiables. No intercambies estos roles.
 - **Dos apps, un mismo lenguaje, distinta densidad.** El **PWA Client** (cliente final en el celular) es de una sola columna, gestual, con CTAs grandes tipo app nativa. Los **dashboards** (merchant / organizer) son de trabajo, con más densidad de datos, tablas, KPIs y gráficas, pero comparten paleta, radios, tipografía y tono con el PWA.
@@ -34,16 +34,16 @@ Estas variables CSS están disponibles globalmente en las 4 apps front (se impor
 | `--onda-sky-soft` | `#E5F6FC` | Fondo suave para hover/estado activo de elementos "sky" |
 | `--onda-violet` | `var(--onda-primary-500)` → `#052DDE` | **Primario** — CTA principal, marca, canje, navegación activa. Alias histórico: el nombre de la variable quedó de la época en que el primario era violeta; hoy resuelve a azul. Ver [2.1.1](#211-escala-primaria-50900) |
 | `--onda-violet-soft` | `var(--onda-primary-100)` → `#E2EAFD` | Fondo suave para hover/estado activo de elementos "primary" |
-| `--onda-bridge` | `#5B8AF0` | Azul puente — color medio del gradiente; usado en `:hover`/`:focus` de bordes de inputs |
+| `--onda-bridge` | `#5B8AF0` | Azul puente — usado en `:hover`/`:focus` de bordes de inputs |
 | `--onda-lime` | `#DDF24E` | Acento — avatar de "usuario" en el PWA, detalles de energía/gamificación. Uso puntual, nunca como color de texto o superficie grande |
 | `--onda-ink` | `#1A1B2E` | Texto principal / fondo de overlays oscuros |
 | `--onda-muted` | `#6B7289` | Texto secundario, labels, metadatos, timestamps |
-| `--onda-bg` | `#F3F6FB` | Fondo de página (body) |
+| `--onda-bg` | `#F2F2F2` | Fondo de página (body) — gris de marca |
 | `--onda-card` | `#FFFFFF` | Fondo de tarjetas/superficies elevadas |
-| `--onda-border` | `#E2E8F2` | Bordes de tarjetas, inputs, separadores |
+| `--onda-border` | `#E4E4E4` | Bordes de tarjetas, inputs, separadores (un paso más oscuro que el bg para contraste) |
 | `--onda-success` | `#2BB673` | Éxito, deltas positivos, confirmaciones |
 | `--onda-danger` | `#E5484D` | Error, deltas negativos, acciones destructivas |
-| `--onda-gradient` | `linear-gradient(135deg, #3DB9E8 0%, #5B8AF0 48%, var(--onda-primary-500) 100%)` | Logo, `.onda-gradient`, `GradientButton` |
+| `--onda-gradient` | `var(--onda-primary-500)` → `#052DDE` | Alias legacy (antes era un degradado). `.onda-gradient` / `GradientButton` son azul **sólido** |
 
 Alias semánticos adicionales (mapeados a los tokens de arriba, usados por HeroUI):
 
@@ -70,7 +70,7 @@ Generada interpolando en HSL a partir del H/S/L exacto de `#052DDE` (H 228.9°, 
 | 300 | `#8EA6FA` | H227 S92 L77 | Elementos decorativos claros, disabled-state de algo "primary" |
 | 400 | `#3E63F9` | H228 S94 L61 | Variante más clara del primario — hover de superficies oscuras, gráficas |
 | **500** | **`#052DDE`** | **H228.9 S95.6 L44.5** | **Primario** — CTA, marca, navegación activa, foco. El valor exacto pedido, sin redondear |
-| 600 | `#0623B7` | H230 S94 L37 | `:hover`/`:active` de botones primarios sobre fondo claro |
+| 600 | `#041DB2` | H230 S96 L35 | `:hover`/`:active` de botones primarios sobre fondo claro — azul oscuro de marca |
 | 700 | `#081C91` | H231 S90 L30 | Texto sobre fondo `primary-50`/`100` cuando se necesita alto contraste con tinte de marca |
 | 800 | `#09166D` | H232 S85 L23 | Superficies oscuras de marca (raro; úsalo solo si hace falta un "primary" casi-navy) |
 | 900 | `#080F44` | H233 S78 L15 | Extremo oscuro — reservado, análogo a `--onda-ink` pero con tinte de marca |
@@ -96,8 +96,8 @@ Ambos comparten el mismo fondo base (`--onda-bg`) y tarjeta base (`--onda-card` 
 | | PWA Client | Merchant / Organizer Dashboard |
 |---|---|---|
 | Fondo de página | `--onda-bg`, ancho máximo `28rem` centrado (`onda-pwa-shell`) — simula un contenedor móvil incluso en desktop | `--onda-bg`, ancho completo con sidebar fijo |
-| Tarjeta primaria | Fondo blanco sólido, sombra difusa grande (`0 8px 24px rgba(26,27,46,.06)`), radios muy grandes (`1rem`–`1.5rem`) | `.onda-card`: blanco, borde `1px solid var(--onda-border)`, sombra sutil `0 10px 30px rgba(26,27,46,.06)`, radio `1rem` |
-| Header/hero | Bloque violeta sólido a sangre (`onda-pwa-hola-banner`, `background: var(--onda-violet)`) con texto blanco — usado en pantallas de bienvenida | Topbar blanco translúcido con `backdrop-filter: blur(8px)` sobre borde inferior sutil |
+| Tarjeta primaria | Fondo `--onda-card` (`#FFFFFF`), sombra difusa grande (`0 8px 24px rgba(26,27,46,.06)`), radios muy grandes (`1rem`–`1.5rem`) | `.onda-card`: `--onda-card`, borde `1px solid var(--onda-border)`, sombra sutil `0 10px 30px rgba(26,27,46,.06)`, radio `1rem` |
+| Header/hero | Bloque primario sólido a sangre (`onda-pwa-hola-banner`, `background: var(--onda-violet)`) con texto blanco — usado en pantallas de bienvenida | Topbar translúcido sobre `--onda-card` con `backdrop-filter: blur(8px)` sobre borde inferior sutil |
 | Overlay/backdrop de modal | `rgba(26,27,46,.45)` + `blur(4px)` | mismo token (`--onda-dialog-backdrop`) — compartido |
 
 ### 2.4 Dark mode
@@ -258,7 +258,7 @@ Todos los íconos de producto están centralizados en `libs/shared/ui/src/icons.
 ### 5.4 Otros assets
 
 - No hay set de ilustraciones custom ni SVGs de estado vacío — los empty states actuales son solo texto (`"Sin actividad aún."`). Si se necesita una ilustración, debe mantenerse en la paleta de marca (sky/violet/lime sobre blanco), no introducir un estilo de ilustración ajeno.
-- El logo (`OndaLogo`) es un cuadrado `rounded-xl` con `.onda-gradient` de fondo + wordmark en `.font-display`. No existe un archivo de logo estático (SVG/PNG) — se genera en CSS/JSX.
+- El logo (`OndaLogo`) es un cuadrado `rounded-xl` con fondo azul sólido primario (clase `.onda-gradient`, alias legacy) + wordmark en `.font-display`. No existe un archivo de logo estático (SVG/PNG) — se genera en CSS/JSX.
 
 ---
 
@@ -273,13 +273,13 @@ Los componentes base (Button, Card, Table, Chip, Avatar, Badge, Form, Input, Tex
 | `primary` (HeroUI `<Button variant="primary">`) | Acción principal de la pantalla/diálogo | Fondo `--onda-violet` (= `--onda-primary-500`, `#052DDE`), texto blanco, `rounded-full` |
 | `secondary` | Acción secundaria / cancelar | Outline o fondo neutro, `rounded-full` |
 | `danger` | Confirmar una acción destructiva | Fondo `--onda-danger`, texto blanco (ver `.onda-dialog-btn--danger`) |
-| `GradientButton` (`@onda/shared-ui`) | CTA de marca de muy alto protagonismo (poco frecuente — no lo uses como botón por defecto) | `.onda-gradient` de fondo, `rounded-full`, `px-5 py-2.5 text-sm font-medium` |
+| `GradientButton` (`@onda/shared-ui`) | CTA de marca de muy alto protagonismo (poco frecuente — no lo uses como botón por defecto) | Azul sólido `--onda-primary-500` (clase `.onda-gradient`, nombre legacy), hover `--onda-primary-600`, `rounded-full`, `px-5 py-2.5 text-sm font-medium` |
 | `.onda-wa-btn` | Deep-link a WhatsApp exclusivamente | Verde WhatsApp `#25D366`, `rounded-full`, ícono + label, sombra verde |
 | `.onda-pwa-cta` (PWA) | CTA principal de pantalla completa en el flujo del cliente | Ancho completo, `min-height: 3.25rem`, `rounded-full`, fondo primario, sombra de color primario grande, `active:scale(0.98)` |
 
 **Reglas comunes:** todos los botones son `rounded-full` (pill) — nunca esquinas cuadradas. Estado `disabled` = `opacity: 0.45–0.5`, sin cambiar el color de fondo. Feedback táctil en botones grandes de PWA vía `transform: scale(0.98)` en `:active`, no vía cambio de color.
 
-- **PWA:** botones grandes, ancho completo, un CTA primario por pantalla como máximo. El botón secundario (si existe) es de menor peso visual (fondo blanco, texto en color primario) — nunca dos botones del mismo peso visual compitiendo.
+- **PWA:** botones grandes, ancho completo, un CTA primario por pantalla como máximo. El botón secundario (si existe) es de menor peso visual (fondo `--onda-card`, texto en color primario) — nunca dos botones del mismo peso visual compitiendo.
 - **Dashboard:** botones de tamaño estándar HeroUI, agrupados en toolbars/headers de tarjeta, pueden coexistir varios de peso similar (ej. filtros tipo `SegmentedControl`).
 
 ### 6.2 Inputs
@@ -287,13 +287,13 @@ Los componentes base (Button, Card, Table, Chip, Avatar, Badge, Form, Input, Tex
 - Radio `rounded-xl` (texto libre) o `rounded-full` (selects/pill inputs como `PhoneInput`, campos de búsqueda).
 - Borde `1px solid var(--onda-border)` en reposo; `:hover`/`:focus` cambia el borde a `--onda-bridge` (nunca a `--onda-violet` directo en el borde — ese matiz queda para el outline de foco).
 - Foco: `outline: 2px solid var(--onda-violet-soft); outline-offset: 2px` — un halo suave, no un borde duro de alto contraste.
-- En PWA, los inputs son "flotantes": sin borde, fondo blanco, `box-shadow` en vez de borde (`.onda-pwa-field`), `font-size: 17px` explícito (evita el zoom automático de iOS Safari en inputs <16px — no bajes de ese tamaño en inputs de PWA).
+- En PWA, los inputs son "flotantes": sin borde, fondo `--onda-card`, `box-shadow` en vez de borde (`.onda-pwa-field`), `font-size: 17px` explícito (evita el zoom automático de iOS Safari en inputs <16px — no bajes de ese tamaño en inputs de PWA).
 - Labels de formulario: siempre de-enfatizados respecto al valor — uppercase, `0.7rem`, `font-weight: 600`, `letter-spacing: 0.04em`, color `--onda-muted` (ver `.onda-pass-designer label > span`). Nunca el mismo tamaño/peso que el valor que describen.
 - Campos OTP (`InputOTP` / `.onda-pwa-otp-slot`): celdas cuadradas grandes (`3.5rem` alto), `rounded-xl`, número en `.font-display` bold, celda activa con el mismo halo de foco (`--onda-violet-soft` = `--onda-primary-100`).
 
 ### 6.3 Tarjetas (Cards)
 
-- Clase base: `.onda-card` — fondo blanco, borde `--onda-border`, `rounded-xl`, sombra Nivel 2. Es el contenedor por defecto para **cualquier bloque de contenido agrupado** en el dashboard (KPI, gráfica, lista de actividad, panel de recomendaciones).
+- Clase base: `.onda-card` — fondo `--onda-card` (`#FFFFFF`), borde `--onda-border`, `rounded-xl`, sombra Nivel 2. Es el contenedor por defecto para **cualquier bloque de contenido agrupado** en el dashboard (KPI, gráfica, lista de actividad, panel de recomendaciones).
 - Padding interno estándar: `px-4 py-3.5` (KPI card) hasta `p-4`–`p-5` para tarjetas con más contenido.
 - Jerarquía dentro de una tarjeta: label pequeño/muted arriba → valor grande/bold debajo → metadata/delta pequeño al final. No inviertas este orden.
 - Tarjetas con severidad (ej. "Recomendaciones" del dashboard) usan un borde/barra de color a la izquierda para codificar urgencia (naranja/azul primario/verde) — el resto de la tarjeta se mantiene neutro (blanco/gris), el color solo vive en el indicador, no satura toda la tarjeta.
@@ -331,7 +331,7 @@ Reglas estrictas — **NUNCA** hagas lo siguiente al generar o modificar UI en e
 10. **No sobrecargues de sombras.** Máximo un elemento "flotante" (Nivel 4–5) visible a la vez por pantalla (el modal abierto, o la tarjeta de pase). No pongas sombra grande en elementos secundarios/repetidos de una lista — usa el Nivel 1–2, o ninguna sombra y solo el borde `--onda-border`.
 11. **No inventes una tercera familia tipográfica** ni cargues fuentes nuevas vía `<link>`/`next/font` sin que Sora/Manrope sean insuficientes — no lo son para el 99% de los casos.
 12. **No confundas los roles de sky vs. primary.** Sky (`--onda-sky`, celeste) = información/acumulación/neutro. Primary (`--onda-violet` / `--onda-primary-500`, azul profundo `#052DDE`) = acción principal/marca/canje. Ambos son azules, pero de temperatura y saturación distintas — un botón de acción primaria en sky, o un dato puramente informativo en el azul primario saturado, es un error de sistema, no una variación válida.
-13. **No apliques el degradado de marca (`--onda-gradient`) como fondo de página o de tarjeta grande.** Su uso correcto es en superficies pequeñas y puntuales (logo, ícono, un CTA destacado como mucho por pantalla).
+13. **No uses degradados de marca.** La firma es azul sólido (`--onda-primary-500`). La clase `.onda-gradient` / token `--onda-gradient` son alias legacy a ese sólido — no reintroduzcas `linear-gradient` celeste→azul. Limita el azul primario sólido a logo, ícono y CTAs destacados; no lo uses como fondo de página completa.
 14. **No mezcles densidades entre PWA y dashboard.** No traigas tablas HeroUI al PWA Client, ni reduzcas los CTAs del dashboard al tamaño gigante de los botones del PWA. Cada superficie tiene su densidad establecida (ver sección 6).
 15. **Al proponer un valor que no está en este documento** (un tamaño, un color, un radio nuevo), interpola desde los valores existentes más cercanos en las tablas de arriba — no adivines un número arbitrario. Si el valor resultante no calza claramente en ninguna escala existente, señálalo explícitamente en tu respuesta en vez de introducirlo en silencio.
 16. **No generes un nuevo tono de "primary" a mano.** Usa siempre uno de los 10 pesos de `--onda-primary-50`…`900` (sección 2.1.1) — no mezcles un `color-mix()` improvisado o un hex intermedio no listado ahí cuando necesites una variante más clara/oscura del primario.

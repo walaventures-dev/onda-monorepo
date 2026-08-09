@@ -240,7 +240,7 @@ export function CompareStores({
 
   return (
     <div className="space-y-6">
-      <div className="overflow-x-auto rounded-xl border border-[var(--onda-border)] bg-white shadow-[0_1px_2px_rgba(26,27,46,0.04)]">
+      <div className="overflow-x-auto rounded-xl border border-[var(--onda-border)] bg-[var(--onda-card)] shadow-[0_1px_2px_rgba(26,27,46,0.04)]">
         <div className="flex flex-wrap items-end gap-x-4 gap-y-3 px-4 py-3">
           <FilterGroup label="Sedes" className="min-w-0 flex-1">
             <div className="flex flex-wrap gap-1.5">

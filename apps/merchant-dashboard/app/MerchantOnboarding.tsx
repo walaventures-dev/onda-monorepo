@@ -64,6 +64,13 @@ function parsePlanParam(raw: string | null): PlanChoice {
   return v === 'PRO' ? 'PRO' : 'BASIC';
 }
 
+/** Extrae solo el código limpio de ?ref= (evita texto pegado por share). */
+function sanitizeReferralCode(raw: string | null): string {
+  const decoded = (raw || '').trim().toUpperCase();
+  const match = decoded.match(/^[A-Z0-9]{4,16}/);
+  return match?.[0] || '';
+}
+
 const CATEGORY_OPTIONS = (
   Object.keys(STORE_CATEGORY_LABELS) as StoreCategory[]
 ).map((id) => ({ id, label: STORE_CATEGORY_LABELS[id] }));
@@ -143,7 +150,7 @@ export function MerchantOnboarding({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const refFromUrl = (searchParams.get('ref') || '').trim().toUpperCase();
+  const refFromUrl = sanitizeReferralCode(searchParams.get('ref'));
   const planFromUrl = parsePlanParam(searchParams.get('plan'));
 
   const [step, setStep] = useState<Step>(1);
@@ -201,8 +208,6 @@ export function MerchantOnboarding({
       })),
     [category]
   );
-
-  const stepMeta = STEPS.find((s) => s.id === step)!;
 
   useEffect(() => {
     setPlanType(parsePlanParam(searchParams.get('plan')));
@@ -443,7 +448,7 @@ export function MerchantOnboarding({
                           ? 'bg-[var(--onda-success)] text-white'
                           : active
                             ? 'onda-gradient text-white shadow-[0_8px_20px_rgba(5,45,222,0.25)]'
-                            : 'bg-white text-[var(--onda-muted)] ring-1 ring-[var(--onda-border)]'
+                            : 'bg-[var(--onda-card)] text-[var(--onda-muted)] ring-1 ring-[var(--onda-border)]'
                       }`}
                     >
                       {done ? OndaIcons.check : s.icon}
@@ -469,7 +474,7 @@ export function MerchantOnboarding({
         <main className="flex min-h-0 flex-col px-4 py-4 sm:px-6 lg:py-8 lg:pr-10">
           <div className="mb-3 flex shrink-0 items-center justify-between gap-3 lg:hidden">
             <OndaLogo />
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--onda-muted)] ring-1 ring-[var(--onda-border)]">
+            <span className="rounded-full bg-[var(--onda-card)] px-3 py-1 text-xs font-medium text-[var(--onda-muted)] ring-1 ring-[var(--onda-border)]">
               Paso {step}/3
             </span>
           </div>
@@ -490,14 +495,6 @@ export function MerchantOnboarding({
 
           <div className="onda-card flex min-h-0 flex-1 flex-col overflow-hidden p-5 sm:p-7">
             <header className="mb-4 shrink-0 space-y-2 border-b border-[var(--onda-border)] pb-4">
-              <div className="flex items-center gap-2 text-[var(--onda-violet)]">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--onda-violet-soft)]">
-                  {stepMeta.icon}
-                </span>
-                <span className="text-xs font-semibold uppercase tracking-[0.14em]">
-                  {stepMeta.label}
-                </span>
-              </div>
               <h1 className="font-display text-2xl font-semibold tracking-tight text-[var(--onda-ink)] sm:text-3xl">
                 {step === 1
                   ? 'Registra tu comercio'
@@ -529,7 +526,8 @@ export function MerchantOnboarding({
             <div
               key={step}
               className="min-h-0 flex-1 duration-300 ease-out animate-[fadeIn_0.28s_ease-out]"
-            >              {step === 1 ? (
+            >
+              {step === 1 ? (
                 <form onSubmit={submitStep1} className="flex h-full min-h-0 flex-col">
                   <FormShell
                     footer={
@@ -616,7 +614,7 @@ export function MerchantOnboarding({
                               className={`rounded-2xl border px-4 py-4 text-left transition ${
                                 selected
                                   ? 'border-[var(--onda-violet)] bg-[var(--onda-violet-soft)] shadow-[0_8px_20px_rgba(5,45,222,0.12)]'
-                                  : 'border-[var(--onda-border)] bg-white hover:border-[var(--onda-bridge)]'
+                                  : 'border-[var(--onda-border)] bg-[var(--onda-card)] hover:border-[var(--onda-bridge)]'
                               }`}
                             >
                               <div className="flex items-start justify-between gap-2">

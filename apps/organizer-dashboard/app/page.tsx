@@ -382,7 +382,7 @@ export default function OrganizerPage() {
                 Más visitas: {drawResult.topVisitor?.user?.name} (
                 {drawResult.topVisitor?.visits})
               </p>
-              <pre className="mt-3 max-h-40 overflow-auto rounded bg-white p-2 text-xs">
+              <pre className="mt-3 max-h-40 overflow-auto rounded bg-[var(--onda-card)] p-2 text-xs">
                 {drawResult.exportCsv}
               </pre>
             </div>

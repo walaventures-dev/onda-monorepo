@@ -508,7 +508,7 @@ export default function StoreEntryPage() {
               <button
                 type="button"
                 aria-label="Volver al pase"
-                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-white text-lg text-[var(--onda-ink)] shadow-sm"
+                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-[var(--onda-card)] text-lg text-[var(--onda-ink)] shadow-sm"
                 onClick={() => setStep("home")}
               >
                 ←
@@ -542,7 +542,7 @@ export default function StoreEntryPage() {
                 return (
                   <div
                     key={p.id}
-                    className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-sm"
+                    className="flex items-center gap-4 rounded-2xl bg-[var(--onda-card)] p-4 shadow-sm"
                   >
                     <div
                       className={`flex h-16 w-16 flex-shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl ${

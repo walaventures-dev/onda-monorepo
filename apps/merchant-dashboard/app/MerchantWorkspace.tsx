@@ -143,7 +143,7 @@ function PromoTag({
 
 const promoBtnBase =
   "inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition";
-const promoBtnNeutral = `${promoBtnBase} border-[var(--onda-border)] bg-white text-[var(--onda-ink)] hover:border-[var(--onda-violet)]/40 hover:bg-[var(--onda-violet-soft)] hover:text-[var(--onda-violet)]`;
+const promoBtnNeutral = `${promoBtnBase} border-[var(--onda-border)] bg-[var(--onda-card)] text-[var(--onda-ink)] hover:border-[var(--onda-violet)]/40 hover:bg-[var(--onda-violet-soft)] hover:text-[var(--onda-violet)]`;
 const promoBtnDanger = `${promoBtnBase} border-transparent bg-transparent text-[var(--onda-danger)] hover:border-[var(--onda-danger)]/25 hover:bg-[var(--onda-danger)]/10`;
 
 type PulseTone = "good" | "ok" | "warn" | "bad" | "neutral";
@@ -1103,7 +1103,7 @@ export function MerchantWorkspace() {
             />
             <Link
               href="/onboarding"
-              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--onda-ink)] hover:bg-[var(--onda-bg)]"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium text-[var(--onda-ink)] hover:bg-[var(--onda-bg)]"
             >
               {OndaIcons.plus}
               Registrar comercio
@@ -1233,7 +1233,7 @@ export function MerchantWorkspace() {
                       ? "border-amber-400/40 bg-amber-50"
                       : pulse.tone === "bad"
                         ? "border-[var(--onda-danger)]/30 bg-[var(--onda-danger)]/8"
-                        : "border-[var(--onda-border)] bg-white"
+                        : "border-[var(--onda-border)] bg-[var(--onda-card)]"
               }`}
             >
               <p className="mt-1 font-display text-xl font-semibold text-[var(--onda-ink)]">
@@ -1689,7 +1689,7 @@ export function MerchantWorkspace() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <div
-                  className="inline-flex rounded-full border border-[var(--onda-border)] bg-white p-0.5"
+                  className="inline-flex rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] p-0.5"
                   role="group"
                   aria-label="Vista de promociones"
                 >
@@ -2307,9 +2307,18 @@ export function MerchantWorkspace() {
                 <h3 className="font-display font-semibold">Sede</h3>
                 <p>Place ID: {store?.googlePlaceId || "—"}</p>
                 <p>Plan: {billing?.planType}</p>
-                <p>
-                  Meses gratis: {billing?.freeMonthsBalance ?? store?.freeMonthsBalance ?? "—"}
-                </p>
+                <div className="rounded-xl bg-[var(--onda-bg)] px-3 py-2.5">
+                  <p className="text-sm font-medium text-[var(--onda-ink)]">
+                    Meses gratis:{' '}
+                    {billing?.freeMonthsBalance ??
+                      store?.freeMonthsBalance ??
+                      '—'}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--onda-muted)]">
+                    Detalle visual en Referidos (bienvenida + meses por cada
+                    alta)
+                  </p>
+                </div>
                 <p>
                   WhatsApp atribuido: {billing?.whatsappUsed}/
                   {billing?.whatsappLimit} (excedente {billing?.overageCop} COP)

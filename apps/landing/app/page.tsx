@@ -70,7 +70,7 @@ export default function LandingPage() {
           </div>
           <button
             type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--onda-border)] bg-white text-[var(--onda-ink)] md:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--onda-border)] bg-[var(--onda-card)] text-[var(--onda-ink)] md:hidden"
             aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}
@@ -95,7 +95,7 @@ export default function LandingPage() {
           </button>
         </div>
         {menuOpen ? (
-          <div className="absolute inset-x-4 top-full z-50 rounded-2xl border border-[var(--onda-border)] bg-white p-4 shadow-lg md:hidden">
+          <div className="absolute inset-x-4 top-full z-50 rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] p-4 shadow-lg md:hidden">
             <nav className="flex flex-col gap-1 text-sm">
               {navLinks.map((l) => (
                 <a
@@ -131,7 +131,7 @@ export default function LandingPage() {
           <div className="mt-8 flex flex-wrap gap-3">
             <a
               href={MERCHANT_ONBOARDING_BASE}
-              className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-[var(--onda-violet)]"
+              className="rounded-full bg-[var(--onda-card)] px-6 py-3 text-sm font-semibold text-[var(--onda-violet)]"
             >
               Empieza gratis
             </a>
@@ -164,7 +164,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="pricing" className="bg-white py-20">
+      <section id="pricing" className="bg-[var(--onda-card)] py-20">
         <div className="mx-auto max-w-6xl px-6">
           <h2 className="font-display text-3xl font-semibold">Planes</h2>
           <p className="mt-2 text-[var(--onda-muted)]">
@@ -219,7 +219,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="signup" className="bg-white py-20">
+      <section id="signup" className="bg-[var(--onda-card)] py-20">
         <div className="mx-auto max-w-xl px-6 text-center">
           <h2 className="font-display text-3xl font-semibold">Registra tu comercio</h2>
           <p className="mt-3 text-[var(--onda-muted)]">

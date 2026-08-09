@@ -209,7 +209,7 @@ export function PromoDetail({
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-white px-3 py-1.5 text-xs font-medium"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium"
             onClick={() => setEditing((v) => !v)}
           >
             {editing ? OndaIcons.close : OndaIcons.edit}
@@ -217,7 +217,7 @@ export function PromoDetail({
           </button>
           <button
             type="button"
-            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-white px-3 py-1.5 text-xs font-medium"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium"
             onClick={() => onDuplicate(promo)}
           >
             {OndaIcons.copy}
@@ -225,7 +225,7 @@ export function PromoDetail({
           </button>
           <button
             type="button"
-            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-white px-3 py-1.5 text-xs font-medium"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium"
             onClick={() => onToggle(promo.id, promo.isActive)}
           >
             {OndaIcons.power}

@@ -150,7 +150,7 @@ export function ActivityHeatmap({ data }: { data: HeatmapData | null | undefined
 
         {tip ? (
           <div
-            className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full rounded-lg border border-[var(--onda-border)] bg-white px-2.5 py-2 shadow-md"
+            className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full rounded-lg border border-[var(--onda-border)] bg-[var(--onda-card)] px-2.5 py-2 shadow-md"
             style={{ left: tip.x, top: tip.y }}
           >
             <p className="whitespace-nowrap text-[11px] font-semibold text-[var(--onda-ink)]">

@@ -42,7 +42,7 @@ export function PhoneInput({
       maxLength={16}
       className={
         className ||
-        'w-full rounded-xl border border-[var(--onda-border)] bg-white px-4 py-3 text-[var(--onda-ink)] outline-none focus:border-[var(--onda-violet)]'
+        'w-full rounded-xl border border-[var(--onda-border)] bg-[var(--onda-card)] px-4 py-3 text-[var(--onda-ink)] outline-none focus:border-[var(--onda-violet)]'
       }
       aria-invalid={value.length > 0 && !isCompletePhoneMask(value) ? true : undefined}
     />
