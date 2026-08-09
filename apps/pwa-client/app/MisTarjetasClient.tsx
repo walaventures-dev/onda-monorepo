@@ -55,6 +55,11 @@ export function MisTarjetasClient() {
 
       if (userPasses.length === 0 && SIMULATE_QR_SCAN && (await simulateQrScan(router))) return;
 
+      if (userPasses.length === 1) {
+        if (!cancelled) router.replace(`/r/${userPasses[0].storeId}`);
+        return;
+      }
+
       if (!cancelled) {
         setPasses(userPasses);
         setStep('cards');
