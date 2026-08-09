@@ -12,6 +12,7 @@ export function ProfileClient() {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     if (session === null) {
@@ -59,11 +60,15 @@ export function ProfileClient() {
   }
 
   async function logout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
     try {
       await api('/customer-auth/logout', {
         method: 'POST',
         headers: { Authorization: `Bearer ${activeSession.token}` },
       });
+    } catch {
+      // se limpia la sesión local igual, aunque falle la llamada
     } finally {
       clearSession();
     }
@@ -117,8 +122,13 @@ export function ProfileClient() {
           </div>
         </div>
 
-        <button type="button" className="onda-pwa-secondary mt-6" onClick={logout}>
-          Cerrar sesión
+        <button
+          type="button"
+          className="onda-pwa-secondary mt-6"
+          onClick={logout}
+          disabled={loggingOut}
+        >
+          {loggingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
         </button>
       </div>
     </div>

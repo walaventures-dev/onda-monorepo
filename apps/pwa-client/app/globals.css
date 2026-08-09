@@ -460,6 +460,10 @@
   padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0));
 }
 
+.onda-pwa-tabbed-content .onda-pwa-shell {
+  min-height: calc(100dvh - 4.75rem - env(safe-area-inset-bottom, 0));
+}
+
 .onda-pwa-tabbar {
   position: fixed;
   left: 0;

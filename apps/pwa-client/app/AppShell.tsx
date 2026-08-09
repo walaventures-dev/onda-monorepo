@@ -16,10 +16,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  if (!session) {
-    return <>{children}</>;
-  }
-
+  const showTabs = Boolean(session && session.user.name.trim().length > 0);
   const selectedKey = tabKeyForPath(pathname);
 
   return (
@@ -27,8 +24,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       selectedKey={selectedKey}
       onSelectionChange={(key) => router.push(key === 'perfil' ? '/perfil' : '/')}
     >
-      <Tabs.List className="onda-pwa-tabbar" aria-label="Navegación principal">
-        <Tabs.Tab id="wallet" className="onda-pwa-tab">
+      <Tabs.List className="onda-pwa-tabbar" aria-label="Navegación principal" hidden={!showTabs}>
+        <Tabs.Tab
+          id="wallet"
+          className="onda-pwa-tab"
+          onPress={() => {
+            if (pathname !== '/') router.push('/');
+          }}
+        >
           {OndaIcons.wallet}
           <span>Mis tarjetas</span>
         </Tabs.Tab>
@@ -37,7 +40,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span>Perfil</span>
         </Tabs.Tab>
       </Tabs.List>
-      <Tabs.Panel id={selectedKey} className="onda-pwa-tabbed-content">{children}</Tabs.Panel>
+      <Tabs.Panel id={selectedKey} className={showTabs ? 'onda-pwa-tabbed-content' : undefined}>
+        {children}
+      </Tabs.Panel>
     </Tabs>
   );
 }

@@ -28,8 +28,8 @@ export function clearSession() {
   window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
 }
 
-export function useSession(): CustomerSession | null {
-  const [session, setSession] = useState<CustomerSession | null>(null);
+export function useSession(): CustomerSession | null | undefined {
+  const [session, setSession] = useState<CustomerSession | null | undefined>(undefined);
 
   useEffect(() => {
     function sync() {
