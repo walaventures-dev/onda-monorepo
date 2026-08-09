@@ -26,7 +26,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     <Tabs
       selectedKey={selectedKey}
       onSelectionChange={(key) => router.push(key === 'perfil' ? '/perfil' : '/')}
-      className="onda-pwa-appshell--tabbed"
     >
       <Tabs.List className="onda-pwa-tabbar" aria-label="Navegación principal">
         <Tabs.Tab id="wallet" className="onda-pwa-tab">
@@ -38,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span>Perfil</span>
         </Tabs.Tab>
       </Tabs.List>
-      <Tabs.Panel id={selectedKey}>{children}</Tabs.Panel>
+      <Tabs.Panel id={selectedKey} className="onda-pwa-tabbed-content">{children}</Tabs.Panel>
     </Tabs>
   );
 }

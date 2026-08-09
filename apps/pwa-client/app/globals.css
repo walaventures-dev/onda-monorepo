@@ -456,7 +456,7 @@
   position: relative;
 }
 
-.onda-pwa-appshell--tabbed .onda-pwa-shell {
+.onda-pwa-tabbed-content {
   padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0));
 }
 
