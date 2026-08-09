@@ -44,6 +44,8 @@ import { SidebarSimpleIcon as SidebarSimple } from '@phosphor-icons/react/dist/c
 import { CaretLeftIcon as CaretLeft } from '@phosphor-icons/react/dist/csr/CaretLeft';
 import { CaretRightIcon as CaretRight } from '@phosphor-icons/react/dist/csr/CaretRight';
 import { SnowflakeIcon as Snowflake } from '@phosphor-icons/react/dist/csr/Snowflake';
+import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/CreditCard';
+import { UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
 
 const SIZE = 16;
 const CLASS = 'h-3 w-3 shrink-0';
@@ -93,6 +95,8 @@ export const OndaIcons = {
   chevronLeft: <CaretLeft size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   chevronRight: <CaretRight size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   snowflake: <Snowflake size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
+  wallet: <CreditCard size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
+  profile: <UserCircle size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
 };
 
 export function OndaMark({ className = 'h-3 w-3 shrink-0' }: { className?: string }) {
