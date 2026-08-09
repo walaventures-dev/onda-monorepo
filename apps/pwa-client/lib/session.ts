@@ -29,7 +29,7 @@ export function clearSession() {
 }
 
 export function useSession(): CustomerSession | null {
-  const [session, setSession] = useState<CustomerSession | null>(() => loadSession());
+  const [session, setSession] = useState<CustomerSession | null>(null);
 
   useEffect(() => {
     function sync() {
