@@ -18,6 +18,11 @@ export {
   PoliciesConsent,
 } from './legal';
 export { ImageUploadField, uploadFile } from './ImageUploadField';
+export { PlacesAddressField } from './PlacesAddressField';
+export type {
+  PlacesAddressFieldProps,
+  PlacesAddressValue,
+} from './PlacesAddressField';
 export { OndaColorPicker } from './OndaColorPicker';
 export type { OndaColorPickerProps } from './OndaColorPicker';
 export { useOndaDialogs } from './OndaDialogs';

@@ -1,11 +1,11 @@
 'use client';
 
+import { OndaLogo, GradientButton } from '@onda/shared-ui';
 import { useState } from 'react';
-import { OndaLogo, GradientButton, PhoneInput, api } from '@onda/shared-ui';
-import { toE164Colombia, isCompletePhoneMask } from '@onda/shared-utils';
 
 const plans = [
   {
+    id: 'BASIC' as const,
     name: 'Básico Lite',
     price: '$49.900',
     features: [
@@ -15,6 +15,7 @@ const plans = [
     ],
   },
   {
+    id: 'PRO' as const,
     name: 'PRO Crecimiento',
     price: '$79.900',
     features: [
@@ -27,18 +28,19 @@ const plans = [
   },
 ];
 
+const MERCHANT_ONBOARDING_BASE =
+  process.env.NEXT_PUBLIC_MERCHANT_URL
+    ? `${process.env.NEXT_PUBLIC_MERCHANT_URL.replace(/\/$/, '')}/onboarding`
+    : 'http://localhost:4202/onboarding';
+
+function onboardingUrl(plan?: 'BASIC' | 'PRO') {
+  if (!plan) return MERCHANT_ONBOARDING_BASE;
+  return `${MERCHANT_ONBOARDING_BASE}?plan=${plan}`;
+}
+
 export default function LandingPage() {
   const [roiVisits, setRoiVisits] = useState(200);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [lead, setLead] = useState({
-    name: '',
-    email: '',
-    businessName: '',
-    phone: '',
-    message: '',
-  });
-  const [sent, setSent] = useState(false);
-  const [leadError, setLeadError] = useState('');
 
   const roi = Math.round(roiVisits * 0.18 * 25000);
 
@@ -47,28 +49,7 @@ export default function LandingPage() {
     { href: '#pricing', label: 'Planes' },
     { href: '#roi', label: 'ROI' },
     { href: '/festival-neiva', label: 'Eventos' },
-    { href: '#contact', label: 'Contacto' },
   ];
-
-  async function submitLead(e: React.FormEvent) {
-    e.preventDefault();
-    setLeadError('');
-    if (lead.phone && !isCompletePhoneMask(lead.phone)) {
-      setLeadError('Teléfono inválido. Usa el formato (300) 000 - 0000');
-      return;
-    }
-    await api('/leads', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: lead.name,
-        email: lead.email,
-        businessName: lead.businessName,
-        message: lead.message,
-        phone: lead.phone ? toE164Colombia(lead.phone) : undefined,
-      }),
-    });
-    setSent(true);
-  }
 
   return (
     <div className="min-h-screen">
@@ -83,12 +64,9 @@ export default function LandingPage() {
         </nav>
         <div className="flex items-center gap-2">
           <div className="hidden sm:block">
-            <GradientButton
-              type="button"
-              onClick={() => (window.location.href = '#contact')}
-            >
-              Hablar con ventas
-            </GradientButton>
+            <a href={MERCHANT_ONBOARDING_BASE}>
+              <GradientButton type="button">Empieza gratis</GradientButton>
+            </a>
           </div>
           <button
             type="button"
@@ -130,16 +108,11 @@ export default function LandingPage() {
                 </a>
               ))}
             </nav>
-            <GradientButton
-              type="button"
-              className="mt-3 w-full"
-              onClick={() => {
-                setMenuOpen(false);
-                window.location.href = '#contact';
-              }}
-            >
-              Hablar con ventas
-            </GradientButton>
+            <a href={MERCHANT_ONBOARDING_BASE} className="mt-3 block">
+              <GradientButton type="button" className="w-full">
+                Empieza gratis
+              </GradientButton>
+            </a>
           </div>
         ) : null}
       </header>
@@ -157,16 +130,16 @@ export default function LandingPage() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a
-              href="#pricing"
+              href={MERCHANT_ONBOARDING_BASE}
               className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-[var(--onda-violet)]"
             >
-              Ver planes
+              Empieza gratis
             </a>
             <a
-              href="/festival-neiva"
+              href="#pricing"
               className="rounded-full border border-white/40 px-6 py-3 text-sm font-semibold"
             >
-              Festival Neiva
+              Ver planes
             </a>
           </div>
         </div>
@@ -194,9 +167,12 @@ export default function LandingPage() {
       <section id="pricing" className="bg-white py-20">
         <div className="mx-auto max-w-6xl px-6">
           <h2 className="font-display text-3xl font-semibold">Planes</h2>
+          <p className="mt-2 text-[var(--onda-muted)]">
+            El primer mes es gratis. Empieza en minutos.
+          </p>
           <div className="mt-10 grid gap-6 md:grid-cols-2">
             {plans.map((p) => (
-              <div key={p.name} className="onda-card p-8">
+              <div key={p.name} className="onda-card flex flex-col p-8">
                 <h3 className="font-display text-2xl font-semibold">{p.name}</h3>
                 <p className="mt-2 text-3xl font-bold text-[var(--onda-violet)]">
                   {p.price}
@@ -207,6 +183,11 @@ export default function LandingPage() {
                     <li key={f}>• {f}</li>
                   ))}
                 </ul>
+                <a href={onboardingUrl(p.id)} className="mt-8 block">
+                  <GradientButton type="button" className="w-full">
+                    Empezar con {p.name}
+                  </GradientButton>
+                </a>
               </div>
             ))}
           </div>
@@ -232,47 +213,24 @@ export default function LandingPage() {
           <p className="text-sm text-[var(--onda-muted)]">
             Estimado de ticket incremental por retención (18%).
           </p>
+          <a href={MERCHANT_ONBOARDING_BASE} className="mt-6 inline-block">
+            <GradientButton type="button">Registrar mi comercio</GradientButton>
+          </a>
         </div>
       </section>
 
-      <section id="contact" className="bg-white py-20">
-        <div className="mx-auto max-w-xl px-6">
+      <section id="signup" className="bg-white py-20">
+        <div className="mx-auto max-w-xl px-6 text-center">
           <h2 className="font-display text-3xl font-semibold">Registra tu comercio</h2>
-          {sent ? (
-            <p className="mt-6 text-[var(--onda-success)]">¡Recibimos tu solicitud!</p>
-          ) : (
-            <form onSubmit={submitLead} className="mt-6 space-y-4">
-              {(['name', 'email', 'businessName'] as const).map((k) => (
-                <input
-                  key={k}
-                  required={k !== 'businessName'}
-                  placeholder={
-                    k === 'name' ? 'Nombre' : k === 'email' ? 'Email' : 'Negocio'
-                  }
-                  className="w-full rounded-xl border border-[var(--onda-border)] px-4 py-3"
-                  value={lead[k]}
-                  onChange={(e) => setLead({ ...lead, [k]: e.target.value })}
-                />
-              ))}
-              <PhoneInput
-                placeholder="WhatsApp (300) 000 - 0000"
-                value={lead.phone}
-                onChange={(phone) => setLead({ ...lead, phone })}
-              />
-              <textarea
-                placeholder="Mensaje"
-                className="w-full rounded-xl border border-[var(--onda-border)] px-4 py-3"
-                value={lead.message}
-                onChange={(e) => setLead({ ...lead, message: e.target.value })}
-              />
-              {leadError ? (
-                <p className="text-sm text-[var(--onda-danger)]">{leadError}</p>
-              ) : null}
-              <GradientButton type="submit" className="w-full">
-                Enviar
-              </GradientButton>
-            </form>
-          )}
+          <p className="mt-3 text-[var(--onda-muted)]">
+            Alta en minutos: datos del negocio, diseño de tu tarjeta wallet y primera
+            recompensa. Empiezas con 1 mes gratis.
+          </p>
+          <a href={MERCHANT_ONBOARDING_BASE} className="mt-8 inline-block">
+            <GradientButton type="button" className="px-8">
+              Darme de alta
+            </GradientButton>
+          </a>
         </div>
       </section>
 

@@ -21,6 +21,7 @@ import {
 import { AuthController } from './auth.controller';
 import { CustomerAuthController } from './customer-auth.controller';
 import { UploadsController } from './uploads.controller';
+import { ReferralsController } from './referrals.controller';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { WhatsappService } from './whatsapp.service';
@@ -57,6 +58,7 @@ import { PendingRequestsController } from './pending-requests.controller';
     WebhooksController,
     UploadsController,
     PendingRequestsController,
+    ReferralsController,
   ],
   providers: [PrismaService, WalletService, WhatsappService, CustomerAuthService, PendingRequestsSseService],
 })

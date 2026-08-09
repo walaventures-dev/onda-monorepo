@@ -877,15 +877,102 @@ h3,
 }
 
 .onda-pass-designer input,
-.onda-pass-designer textarea {
+.onda-pass-designer textarea,
+.onda-input {
   width: 100%;
   border: 1px solid var(--onda-border);
   border-radius: 0.85rem;
-  padding: 0.65rem 0.85rem;
-  font-size: 0.9rem;
+  padding: 0.7rem 0.95rem;
+  font-size: 0.9375rem;
   line-height: 1.4;
   color: var(--onda-ink);
   background: #fff;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.onda-pass-designer input:focus,
+.onda-pass-designer textarea:focus,
+.onda-input:focus {
+  border-color: var(--onda-bridge);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--onda-bridge) 22%, transparent);
+}
+
+.onda-pass-designer input::placeholder,
+.onda-pass-designer textarea::placeholder,
+.onda-input::placeholder {
+  color: color-mix(in srgb, var(--onda-muted) 85%, white);
+}
+
+.onda-input-group {
+  display: flex;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--onda-border);
+  border-radius: 0.85rem;
+  background: #fff;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.onda-input-group:focus-within {
+  border-color: var(--onda-bridge);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--onda-bridge) 22%, transparent);
+}
+
+.onda-input-group__prefix {
+  display: flex;
+  align-items: center;
+  padding: 0 0.85rem;
+  font-size: 0.875rem;
+  color: var(--onda-muted);
+  background: var(--onda-bg);
+  border-right: 1px solid var(--onda-border);
+  white-space: nowrap;
+}
+
+.onda-input-group .onda-input {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.onda-input-group .onda-input:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.onda-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.onda-field__label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--onda-ink);
+}
+
+.onda-field__hint {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--onda-muted);
+}
+
+.onda-field .onda-select {
+  width: 100%;
+  max-width: none;
+}
+
+.onda-field .onda-select-trigger {
+  border-radius: 0.85rem !important;
+  min-height: 2.75rem;
+  padding: 0.7rem 2rem 0.7rem 0.95rem !important;
 }
 
 .onda-pass-designer textarea {

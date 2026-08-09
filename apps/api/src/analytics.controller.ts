@@ -1724,6 +1724,7 @@ export class BillingController {
       overageMessages: overage,
       overageCop: overage * 150,
       planPriceCop: store.planType === 'PRO' ? 79900 : 49900,
+      freeMonthsBalance: store.freeMonthsBalance,
       wompiPublicKey: process.env.WOMPI_PUBLIC_KEY || null,
       features: {
         gpsProximity: store.planType === 'PRO',

@@ -4,11 +4,21 @@ import {
   EventStatus,
   InvitationStatus,
   StoreCategory,
+  StoreSubcategory,
   PromotionType,
   PromotionExpiryMode,
 } from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+function slugify(name: string) {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
 
 async function main() {
   await prisma.transaction.deleteMany();
@@ -18,6 +28,7 @@ async function main() {
   await prisma.promotion.deleteMany();
   await prisma.passDesign.deleteMany();
   await prisma.storeEventMembership.deleteMany();
+  await prisma.pendingRequest.deleteMany().catch(() => undefined);
   await prisma.lead.deleteMany();
   await prisma.user.deleteMany();
   await prisma.event.deleteMany();
@@ -88,41 +99,90 @@ async function main() {
     },
   ];
 
-  const stores = await Promise.all(
-    [
-      { name: 'Café del Río', category: StoreCategory.RESTAURANT, pin: '1234', lat: 2.9273, lng: -75.2819 },
-      { name: 'Asados La 8', category: StoreCategory.RESTAURANT, pin: '5678', lat: 2.934, lng: -75.29 },
-      { name: 'Hotel Neiva Plaza', category: StoreCategory.HOSPITALITY, pin: '9999', lat: 2.94, lng: -75.275 },
-    ].map((s, i) =>
-      prisma.store.create({
-        data: {
-          name: s.name,
-          category: s.category,
-          pinCode: s.pin,
-          planType: i === 0 ? PlanType.PRO : PlanType.BASIC,
-          googlePlaceId: `demo-place-${i}`,
-          lat: s.lat,
-          lng: s.lng,
-          ownerEmail: `owner${i}@onda.lat`,
-          whatsappUsed: i * 12,
-          passDesign: {
-            create: {
-              title: s.name,
-              subtitle: 'Programa de lealtad Onda',
-              description: 'Gana ondas en cada visita y canjea recompensas',
-              backgroundColor: i === 0 ? '#3DB9E8' : i === 1 ? '#6E5AE6' : '#5B8AF0',
-              foregroundColor: '#FFFFFF',
-              labelColor: '#E5F6FC',
-            },
-          },
-          promotions: {
-            create: promoTemplates.map((p) => ({ ...p, isActive: true })),
+  const storeDefs = [
+    {
+      name: 'Café del Río',
+      category: StoreCategory.RESTAURANT,
+      subcategory: StoreSubcategory.CAFE,
+      pin: '1234',
+      lat: 2.9273,
+      lng: -75.2819,
+      address: 'Carrera 5 #12-34, Neiva',
+      ownerName: 'Ana Pérez',
+      referralCode: 'CAFERIO1',
+      freeMonthsBalance: 2,
+    },
+    {
+      name: 'Asados La 8',
+      category: StoreCategory.RESTAURANT,
+      subcategory: StoreSubcategory.RESTAURANT_FULL,
+      pin: '5678',
+      lat: 2.934,
+      lng: -75.29,
+      address: 'Calle 8 #10-20, Neiva',
+      ownerName: 'Carlos Ruiz',
+      referralCode: 'ASADOS81',
+      freeMonthsBalance: 1,
+      referredByIndex: 0 as number | undefined,
+    },
+    {
+      name: 'Hotel Neiva Plaza',
+      category: StoreCategory.HOSPITALITY,
+      subcategory: StoreSubcategory.HOTEL,
+      pin: '9999',
+      lat: 2.94,
+      lng: -75.275,
+      address: 'Calle 7 #5-50, Neiva',
+      ownerName: 'María López',
+      referralCode: 'HOTELNP1',
+      freeMonthsBalance: 1,
+    },
+  ];
+
+  const stores = [];
+  for (let i = 0; i < storeDefs.length; i++) {
+    const s = storeDefs[i];
+    const referredByStoreId =
+      'referredByIndex' in s && s.referredByIndex != null
+        ? stores[s.referredByIndex].id
+        : undefined;
+    const store = await prisma.store.create({
+      data: {
+        name: s.name,
+        slug: slugify(s.name),
+        category: s.category,
+        subcategory: s.subcategory,
+        pinCode: s.pin,
+        planType: i === 0 ? PlanType.PRO : PlanType.BASIC,
+        googlePlaceId: `demo-place-${i}`,
+        address: s.address,
+        lat: s.lat,
+        lng: s.lng,
+        ownerName: s.ownerName,
+        ownerEmail: `owner${i}@onda.lat`,
+        referralCode: s.referralCode,
+        freeMonthsBalance: s.freeMonthsBalance,
+        referredByStoreId,
+        whatsappUsed: i * 12,
+        passDesign: {
+          create: {
+            title: s.name,
+            subtitle: 'Programa de lealtad Onda',
+            description: 'Gana ondas en cada visita y canjea recompensas',
+            backgroundColor: i === 0 ? '#3DB9E8' : i === 1 ? '#6E5AE6' : '#5B8AF0',
+            foregroundColor: '#FFFFFF',
+            labelColor: '#E5F6FC',
           },
         },
-        include: { promotions: true },
-      })
-    )
-  );
+        promotions: {
+          create: promoTemplates.map((p) => ({ ...p, isActive: true })),
+        },
+      },
+      include: { promotions: true },
+    });
+    stores.push(store);
+  }
+
 
   await prisma.storeEventMembership.create({
     data: {

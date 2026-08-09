@@ -59,27 +59,55 @@ enum StoreCategory {
   HOSPITALITY
 }
 
+enum StoreSubcategory {
+  CAFE
+  RESTAURANT_FULL
+  BAR
+  BAKERY
+  FAST_FOOD
+  FOOD_TRUCK
+  RETAIL
+  BEAUTY
+  HEALTH
+  AUTO
+  EDUCATION
+  OTHER_SERVICE
+  HOTEL
+  HOSTEL
+  VACATION_RENTAL
+  EVENT_VENUE
+}
+
 model Store {
-  id               String                 @id @default(uuid())
-  name             String
-  category         StoreCategory          @default(RESTAURANT)
-  googlePlaceId    String?
-  pinCode          String
-  planType         PlanType               @default(BASIC)
-  billingStatus    String                 @default("ACTIVE")
-  whatsappUsed     Int                    @default(0)
-  maxStamps        Int                    @default(12)
-  lat              Float?
-  lng              Float?
-  ownerEmail       String?
-  passes           Pass[]
-  transactions     Transaction[]
-  feedbacks        Feedback[]
-  promotions       Promotion[]
-  eventMemberships StoreEventMembership[]
-  passDesign       PassDesign?
-  pendingRequests  PendingRequest[]
-  createdAt        DateTime               @default(now())
+  id                String                 @id @default(uuid())
+  name              String
+  slug              String                 @unique
+  category          StoreCategory          @default(RESTAURANT)
+  subcategory       StoreSubcategory
+  googlePlaceId     String?
+  address           String?
+  pinCode           String
+  planType          PlanType               @default(BASIC)
+  billingStatus     String                 @default("ACTIVE")
+  whatsappUsed      Int                    @default(0)
+  maxStamps         Int                    @default(12)
+  lat               Float?
+  lng               Float?
+  ownerName         String
+  ownerEmail        String?
+  referralCode      String                 @unique
+  referredByStoreId String?
+  freeMonthsBalance Int                    @default(1)
+  referredBy        Store?                 @relation("StoreReferrals", fields: [referredByStoreId], references: [id])
+  referrals         Store[]                @relation("StoreReferrals")
+  passes            Pass[]
+  transactions      Transaction[]
+  feedbacks         Feedback[]
+  promotions        Promotion[]
+  eventMemberships  StoreEventMembership[]
+  passDesign        PassDesign?
+  pendingRequests   PendingRequest[]
+  createdAt         DateTime               @default(now())
 }
 
 model Event {

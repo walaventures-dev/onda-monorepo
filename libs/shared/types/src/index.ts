@@ -27,6 +27,78 @@ export enum StoreCategory {
   HOSPITALITY = 'HOSPITALITY',
 }
 
+export enum StoreSubcategory {
+  CAFE = 'CAFE',
+  RESTAURANT_FULL = 'RESTAURANT_FULL',
+  BAR = 'BAR',
+  BAKERY = 'BAKERY',
+  FAST_FOOD = 'FAST_FOOD',
+  FOOD_TRUCK = 'FOOD_TRUCK',
+  RETAIL = 'RETAIL',
+  BEAUTY = 'BEAUTY',
+  HEALTH = 'HEALTH',
+  AUTO = 'AUTO',
+  EDUCATION = 'EDUCATION',
+  OTHER_SERVICE = 'OTHER_SERVICE',
+  HOTEL = 'HOTEL',
+  HOSTEL = 'HOSTEL',
+  VACATION_RENTAL = 'VACATION_RENTAL',
+  EVENT_VENUE = 'EVENT_VENUE',
+}
+
+export const STORE_SUBCATEGORIES_BY_CATEGORY: Record<
+  StoreCategory,
+  StoreSubcategory[]
+> = {
+  [StoreCategory.RESTAURANT]: [
+    StoreSubcategory.CAFE,
+    StoreSubcategory.RESTAURANT_FULL,
+    StoreSubcategory.BAR,
+    StoreSubcategory.BAKERY,
+    StoreSubcategory.FAST_FOOD,
+    StoreSubcategory.FOOD_TRUCK,
+  ],
+  [StoreCategory.SERVICE]: [
+    StoreSubcategory.RETAIL,
+    StoreSubcategory.BEAUTY,
+    StoreSubcategory.HEALTH,
+    StoreSubcategory.AUTO,
+    StoreSubcategory.EDUCATION,
+    StoreSubcategory.OTHER_SERVICE,
+  ],
+  [StoreCategory.HOSPITALITY]: [
+    StoreSubcategory.HOTEL,
+    StoreSubcategory.HOSTEL,
+    StoreSubcategory.VACATION_RENTAL,
+    StoreSubcategory.EVENT_VENUE,
+  ],
+};
+
+export const STORE_CATEGORY_LABELS: Record<StoreCategory, string> = {
+  [StoreCategory.RESTAURANT]: 'Restaurante',
+  [StoreCategory.SERVICE]: 'Servicios',
+  [StoreCategory.HOSPITALITY]: 'Hospitalidad',
+};
+
+export const STORE_SUBCATEGORY_LABELS: Record<StoreSubcategory, string> = {
+  [StoreSubcategory.CAFE]: 'Café',
+  [StoreSubcategory.RESTAURANT_FULL]: 'Restaurante',
+  [StoreSubcategory.BAR]: 'Bar',
+  [StoreSubcategory.BAKERY]: 'Panadería',
+  [StoreSubcategory.FAST_FOOD]: 'Comida rápida',
+  [StoreSubcategory.FOOD_TRUCK]: 'Food truck',
+  [StoreSubcategory.RETAIL]: 'Retail',
+  [StoreSubcategory.BEAUTY]: 'Belleza',
+  [StoreSubcategory.HEALTH]: 'Salud',
+  [StoreSubcategory.AUTO]: 'Automotriz',
+  [StoreSubcategory.EDUCATION]: 'Educación',
+  [StoreSubcategory.OTHER_SERVICE]: 'Otro servicio',
+  [StoreSubcategory.HOTEL]: 'Hotel',
+  [StoreSubcategory.HOSTEL]: 'Hostel',
+  [StoreSubcategory.VACATION_RENTAL]: 'Alojamiento',
+  [StoreSubcategory.EVENT_VENUE]: 'Venue de eventos',
+};
+
 export enum BillingStatus {
   ACTIVE = 'ACTIVE',
   PAST_DUE = 'PAST_DUE',
@@ -50,11 +122,18 @@ export interface PassDesignDto {
 export interface StoreDto {
   id: string;
   name: string;
+  slug: string;
   category: StoreCategory | string;
+  subcategory: StoreSubcategory | string;
   googlePlaceId?: string | null;
+  address?: string | null;
   planType: PlanType | string;
   billingStatus: string;
   whatsappUsed: number;
+  freeMonthsBalance?: number;
+  referralCode?: string;
+  ownerName?: string;
+  ownerEmail?: string | null;
   pinCode?: string;
   lat?: number | null;
   lng?: number | null;

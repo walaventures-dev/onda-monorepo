@@ -57,6 +57,7 @@ import {
 } from "./CompareStores";
 import { ActivityHeatmap } from "./ActivityHeatmap";
 import { PendingRequestsPanel } from "./PendingRequestsPanel";
+import { ReferralsPanel } from "./ReferralsPanel";
 
 type Tab =
   | "resumen"
@@ -65,6 +66,7 @@ type Tab =
   | "actividad"
   | "promos"
   | "eventos"
+  | "referidos"
   | "config";
 
 type CustomerSegment =
@@ -86,6 +88,7 @@ const SECTIONS: Tab[] = [
   "actividad",
   "promos",
   "eventos",
+  "referidos",
   "config",
 ];
 
@@ -424,6 +427,7 @@ export function MerchantWorkspace() {
       ["actividad", "Actividad", OndaIcons.activity, false],
       ["promos", "Promociones", OndaIcons.redeem, false],
       ["eventos", "Eventos", OndaIcons.ticket, false],
+      ["referidos", "Referidos", OndaIcons.users, false],
       ["config", "Configuración", OndaIcons.gear, true],
     ];
     return items.map(([href, label, icon, footer]) => ({
@@ -489,7 +493,15 @@ export function MerchantWorkspace() {
   useEffect(() => {
     api<any[]>("/stores").then((list) => {
       setStores(list);
-      if (list[0]) setStoreId(list[0].id);
+      let preferred = "";
+      try {
+        preferred = localStorage.getItem("onda-merchant-store-id") || "";
+      } catch {
+        /* ignore */
+      }
+      const initial =
+        list.find((s) => s.id === preferred)?.id || list[0]?.id || "";
+      if (initial) setStoreId(initial);
       setCompareStoreIds(list.map((s) => s.id));
       setStoresReady(true);
     });
@@ -1077,11 +1089,25 @@ export function MerchantWorkspace() {
             <OndaSelect
               aria-label="Sede"
               value={storeId}
-              onChange={setStoreId}
+              onChange={(id) => {
+                setStoreId(id);
+                try {
+                  localStorage.setItem("onda-merchant-store-id", id);
+                } catch {
+                  /* ignore */
+                }
+              }}
               placeholder="Sede"
               compact
               options={stores.map((s) => ({ id: s.id, label: s.name }))}
             />
+            <Link
+              href="/onboarding"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--onda-ink)] hover:bg-[var(--onda-bg)]"
+            >
+              {OndaIcons.plus}
+              Registrar comercio
+            </Link>
             <SegmentedControl
               aria-label="Modo"
               value={mode}
@@ -1104,8 +1130,27 @@ export function MerchantWorkspace() {
           </div>
         }
       >
-        {["resumen", "comparativa", "clientes", "actividad"].includes(tab) ||
-        (tab === "promos" && !selectedPromoId) ? (
+        {storesReady && stores.length === 0 ? (
+          <div className="mx-auto max-w-lg space-y-4 py-16 text-center">
+            <h2 className="font-display text-2xl font-semibold">
+              Aún no hay comercios
+            </h2>
+            <p className="text-[var(--onda-muted)]">
+              Registra tu negocio para activar el panel, el pase wallet y tus
+              primeras recompensas.
+            </p>
+            <Link href="/onboarding">
+              <GradientButton type="button">
+                {OndaIcons.plus}
+                Registrar mi comercio
+              </GradientButton>
+            </Link>
+          </div>
+        ) : null}
+
+        {stores.length > 0 &&
+        (["resumen", "comparativa", "clientes", "actividad"].includes(tab) ||
+          (tab === "promos" && !selectedPromoId)) ? (
           <AnalyticsFiltersBar
             value={filters}
             onChange={setFilters}
@@ -2251,6 +2296,10 @@ export function MerchantWorkspace() {
           </div>
         )}
 
+        {tab === "referidos" && storeId ? (
+          <ReferralsPanel storeId={storeId} />
+        ) : null}
+
         {tab === "config" && (
           <div className="space-y-6">
             <div className="grid gap-6 lg:grid-cols-2">
@@ -2258,6 +2307,9 @@ export function MerchantWorkspace() {
                 <h3 className="font-display font-semibold">Sede</h3>
                 <p>Place ID: {store?.googlePlaceId || "—"}</p>
                 <p>Plan: {billing?.planType}</p>
+                <p>
+                  Meses gratis: {billing?.freeMonthsBalance ?? store?.freeMonthsBalance ?? "—"}
+                </p>
                 <p>
                   WhatsApp atribuido: {billing?.whatsappUsed}/
                   {billing?.whatsappLimit} (excedente {billing?.overageCop} COP)
