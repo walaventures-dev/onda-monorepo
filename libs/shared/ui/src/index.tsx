@@ -2,8 +2,8 @@
 
 import React from 'react';
 import { Button } from '@heroui/react';
-import { OndaIcons, OndaMark } from './icons';
-import { OndaLogo } from './brand';
+import { OndaIcons } from './icons';
+import { ONDA_BRAND, OndaLogo } from './brand';
 import { TxActivityRow, type TxActivityItem } from './TxActivity';
 
 export { Button, Card, Chip, Avatar, Badge, Spinner, Form, TextField, Input, TextArea, InputOTP, Table, ColorPicker, Tabs } from '@heroui/react';
@@ -204,15 +204,21 @@ export function PassPreview({
     return (
       <span
         key={stampNumber}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-semibold"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
         style={{
-          backgroundColor: filled ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.18)',
-          color: filled ? backgroundColor : foregroundColor,
-          border: hasMilestone ? `1.5px solid ${foregroundColor}` : 'none',
+          backgroundColor: filled ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.14)',
         }}
         title={hasMilestone ? `Premio en el sello ${stampNumber}` : undefined}
       >
-        {hasMilestone ? <OndaMark className="h-6 w-6 shrink-0" /> : null}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={ONDA_BRAND.hand}
+          alt=""
+          aria-hidden
+          draggable={false}
+          className="h-5 w-5 object-contain brightness-0 invert"
+          style={{ opacity: filled ? 1 : 0.35 }}
+        />
       </span>
     );
   };
