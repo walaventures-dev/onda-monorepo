@@ -9,7 +9,6 @@ import { HeroSection } from './components/HeroSection';
 import { LandingHeader } from './components/LandingHeader';
 import { PricingCards } from './components/PricingCards';
 import { PricingConfigurator } from './components/PricingConfigurator';
-import { StatsBar } from './components/StatsBar';
 
 export default function LandingPage() {
   return (
@@ -17,7 +16,6 @@ export default function LandingPage() {
       <LandingHeader />
       <main>
         <HeroSection />
-        <StatsBar />
         <DemoSection />
         <ConceptSection />
         <CampaignSection />

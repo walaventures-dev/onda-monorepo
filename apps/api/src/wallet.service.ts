@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   WalletPassService,
   buildLoyaltyPassSpec,
@@ -35,7 +35,7 @@ export class WalletService {
   private readonly logger = new Logger(WalletService.name);
   private readonly passes = new WalletPassService();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async issuePass(input: IssuePassInput): Promise<IssuedPassLinks> {
     const ctx = this.toLoyaltyContext(input);

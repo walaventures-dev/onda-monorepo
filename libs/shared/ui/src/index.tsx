@@ -143,6 +143,29 @@ export function GradientButton({
   );
 }
 
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const raw = hex.replace('#', '').trim();
+  const full =
+    raw.length === 3
+      ? raw
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : raw;
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) return null;
+  return {
+    r: parseInt(full.slice(0, 2), 16),
+    g: parseInt(full.slice(2, 4), 16),
+    b: parseInt(full.slice(4, 6), 16),
+  };
+}
+
+function isLightHexColor(hex: string): boolean {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return true;
+  return 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b > 180;
+}
+
 export function PassPreview({
   backgroundColor = '#6E5AE6',
   foregroundColor = '#FFFFFF',
@@ -180,6 +203,13 @@ export function PassPreview({
 }) {
   const displayName = memberName?.trim() || 'Tu nombre';
   const hasName = Boolean(memberName?.trim());
+  const lightForeground = isLightHexColor(foregroundColor);
+  const stampInk = lightForeground
+    ? 'rgba(255,255,255,'
+    : (() => {
+        const rgb = hexToRgb(foregroundColor);
+        return rgb ? `rgba(${rgb.r},${rgb.g},${rgb.b},` : 'rgba(47,79,70,';
+      })();
 
   const ondasRemaining = Math.max(0, maxStamps - points);
   const ondasRemainingText =
@@ -205,10 +235,16 @@ export function PassPreview({
       <span
         key={stampNumber}
         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-        style={{
-          backgroundColor: filled ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.14)',
-        }}
+        style={
+          filled
+            ? { backgroundColor: `${stampInk}0.16)` }
+            : {
+                backgroundColor: `${stampInk}0.05)`,
+                boxShadow: `inset 0 0 0 1.5px ${stampInk}0.28)`,
+              }
+        }
         title={hasMilestone ? `Premio en el sello ${stampNumber}` : undefined}
+        aria-label={filled ? `Onda ${stampNumber} acumulada` : `Ubicación ${stampNumber} vacía`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -216,8 +252,8 @@ export function PassPreview({
           alt=""
           aria-hidden
           draggable={false}
-          className="h-5 w-5 object-contain brightness-0 invert"
-          style={{ opacity: filled ? 1 : 0.35 }}
+          className={`h-5 w-5 object-contain brightness-0 ${lightForeground ? 'invert' : ''}`}
+          style={{ opacity: filled ? 1 : 0.22 }}
         />
       </span>
     );
@@ -237,7 +273,10 @@ export function PassPreview({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={logoUrl} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />
           ) : (
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 text-lg font-bold">
+            <div
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg font-bold"
+              style={{ backgroundColor: lightForeground ? 'rgba(255,255,255,0.2)' : `${stampInk}0.12)` }}
+            >
               O
             </div>
           )}
@@ -269,9 +308,10 @@ export function PassPreview({
       </div>
 
       <div
-        className={`flex items-center justify-between gap-3 border-t border-white/15 px-4 ${
+        className={`flex items-center justify-between gap-3 px-4 ${
           compact ? 'pb-4 pt-3' : 'pb-5 pt-3'
         }`}
+        style={{ borderTop: `1px solid ${stampInk}0.18)` }}
       >
         <p
           className={`truncate font-semibold ${compact ? 'text-xs' : 'text-sm'} ${

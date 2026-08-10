@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Onda Spa">
+  <defs>
+    <linearGradient id="spaBg" x1="20" y1="8" x2="108" y2="120" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8F3EE"/>
+      <stop offset="1" stop-color="#D4E8DF"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#spaBg)"/>
+  <!-- Soft lotus / wellness mark -->
+  <g fill="none" stroke="#3D6B5C" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M64 92c-14-10-22-24-22-38 0-10 6-18 14-22" stroke-width="3.2" opacity="0.45"/>
+    <path d="M64 92c14-10 22-24 22-38 0-10-6-18-14-22" stroke-width="3.2" opacity="0.45"/>
+    <path d="M64 94V52" stroke-width="3.2"/>
+    <path d="M64 58c-10-8-14-18-12-28 8 2 16 10 12 28Z" fill="#5F9B86" stroke="none"/>
+    <path d="M64 58c10-8 14-18 12-28-8 2-16 10-12 28Z" fill="#7BB59E" stroke="none"/>
+    <path d="M64 58c0-12 4-22 12-28-10 0-18 8-18 22 0-14-8-22-18-22 8 6 12 16 12 28Z" fill="#4E8A74" stroke="none"/>
+  </g>
+  <circle cx="64" cy="98" r="3.5" fill="#C9A08A"/>
+</svg>
