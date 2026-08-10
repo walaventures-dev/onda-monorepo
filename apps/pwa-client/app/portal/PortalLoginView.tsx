@@ -73,7 +73,9 @@ export function PortalLoginView({ onSuccess }: { onSuccess: () => void }) {
     <div className="onda-pwa-shell">
       <header className="onda-pwa-hero">
         <div className="onda-pwa-hero-copy">
-          <p className="onda-pwa-eyebrow">Onda</p>
+          <p className="onda-pwa-eyebrow">
+            <img src="/brand/onda-wordmark.png" alt="Onda" className="h-4 w-auto" />
+          </p>
           <h1 className="onda-pwa-title">
             {step === 'signup-name' ? 'Crea tu cuenta Onda' : 'Ingresa a tu cuenta Onda'}
           </h1>

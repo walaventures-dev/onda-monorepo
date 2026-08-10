@@ -87,16 +87,23 @@ export class UsersController {
 
       const design = store.passDesign;
       if (design) {
-        const issued = await this.wallet.issuePass({
-          serialNumber,
-          points: 1,
-          holderName: user.name,
-          design,
-        });
-        pass = await this.prisma.pass.update({
-          where: { id: pass.id },
-          data: { walletRef: issued.walletRef },
-        });
+        try {
+          const issued = await this.wallet.issuePass({
+            serialNumber,
+            points: 1,
+            holderName: user.name,
+            organizationName: store.name,
+            maxStamps: store.maxStamps,
+            kind: 'store',
+            design,
+          });
+          pass = await this.prisma.pass.update({
+            where: { id: pass.id },
+            data: { walletRef: issued.walletRef },
+          });
+        } catch {
+          // Emisión wallet es best-effort: el Pass en DB ya existe.
+        }
       }
     }
 

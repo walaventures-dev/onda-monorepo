@@ -102,12 +102,22 @@
 }
 
 .onda-pwa-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1rem;
+  margin: 0;
   font-family: "Sora", "Manrope", system-ui, sans-serif;
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--onda-muted);
+}
+
+.onda-pwa-eyebrow img {
+  display: block;
+  height: 0.95rem;
+  width: auto;
 }
 
 .onda-pwa-title {

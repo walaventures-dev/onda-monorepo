@@ -3,6 +3,7 @@
 import React from 'react';
 import { Button } from '@heroui/react';
 import { OndaIcons, OndaMark } from './icons';
+import { OndaLogo } from './brand';
 import { TxActivityRow, type TxActivityItem } from './TxActivity';
 
 export { Button, Card, Chip, Avatar, Badge, Spinner, Form, TextField, Input, TextArea, InputOTP, Table, ColorPicker, Tabs } from '@heroui/react';
@@ -52,31 +53,20 @@ export type {
 } from './AnalyticsFilters';
 export { OndaIcons, BadgePill, badgeIcon } from './icons';
 export {
+  OndaLogo,
+  OndaWordmark,
+  OndaHandMark,
+  OndaScriptMark,
+  ONDA_BRAND,
+} from './brand';
+export type { OndaBrandVariant } from './brand';
+export {
   TxActivityRow,
   TxTypeBadge,
   PromoTypeChip,
   promoTypeIcon,
 } from './TxActivity';
 export type { TxActivityItem, TxKind } from './TxActivity';
-
-export function OndaLogo({
-  className = '',
-  compact = false,
-}: {
-  className?: string;
-  compact?: boolean;
-}) {
-  return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <div className="h-8 w-8 shrink-0 rounded-xl onda-gradient" aria-hidden />
-      {!compact ? (
-        <span className="onda-logo-text font-display text-lg font-semibold tracking-tight text-[var(--onda-ink)]">
-          Onda
-        </span>
-      ) : null}
-    </div>
-  );
-}
 
 export function InfoTooltip({ text }: { text: string }) {
   return (
@@ -521,7 +511,15 @@ export function AppShell({
               <MenuIcon open={navOpen} />
             </button>
             <div className="onda-topbar-brand">
-              <p className="onda-topbar-sub">Panel Onda</p>
+              <p className="onda-topbar-sub inline-flex items-center gap-1.5">
+                <img
+                  src="/brand/onda-wordmark.png"
+                  alt=""
+                  className="h-3.5 w-auto"
+                  aria-hidden
+                />
+                <span>Panel</span>
+              </p>
               <h1 className="onda-topbar-title">{title}</h1>
             </div>
           </div>

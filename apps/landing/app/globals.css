@@ -3,3 +3,17 @@
 
 @source "../../../libs/shared/ui/src";
 @source "../app";
+
+@keyframes onda-confetti {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.6);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-48px) scale(1);
+  }
+}

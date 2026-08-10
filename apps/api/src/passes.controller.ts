@@ -81,16 +81,20 @@ export class PassesController {
         title: 'Onda',
         subtitle: 'Loyalty',
         description: '',
-        backgroundColor: '#6E5AE6',
+        backgroundColor: '#052DDE',
         foregroundColor: '#FFFFFF',
         labelColor: '#E5F6FC',
         logoUrl: null,
+        stripImageUrl: null,
       } as const);
 
     const issued = await this.wallet.issuePass({
       serialNumber: pass.serialNumber,
       points: pass.points,
       holderName: pass.user.name,
+      organizationName: pass.store?.name ?? pass.event?.name ?? design.title,
+      maxStamps: pass.store?.maxStamps,
+      kind: pass.eventId ? 'event' : 'store',
       design,
     });
 

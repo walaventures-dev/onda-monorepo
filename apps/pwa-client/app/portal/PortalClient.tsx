@@ -70,7 +70,9 @@ export default function PortalClient() {
     <div className="onda-pwa-shell">
       <header className="onda-pwa-hero">
         <div className="onda-pwa-hero-copy">
-          <p className="onda-pwa-eyebrow">Onda</p>
+          <p className="onda-pwa-eyebrow">
+            <img src="/brand/onda-wordmark.png" alt="Onda" className="h-4 w-auto" />
+          </p>
           <h1 className="onda-pwa-title">Mi tarjeta Onda</h1>
           <p className="onda-pwa-sub">{ondaCard.totalPoints} ondas acumuladas en total</p>
         </div>

@@ -78,7 +78,9 @@ export function ProfileClient() {
     <div className="onda-pwa-shell">
       <header className="onda-pwa-hero">
         <div className="onda-pwa-hero-copy">
-          <p className="onda-pwa-eyebrow">Onda</p>
+          <p className="onda-pwa-eyebrow">
+            <img src="/brand/onda-wordmark.png" alt="Onda" className="h-4 w-auto" />
+          </p>
           <h1 className="onda-pwa-title">Perfil</h1>
         </div>
       </header>

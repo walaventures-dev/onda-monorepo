@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Onda — Lealtad digital para tu negocio',
+  title: 'Onda — Tu cliente se fue. Tu marca no.',
   description:
-    'Pases Apple/Google Wallet, ondas y WhatsApp para restaurantes y eventos.',
+    'Onda convierte cada visita en una razón para volver. Wallet, NFC, recompensas y campañas para tu negocio.',
 };
 
 export const viewport: Viewport = {

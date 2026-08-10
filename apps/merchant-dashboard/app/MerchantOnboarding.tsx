@@ -6,6 +6,8 @@ import {
   api,
   GradientButton,
   OndaLogo,
+  OndaHandMark,
+  OndaScriptMark,
   OndaSelect,
   PlacesAddressField,
   PassPreview,
@@ -413,7 +415,8 @@ export function MerchantOnboarding({
 
       <div className="relative mx-auto grid h-full max-w-6xl min-h-0 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
         {/* Brand panel */}
-        <aside className="hidden min-h-0 flex-col justify-between overflow-y-auto overscroll-contain px-10 py-10 lg:flex xl:px-14">
+        <aside className="relative hidden min-h-0 flex-col justify-between overflow-y-auto overscroll-contain px-10 py-10 lg:flex xl:px-14">
+          <OndaScriptMark className="pointer-events-none absolute bottom-10 right-6 h-20 w-auto opacity-[0.08]" />
           <div>
             <OndaLogo />
             <p className="mt-10 font-display text-4xl font-semibold leading-tight tracking-tight text-[var(--onda-ink)] xl:text-5xl">
@@ -465,9 +468,14 @@ export function MerchantOnboarding({
             </ul>
           </div>
 
-          <p className="mt-8 text-xs text-[var(--onda-muted)]">
-            ¿Ya tienes cuenta? Entra al panel y selecciona tu sede.
-          </p>
+          <div className="mt-8 flex items-center gap-3">
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--onda-primary-500)]">
+              <OndaHandMark variant="onPrimary" className="h-6 w-auto" />
+            </span>
+            <p className="text-xs text-[var(--onda-muted)]">
+              ¿Ya tienes cuenta? Entra al panel y selecciona tu sede.
+            </p>
+          </div>
         </aside>
 
         {/* Form panel */}

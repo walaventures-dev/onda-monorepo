@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { OndaLogo } from './brand';
 
 export function LegalLayout({
   title,
@@ -20,7 +21,7 @@ export function LegalLayout({
           <a href={backHref} className="text-sm font-medium text-[var(--onda-violet)]">
             ← Volver
           </a>
-          <span className="font-display text-lg font-semibold">Onda</span>
+          <OndaLogo className="scale-90" />
         </div>
       </header>
       <article className="mx-auto max-w-3xl px-4 py-10">

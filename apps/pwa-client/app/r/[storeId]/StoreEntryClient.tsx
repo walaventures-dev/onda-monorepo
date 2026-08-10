@@ -313,7 +313,9 @@ export default function StoreEntryPage() {
               </>
             ) : (
               <>
-                <p className="onda-pwa-eyebrow">Onda</p>
+                <p className="onda-pwa-eyebrow">
+                  <img src="/brand/onda-wordmark.png" alt="Onda" className="h-4 w-auto" />
+                </p>
                 <h1 className="onda-pwa-title">{storeName}</h1>
               </>
             )}
