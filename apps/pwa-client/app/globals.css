@@ -464,22 +464,27 @@
   min-height: calc(100dvh - 5.5rem - env(safe-area-inset-bottom, 0));
 }
 
+.onda-pwa-tabbed-content .onda-pwa-bottom {
+  bottom: calc(4.5rem + env(safe-area-inset-bottom, 0));
+  padding-bottom: 0.35rem;   /* en vez de calc(0.85rem + safe-area) */
+  background: none;
+}
+
 .onda-pwa-tabbar {
   position: fixed;
   left: 50%;
-  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0));
+  bottom: 0;
   transform: translateX(-50%);
   z-index: 20;
   display: flex;
-  width: fit-content !important;
-  min-width: fit-content !important;
+  width: 100%;
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  padding: 1.25rem 1.25rem;
+  padding: 1.25rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0));
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(12px);
-  border-radius: 999px;
+  border-radius: 1.25rem 1.25rem 0 0 ;
   box-shadow: 0 8px 20px rgba(26, 27, 46, 0.16);
 }
 
