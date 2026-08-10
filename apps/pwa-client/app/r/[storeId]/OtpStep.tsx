@@ -70,8 +70,8 @@ export function OtpStep({ onVerified }: { onVerified: (result: VerifyResult) => 
     return (
       <div className="flex flex-1 flex-col">
         <div className="mb-1">
-          <p className="onda-pwa-label">Primero, tú</p>
-          <h1 className="onda-pwa-headline mt-1">¿Cuál es tu WhatsApp?</h1>
+          <p className="onda-pwa-label pb-3">Primero, tú</p>
+          <h1 className="onda-pwa-headline mt-1 pb-2">¿Cuál es tu WhatsApp?</h1>
           <p className="onda-pwa-sub mt-2">Te enviaremos un código para guardar tus ondas.</p>
         </div>
         <form className="mt-auto flex flex-col gap-3" onSubmit={requestOtp}>
@@ -112,8 +112,8 @@ export function OtpStep({ onVerified }: { onVerified: (result: VerifyResult) => 
   return (
     <div className="flex flex-1 flex-col">
       <div className="mb-1">
-        <p className="onda-pwa-label">Ya casi</p>
-        <h1 className="onda-pwa-headline mt-1">Revisa tu WhatsApp</h1>
+        <p className="onda-pwa-label pb-3">Ya casi</p>
+        <h1 className="onda-pwa-headline mt-1 pb-2">Revisa tu WhatsApp</h1>
         <p className="onda-pwa-sub mt-2">
           Enviamos un código de 6 dígitos al {toE164Colombia(phone)}.
         </p>

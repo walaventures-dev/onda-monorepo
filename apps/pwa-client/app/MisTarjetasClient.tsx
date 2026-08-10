@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, PassPreview } from '@onda/shared-ui';
-import { loadSession, clearSession, type CustomerSession } from '../lib/session';
+import { loadSession, type CustomerSession } from '../lib/session';
 
 type Step = 'loading' | 'cards';
 
@@ -55,6 +55,11 @@ export function MisTarjetasClient() {
 
       if (userPasses.length === 0 && SIMULATE_QR_SCAN && (await simulateQrScan(router))) return;
 
+      if (userPasses.length === 1 && userPasses[0].storeId) {
+        if (!cancelled) router.replace(`/r/${userPasses[0].storeId}`);
+        return;
+      }
+
       if (!cancelled) {
         setPasses(userPasses);
         setStep('cards');
@@ -66,25 +71,6 @@ export function MisTarjetasClient() {
       cancelled = true;
     };
   }, [router]);
-
-  async function logout() {
-    if (!session) return;
-    try {
-      await api('/customer-auth/logout', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.token}` },
-      });
-    } finally {
-      clearSession();
-      setSession(null);
-      setPasses([]);
-      if (SIMULATE_QR_SCAN) {
-        await simulateQrScan(router);
-      } else {
-        setStep('cards');
-      }
-    }
-  }
 
   if (step === 'loading') {
     return (
@@ -120,11 +106,6 @@ export function MisTarjetasClient() {
             <p className="text-center text-sm text-[var(--onda-muted)]">
               Aún no tienes tarjetas. Escanea el QR de un negocio para empezar.
             </p>
-          ) : null}
-          {session ? (
-            <button type="button" className="onda-pwa-secondary" onClick={logout}>
-              Cerrar sesión
-            </button>
           ) : null}
         </div>
       </div>

@@ -11,6 +11,8 @@ export type PendingRequestDto = {
   status: 'PENDING' | 'CONFIRMED' | 'REJECTED';
   expiresAt: string;
   devCode?: string;
+  type?: 'ACCUMULATE' | 'CLAIM';
+  promotionTitle?: string;
 };
 
 export function PendingRequestWait({
@@ -80,33 +82,52 @@ export function PendingRequestWait({
   const ringRadius = 34;
   const ringCircumference = 2 * Math.PI * ringRadius;
   const ringOffset = ringCircumference * (1 - secondsLeft / totalSeconds);
+  const isClaim = request.type === 'CLAIM';
+  const eyebrowColor = isClaim ? 'rgba(26,27,46,0.65)' : 'rgba(255,255,255,0.85)';
+  const subtextColor = isClaim ? 'var(--onda-muted)' : 'rgba(255,255,255,0.7)';
 
   return (
-    <div className="-mx-5 -mb-2 flex flex-1 flex-col bg-[var(--onda-violet)] px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-[calc(1.75rem+env(safe-area-inset-top,0px))] text-white">
+    <div
+      className={`-mx-5 -mb-2 flex flex-1 flex-col px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-[calc(1.75rem+env(safe-area-inset-top,0px))] ${isClaim ? 'text-[var(--onda-ink)]' : 'text-white'}`}
+      style={{ backgroundColor: isClaim ? '#FFFDF3' : 'var(--onda-violet)' }}
+    >
       <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex items-center gap-1.5 text-sm font-semibold text-white"
-        >
+        <button type="button" onClick={onCancel} className="flex items-center gap-1.5 text-sm font-semibold">
           <span aria-hidden>←</span> Cancelar
         </button>
-        <div className="flex items-center gap-1.5 text-sm font-bold tracking-wide text-white uppercase">
+        <div className="flex items-center gap-1.5 text-sm font-bold tracking-wide uppercase">
           <span aria-hidden>✺</span> {storeName}
         </div>
       </div>
 
       <div className="mt-16">
-        <p className="onda-pwa-label" style={{ color: 'rgba(255,255,255,0.85)' }}>
+        <p className="onda-pwa-label" style={{ color: eyebrowColor }}>
           Muéstrale esto a caja
         </p>
-        <h2 className="text-4xl font-extrabold tracking-tight mt-2 leading-none" style={{ color: '#fff' }}>
-          Sumemos
-          <br />
-          tu onda.
+        <h2
+          className="text-4xl font-extrabold tracking-tight mt-2 leading-none"
+          style={{ color: isClaim ? 'var(--onda-ink)' : '#fff' }}
+        >
+          {isClaim ? (
+            <>
+              Reclamemos
+              <br />
+              tu premio.
+            </>
+          ) : (
+            <>
+              Sumemos
+              <br />
+              tu onda.
+            </>
+          )}
         </h2>
-        <p className="text-sm mt-4" style={{ color: 'rgba(255,255,255,0.7)' }}>
-          La persona en caja confirmará tu compra.
+        <p className="text-sm mt-4" style={{ color: subtextColor }}>
+          {isClaim
+            ? request.promotionTitle
+              ? `${request.promotionTitle} — la persona en caja lo confirmará.`
+              : 'La persona en caja lo confirmará.'
+            : 'La persona en caja confirmará tu compra.'}
         </p>
       </div>
 
@@ -146,10 +167,16 @@ export function PendingRequestWait({
       </div>
 
       <div className="mt-7 flex items-center gap-3">
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-white" aria-hidden />
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: isClaim ? 'var(--onda-violet)' : '#fff' }}
+          aria-hidden
+        />
         <div>
-          <p className="text-sm font-semibold text-white">Esperando confirmación</p>
-          <p className="text-xs text-white/60">Esta pantalla se actualiza sola</p>
+          <p className="text-sm font-semibold">Esperando confirmación</p>
+          <p className="text-xs" style={{ color: subtextColor }}>
+            Esta pantalla se actualiza sola
+          </p>
         </div>
       </div>
     </div>

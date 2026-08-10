@@ -1,10 +1,11 @@
 'use client';
 
 import React from 'react';
+import { Button } from '@heroui/react';
 import { OndaIcons, OndaMark } from './icons';
 import { TxActivityRow, type TxActivityItem } from './TxActivity';
 
-export { Button, Card, Chip, Avatar, Badge, Spinner, Form, TextField, Input, TextArea, InputOTP, Table, ColorPicker } from '@heroui/react';
+export { Button, Card, Chip, Avatar, Badge, Spinner, Form, TextField, Input, TextArea, InputOTP, Table, ColorPicker, Tabs } from '@heroui/react';
 export { api, API_URL, getApiUrl } from './api';
 export { HeatmapPoints } from './HeatmapPoints';
 export { PhoneInput } from './PhoneInput';
@@ -165,6 +166,9 @@ export function PassPreview({
   milestoneStamps = [],
   memberName,
   compact = false,
+  onAddToWallet,
+  walletBusy = false,
+  walletLabel = 'Añadir a billetera digital',
 }: {
   backgroundColor?: string;
   foregroundColor?: string;
@@ -179,9 +183,21 @@ export function PassPreview({
   /** Nombre del miembro (como en Wallet) */
   memberName?: string | null;
   compact?: boolean;
+  /** Si se provee, muestra el botón de wallet dentro de la tarjeta */
+  onAddToWallet?: () => void;
+  walletBusy?: boolean;
+  walletLabel?: string;
 }) {
   const displayName = memberName?.trim() || 'Tu nombre';
   const hasName = Boolean(memberName?.trim());
+
+  const ondasRemaining = Math.max(0, maxStamps - points);
+  const ondasRemainingText =
+    ondasRemaining === 0
+      ? '¡Ya puedes reclamar tu premio!'
+      : ondasRemaining === 1
+        ? 'Te falta 1 onda'
+        : `Te faltan ${ondasRemaining} ondas`;
 
   const stampRowCounts =
     maxStamps <= 5 ? [maxStamps] : [Math.ceil(maxStamps / 2), Math.floor(maxStamps / 2)];
@@ -198,7 +214,7 @@ export function PassPreview({
     return (
       <span
         key={stampNumber}
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-semibold"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-semibold"
         style={{
           backgroundColor: filled ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.18)',
           color: filled ? backgroundColor : foregroundColor,
@@ -206,73 +222,44 @@ export function PassPreview({
         }}
         title={hasMilestone ? `Premio en el sello ${stampNumber}` : undefined}
       >
-        {hasMilestone ? <OndaMark className="h-8 w-8 shrink-0" /> : null}
+        {hasMilestone ? <OndaMark className="h-6 w-6 shrink-0" /> : null}
       </span>
     );
   };
 
   return (
     <div
-      className={`relative mx-auto w-full max-w-sm overflow-hidden rounded-[.85rem] shadow-[0_20px_50px_rgba(26,27,46,0.22)] ${
+      className={`relative mx-auto w-full max-w-sm overflow-hidden rounded-[.5rem] shadow-[0_20px_50px_rgba(26,27,46,0.22)] ${
         compact ? '' : ''
       }`}
       style={{ backgroundColor, color: foregroundColor }}
       aria-label={`Vista previa del pase ${title}`}
     >
-      <div className={`flex items-start justify-between ${compact ? 'p-4' : 'p-5'}`}>
-        <div className="min-w-0 pr-3">
-          {/*<p
-            className="text-[10px] font-medium uppercase tracking-[0.14em]"
-            style={{ color: labelColor ?? undefined }}
-          >
-            Pase de lealtad
-          </p>*/}
-          <h3 className={`font-display mt-1 font-semibold leading-tight ${compact ? 'text-lg' : 'text-xl'}`}>
-            {title}
-          </h3>
-          {subtitle ? <p className="mt-0.5 truncate text-sm opacity-90">{subtitle}</p> : null}
-        </div>
-        {logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={logoUrl} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />
-        ) : (
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 text-lg font-bold">
-            O
+      <div className={`flex items-start justify-between gap-3 px-4 ${compact ? 'py-4' : 'py-5'}`}>
+        <div className="flex min-w-0 items-center gap-3">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />
+          ) : (
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 text-lg font-bold">
+              O
+            </div>
+          )}
+          <div className="min-w-0">
+            <h3 className="font-display text-lg font-semibold leading-tight">{title}</h3>
+            {subtitle ? <p className="mt-0.5 truncate text-xs opacity-90">{subtitle}</p> : null}
           </div>
-        )}
-      </div>
-
-      <div className={`grid grid-cols-2 gap-3 ${compact ? 'px-4 pb-3' : 'px-5 pb-4'}`}>
-        <div>
-          <p
-            className="text-[10px] font-medium uppercase tracking-[0.12em]"
-            style={{ color: labelColor ?? undefined }}
-          >
-            Miembro
-          </p>
-          <p
-            className={`mt-0.5 truncate font-semibold ${compact ? 'text-sm' : 'text-base'} ${
-              hasName ? '' : 'opacity-50'
-            }`}
-          >
-            {displayName}
-          </p>
         </div>
-        <div className="text-right">
-          <p
-            className="text-[10px] font-medium uppercase tracking-[0.12em]"
-            style={{ color: labelColor ?? undefined }}
-          >
-            Ondas
+        <div className="shrink-0 text-right">
+          <p className="font-display text-lg font-bold leading-tight">
+            {points} de {maxStamps} ondas
           </p>
-          <p className={`font-display font-bold ${compact ? 'text-2xl' : 'text-3xl'}`}>
-            {points}/{maxStamps}
-          </p>
+          <p className="mt-0.5 text-xs opacity-90">{ondasRemainingText}</p>
         </div>
       </div>
 
       <div
-        className={`flex flex-col gap-1.5 ${compact ? 'px-4 pb-3' : 'px-5 pb-4'}`}
+        className={`flex flex-col gap-1.5 px-4 ${compact ? 'pb-3' : 'pb-4'}`}
         aria-label="Progreso de sellos"
       >
         {stampRows.map((row, rowIndex) => (
@@ -283,6 +270,40 @@ export function PassPreview({
             {row.map((stampNumber) => renderStamp(stampNumber))}
           </div>
         ))}
+      </div>
+
+      <div
+        className={`flex items-center justify-between gap-3 border-t border-white/15 px-4 ${
+          compact ? 'pb-4 pt-3' : 'pb-5 pt-3'
+        }`}
+      >
+        <p
+          className={`truncate font-semibold ${compact ? 'text-xs' : 'text-sm'} ${
+            hasName ? '' : 'opacity-50'
+          }`}
+        >
+          {displayName}
+        </p>
+        {onAddToWallet ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onPress={onAddToWallet}
+            isDisabled={walletBusy}
+            className="shrink-0 gap-1.5 text-xs"
+            style={
+              {
+                '--button-bg': 'transparent',
+                '--button-bg-hover': 'rgba(255,255,255,0.18)',
+                '--button-fg': foregroundColor,
+                borderColor: foregroundColor,
+              } as React.CSSProperties
+            }
+          >
+            {OndaIcons.wallet}
+            {walletBusy ? 'Abriendo…' : walletLabel}
+          </Button>
+        ) : null}
       </div>
 
       {/*{!compact && description ? (

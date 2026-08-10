@@ -122,11 +122,13 @@ export class PendingRequestsController {
         type: body.type,
         ...(body.type === 'CLAIM' ? { promotionId: body.promotionId } : {}),
       },
+      include: { promotion: true },
       orderBy: { createdAt: 'desc' },
     });
     if (existing) {
       if (existing.expiresAt > new Date()) {
-        return existing;
+        const { promotion: existingPromotion, ...existingRest } = existing;
+        return { ...existingRest, promotionTitle: existingPromotion?.title };
       }
       await this.prisma.pendingRequest.update({
         where: { id: existing.id },
@@ -213,7 +215,8 @@ export class PendingRequestsController {
       expiresAt: created.expiresAt,
     });
 
-    return devMode ? { ...created, devCode: code } : created;
+    const response = { ...created, promotionTitle: promotion?.title };
+    return devMode ? { ...response, devCode: code } : response;
   }
 
   @Post(':id/confirm')
