@@ -154,49 +154,51 @@ export function CreatePromo({
       return;
     }
     setBusy(true);
+    const body: Record<string, unknown> = {
+      storeId,
+      title: form.title.trim(),
+      description: form.description.trim() || undefined,
+      pointsRequired: Number(form.pointsRequired) || 1,
+      imageUrl: form.imageUrl || undefined,
+      isActive: form.isActive,
+      type: form.type,
+      expiryMode: form.expiryMode,
+    };
+    if (form.expiryMode === "TIME") body.endsAt = form.endsAt;
+    if (form.expiryMode === "QUANTITY") {
+      body.maxRedemptions = Number(form.maxRedemptions);
+    }
+    if (form.type === "PERCENT_OFF" || form.type === "AMOUNT_OFF") {
+      body.value = Number(form.value) || 0;
+    }
+    if (form.type === "BUY_GET") {
+      body.buyQuantity = Number(form.buyQuantity) || 1;
+      body.getQuantity = Number(form.getQuantity) || 1;
+    }
+    if (form.type === "PRODUCT") {
+      body.productName = form.productName.trim() || form.title.trim();
+      if (form.value) body.value = Number(form.value);
+    }
+    let promo: any;
     try {
-      const body: Record<string, unknown> = {
-        storeId,
-        title: form.title.trim(),
-        description: form.description.trim() || undefined,
-        pointsRequired: Number(form.pointsRequired) || 1,
-        imageUrl: form.imageUrl || undefined,
-        isActive: form.isActive,
-        type: form.type,
-        expiryMode: form.expiryMode,
-      };
-      if (form.expiryMode === "TIME") body.endsAt = form.endsAt;
-      if (form.expiryMode === "QUANTITY") {
-        body.maxRedemptions = Number(form.maxRedemptions);
-      }
-      if (form.type === "PERCENT_OFF" || form.type === "AMOUNT_OFF") {
-        body.value = Number(form.value) || 0;
-      }
-      if (form.type === "BUY_GET") {
-        body.buyQuantity = Number(form.buyQuantity) || 1;
-        body.getQuantity = Number(form.getQuantity) || 1;
-      }
-      if (form.type === "PRODUCT") {
-        body.productName = form.productName.trim() || form.title.trim();
-        if (form.value) body.value = Number(form.value);
-      }
-      const promo = await api("/promotions", {
+      promo = await api("/promotions", {
         method: "POST",
         body: JSON.stringify(body),
       });
-      toast.success("Promoción creada", {
-        description: "Ya está disponible para tus clientes.",
-      });
-      await onCreated(promo);
     } catch (err: any) {
+      setBusy(false);
       await alert({
         title: "Error al crear promo",
         message: err.message || "Intenta de nuevo.",
         tone: "danger",
       });
-    } finally {
-      setBusy(false);
+      return;
     }
+    setBusy(false);
+    toast.success("Promoción creada", {
+      description: "Ya está disponible para tus clientes.",
+    });
+    await onCreated(promo);
   }
 
   return (
@@ -435,7 +437,7 @@ export function CreatePromo({
               Activa al crear
             </label>
           </div>
-          <GradientButton type="submit" disabled={busy}>
+          <GradientButton type="submit" disabled={busy || !storeId}>
             {OndaIcons.plus}
             {busy ? "Guardando…" : "Crear promoción"}
           </GradientButton>

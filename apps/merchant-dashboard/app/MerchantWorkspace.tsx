@@ -28,7 +28,6 @@ import {
   promoTypeLabel,
   promoTypeIcon,
   formatPromoBenefit,
-  PROMO_TYPE_OPTIONS,
   api,
   type AnalyticsFiltersValue,
   OndaIcons,
@@ -568,6 +567,10 @@ export function MerchantWorkspace() {
     const t = setTimeout(() => setJustCreatedPromoId(null), 4000);
     return () => clearTimeout(t);
   }, [justCreatedPromoId]);
+
+  useEffect(() => {
+    if (selectedPromoId !== "nueva") setDuplicateSource(null);
+  }, [selectedPromoId]);
 
   useEffect(() => {
     if (!selectedCustomerPassId || !storeId) {
