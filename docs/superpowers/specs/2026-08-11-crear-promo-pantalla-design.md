@@ -1,7 +1,7 @@
 # Diseño: Pantalla dedicada para crear promoción
 
 Fecha: 2026-08-11
-Alcance: `apps/merchant-dashboard` (flujo de creación de promociones), `libs/shared/ui` (nuevo toast)
+Alcance: `apps/merchant-dashboard` (flujo de creación de promociones), `libs/shared/ui` (re-exportar el `Toast` de Hero UI)
 Fuera de alcance: agregar un tercer modo de caducidad "No caduca" a `PromotionExpiryMode`, unificar `CreatePromo` y `PromoDetail` en un único componente de formulario compartido, migrar los demás `alert()` de éxito existentes (togglePromo, plan actualizado, etc.) a toast — todo esto quedó identificado en la conversación previa como trabajo futuro, no parte de este cambio.
 
 ## 1. Problema
@@ -29,7 +29,7 @@ CreatePromo → "Volver" con cambios sin guardar → confirm() → si OK, router
 - Se agrega una rama de render: cuando `selectedPromoId === "nueva"`, se renderiza `<CreatePromo>` en vez de `<PromoDetail>` (mismo nivel condicional que ya existe para `tab === "promos" && selectedPromoId`).
 - `duplicatePromo(source)`: en vez de precargar `promoForm` local y togglear `showPromoForm`, guarda `source` en un nuevo state `duplicateSource` y navega con `router.push("/promos/nueva")`.
 - Nuevo state `justCreatedPromoId: string | null`, seteado en el callback `onCreated` que se le pasa a `CreatePromo`. Se usa para resaltar la card correspondiente en la grilla/lista al volver, y se limpia automáticamente después de ~4s o en la siguiente navegación.
-- Se monta `useOndaToast()` (ver sección 5) junto al `useOndaDialogs()` ya existente (línea 401), y se spreadea `toastNode` en el layout igual que `dialogs`.
+- No se toca `useOndaDialogs()` (línea 401, sigue igual) — el toast de éxito se dispara aparte, ver sección 5.
 
 ## 4. Nuevo componente `CreatePromo.tsx`
 
@@ -62,21 +62,15 @@ Al hacer submit con éxito: `POST /promotions` → llama `onCreated(promo)` (el 
 
 Botón "Volver": si `promoForm` tiene algún campo distinto de su estado inicial (o de `initialValues` si vino de duplicar), pide confirmación con el `confirm()` ya existente (`useOndaDialogs`) — título "¿Descartar cambios?", mensaje "Vas a perder lo que escribiste en esta promo.", tono `warning`. Si no hay cambios, cierra directo.
 
-## 5. Toast — `useOndaToast` en `libs/shared/ui`
+## 5. Toast — `Toast` nativo de Hero UI, no un componente custom
 
-Nuevo hook, mismo patrón que `useOndaDialogs` (`libs/shared/ui/src/OndaDialogs.tsx`): archivo nuevo `libs/shared/ui/src/OndaToast.tsx`, exportado desde `libs/shared/ui/src/index.tsx` junto a `useOndaDialogs`.
+`@heroui/react` (`3.2.3`, ya en `package.json`) trae un sistema de toast completo (`ToastProvider`, `toast` singleton, cola con auto-dismiss ya resuelta vía `react-aria-components`) que hoy no está montado en ningún lado del repo. Siguiendo el mismo patrón que `OndaDialogs.tsx` (envolver primitivos de Hero UI en vez de reconstruirlos — ver el resto del repo, sección "componentes Hero UI vs. custom" tratada en la conversación), usamos esto directamente en lugar de un hook custom:
 
-```ts
-function useOndaToast(): {
-  showToast: (opts: { title: string; message?: string; tone?: 'success' | 'danger' }) => void;
-  toastNode: ReactNode;
-}
-```
-
-- Tarjeta flotante estilo `onda-card` (fondo blanco, sombra suave, radio grande), posicionada fija abajo-centro, con ícono de tono + título + mensaje opcional.
-- Auto-dismiss a los 3.5s: `setTimeout` que limpia el estado; se cancela y reinicia si se llama `showToast` de nuevo antes de que expire.
-- Botón "×" pequeño para cerrar manualmente.
-- Solo se usa en este cambio para el mensaje de éxito de creación: título **"Promoción creada"**, mensaje **"Ya está disponible para tus clientes."**, tono `success`. No se retrofitea a otros flujos existentes (fuera de alcance, ver cabecera).
+- **`ToastProvider`** se monta **una sola vez**, en `apps/merchant-dashboard/app/DashboardShell.tsx` (el wrapper que ya envuelve todo el dashboard y se mantiene montado entre cambios de ruta) — no en `MerchantWorkspace.tsx`, porque el `toast` de Hero UI es un singleton imperativo, no necesita estar atado al ciclo de vida/estado de ese componente.
+- Se re-exporta `toast` (y `ToastProvider` si hace falta el tipo) desde `libs/shared/ui/src/index.tsx`, igual que ya hacen con `Button`, `Card`, `Chip`, etc. — así `CreatePromo.tsx` lo importa desde `@onda/shared-ui` como el resto de los primitivos, no directo de `@heroui/react`.
+- En `CreatePromo.tsx`, al terminar el submit exitoso: `toast.success('Promoción creada', { description: 'Ya está disponible para tus clientes.' })`. No hace falta estado propio ni timers — la cola de Hero UI maneja el auto-dismiss.
+- Estilo visual: por defecto viene con la skin de Hero UI (`ToastVariants` de `@heroui/styles`); si no calza con el tono "cálido-tecnológico" del DESIGN.md se ajusta con `className` sobre `ToastProvider`/`Toast` apoyándose en los tokens `--onda-*` — mismo mecanismo que `OndaDialogs.tsx` usa (`className="onda-dialog-*"`) para adaptar `AlertDialog` a la marca.
+- Solo se usa en este cambio para el mensaje de éxito de creación. No se retrofitea a otros flujos existentes (fuera de alcance, ver cabecera) — aunque, al quedar `ToastProvider` montado globalmente, sí queda disponible para que esos flujos lo adopten después sin trabajo adicional de infraestructura.
 
 ## 6. Tooltips en "¿Cómo caduca?"
 
