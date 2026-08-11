@@ -276,7 +276,7 @@ export function CreatePromo({
           ) : null}
           {form.type === "AMOUNT_OFF" ? (
             <label className="block text-sm text-[var(--onda-muted)]">
-              Monto off (COP)
+              Valor de descuento (COP)
               <input
                 type="number"
                 min={1}
