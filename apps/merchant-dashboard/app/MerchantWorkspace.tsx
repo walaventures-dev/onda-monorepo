@@ -31,7 +31,6 @@ import {
   PROMO_TYPE_OPTIONS,
   api,
   type AnalyticsFiltersValue,
-  type PromoTypeKey,
   OndaIcons,
   BadgePill,
   TxActivityRow,
@@ -50,6 +49,7 @@ import {
   Cell,
 } from "recharts";
 import { PromoDetail } from "./PromoDetail";
+import { CreatePromo } from "./CreatePromo";
 import { CustomerDetail } from "./CustomerDetail";
 import {
   CompareStores,
@@ -95,22 +95,6 @@ const TYPE_COLORS: Record<string, string> = {
   BUY_GET: "#22C55E",
   PRODUCT: "#F59E0B",
   OTHER: "#94A3B8",
-};
-
-const emptyPromoForm = {
-  title: "",
-  description: "",
-  pointsRequired: "5",
-  imageUrl: "" as string,
-  isActive: true,
-  type: "PRODUCT" as PromoTypeKey,
-  value: "",
-  buyQuantity: "2",
-  getQuantity: "1",
-  productName: "",
-  expiryMode: "" as "" | "TIME" | "QUANTITY",
-  endsAt: "",
-  maxRedemptions: "",
 };
 
 function deltaLabel(n?: number | null) {
@@ -378,9 +362,10 @@ export function MerchantWorkspace() {
   const [billing, setBilling] = useState<any>(null);
   const [pin, setPin] = useState("");
   const [passId, setPassId] = useState("");
-  const [promoForm, setPromoForm] = useState(emptyPromoForm);
-  const [promoBusy, setPromoBusy] = useState(false);
-  const [showPromoForm, setShowPromoForm] = useState(false);
+  const [duplicateSource, setDuplicateSource] = useState<any>(null);
+  const [justCreatedPromoId, setJustCreatedPromoId] = useState<string | null>(
+    null,
+  );
   const [promoView, setPromoView] = useState<"grid" | "list">("grid");
   const [promoStatusFilter, setPromoStatusFilter] = useState<
     "all" | "active" | "inactive"
@@ -553,7 +538,7 @@ export function MerchantWorkspace() {
   }, [storeId, mode, eventId, loadOverview, loadTxs, loadPromos]);
 
   useEffect(() => {
-    if (!selectedPromoId) {
+    if (!selectedPromoId || selectedPromoId === "nueva") {
       setPromoDetail(null);
       return;
     }
@@ -577,6 +562,12 @@ export function MerchantWorkspace() {
       cancelled = true;
     };
   }, [selectedPromoId, filters.from, filters.to]);
+
+  useEffect(() => {
+    if (!justCreatedPromoId) return;
+    const t = setTimeout(() => setJustCreatedPromoId(null), 4000);
+    return () => clearTimeout(t);
+  }, [justCreatedPromoId]);
 
   useEffect(() => {
     if (!selectedCustomerPassId || !storeId) {
@@ -607,12 +598,24 @@ export function MerchantWorkspace() {
   }, [selectedCustomerPassId, storeId, filters.from, filters.to]);
 
   function openPromoDetail(id: string) {
-    setShowPromoForm(false);
     router.push(`/promos/${id}`);
   }
 
   function closePromoDetail() {
     setPromoDetail(null);
+    router.push("/promos");
+  }
+
+  function closeCreatePromo() {
+    setDuplicateSource(null);
+    router.push("/promos");
+  }
+
+  async function handlePromoCreated(promo: any) {
+    await loadPromos();
+    await loadOverview();
+    setJustCreatedPromoId(promo.id);
+    setDuplicateSource(null);
     router.push("/promos");
   }
 
@@ -828,107 +831,10 @@ export function MerchantWorkspace() {
     });
   }
 
-  async function createPromo(e: FormEvent) {
-    e.preventDefault();
-    if (!storeId || !promoForm.title.trim()) return;
-    if (!promoForm.expiryMode) {
-      await alert({
-        title: "Caducidad requerida",
-        message:
-          "Indica si la promo caduca por tiempo o por cantidad de redenciones.",
-        tone: "warning",
-      });
-      return;
-    }
-    if (promoForm.expiryMode === "TIME" && !promoForm.endsAt) {
-      await alert({
-        title: "Fecha requerida",
-        message: "Indica hasta cuándo estará disponible.",
-        tone: "warning",
-      });
-      return;
-    }
-    if (
-      promoForm.expiryMode === "QUANTITY" &&
-      (!promoForm.maxRedemptions || Number(promoForm.maxRedemptions) < 1)
-    ) {
-      await alert({
-        title: "Cantidad requerida",
-        message: "Indica el máximo de redenciones.",
-        tone: "warning",
-      });
-      return;
-    }
-    setPromoBusy(true);
-    try {
-      const body: Record<string, unknown> = {
-        storeId,
-        title: promoForm.title.trim(),
-        description: promoForm.description.trim() || undefined,
-        pointsRequired: Number(promoForm.pointsRequired) || 1,
-        imageUrl: promoForm.imageUrl || undefined,
-        isActive: promoForm.isActive,
-        type: promoForm.type,
-        expiryMode: promoForm.expiryMode,
-      };
-      if (promoForm.expiryMode === "TIME") body.endsAt = promoForm.endsAt;
-      if (promoForm.expiryMode === "QUANTITY") {
-        body.maxRedemptions = Number(promoForm.maxRedemptions);
-      }
-      if (promoForm.type === "PERCENT_OFF" || promoForm.type === "AMOUNT_OFF") {
-        body.value = Number(promoForm.value) || 0;
-      }
-      if (promoForm.type === "BUY_GET") {
-        body.buyQuantity = Number(promoForm.buyQuantity) || 1;
-        body.getQuantity = Number(promoForm.getQuantity) || 1;
-      }
-      if (promoForm.type === "PRODUCT") {
-        body.productName =
-          promoForm.productName.trim() || promoForm.title.trim();
-        if (promoForm.value) body.value = Number(promoForm.value);
-      }
-      await api("/promotions", { method: "POST", body: JSON.stringify(body) });
-      await loadPromos();
-      await loadOverview();
-      setPromoForm(emptyPromoForm);
-      setShowPromoForm(false);
-      await alert({
-        title: "Promoción creada",
-        message: "La recompensa ya está disponible para tus clientes.",
-        tone: "success",
-      });
-    } catch (err: any) {
-      await alert({
-        title: "Error al crear promo",
-        message: err.message || "Intenta de nuevo.",
-        tone: "danger",
-      });
-    } finally {
-      setPromoBusy(false);
-    }
-  }
-
   function duplicatePromo(source: any) {
     setPromoDetail(null);
-    setPromoForm({
-      title: source.title || "",
-      description: source.description || "",
-      pointsRequired: String(source.pointsRequired ?? 5),
-      imageUrl: source.imageUrl || "",
-      isActive: true,
-      type: (source.type as PromoTypeKey) || "PRODUCT",
-      value: source.value != null ? String(source.value) : "",
-      buyQuantity:
-        source.buyQuantity != null ? String(source.buyQuantity) : "2",
-      getQuantity:
-        source.getQuantity != null ? String(source.getQuantity) : "1",
-      productName: source.productName || "",
-      expiryMode: "",
-      endsAt: "",
-      maxRedemptions: "",
-    });
-    setShowPromoForm(true);
-    router.push("/promos");
+    setDuplicateSource(source);
+    router.push("/promos/nueva");
   }
 
   async function togglePromo(id: string, isActive: boolean) {
@@ -999,8 +905,7 @@ export function MerchantWorkspace() {
         duplicatePromo(source);
         return;
       }
-      setShowPromoForm(true);
-      router.push("/promos");
+      router.push("/promos/nueva");
       return;
     }
     if (id === "near-redeem") {
@@ -1010,8 +915,7 @@ export function MerchantWorkspace() {
       setSegment("enRiesgo");
       router.push("/clientes");
     } else if (id === "few-promos" || id === "redeem-drop") {
-      setShowPromoForm(true);
-      router.push("/promos");
+      router.push("/promos/nueva");
     } else if (id === "wa-limit") {
       router.push("/config");
     }
@@ -1056,14 +960,6 @@ export function MerchantWorkspace() {
       icon: OndaIcons.moon,
     },
   ];
-
-  const promoPreview = formatPromoBenefit({
-    ...promoForm,
-    value: promoForm.value ? Number(promoForm.value) : null,
-    buyQuantity: Number(promoForm.buyQuantity) || null,
-    getQuantity: Number(promoForm.getQuantity) || null,
-    pointsRequired: Number(promoForm.pointsRequired) || 0,
-  });
 
   return (
     <>
@@ -1587,7 +1483,7 @@ export function MerchantWorkspace() {
           </div>
         )}
 
-        {tab === "promos" && selectedPromoId ? (
+        {tab === "promos" && selectedPromoId && selectedPromoId !== "nueva" ? (
           <PromoDetail
             detail={promoDetail}
             loading={promoDetailLoading}
@@ -1616,6 +1512,18 @@ export function MerchantWorkspace() {
               await loadPromos();
               await loadOverview();
             }}
+          />
+        ) : null}
+
+        {tab === "promos" && selectedPromoId === "nueva" ? (
+          <CreatePromo
+            storeId={storeId}
+            store={store}
+            duplicateFrom={duplicateSource}
+            confirm={confirm}
+            alert={alert}
+            onCreated={handlePromoCreated}
+            onClose={closeCreatePromo}
           />
         ) : null}
 
@@ -1703,285 +1611,13 @@ export function MerchantWorkspace() {
                 </div>
                 <GradientButton
                   type="button"
-                  onClick={() => setShowPromoForm((v) => !v)}
+                  onClick={() => router.push("/promos/nueva")}
                 >
-                  {showPromoForm ? OndaIcons.close : OndaIcons.plus}
-                  {showPromoForm ? "Cerrar" : "Nueva promo"}
+                  {OndaIcons.plus}
+                  Nueva promo
                 </GradientButton>
               </div>
             </div>
-
-            {showPromoForm && (
-              <form
-                onSubmit={createPromo}
-                className="onda-card grid gap-5 p-5 lg:grid-cols-[220px_1fr]"
-              >
-                <div>
-                  <ImageUploadField
-                    label="Imagen de la promo"
-                    value={promoForm.imageUrl}
-                    onChange={(imageUrl) =>
-                      setPromoForm((f) => ({ ...f, imageUrl }))
-                    }
-                  />
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex flex-wrap gap-1.5">
-                    {PROMO_TYPE_OPTIONS.map((t) => (
-                      <FilterChip
-                        key={t.id}
-                        selected={promoForm.type === t.id}
-                        icon={t.icon}
-                        onClick={() =>
-                          setPromoForm((f) => ({ ...f, type: t.id }))
-                        }
-                      >
-                        {t.label}
-                      </FilterChip>
-                    ))}
-                  </div>
-                  <input
-                    required
-                    placeholder="Título (ej. Postre gratis)"
-                    className="w-full rounded-xl border border-[var(--onda-border)] px-3 py-2.5 text-sm"
-                    value={promoForm.title}
-                    onChange={(e) =>
-                      setPromoForm((f) => ({ ...f, title: e.target.value }))
-                    }
-                  />
-                  <textarea
-                    placeholder="Descripción opcional"
-                    rows={2}
-                    className="w-full rounded-xl border border-[var(--onda-border)] px-3 py-2.5 text-sm"
-                    value={promoForm.description}
-                    onChange={(e) =>
-                      setPromoForm((f) => ({
-                        ...f,
-                        description: e.target.value,
-                      }))
-                    }
-                  />
-
-                  {promoForm.type === "PERCENT_OFF" ? (
-                    <label className="block text-sm text-[var(--onda-muted)]">
-                      Porcentaje (1–100)
-                      <input
-                        type="number"
-                        min={1}
-                        max={100}
-                        required
-                        className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                        value={promoForm.value}
-                        onChange={(e) =>
-                          setPromoForm((f) => ({ ...f, value: e.target.value }))
-                        }
-                      />
-                    </label>
-                  ) : null}
-                  {promoForm.type === "AMOUNT_OFF" ? (
-                    <label className="block text-sm text-[var(--onda-muted)]">
-                      Monto off (COP)
-                      <input
-                        type="number"
-                        min={1}
-                        required
-                        className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                        value={promoForm.value}
-                        onChange={(e) =>
-                          setPromoForm((f) => ({ ...f, value: e.target.value }))
-                        }
-                      />
-                    </label>
-                  ) : null}
-                  {promoForm.type === "BUY_GET" ? (
-                    <div className="flex flex-wrap gap-3">
-                      <label className="text-sm text-[var(--onda-muted)]">
-                        Compra N
-                        <input
-                          type="number"
-                          min={1}
-                          required
-                          className="ml-2 w-20 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                          value={promoForm.buyQuantity}
-                          onChange={(e) =>
-                            setPromoForm((f) => ({
-                              ...f,
-                              buyQuantity: e.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                      <label className="text-sm text-[var(--onda-muted)]">
-                        Lleva M
-                        <input
-                          type="number"
-                          min={1}
-                          required
-                          className="ml-2 w-20 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                          value={promoForm.getQuantity}
-                          onChange={(e) =>
-                            setPromoForm((f) => ({
-                              ...f,
-                              getQuantity: e.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                    </div>
-                  ) : null}
-                  {promoForm.type === "PRODUCT" ? (
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="text-sm text-[var(--onda-muted)]">
-                        Nombre del producto
-                        <input
-                          className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                          value={promoForm.productName}
-                          onChange={(e) =>
-                            setPromoForm((f) => ({
-                              ...f,
-                              productName: e.target.value,
-                            }))
-                          }
-                          placeholder="Ej. Postre del día"
-                        />
-                      </label>
-                      <label className="text-sm text-[var(--onda-muted)]">
-                        Precio especial (opcional)
-                        <input
-                          type="number"
-                          min={0}
-                          className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                          value={promoForm.value}
-                          onChange={(e) =>
-                            setPromoForm((f) => ({
-                              ...f,
-                              value: e.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                    </div>
-                  ) : null}
-
-                  <p className="rounded-xl bg-[var(--onda-bg)] px-3 py-2 text-xs text-[var(--onda-muted)]">
-                    Preview: {promoPreview}
-                  </p>
-
-                  <div className="rounded-xl border border-[var(--onda-border)] p-3 space-y-3">
-                    <p className="text-sm font-medium text-[var(--onda-ink)]">
-                      ¿Cómo caduca?{" "}
-                      <span className="text-[var(--onda-danger)]">*</span>
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      <FilterChip
-                        selected={promoForm.expiryMode === "TIME"}
-                        icon={OndaIcons.calendar}
-                        onClick={() =>
-                          setPromoForm((f) => ({
-                            ...f,
-                            expiryMode: "TIME",
-                            maxRedemptions: "",
-                          }))
-                        }
-                      >
-                        Por tiempo
-                      </FilterChip>
-                      <FilterChip
-                        selected={promoForm.expiryMode === "QUANTITY"}
-                        icon={OndaIcons.nXm}
-                        onClick={() =>
-                          setPromoForm((f) => ({
-                            ...f,
-                            expiryMode: "QUANTITY",
-                            endsAt: "",
-                          }))
-                        }
-                      >
-                        Por cantidad
-                      </FilterChip>
-                    </div>
-                    {promoForm.expiryMode === "TIME" ? (
-                      <label className="block text-sm text-[var(--onda-muted)]">
-                        Disponible hasta
-                        <input
-                          type="date"
-                          required
-                          className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                          value={promoForm.endsAt}
-                          onChange={(e) =>
-                            setPromoForm((f) => ({
-                              ...f,
-                              endsAt: e.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                    ) : null}
-                    {promoForm.expiryMode === "QUANTITY" ? (
-                      <label className="block text-sm text-[var(--onda-muted)]">
-                        Máximo de redenciones
-                        <input
-                          type="number"
-                          min={1}
-                          required
-                          className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                          value={promoForm.maxRedemptions}
-                          onChange={(e) =>
-                            setPromoForm((f) => ({
-                              ...f,
-                              maxRedemptions: e.target.value,
-                            }))
-                          }
-                          placeholder="Ej. 50"
-                        />
-                      </label>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-4">
-                    <label className="text-sm text-[var(--onda-muted)]">
-                      Ondas requeridas
-                      <input
-                        type="number"
-                        min={1}
-                        max={store?.maxStamps ?? 12}
-                        required
-                        className="ml-2 w-24 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                        value={promoForm.pointsRequired}
-                        onChange={(e) =>
-                          setPromoForm((f) => ({
-                            ...f,
-                            pointsRequired: e.target.value,
-                          }))
-                        }
-                      />
-                    </label>
-                    <span className="text-xs text-[var(--onda-muted)]">
-                      de {store?.maxStamps ?? 12} sellos del ciclo
-                    </span>
-                    <label className="flex items-center gap-2 text-sm text-[var(--onda-muted)]">
-                      <input
-                        type="checkbox"
-                        checked={promoForm.isActive}
-                        onChange={(e) =>
-                          setPromoForm((f) => ({
-                            ...f,
-                            isActive: e.target.checked,
-                          }))
-                        }
-                        className="accent-[var(--onda-violet)]"
-                      />
-                      Activa al crear
-                    </label>
-                  </div>
-                  <GradientButton type="submit" disabled={promoBusy}>
-                    {OndaIcons.plus}
-                    {promoBusy ? "Guardando…" : "Crear promoción"}
-                  </GradientButton>
-                </div>
-              </form>
-            )}
 
             <div
               className={
@@ -2009,7 +1645,11 @@ export function MerchantWorkspace() {
                         openPromoDetail(p.id);
                       }
                     }}
-                    className="onda-card cursor-pointer overflow-hidden transition hover:shadow-lg"
+                    className={`onda-card cursor-pointer overflow-hidden transition hover:shadow-lg ${
+                      p.id === justCreatedPromoId
+                        ? "ring-2 ring-[var(--onda-violet)] ring-offset-2"
+                        : ""
+                    }`}
                   >
                     <div className="relative aspect-[16/10] bg-[var(--onda-bg)]">
                       {p.imageUrl ? (
@@ -2123,7 +1763,11 @@ export function MerchantWorkspace() {
                         openPromoDetail(p.id);
                       }
                     }}
-                    className="onda-card flex cursor-pointer items-center gap-3 p-2.5 pr-3 transition hover:shadow-md"
+                    className={`onda-card flex cursor-pointer items-center gap-3 p-2.5 pr-3 transition hover:shadow-md ${
+                      p.id === justCreatedPromoId
+                        ? "ring-2 ring-[var(--onda-violet)] ring-offset-2"
+                        : ""
+                    }`}
                   >
                     <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[var(--onda-bg)]">
                       {p.imageUrl ? (
