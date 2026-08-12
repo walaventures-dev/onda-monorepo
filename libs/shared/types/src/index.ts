@@ -134,7 +134,6 @@ export interface StoreDto {
   referralCode?: string;
   ownerName?: string;
   ownerEmail?: string | null;
-  pinCode?: string;
   lat?: number | null;
   lng?: number | null;
   createdAt?: string;
@@ -231,14 +230,12 @@ export interface EnrollResponse {
 export interface AccumulateRequest {
   passId: string;
   storeId: string;
-  pinCode: string;
   points?: number;
 }
 
 export interface RedeemRequest {
   passId: string;
   storeId: string;
-  pinCode: string;
   promotionId: string;
 }
 

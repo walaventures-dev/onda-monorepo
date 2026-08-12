@@ -483,13 +483,6 @@ button.onda-gradient:focus-visible:not(:disabled) {
   white-space: nowrap;
 }
 
-.onda-topbar-sub {
-  margin: 0 0 0.1rem;
-  font-size: 0.7rem;
-  color: var(--onda-muted);
-  line-height: 1.1;
-}
-
 .onda-topbar-actions {
   display: flex;
   align-items: center;
@@ -583,10 +576,6 @@ button.onda-gradient:focus-visible:not(:disabled) {
 
   .onda-topbar-leading {
     max-width: 34%;
-  }
-
-  .onda-topbar-sub {
-    display: none;
   }
 
   .onda-topbar-actions {

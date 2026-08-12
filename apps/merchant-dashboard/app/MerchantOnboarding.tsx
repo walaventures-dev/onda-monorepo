@@ -186,7 +186,6 @@ export function MerchantOnboarding({
     StoreSubcategory.CAFE
   );
   const [ownerEmail, setOwnerEmail] = useState('');
-  const [pinCode, setPinCode] = useState('');
   const [referralCode, setReferralCode] = useState(refFromUrl);
 
   const [design, setDesign] = useState<DesignForm>({
@@ -291,7 +290,6 @@ export function MerchantOnboarding({
           ownerName: ownerName.trim(),
           category,
           subcategory,
-          pinCode,
           ownerEmail: ownerEmail.trim() || undefined,
           address: address.trim() || undefined,
           googlePlaceId,
@@ -551,7 +549,7 @@ export function MerchantOnboarding({
                       <div className="flex flex-wrap items-center gap-3">
                         <GradientButton
                           type="submit"
-                          disabled={busy || pinCode.length < 4}
+                          disabled={busy}
                           className="min-w-[10rem]"
                         >
                           {busy ? 'Creando…' : 'Continuar'}
@@ -698,36 +696,15 @@ export function MerchantOnboarding({
 
                     <div className="space-y-4">
                       <SectionTitle>Acceso</SectionTitle>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <Field label="Email">
-                          <input
-                            type="email"
-                            value={ownerEmail}
-                            onChange={(e) => setOwnerEmail(e.target.value)}
-                            placeholder="dueno@negocio.com"
-                            className="onda-input"
-                          />
-                        </Field>
-                        <Field
-                          label="PIN de caja"
-                          hint="4 dígitos para aprobar acumulaciones"
-                        >
-                          <input
-                            required
-                            inputMode="numeric"
-                            pattern="[0-9]{4}"
-                            maxLength={4}
-                            value={pinCode}
-                            onChange={(e) =>
-                              setPinCode(
-                                e.target.value.replace(/\D/g, '').slice(0, 4)
-                              )
-                            }
-                            placeholder="••••"
-                            className="onda-input tracking-[0.35em]"
-                          />
-                        </Field>
-                      </div>
+                      <Field label="Email">
+                        <input
+                          type="email"
+                          value={ownerEmail}
+                          onChange={(e) => setOwnerEmail(e.target.value)}
+                          placeholder="dueno@negocio.com"
+                          className="onda-input"
+                        />
+                      </Field>
                     </div>
 
                     <div className="space-y-4">

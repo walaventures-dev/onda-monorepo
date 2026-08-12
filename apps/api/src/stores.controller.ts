@@ -4,8 +4,8 @@ import {
   BadRequestException,
   ConflictException,
   Controller,
-  ForbiddenException,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -17,10 +17,6 @@ import {
   isSubcategoryOfCategory,
   normalizeStoreSlug,
 } from './store-taxonomy';
-
-const pinAttempts = new Map<string, { count: number; resetAt: number }>();
-const PIN_ATTEMPT_LIMIT = 5;
-const PIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 
 const storePublicSelect = {
   id: true,
@@ -59,14 +55,18 @@ export class StoresController {
   }
 
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.prisma.store.findUniqueOrThrow({
-      where: { id },
+  async get(@Param('id') id: string) {
+    const store = await this.prisma.store.findFirst({
+      where: { OR: [{ id }, { slug: id }] },
       select: {
         ...storePublicSelect,
         eventMemberships: true,
       },
     });
+    if (!store) {
+      throw new NotFoundException('Comercio no encontrado');
+    }
+    return store;
   }
 
   @Post()
@@ -78,7 +78,6 @@ export class StoresController {
       ownerName: string;
       category: string;
       subcategory: string;
-      pinCode: string;
       googlePlaceId?: string;
       address?: string;
       ownerEmail?: string;
@@ -93,9 +92,6 @@ export class StoresController {
     }
     if (!body.ownerName?.trim()) {
       throw new BadRequestException('El nombre del encargado es requerido');
-    }
-    if (!body.pinCode?.trim()) {
-      throw new BadRequestException('El PIN es requerido');
     }
     if (!body.category || !body.subcategory) {
       throw new BadRequestException('Categoría y subcategoría son requeridas');
@@ -151,7 +147,6 @@ export class StoresController {
           ownerName: body.ownerName.trim(),
           category: body.category as any,
           subcategory: body.subcategory as any,
-          pinCode: body.pinCode,
           googlePlaceId: body.googlePlaceId,
           address: body.address?.trim() || undefined,
           ownerEmail: body.ownerEmail?.trim() || undefined,
@@ -196,27 +191,17 @@ export class StoresController {
       name: string;
       googlePlaceId: string;
       address: string;
-      pinCode: string;
       lat: number;
       lng: number;
       planType: 'BASIC' | 'PRO';
       billingStatus: string;
       maxStamps: number;
-      currentPinCode: string;
       ownerName: string;
     }>
   ) {
-    const existingStore = await this.prisma.store.findUniqueOrThrow({
-      where: { id },
-    });
-    if (existingStore.pinCode !== body.currentPinCode) {
-      throw new ForbiddenException('PIN de tienda inválido');
-    }
-    const { currentPinCode, ...updateFields } = body;
-
     let maxStamps: number | undefined;
-    if (updateFields.maxStamps != null) {
-      maxStamps = Number(updateFields.maxStamps);
+    if (body.maxStamps != null) {
+      maxStamps = Number(body.maxStamps);
       if (!Number.isInteger(maxStamps) || maxStamps < 1 || maxStamps > 12) {
         throw new BadRequestException(
           'El tope de sellos debe ser un número entre 1 y 12'
@@ -233,33 +218,8 @@ export class StoresController {
     }
     return this.prisma.store.update({
       where: { id },
-      data: { ...updateFields, maxStamps },
+      data: { ...body, maxStamps },
     });
-  }
-
-  @Post(':id/validate-pin')
-  async validatePin(
-    @Param('id') id: string,
-    @Body() body: { pinCode: string }
-  ) {
-    const now = Date.now();
-    const entry = pinAttempts.get(id);
-    if (entry && entry.resetAt > now && entry.count >= PIN_ATTEMPT_LIMIT) {
-      throw new ForbiddenException('Demasiados intentos, espera unos minutos');
-    }
-    const store = await this.prisma.store.findUniqueOrThrow({ where: { id } });
-    const valid = store.pinCode === body.pinCode;
-    if (!valid) {
-      const current =
-        entry && entry.resetAt > now
-          ? entry
-          : { count: 0, resetAt: now + PIN_ATTEMPT_WINDOW_MS };
-      current.count += 1;
-      pinAttempts.set(id, current);
-    } else {
-      pinAttempts.delete(id);
-    }
-    return { valid };
   }
 
   @Get(':id/customers')

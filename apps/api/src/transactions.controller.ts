@@ -1,7 +1,6 @@
 import { Inject, BadRequestException,
   Body,
   Controller,
-  ForbiddenException,
   Get,
   Param,
   Post,
@@ -62,14 +61,11 @@ export class TransactionsController {
 
   @Post('accumulate')
   async accumulate(
-    @Body() body: { passId: string; storeId: string; pinCode: string; points?: number }
+    @Body() body: { passId: string; storeId: string; points?: number }
   ) {
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: body.storeId },
     });
-    if (store.pinCode !== body.pinCode) {
-      throw new ForbiddenException('PIN inválido');
-    }
     const requestedPoints = body.points ?? 1;
     const { pass, tx } = await this.prisma.$transaction(async (trx) => {
       const allowed = await assertCanAccumulate(trx, store.id, requestedPoints);
@@ -116,16 +112,12 @@ export class TransactionsController {
     body: {
       passId: string;
       storeId: string;
-      pinCode: string;
       promotionId: string;
     }
   ) {
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: body.storeId },
     });
-    if (store.pinCode !== body.pinCode) {
-      throw new ForbiddenException('PIN inválido');
-    }
     const promo = await this.prisma.promotion.findUniqueOrThrow({
       where: { id: body.promotionId },
     });

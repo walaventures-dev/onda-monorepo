@@ -91,7 +91,6 @@ model Store {
   subcategory       StoreSubcategory
   googlePlaceId     String?
   address           String?
-  pinCode           String
   planType          PlanType               @default(BASIC)
   billingStatus     String                 @default("ACTIVE")
   whatsappUsed      Int                    @default(0)

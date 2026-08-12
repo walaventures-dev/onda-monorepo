@@ -10,11 +10,11 @@ export class AuthController {
   ) {}
 
   @Post('merchant')
-  async merchantLogin(@Body() body: { email: string; pinCode: string }) {
+  async merchantLogin(@Body() body: { email: string }) {
     const store = await this.prisma.store.findFirst({
       where: { ownerEmail: body.email },
     });
-    if (!store || store.pinCode !== body.pinCode) {
+    if (!store) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
     const token = await this.jwt.signAsync({

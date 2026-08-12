@@ -557,15 +557,6 @@ export function AppShell({
               <MenuIcon open={navOpen} />
             </button>
             <div className="onda-topbar-brand">
-              <p className="onda-topbar-sub inline-flex items-center gap-1.5">
-                <img
-                  src="/brand/onda-wordmark.png"
-                  alt=""
-                  className="h-3.5 w-auto"
-                  aria-hidden
-                />
-                <span>Panel</span>
-              </p>
               <h1 className="onda-topbar-title">{title}</h1>
             </div>
           </div>

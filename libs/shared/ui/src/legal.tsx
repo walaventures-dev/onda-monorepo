@@ -123,7 +123,7 @@ export function TermsContent() {
         <h2 className="font-display text-xl font-semibold">3. Uso aceptable</h2>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-[var(--onda-muted)]">
           <li>Debes proporcionar datos veraces (nombre y WhatsApp).</li>
-          <li>No puedes manipular puntos, PIN de caja ni dispositivos NFC ajenos.</li>
+          <li>No puedes manipular puntos ni dispositivos NFC ajenos.</li>
           <li>Un pase es personal; el comercio puede exigir identificación razonable al canjear.</li>
         </ul>
       </section>

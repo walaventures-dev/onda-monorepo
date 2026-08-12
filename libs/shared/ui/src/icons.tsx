@@ -46,6 +46,7 @@ import { CaretRightIcon as CaretRight } from '@phosphor-icons/react/dist/csr/Car
 import { SnowflakeIcon as Snowflake } from '@phosphor-icons/react/dist/csr/Snowflake';
 import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/CreditCard';
 import { UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
+import { ShareNetworkIcon as ShareNetwork } from '@phosphor-icons/react/dist/csr/ShareNetwork';
 
 const SIZE = 16;
 const CLASS = 'h-3 w-3 shrink-0';
@@ -97,6 +98,7 @@ export const OndaIcons = {
   snowflake: <Snowflake size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   wallet: <CreditCard size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   profile: <UserCircle size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
+  share: <ShareNetwork size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
 };
 
 export function OndaMark({ className = 'h-3 w-3 shrink-0' }: { className?: string }) {

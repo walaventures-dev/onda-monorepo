@@ -33,7 +33,7 @@ function getGreeting() {
 
 export default function StoreEntryPage() {
   const params = useParams<{ storeId: string }>();
-  const storeId = params.storeId;
+  const storeKey = params.storeId;
 
   const [step, setStep] = useState<Step>("loading");
   const [store, setStore] = useState<any>(null);
@@ -49,18 +49,21 @@ export default function StoreEntryPage() {
   const [pendingRequest, setPendingRequest] =
     useState<PendingRequestDto | null>(null);
 
-  async function loadOrClaim(sess: CustomerSession) {
+  async function loadOrClaim(sess: CustomerSession, resolvedStoreId: string) {
     try {
       const passes = await api<any[]>(
-        `/passes?userId=${sess.user.id}&storeId=${storeId}`,
+        `/passes?userId=${sess.user.id}&storeId=${resolvedStoreId}`,
       );
       if (passes[0]) {
         setPass(passes[0]);
       } else {
-        const created = await api<any>(`/passes/store/${storeId}/claim`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${sess.token}` },
-        });
+        const created = await api<any>(
+          `/passes/store/${resolvedStoreId}/claim`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${sess.token}` },
+          },
+        );
         setPass(created);
       }
     } catch (err: any) {
@@ -75,7 +78,7 @@ export default function StoreEntryPage() {
 
     async function boot() {
       try {
-        const s = await api<any>(`/stores/${storeId}`);
+        const s = await api<any>(`/stores/${storeKey}`);
         if (cancelled) return;
         setStore(s);
 
@@ -85,7 +88,7 @@ export default function StoreEntryPage() {
           return;
         }
         setSession(existing);
-        await loadOrClaim(existing);
+        await loadOrClaim(existing, s.id);
       } catch (err: any) {
         if (!cancelled) {
           setError(err.message || "No se pudo conectar");
@@ -98,7 +101,7 @@ export default function StoreEntryPage() {
     return () => {
       cancelled = true;
     };
-  }, [storeId]);
+  }, [storeKey]);
 
   async function onOtpVerified(result: {
     token: string;
@@ -112,7 +115,8 @@ export default function StoreEntryPage() {
       setStep("name");
       return;
     }
-    await loadOrClaim(sess);
+    if (!store?.id) return;
+    await loadOrClaim(sess, store.id);
   }
 
   async function submitName(e: FormEvent) {
@@ -132,7 +136,8 @@ export default function StoreEntryPage() {
       const sess: CustomerSession = { token: session.token, user: updated };
       saveSession(sess);
       setSession(sess);
-      await loadOrClaim(sess);
+      if (!store?.id) return;
+      await loadOrClaim(sess, store.id);
     } catch (err: any) {
       setError(err.message || "No se pudo guardar tu nombre");
     } finally {

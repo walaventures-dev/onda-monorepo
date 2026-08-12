@@ -21,51 +21,24 @@ type SsePayload = {
   createdAt: string;
 };
 
-function pinStorageKey(storeId: string) {
-  return `onda_dashboard_pin_${storeId}`;
-}
-
-function getOrPromptPin(storeId: string): string | null {
-  const existing = localStorage.getItem(pinStorageKey(storeId));
-  if (existing) return existing;
-  const entered = window.prompt('PIN de la tienda para confirmar acciones de caja');
-  if (!entered) return null;
-  localStorage.setItem(pinStorageKey(storeId), entered);
-  return entered;
-}
-
-function clearStoredPin(storeId: string) {
-  localStorage.removeItem(pinStorageKey(storeId));
-}
-
 export function PendingRequestsPanel({ storeId }: { storeId: string }) {
   const [items, setItems] = useState<PendingItem[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [pin, setPin] = useState<string | null>(null);
 
   useEffect(() => {
     if (!storeId) return;
-    setPin(getOrPromptPin(storeId));
-  }, [storeId]);
-
-  useEffect(() => {
-    if (!storeId || !pin) return;
     let cancelled = false;
 
-    api<PendingItem[]>(`/pending-requests/pending?storeId=${storeId}&pinCode=${encodeURIComponent(pin)}`)
+    api<PendingItem[]>(`/pending-requests/pending?storeId=${storeId}`)
       .then((list) => {
         if (!cancelled) setItems(list);
       })
-      .catch((err: any) => {
-        if (err.message === 'PIN de tienda inválido') {
-          clearStoredPin(storeId);
-          setPin(getOrPromptPin(storeId));
-        }
-        /* si no es error de PIN, la conexión SSE de abajo seguirá empujando novedades */
+      .catch(() => {
+        /* la conexión SSE de abajo seguirá empujando novedades */
       });
 
     const source = new EventSource(
-      `${getApiUrl()}/api/pending-requests/stream?storeId=${storeId}&pinCode=${encodeURIComponent(pin)}`
+      `${getApiUrl()}/api/pending-requests/stream?storeId=${storeId}`
     );
     source.onmessage = (event) => {
       const payload = JSON.parse(event.data) as SsePayload;
@@ -86,22 +59,15 @@ export function PendingRequestsPanel({ storeId }: { storeId: string }) {
       cancelled = true;
       source.close();
     };
-  }, [storeId, pin]);
+  }, [storeId]);
 
   async function resolve(id: string, action: 'confirm' | 'reject') {
-    if (!pin) return;
     setBusyId(id);
     try {
-      await api(`/pending-requests/${id}/${action}`, {
-        method: 'POST',
-        body: JSON.stringify({ pinCode: pin }),
-      });
+      await api(`/pending-requests/${id}/${action}`, { method: 'POST' });
       setItems((prev) => prev.filter((i) => i.id !== id));
-    } catch (err: any) {
-      if (err.message === 'PIN de tienda inválido' && storeId) {
-        clearStoredPin(storeId);
-        setPin(getOrPromptPin(storeId));
-      }
+    } catch {
+      /* el item sigue visible para reintentar */
     } finally {
       setBusyId(null);
     }

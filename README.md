@@ -54,5 +54,5 @@ Copia `.env.example` → `.env`. Variables clave:
 ## Seed demo
 
 - Evento: `festival-neiva`
-- Merchant login email seed: `owner0@onda.lat` / PIN store `1234`
+- Merchant login email seed: `owner0@onda.lat`
 - User demo: `+573001112233`

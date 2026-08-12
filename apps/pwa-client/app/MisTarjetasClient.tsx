@@ -13,10 +13,10 @@ const PREFERRED_STORE_NAME = 'Café del Río';
 
 async function simulateQrScan(router: ReturnType<typeof useRouter>): Promise<boolean> {
   try {
-    const stores = await api<{ id: string; name: string }[]>('/stores');
+    const stores = await api<{ id: string; name: string; slug: string }[]>('/stores');
     const target = stores.find((s) => s.name === PREFERRED_STORE_NAME) || stores[0];
     if (target) {
-      router.replace(`/r/${target.id}`);
+      router.replace(`/r/${target.slug || target.id}`);
       return true;
     }
   } catch {
@@ -56,7 +56,8 @@ export function MisTarjetasClient() {
       if (userPasses.length === 0 && SIMULATE_QR_SCAN && (await simulateQrScan(router))) return;
 
       if (userPasses.length === 1 && userPasses[0].storeId) {
-        if (!cancelled) router.replace(`/r/${userPasses[0].storeId}`);
+        const href = userPasses[0].store?.slug || userPasses[0].storeId;
+        if (!cancelled) router.replace(`/r/${href}`);
         return;
       }
 
@@ -94,7 +95,7 @@ export function MisTarjetasClient() {
       <div className="onda-pwa-body onda-pwa-fade">
         <div className="flex flex-1 flex-col gap-4 pb-6">
           {passes.map((p) => (
-            <Link key={p.id} href={`/r/${p.storeId}`} className="block">
+            <Link key={p.id} href={`/r/${p.store?.slug || p.storeId}`} className="block">
               <PassPreview
                 compact
                 {...(p.store?.passDesign || {})}

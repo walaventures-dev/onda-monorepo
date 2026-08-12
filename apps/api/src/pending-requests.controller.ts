@@ -45,22 +45,15 @@ export class PendingRequestsController {
 
   @Sse('stream')
   async stream(
-    @Query('storeId') storeId: string,
-    @Query('pinCode') pinCode: string
+    @Query('storeId') storeId: string
   ): Promise<Observable<MessageEvent>> {
-    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
-    if (store.pinCode !== pinCode) {
-      throw new ForbiddenException('PIN de tienda inválido');
-    }
+    await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
     return this.sse.stream(storeId);
   }
 
   @Get('pending')
-  async listPending(@Query('storeId') storeId: string, @Query('pinCode') pinCode: string) {
-    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
-    if (store.pinCode !== pinCode) {
-      throw new ForbiddenException('PIN de tienda inválido');
-    }
+  async listPending(@Query('storeId') storeId: string) {
+    await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
     return this.prisma.pendingRequest.findMany({
       where: { storeId, status: 'PENDING' },
       include: { pass: { include: { user: true } }, promotion: true },
@@ -218,12 +211,9 @@ export class PendingRequestsController {
   }
 
   @Post(':id/confirm')
-  async confirm(@Param('id') id: string, @Body() body: { pinCode: string }) {
+  async confirm(@Param('id') id: string) {
     const pending = await this.prisma.pendingRequest.findUniqueOrThrow({ where: { id } });
     const store = await this.prisma.store.findUniqueOrThrow({ where: { id: pending.storeId } });
-    if (store.pinCode !== body.pinCode) {
-      throw new ForbiddenException('PIN de tienda inválido');
-    }
     if (pending.status !== 'PENDING') {
       throw new BadRequestException('Esta solicitud ya no está pendiente');
     }
@@ -345,12 +335,8 @@ export class PendingRequestsController {
   }
 
   @Post(':id/reject')
-  async reject(@Param('id') id: string, @Body() body: { pinCode: string }) {
+  async reject(@Param('id') id: string) {
     const pending = await this.prisma.pendingRequest.findUniqueOrThrow({ where: { id } });
-    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: pending.storeId } });
-    if (store.pinCode !== body.pinCode) {
-      throw new ForbiddenException('PIN de tienda inválido');
-    }
     if (pending.status !== 'PENDING') {
       throw new BadRequestException('Esta solicitud ya no está pendiente');
     }

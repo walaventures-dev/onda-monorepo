@@ -29,6 +29,7 @@ import {
   promoTypeIcon,
   formatPromoBenefit,
   api,
+  toast,
   type AnalyticsFiltersValue,
   OndaIcons,
   BadgePill,
@@ -83,6 +84,8 @@ type CustomerSegment =
 
 // Oculto temporalmente: poner en true para reactivar el módulo.
 const COMPARATIVA_ENABLED = false;
+const REGISTER_STORE_ENABLED = false;
+const EVENTOS_ENABLED = false;
 
 const SECTIONS: Tab[] = [
   "resumen",
@@ -90,7 +93,7 @@ const SECTIONS: Tab[] = [
   "clientes",
   "actividad",
   "promos",
-  "eventos",
+  ...(EVENTOS_ENABLED ? (["eventos"] as const) : []),
   "referidos",
   "config",
 ];
@@ -247,7 +250,7 @@ const PULSE_COPY: Record<
     ],
     lines: [
       "Poco movimiento y peores números que antes. Actúa en caja y en el catálogo.",
-      "Casi no hay ondas ni canjes. Revisa QR, PIN y que el equipo sume en cada venta.",
+      "Casi no hay ondas ni canjes. Revisa QR y que el equipo sume en cada venta.",
       "Se siente apagado. Lanza algo inmediato: promo fácil y visible en mostrador.",
       "Los números piden SOS. Duplica una promo que ya funcionó o crea un gancho nuevo.",
       "Muy poca vida en el programa. Confirma que los clientes encuentran cómo acumular.",
@@ -328,6 +331,13 @@ function fillPeriod(template: string, periodHint: string) {
   return template.replaceAll("{period}", periodHint);
 }
 
+function buildStorePublicUrl(slug: string) {
+  const pwa = (
+    process.env.NEXT_PUBLIC_PWA_URL || "http://localhost:4201"
+  ).replace(/\/$/, "");
+  return `${pwa}/r/${slug}`;
+}
+
 function parseRoute(pathname: string): {
   tab: Tab;
   promoId: string | null;
@@ -353,6 +363,12 @@ export function MerchantWorkspace() {
     if (pathname === "/pase" || pathname.startsWith("/pase/")) {
       router.replace("/config");
     }
+    if (
+      !EVENTOS_ENABLED &&
+      (pathname === "/eventos" || pathname.startsWith("/eventos/"))
+    ) {
+      router.replace("/resumen");
+    }
   }, [pathname, router]);
 
   const [stores, setStores] = useState<any[]>([]);
@@ -366,8 +382,6 @@ export function MerchantWorkspace() {
   const [memberships, setMemberships] = useState<any[]>([]);
   const [design, setDesign] = useState<any>(null);
   const [billing, setBilling] = useState<any>(null);
-  const [pin, setPin] = useState("");
-  const [passId, setPassId] = useState("");
   const [duplicateSource, setDuplicateSource] = useState<any>(null);
   const [justCreatedPromoId, setJustCreatedPromoId] = useState<string | null>(
     null,
@@ -414,7 +428,9 @@ export function MerchantWorkspace() {
       ["clientes", "Clientes", OndaIcons.users, false],
       ["actividad", "Actividad", OndaIcons.activity, false],
       ["promos", "Promociones", OndaIcons.redeem, false],
-      ["eventos", "Eventos", OndaIcons.ticket, false],
+      ...(EVENTOS_ENABLED
+        ? ([["eventos", "Eventos", OndaIcons.ticket, false]] as const)
+        : []),
       ["referidos", "Referidos", OndaIcons.users, false],
       ["config", "Configuración", OndaIcons.gear, true],
     ];
@@ -752,40 +768,6 @@ export function MerchantWorkspace() {
     return { tone, title, line };
   }, [overview, emptyRange, kpis, filters.preset, pulseSeed]);
 
-  async function accumulate() {
-    try {
-      await api("/transactions/accumulate", {
-        method: "POST",
-        body: JSON.stringify({ passId, storeId, pinCode: pin, points: 1 }),
-      });
-      await alert({
-        title: "Onda acumulada",
-        message: "Se sumó 1 onda al pase del cliente.",
-        tone: "success",
-      });
-      await Promise.all([loadTxs(), loadOverview()]);
-    } catch (e: any) {
-      await alert({
-        title: "No se pudo acumular",
-        message: e.message || "Revisa el PIN y el pase.",
-        tone: "danger",
-      });
-    }
-  }
-
-  function dashboardPinStorageKey(storeId: string) {
-    return `onda_dashboard_pin_${storeId}`;
-  }
-
-  function getOrPromptDashboardPin(storeId: string): string | null {
-    const existing = localStorage.getItem(dashboardPinStorageKey(storeId));
-    if (existing) return existing;
-    const entered = window.prompt("PIN de la tienda para guardar el tope de sellos");
-    if (!entered) return null;
-    localStorage.setItem(dashboardPinStorageKey(storeId), entered);
-    return entered;
-  }
-
   async function saveDesign(e: FormEvent) {
     e.preventDefault();
     const payload = {
@@ -798,25 +780,13 @@ export function MerchantWorkspace() {
     });
     setDesign(saved);
     if (store?.maxStamps != null) {
-      const currentPinCode = getOrPromptDashboardPin(storeId);
-      if (!currentPinCode) {
-        await alert({
-          title: "PIN requerido",
-          message: "Necesitas el PIN de la tienda para guardar el tope de sellos.",
-          tone: "warning",
-        });
-        return;
-      }
       try {
         const updatedStore = await api(`/stores/${storeId}`, {
           method: "PATCH",
-          body: JSON.stringify({ maxStamps: store.maxStamps, currentPinCode }),
+          body: JSON.stringify({ maxStamps: store.maxStamps }),
         });
         setStores((prev) => prev.map((s) => (s.id === storeId ? updatedStore : s)));
       } catch (err: any) {
-        if (err.message === "PIN de tienda inválido") {
-          localStorage.removeItem(dashboardPinStorageKey(storeId));
-        }
         await alert({
           title: "Diseño guardado, pero el tope de sellos no se actualizó",
           message: err.message || "Intenta de nuevo.",
@@ -830,6 +800,34 @@ export function MerchantWorkspace() {
       message: "La vista previa del pase quedó actualizada.",
       tone: "success",
     });
+  }
+
+  async function shareStoreUrl() {
+    if (!store?.slug) return;
+    const url = buildStorePublicUrl(store.slug);
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({
+          title: store.name,
+          text: `Suma ondas en ${store.name}`,
+          url,
+        });
+        return;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copiado", {
+        description: url,
+      });
+    } catch {
+      await alert({
+        title: "Link del negocio",
+        message: url,
+      });
+    }
   }
 
   async function upgrade() {
@@ -1004,31 +1002,50 @@ export function MerchantWorkspace() {
               compact
               options={stores.map((s) => ({ id: s.id, label: s.name }))}
             />
-            <Link
-              href="/onboarding"
-              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium text-[var(--onda-ink)] hover:bg-[var(--onda-bg)]"
-            >
-              {OndaIcons.plus}
-              Registrar comercio
-            </Link>
-            <SegmentedControl
-              aria-label="Modo"
-              value={mode}
-              onChange={setMode}
-              options={[
-                { id: "global", label: "Global", icon: OndaIcons.globe },
-                { id: "event", label: "Evento", icon: OndaIcons.ticket },
-              ]}
-            />
-            {mode === "event" ? (
-              <OndaSelect
-                aria-label="Evento"
-                value={eventId}
-                onChange={setEventId}
-                placeholder="Evento"
-                compact
-                options={events.map((ev) => ({ id: ev.id, label: ev.name }))}
-              />
+            {store?.slug ? (
+              <button
+                type="button"
+                onClick={shareStoreUrl}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium text-[var(--onda-ink)] hover:bg-[var(--onda-bg)]"
+              >
+                {OndaIcons.share}
+                Compartir
+              </button>
+            ) : null}
+            {REGISTER_STORE_ENABLED ? (
+              <Link
+                href="/onboarding"
+                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium text-[var(--onda-ink)] hover:bg-[var(--onda-bg)]"
+              >
+                {OndaIcons.plus}
+                Registrar comercio
+              </Link>
+            ) : null}
+            {EVENTOS_ENABLED ? (
+              <>
+                <SegmentedControl
+                  aria-label="Modo"
+                  value={mode}
+                  onChange={setMode}
+                  options={[
+                    { id: "global", label: "Global", icon: OndaIcons.globe },
+                    { id: "event", label: "Evento", icon: OndaIcons.ticket },
+                  ]}
+                />
+                {mode === "event" ? (
+                  <OndaSelect
+                    aria-label="Evento"
+                    value={eventId}
+                    onChange={setEventId}
+                    placeholder="Evento"
+                    compact
+                    options={events.map((ev) => ({
+                      id: ev.id,
+                      label: ev.name,
+                    }))}
+                  />
+                ) : null}
+              </>
             ) : null}
           </div>
         }
@@ -1492,7 +1509,7 @@ export function MerchantWorkspace() {
                     tone: "warning",
                     title: "Caja fría",
                     message:
-                      "Lleva más de 90 minutos sin movimientos. Revisa QR/NFC o el PIN de caja.",
+                      "Lleva más de 90 minutos sin movimientos. Revisa QR/NFC o que el equipo esté acumulando.",
                     stat: `${overview.ops.minutesSinceLastTx}m`,
                     action: "Ir a acumular",
                   },
@@ -1926,7 +1943,7 @@ export function MerchantWorkspace() {
           </div>
         )}
 
-        {tab === "eventos" && (
+        {EVENTOS_ENABLED && tab === "eventos" && (
           <div className="space-y-3">
             {memberships.map((m) => (
               <div
