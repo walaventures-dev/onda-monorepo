@@ -129,12 +129,11 @@ export function CampaignSection() {
     <section id="campanas" className="mx-auto max-w-6xl px-6 py-20 md:py-28">
       <motion.div {...fadeUp} className="max-w-2xl">
         <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-tight text-[var(--onda-ink)]">
-          Lanza una campaña en minutos.
+          Llena el local cuando esté flojo.
         </h2>
         <p className="mt-3 text-lg text-[var(--onda-muted)]">
-          Prueba este demo: elige objetivo, audiencia y mensaje. En cuatro pasos
-          ves cómo Onda llega a tus clientes por Wallet, WhatsApp y SMS — sin Excel
-          ni agencia.
+          Objetivo, audiencia y mensaje: en cuatro pasos llegas a tus clientes
+          por Wallet, WhatsApp y SMS — sin Excel ni agencia.
         </p>
       </motion.div>
 

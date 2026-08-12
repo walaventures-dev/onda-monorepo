@@ -8,8 +8,8 @@ import { onboardingUrl } from '../lib/pricing';
 
 const BADGES = [
   { icon: DeviceMobile, label: 'Sin app' },
-  { icon: Lightning, label: 'Setup rápido' },
-  { icon: ShieldCheck, label: 'Pago seguro' },
+  { icon: Lightning, label: 'Listo en minutos' },
+  { icon: ShieldCheck, label: 'Sin tarjeta al iniciar' },
 ];
 
 export function FooterCta() {
@@ -20,7 +20,7 @@ export function FooterCta() {
           <div>
             <OndaLogo variant="onPrimary" />
             <p className="mt-4 font-display text-2xl font-semibold md:text-3xl">
-              ¿Tu negocio ya está en la Onda?
+              ¿Listo para que tus clientes vuelvan?
             </p>
             <div className="mt-5 flex flex-wrap justify-center gap-4 md:justify-start">
               {BADGES.map(({ icon: Icon, label }) => (

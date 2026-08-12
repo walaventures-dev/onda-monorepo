@@ -4,7 +4,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Onda — Tu cliente se fue. Tu marca no.',
   description:
-    'Onda convierte cada visita en una razón para volver. Wallet, NFC, recompensas y campañas para tu negocio.',
+    'Cada visita suma hacia un premio. Recompensas, campañas y reseñas en Wallet — sin app que descargar.',
 };
 
 export const viewport: Viewport = {

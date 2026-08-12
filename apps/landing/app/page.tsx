@@ -3,6 +3,7 @@
 import { CampaignSection } from './components/CampaignSection';
 import { ConceptSection } from './components/ConceptSection';
 import { DemoSection } from './components/DemoSection';
+import { FaqSection } from './components/FaqSection';
 import { FooterCta } from './components/FooterCta';
 import { HeroSection } from './components/HeroSection';
 import { LandingHeader } from './components/LandingHeader';
@@ -18,6 +19,7 @@ export default function LandingPage() {
         <ConceptSection />
         <CampaignSection />
         <PricingSection />
+        <FaqSection />
       </main>
       <FooterCta />
     </div>

@@ -11,10 +11,10 @@ import { onboardingUrl } from '../lib/pricing';
 import { fadeUp } from '../lib/motion';
 
 const VALUE_POINTS = [
-  { icon: DeviceMobile, title: 'Wallet', desc: 'Sin apps' },
-  { icon: Gift, title: 'Recompensas', desc: 'A tu manera' },
-  { icon: Megaphone, title: 'Campañas', desc: 'Omnicanal' },
-  { icon: Star, title: 'Google Reviews', desc: 'Más reputación' },
+  { icon: DeviceMobile, title: 'Wallet', desc: 'Sin descargar app' },
+  { icon: Gift, title: 'Recompensas', desc: 'Tú defines el premio' },
+  { icon: Megaphone, title: 'Campañas', desc: 'Wallet, WhatsApp y SMS' },
+  { icon: Star, title: 'Reseñas', desc: 'Más estrellas en Google' },
 ];
 
 export function HeroSection() {
@@ -42,7 +42,8 @@ export function HeroSection() {
             irse con él.
           </h1>
           <p className="mt-5 max-w-lg text-lg text-[var(--onda-muted)]">
-            Onda convierte cada visita en una razón para volver.
+            Cada visita suma hacia un premio. Tú decides cuándo hacerlos volver —
+            sin app que descargar.
           </p>
 
           <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">

@@ -44,9 +44,9 @@ export const PLAN_META: Record<
     name: 'Onda',
     shortName: 'Onda',
     features: [
-      'Pase en Apple y Google Wallet',
-      'Recompensas a tu medida',
-      'Base de clientes propia',
+      'Tarjeta en Apple y Google Wallet',
+      'Recompensas que tú defines',
+      'Tu propia base de clientes',
       'Avisos push desde el Wallet',
     ],
   },
@@ -55,11 +55,11 @@ export const PLAN_META: Record<
     shortName: 'Onda Pro',
     features: [
       'Todo lo de Onda',
-      '2 campañas para traer clientes de vuelta',
+      'Campañas para llenar el local',
       'WhatsApp y SMS (hasta 350 msgs/mes)',
-      'Más reseñas en Google',
-      'Avisos al cliente cuando está cerca del negocio',
-      'Analítica para ver qué funciona',
+      'Pide reseñas en Google al canjear',
+      'Aviso cuando el cliente está cerca',
+      'Analítica para ver qué sí funciona',
     ],
   },
 };

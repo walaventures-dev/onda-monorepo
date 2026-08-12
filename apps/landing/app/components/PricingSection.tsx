@@ -15,6 +15,7 @@ import {
   type BillingPeriod,
   type PlanId,
 } from '../lib/pricing';
+import { KitVisual } from './mocks/KitVisual';
 
 const ORDER: PlanId[] = ['BASIC', 'PRO'];
 
@@ -45,10 +46,10 @@ export function PricingSection() {
     <section id="pricing" className="mx-auto max-w-6xl px-6 py-20 md:py-28">
       <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
         <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-tight text-[var(--onda-ink)]">
-          Arma tu Onda
+          Planes que se pagan solos
         </h2>
         <p className="mt-3 text-lg text-[var(--onda-muted)]">
-          Compara beneficios, elige periodo y empieza con el primer mes gratis.
+          Primer mes gratis. Elige plan y periodo — sin tarjeta para empezar.
         </p>
       </motion.div>
 
@@ -95,7 +96,7 @@ export function PricingSection() {
               className="mt-0.5 shrink-0 text-[var(--onda-success)]"
               weight="fill"
             />
-            <span>No necesitas Tarjeta de crédito para iniciar.</span>
+            <span>No necesitas tarjeta de crédito para iniciar.</span>
           </p>
 
           <AnimatePresence mode="wait">
@@ -115,7 +116,7 @@ export function PricingSection() {
               <span>
                 {includesKit
                   ? 'Con tu primer pago te llega el Kit a tu negocio, con NFC + QR listos para usar.'
-                  : 'Activación digital: sin Kit NFC + QR (disponible en 6 o 12 meses).'}
+                  : 'Activación digital ya. El Kit NFC + QR viene en planes de 6 o 12 meses.'}
               </span>
             </motion.p>
           </AnimatePresence>
@@ -138,6 +139,24 @@ export function PricingSection() {
           </AnimatePresence>
         </div>
       </motion.div>
+
+      <AnimatePresence mode="wait">
+        {includesKit ? (
+          <motion.div
+            key="kit-visual"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.28 }}
+            className="mx-auto mt-10 max-w-3xl"
+          >
+            <KitVisual />
+            <p className="mt-3 text-center text-xs text-[var(--onda-muted)]">
+              Kit de bienvenida · hablador NFC, QR, stickers y materiales de marca
+            </p>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <div className="mt-12 grid gap-6 lg:grid-cols-2">
         {ORDER.map((id) => {
@@ -258,10 +277,10 @@ export function PricingSection() {
         className="mt-8 flex items-center justify-center gap-1.5 text-center text-xs text-[var(--onda-muted)]"
       >
         <ShieldCheck size={14} className="text-[var(--onda-success)]" weight="fill" />
-        No necesitas Tarjeta de crédito para iniciar
+        Sin tarjeta para empezar
         {includesKit
-          ? ' · el Kit te llega con tu primer pago'
-          : ' · activación digital, sin Kit NFC + QR'}
+          ? ' · el Kit llega con tu primer pago'
+          : ' · activación digital (Kit en planes de 6 o 12 meses)'}
       </motion.p>
     </section>
   );

@@ -69,18 +69,18 @@ export const AUDIENCE_BY_OBJECTIVE: Record<Objective, AudienceDemo> = {
       { bucket: '3–5', count: 44 },
       { bucket: '6+', count: 29 },
     ],
-    defaultMessage: '20% off martes y miércoles de 2 a 5',
+    defaultMessage: '20% de dto. martes y miércoles de 2 a 5',
   },
   'Lanzar una recompensa nueva': {
     headline: 'Encontramos 104 clientes listos para probar tu nueva recompensa.',
-    chips: ['Activos 14d', 'Cerca del canje', 'Engagement alto'],
+    chips: ['Activos 14d', 'Cerca del canje', 'Muy activos'],
     kpis: [
       { label: 'Alcanzables', value: '104' },
       { label: 'Cerca del premio', value: '62%' },
       { label: 'Con Wallet', value: '88%' },
     ],
     people: [
-      { name: 'Sofía Herrera', initials: 'SH', meta: '4 de 5 sellos' },
+      { name: 'Sofía Herrera', initials: 'SH', meta: '4 de 5 ondas' },
       { name: 'Mateo López', initials: 'ML', meta: 'activo esta semana' },
       { name: 'Daniela Ruiz', initials: 'DR', meta: '3 canjes previos' },
       { name: 'Julián Castro', initials: 'JC', meta: 'Wallet activo' },
@@ -106,7 +106,7 @@ export const AUDIENCE_BY_OBJECTIVE: Record<Objective, AudienceDemo> = {
       { name: 'Andrea Pineda', initials: 'AP', meta: 'canjeó hace 4 días' },
       { name: 'Ricardo Mora', initials: 'RM', meta: 'sin reseña' },
       { name: 'Catalina Vélez', initials: 'CV', meta: 'canjeó hace 1 sem' },
-      { name: 'Óscar Jiménez', initials: 'OJ', meta: '5 estrellas esperado' },
+      { name: 'Óscar Jiménez', initials: 'OJ', meta: 'cliente feliz' },
       { name: 'Lucía Ramírez', initials: 'LR', meta: 'cliente frecuente' },
       { name: 'Tomás Aguilar', initials: 'TA', meta: 'Wallet + WA' },
     ],
@@ -115,7 +115,7 @@ export const AUDIENCE_BY_OBJECTIVE: Record<Objective, AudienceDemo> = {
       { bucket: '3–5', count: 39 },
       { bucket: '6+', count: 43 },
     ],
-    defaultMessage: '¿Nos dejas una reseña en Google? Te damos 1 sello extra',
+    defaultMessage: '¿Nos dejas una reseña en Google? Te damos 1 onda extra',
   },
 };
 

@@ -6,6 +6,7 @@ export const ONDA_BRAND = {
   wordmark: '/brand/onda-wordmark.png',
   hand: '/brand/onda-hand.png',
   script: '/brand/onda-script.png',
+  kitBienvenida: '/brand/onda-kit-bienvenida.png',
 } as const;
 
 export type OndaBrandVariant = 'default' | 'onDark' | 'onPrimary';

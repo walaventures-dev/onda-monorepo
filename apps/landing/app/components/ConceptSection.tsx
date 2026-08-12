@@ -44,7 +44,8 @@ export function ConceptSection() {
                   Progreso, no saldo
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-white/80">
-                  Una Onda no es moneda: es el camino medible hacia la recompensa que tú defines.
+                  Cada visita suma hacia el premio que tú defines. Sin monedas
+                  inventadas ni apps raras.
                 </p>
               </div>
 
@@ -53,10 +54,11 @@ export function ConceptSection() {
                   Para qué sirve
                 </p>
                 <p className="mt-2 font-display text-xl font-semibold leading-snug tracking-tight">
-                  Traer al cliente de vuelta
+                  Que vuelvan a comprar
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-white/80">
-                  Él la ve en Wallet. Tú la usas para vender de nuevo, cuando te conviene.
+                  Tu cliente la ve en Wallet. Tú decides cuándo empujar la
+                  siguiente visita.
                 </p>
               </div>
             </motion.div>

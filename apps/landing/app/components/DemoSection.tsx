@@ -228,7 +228,7 @@ export function DemoSection() {
   const helperText = !active
     ? 'Toca el hablador, escanea el QR o activa aquí. En segundos tienes tu tarjeta lista.'
     : state?.redeemedThisCycle
-      ? 'Así de fácil es recompensar a tus clientes — en el local y en Wallet.'
+      ? 'Así de fácil es hacerlos volver — en el local y en Wallet.'
       : state?.appleUrl || state?.googleUrl
         ? 'Guárdala en Wallet y sigue acumulando. El premio se actualiza al instante.'
         : 'Sigue acumulando ondas. Al completarlas, canjeas el 30% en masajes.';
@@ -241,8 +241,9 @@ export function DemoSection() {
         </h2>
         <p className="mt-3 text-lg text-[var(--onda-muted)]">
           Activa la tarjeta de <strong className="text-[var(--onda-ink)]">Onda Spa</strong>,
-          acumula ondas y canjea un <strong className="text-[var(--onda-ink)]">30% en masajes</strong>.
-          Misma experiencia aquí y en Wallet — sin app que descargar.
+          acumula ondas y canjea un{' '}
+          <strong className="text-[var(--onda-ink)]">30% en masajes</strong>. Así
+          vive tu cliente la experiencia — aquí y en Wallet.
         </p>
       </motion.div>
 
