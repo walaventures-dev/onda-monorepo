@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { api, Button } from "@onda/shared-ui";
+import { api, Button, Chip, OndaIcons, promoTypeIcon } from "@onda/shared-ui";
 import {
   loadSession,
   saveSession,
@@ -17,7 +17,7 @@ import {
   type PendingRequestDto,
 } from "./PendingRequestWait";
 
-type Step = "loading" | "otp" | "name" | "home" | "pendingWait" | "rewards";
+type Step = "loading" | "otp" | "name" | "home" | "pendingWait";
 
 function isAppleDevice() {
   if (typeof navigator === "undefined") return false;
@@ -201,23 +201,6 @@ export default function StoreEntryPage() {
     () => promotions.map((p: any) => p.pointsRequired as number),
     [promotions],
   );
-  const claimablePromotions = useMemo(() => {
-    if (!pass) return [];
-    const claimed: string[] = pass.claimedPromotionIdsThisCycle || [];
-    return promotions.filter(
-      (p: any) => p.pointsRequired <= pass.points && !claimed.includes(p.id),
-    );
-  }, [pass, promotions]);
-  const nextReward = useMemo(() => {
-    if (!pass) return null;
-    const claimed: string[] = pass.claimedPromotionIdsThisCycle || [];
-    const upcoming = promotions
-      .filter(
-        (p: any) => !claimed.includes(p.id) && p.pointsRequired > pass.points,
-      )
-      .sort((a: any, b: any) => a.pointsRequired - b.pointsRequired);
-    return upcoming[0] || null;
-  }, [pass, promotions]);
   const promotionsWithStatus = useMemo(() => {
     if (!pass) return [];
     const claimed: string[] = pass.claimedPromotionIdsThisCycle || [];
@@ -240,15 +223,6 @@ export default function StoreEntryPage() {
   const storeInitial = (storeName.trim().charAt(0) || "O").toUpperCase();
   const userName = session?.user.name?.trim();
   const userInitial = (userName?.charAt(0) || "O").toUpperCase();
-  const maxStamps = store?.maxStamps ?? 12;
-  const nextRewardText = (() => {
-    if (!nextReward) return null;
-    const stampsRemaining = nextReward.pointsRequired - (pass?.points ?? 0);
-    if (nextReward.pointsRequired === maxStamps) {
-      return `Reclama ${nextReward.title} al completar todos los sellos`;
-    }
-    return `Te faltan ${stampsRemaining} sello${stampsRemaining === 1 ? "" : "s"} para ${nextReward.title}`;
-  })();
 
   const swipeCards: PassSwipeCard[] = useMemo(() => {
     if (!storeDesign && !store) return [];
@@ -283,7 +257,7 @@ export default function StoreEntryPage() {
 
   return (
     <div className="onda-pwa-shell">
-      {step !== "pendingWait" && step !== "rewards" && (
+      {step !== "pendingWait" && (
         <header
           className={`onda-pwa-hero${step === "home" && userName ? " onda-pwa-hero--split" : ""}${step === "name" ? " onda-pwa-hero--hola" : ""}`}
         >
@@ -314,7 +288,11 @@ export default function StoreEntryPage() {
             ) : (
               <>
                 <p className="onda-pwa-eyebrow">
-                  <img src="/brand/onda-wordmark.png" alt="Onda" className="h-4 w-auto" />
+                  <img
+                    src="/brand/onda-wordmark.png"
+                    alt="Onda"
+                    className="h-4 w-auto"
+                  />
                 </p>
                 <h1 className="onda-pwa-title">{storeName}</h1>
               </>
@@ -378,14 +356,109 @@ export default function StoreEntryPage() {
               walletBusy={busy}
               walletLabel={walletLabel}
             />
-            {promotions.length >= 2 ? (
-              <button
-                type="button"
-                className="onda-pwa-link mt-3"
-                onClick={() => setStep("rewards")}
-              >
-                Ver premios
-              </button>
+            {pass && promotionsWithStatus.length > 0 ? (
+              <div className="mt-4 flex flex-col gap-3">
+                {promotionsWithStatus.map((p: any) => {
+                  const stampsRemaining = p.pointsRequired - pass.points;
+                  const isAvailable = p.status === "available";
+                  const isLocked = p.status === "locked";
+                  const isClaimed = p.status === "claimed";
+
+                  return (
+                    <div
+                      key={p.id}
+                      role={isAvailable ? "button" : undefined}
+                      tabIndex={isAvailable ? 0 : undefined}
+                      onClick={
+                        isAvailable && !busy
+                          ? () => startPendingRequest("CLAIM", p.id)
+                          : undefined
+                      }
+                      onKeyDown={
+                        isAvailable
+                          ? (e) => {
+                              if (
+                                (e.key === "Enter" || e.key === " ") &&
+                                !busy
+                              ) {
+                                e.preventDefault();
+                                startPendingRequest("CLAIM", p.id);
+                              }
+                            }
+                          : undefined
+                      }
+                      className={`flex items-center gap-3 rounded-2xl p-4 shadow-sm ${
+                        isLocked ? "bg-[var(--onda-violet-soft)]" : "bg-white"
+                      } ${isAvailable ? "cursor-pointer active:scale-[0.99]" : ""} ${busy ? "opacity-60" : ""}`}
+                    >
+                      <div className="relative flex-shrink-0">
+                        <div
+                          className={`flex h-12 w-12 items-center justify-center rounded-full ${
+                            isLocked
+                              ? "bg-[var(--onda-border)] text-[var(--onda-muted)]"
+                              : "bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]"
+                          }`}
+                        >
+                          {promoTypeIcon(p.type)}
+                        </div>
+                        {isLocked ? (
+                          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[var(--onda-muted)] shadow-sm">
+                            {OndaIcons.lock}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className={`font-semibold ${
+                            isLocked
+                              ? "text-[var(--onda-muted)]"
+                              : "text-[var(--onda-ink)]"
+                          }`}
+                        >
+                          {p.title}
+                        </p>
+                        <p className="mt-0.5 text-sm text-[var(--onda-muted)]">
+                          Por alcanzar {p.pointsRequired} onda
+                          {p.pointsRequired === 1 ? "" : "s"}
+                        </p>
+                        <div className="mt-2">
+                          {isClaimed ? (
+                            <Chip size="sm">✓ Reclamado</Chip>
+                          ) : isAvailable ? (
+                            <Chip color="success" size="sm">
+                              Disponible
+                            </Chip>
+                          ) : (
+                            <Chip size="sm">Próximo premio</Chip>
+                          )}
+                        </div>
+                      </div>
+                      {isAvailable ? (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          excludeFromTabOrder
+                          isDisabled={busy}
+                          className="ml-auto shrink-0"
+                        >
+                          Reclamar
+                        </Button>
+                      ) : null}
+                      {isLocked ? (
+                        <div className="ml-auto shrink-0 rounded-xl bg-white px-3 py-2 text-center shadow-sm">
+                          <p className="text-[0.6rem] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+                            Falta
+                          </p>
+                          <p className="text-sm font-bold text-[var(--onda-violet)]">
+                            {stampsRemaining} onda
+                            {stampsRemaining === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             ) : null}
             <div className="onda-pwa-bottom">
               {error ? (
@@ -393,23 +466,6 @@ export default function StoreEntryPage() {
                   {error}
                 </p>
               ) : null}
-              {nextRewardText ? (
-                <div className="onda-pwa-next-reward">
-                  <p className="onda-pwa-label">Siguiente premio</p>
-                  <p className="onda-pwa-next-reward-text">{nextRewardText}</p>
-                </div>
-              ) : null}
-              {claimablePromotions.map((promo: any) => (
-                <button
-                  key={promo.id}
-                  type="button"
-                  className="onda-pwa-secondary"
-                  disabled={busy}
-                  onClick={() => startPendingRequest("CLAIM", promo.id)}
-                >
-                  Reclamar {promo.title}
-                </button>
-              ))}
               <button
                 type="button"
                 className="onda-pwa-cta"
@@ -447,146 +503,6 @@ export default function StoreEntryPage() {
             onResolved={onPendingResolved}
             onCancel={() => setStep("home")}
           />
-        )}
-
-        {step === "rewards" && pass && (
-          <div className="flex flex-1 flex-col gap-6 pt-[calc(1.1rem+env(safe-area-inset-top,0))]">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                aria-label="Volver al pase"
-                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-[var(--onda-card)] text-lg text-[var(--onda-ink)] shadow-sm"
-                onClick={() => setStep("home")}
-              >
-                ←
-              </button>
-              <span className="text-sm font-semibold text-[var(--onda-ink)]">
-                Atrás
-              </span>
-            </div>
-
-            <div>
-              <p className="onda-pwa-label pb-3">Lo que te espera</p>
-              <h2 className="onda-pwa-headline mt-1">
-                Premios con buena Onda.
-              </h2>
-              <p className="onda-pwa-sub mt-2">
-                Completa {maxStamps} onda{maxStamps === 1 ? "" : "s"} y vuelve a
-                empezar.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 pb-6">
-              {promotionsWithStatus.map((p: any) => {
-                const stampsRemaining = p.pointsRequired - pass.points;
-                const isLit =
-                  p.status === "claimed" || p.status === "available";
-                const statusClasses =
-                  p.status === "available"
-                    ? "inline-flex items-center rounded-full bg-[var(--onda-lime)] px-2 py-0.5 text-[var(--onda-ink)]"
-                    : "text-[var(--onda-muted)]";
-
-                const isAvailable = p.status === "available";
-
-                return (
-                  <div
-                    key={p.id}
-                    role={isAvailable ? "button" : undefined}
-                    tabIndex={isAvailable ? 0 : undefined}
-                    onClick={
-                      isAvailable && !busy
-                        ? () => startPendingRequest("CLAIM", p.id)
-                        : undefined
-                    }
-                    onKeyDown={
-                      isAvailable
-                        ? (e) => {
-                            if ((e.key === "Enter" || e.key === " ") && !busy) {
-                              e.preventDefault();
-                              startPendingRequest("CLAIM", p.id);
-                            }
-                          }
-                        : undefined
-                    }
-                    className={`flex items-center gap-4 rounded-2xl bg-white p-4 shadow-sm ${
-                      isAvailable ? "cursor-pointer active:scale-[0.99]" : ""
-                    } ${busy ? "opacity-60" : ""}`}
-                  >
-                    <div
-                      className={`flex h-16 w-16 flex-shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl ${
-                        isLit
-                          ? "bg-[var(--onda-ink)]"
-                          : "bg-[var(--onda-border)]"
-                      }`}
-                    >
-                      <span
-                        className={`text-[0.6rem] font-semibold tracking-wide ${
-                          isLit
-                            ? "text-[var(--onda-lime)]"
-                            : "text-[var(--onda-muted)]"
-                        }`}
-                      >
-                        SELLO
-                      </span>
-                      <span
-                        className={`text-xl font-bold ${
-                          isLit
-                            ? "text-[var(--onda-lime)]"
-                            : "text-[var(--onda-muted)]"
-                        }`}
-                      >
-                        {String(p.pointsRequired).padStart(2, "0")}
-                      </span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className={`font-semibold ${
-                          isLit
-                            ? "text-[var(--onda-ink)]"
-                            : "text-[var(--onda-muted)]"
-                        }`}
-                      >
-                        {p.title}
-                      </p>
-                      {p.description ? (
-                        <p className="mt-0.5 text-sm text-[var(--onda-muted)]">
-                          {p.description}
-                        </p>
-                      ) : null}
-                      <p
-                        className={`mt-2 text-[0.7rem] font-bold uppercase tracking-wide ${statusClasses}`}
-                      >
-                        {p.status === "claimed"
-                          ? "✓ Reclamado"
-                          : p.status === "available"
-                            ? "Disponible"
-                            : `Te faltan ${stampsRemaining} onda${stampsRemaining === 1 ? "" : "s"}`}
-                      </p>
-                    </div>
-                    {isAvailable ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        excludeFromTabOrder
-                        isDisabled={busy}
-                        className="ml-auto shrink-0 text-xs"
-                        style={
-                          {
-                            "--button-bg": "transparent",
-                            "--button-bg-hover": "var(--onda-violet-soft)",
-                            "--button-fg": "var(--onda-violet)",
-                            borderColor: "var(--onda-violet)",
-                          } as React.CSSProperties
-                        }
-                      >
-                        Reclamar
-                      </Button>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
         )}
       </div>
     </div>
