@@ -4,6 +4,22 @@
 @source "../../../libs/shared/ui/src";
 @source "../app";
 
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5.5rem;
+}
+
+html.lenis,
+html.lenis body {
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
 @keyframes onda-confetti {
   0% {
     opacity: 0;

@@ -1,7 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import type { Channel } from '../../lib/campaign-demo';
 
 const SPA_LOGO = '/demo/onda-spa-logo.svg';
@@ -66,6 +66,8 @@ export function IPhonePreview({
   children: ReactNode;
   className?: string;
 }) {
+  const gradId = `iphone-bezel-${useId().replace(/:/g, '')}`;
+
   return (
     <div className={`relative mx-auto w-full max-w-[280px] ${className}`}>
       <svg
@@ -74,7 +76,7 @@ export function IPhonePreview({
         aria-hidden
       >
         <defs>
-          <linearGradient id="iphone-bezel" x1="0" y1="0" x2="1" y2="1">
+          <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stopColor="#3A3B4D" />
             <stop offset="45%" stopColor="#1A1B2E" />
             <stop offset="100%" stopColor="#0C0D18" />
@@ -82,7 +84,7 @@ export function IPhonePreview({
         </defs>
         {/* Outer frame only — screen hole is transparent so content shows through */}
         <path
-          fill="url(#iphone-bezel)"
+          fill={`url(#${gradId})`}
           fillRule="evenodd"
           d="M58 4h204c29.8 0 54 24.2 54 54v534c0 29.8-24.2 54-54 54H58c-29.8 0-54-24.2-54-54V58C4 28.2 28.2 4 58 4zm-2 12c-23.2 0-42 18.8-42 42v534c0 23.2 18.8 42 42 42h208c23.2 0 42-18.8 42-42V58c0-23.2-18.8-42-42-42H56z"
         />
@@ -102,6 +104,146 @@ export function IPhonePreview({
         <div className="absolute inset-0">{children}</div>
         <div className="pointer-events-none absolute left-1/2 top-3 z-30 h-[22px] w-[88px] -translate-x-1/2 rounded-full bg-black" />
         <div className="pointer-events-none absolute bottom-2 left-1/2 z-30 h-1 w-28 -translate-x-1/2 rounded-full bg-white/40" />
+      </div>
+    </div>
+  );
+}
+
+/** Pantalla tipo Apple Wallet — pase sin overlap ni scale. */
+export function WalletScreen({
+  children,
+}: {
+  children: ReactNode;
+  passTitle?: string;
+}) {
+  const now = new Date();
+  const time = now.toLocaleTimeString('es-CO', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  return (
+    <div className="relative flex h-full flex-col bg-[#0B0B0F] px-2.5 pb-4 pt-11">
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse at 50% 0%, rgba(61,185,232,0.1) 0%, transparent 45%), linear-gradient(180deg, #1A1B2E 0%, #0B0B0F 48%)',
+        }}
+        aria-hidden
+      />
+
+      <div className="relative z-10 flex shrink-0 items-center justify-between px-1 text-white">
+        <p className="text-[10px] font-semibold tabular-nums">{time}</p>
+        <p className="text-[10px] font-semibold tracking-tight">Wallet</p>
+        <span className="w-7" aria-hidden />
+      </div>
+
+      <p className="relative z-10 mt-3 shrink-0 px-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-white/45">
+        Pases
+      </p>
+
+      <div className="relative z-10 mt-2 min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** Pase compacto pensado para caber en el iPhone sin solaparse. */
+export function WalletPassCard({
+  backgroundColor = '#052DDE',
+  foregroundColor = '#FFFFFF',
+  title = 'Onda Spa',
+  subtitle,
+  logoUrl,
+  points = 0,
+  maxStamps = 10,
+  memberName,
+}: {
+  backgroundColor?: string;
+  foregroundColor?: string;
+  title?: string;
+  subtitle?: string | null;
+  logoUrl?: string | null;
+  points?: number;
+  maxStamps?: number;
+  memberName?: string | null;
+}) {
+  const remaining = Math.max(0, maxStamps - points);
+  const remainingText =
+    remaining === 0
+      ? '¡Listo para canjear!'
+      : remaining === 1
+        ? 'Te falta 1 onda'
+        : `Te faltan ${remaining}`;
+
+  return (
+    <div
+      className="overflow-hidden rounded-xl"
+      style={{ backgroundColor, color: foregroundColor }}
+      aria-label={`Pase ${title}`}
+    >
+      <div className="flex items-center gap-2 px-2.5 pt-2.5">
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoUrl} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />
+        ) : (
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/20 text-xs font-bold">
+            O
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[11px] font-semibold leading-tight">{title}</p>
+          {subtitle ? (
+            <p className="truncate text-[9px] leading-tight opacity-80">{subtitle}</p>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="px-2.5 pt-2">
+        <p className="text-[13px] font-bold leading-none">
+          {points}/{maxStamps}
+        </p>
+        <p className="mt-0.5 text-[9px] opacity-80">{remainingText}</p>
+      </div>
+
+      <div className="flex flex-wrap gap-1 px-2.5 py-2.5" aria-label="Progreso de ondas">
+        {Array.from({ length: maxStamps }, (_, i) => {
+          const filled = i < points;
+          return (
+            <span
+              key={i}
+              className="flex h-4 w-4 items-center justify-center rounded-full"
+              style={{
+                backgroundColor: filled ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.06)',
+                boxShadow: filled ? undefined : 'inset 0 0 0 1px rgba(255,255,255,0.28)',
+              }}
+            >
+              <span
+                className="block h-2 w-2 rounded-full"
+                style={{
+                  backgroundColor: foregroundColor,
+                  opacity: filled ? 1 : 0.25,
+                }}
+              />
+            </span>
+          );
+        })}
+      </div>
+
+      <div
+        className="flex items-center justify-between gap-2 border-t px-2.5 py-2"
+        style={{ borderColor: 'rgba(255,255,255,0.16)' }}
+      >
+        <p
+          className={`truncate text-[9px] font-semibold ${
+            memberName?.trim() ? '' : 'opacity-45'
+          }`}
+        >
+          {memberName?.trim() || 'Tu nombre'}
+        </p>
       </div>
     </div>
   );

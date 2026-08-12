@@ -1,8 +1,9 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
+import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, PassPreview } from '@onda/shared-ui';
+import { api } from '@onda/shared-ui';
 import { fadeUp } from '../lib/motion';
 import {
   getDemoDeviceId,
@@ -12,6 +13,7 @@ import {
   type DemoSpaState,
 } from '../lib/demo-device';
 import { HabladorStand } from './mocks/HabladorStand';
+import { IPhonePreview, WalletPassCard, WalletScreen } from './mocks/IPhonePreview';
 
 type InfoResponse = {
   name: string;
@@ -247,104 +249,116 @@ export function DemoSection() {
         </p>
       </motion.div>
 
-      <div className="mt-12 grid items-center gap-10 lg:grid-cols-[0.95fr_1.05fr]">
-        <motion.div {...fadeUp} className="flex flex-col items-center gap-3">
-          <HabladorStand
-            qrSrc={qrSrc}
-            proxyUrl={proxyUrl}
-            busy={busy}
-            onTap={active ? undefined : () => void activate()}
+      {/* Escena a ancho de sección: recepción + hablador + iPhone */}
+      <motion.div {...fadeUp} className="relative mt-10 w-full md:mt-12">
+        <div className="relative overflow-hidden rounded-[1.75rem]">
+          <Image
+            src="/product/spa-reception.png"
+            alt="Recepción de spa con hablador Onda y pase en Wallet"
+            width={1024}
+            height={768}
+            className="aspect-[16/10] h-auto w-full object-cover object-[center_55%] sm:aspect-[21/10] sm:object-[center_48%]"
+            sizes="(max-width: 1152px) 100vw, 1152px"
+            priority={false}
           />
-          {!active ? (
-            <p className="max-w-[14rem] text-center text-xs text-[var(--onda-muted)]">
-              Como en el local: acerca el celular o escanea.
-            </p>
-          ) : null}
-        </motion.div>
 
-        <motion.div {...fadeUp} className="relative mx-auto w-full max-w-sm">
-          <div className="relative">
-            {design ? (
-              <div className="relative">
-                <PassPreview
-                  backgroundColor={design.backgroundColor}
-                  foregroundColor={design.foregroundColor}
-                  labelColor={design.labelColor}
-                  title={design.title}
-                  subtitle={design.subtitle}
-                  description={design.description}
-                  logoUrl={design.logoUrl}
-                  points={displayPoints}
-                  maxStamps={maxStamps}
-                  memberName={state?.memberName || (active ? 'Visitante Onda' : undefined)}
-                  milestoneStamps={[maxStamps]}
-                  onAddToWallet={
-                    state?.appleUrl || state?.googleUrl
-                      ? () => {
-                          const preferApple = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                          const url = preferApple
-                            ? state.appleUrl || state.googleUrl
-                            : state.googleUrl || state.appleUrl;
-                          if (url) window.open(url, '_blank');
-                        }
-                      : undefined
-                  }
-                  walletBusy={busy}
-                  walletLabel="Guardar en Wallet"
-                />
-                <AnimatePresence>
-                  {flashStamp != null ? (
-                    <motion.div
-                      key={flashStamp}
-                      initial={{ scale: 0.6, opacity: 0 }}
-                      animate={{ scale: 1.15, opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="pointer-events-none absolute inset-0 flex items-center justify-center"
-                    >
-                      <span className="rounded-full bg-[var(--onda-lime)] px-4 py-2 text-sm font-bold text-[var(--onda-ink)] shadow-lg">
-                        +1 onda
-                      </span>
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
-                {banner && state?.action === 'redeemed' ? <ConfettiBurst /> : null}
-              </div>
-            ) : (
-              <div className="h-56 animate-pulse rounded-[1.5rem] bg-[var(--onda-card)]" />
-            )}
+          {/* Hablador centrado sobre el mostrador */}
+          <div className="absolute bottom-[11%] left-1/2 z-10 w-[36%] max-w-[260px] min-w-[120px] -translate-x-1/2 sm:bottom-[13%] sm:w-[28%]">
+            <div
+              className="origin-bottom isolate opacity-100"
+              style={{ transform: 'perspective(700px) rotateX(3deg) scale(0.92)' }}
+            >
+              <HabladorStand
+                qrSrc={qrSrc}
+                proxyUrl={proxyUrl}
+                busy={busy}
+                onTap={active ? undefined : () => void activate()}
+                className="!mx-0 !max-w-none"
+              />
+            </div>
           </div>
 
-          <AnimatePresence>
-            {banner ? (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="mt-4 rounded-2xl bg-[var(--onda-primary-500)] px-4 py-3 text-center text-sm font-semibold text-white shadow-lg"
-              >
-                {banner}
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
+          {/* iPhone como parte de la escena, apoyado en la recepción */}
+          <div className="absolute bottom-[2%] right-[2%] z-20 w-[36%] max-w-[280px] min-w-[140px] sm:bottom-[3%] sm:right-[4%] sm:w-[30%] md:right-[5%] md:w-[26%] md:max-w-[300px]">
+            <IPhonePreview className="!mx-0 !max-w-none">
+              <WalletScreen>
+                {design ? (
+                  <div className="relative">
+                    <WalletPassCard
+                      backgroundColor={design.backgroundColor}
+                      foregroundColor={design.foregroundColor}
+                      title={design.title}
+                      subtitle={design.subtitle}
+                      logoUrl={design.logoUrl}
+                      points={displayPoints}
+                      maxStamps={maxStamps}
+                      memberName={
+                        state?.memberName || (active ? 'Visitante Onda' : undefined)
+                      }
+                    />
+                    <AnimatePresence>
+                      {flashStamp != null ? (
+                        <motion.div
+                          key={flashStamp}
+                          initial={{ scale: 0.6, opacity: 0 }}
+                          animate={{ scale: 1.15, opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                        >
+                          <span className="rounded-full bg-[var(--onda-lime)] px-3 py-1.5 text-xs font-bold text-[var(--onda-ink)]">
+                            +1 onda
+                          </span>
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
+                    {banner && state?.action === 'redeemed' ? <ConfettiBurst /> : null}
+                  </div>
+                ) : (
+                  <div className="h-36 animate-pulse rounded-xl bg-white/10" />
+                )}
+              </WalletScreen>
+            </IPhonePreview>
+          </div>
+        </div>
+      </motion.div>
 
-          {error ? (
-            <p className="mt-3 text-center text-sm text-[var(--onda-danger)]">{error}</p>
+      <div className="mx-auto mt-8 max-w-md">
+        {!active ? (
+          <p className="text-center text-xs text-[var(--onda-muted)]">
+            Como en el local: acerca el celular o escanea el hablador en la recepción.
+          </p>
+        ) : null}
+
+        <AnimatePresence>
+          {banner ? (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="mt-4 rounded-2xl bg-[var(--onda-primary-500)] px-4 py-3 text-center text-sm font-semibold text-white"
+            >
+              {banner}
+            </motion.div>
           ) : null}
+        </AnimatePresence>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (!active) void activate();
-              else void darOnda();
-            }}
-            disabled={busy || (active && !canDarOnda)}
-            className="mt-6 flex w-full items-center justify-center rounded-full bg-[var(--onda-primary-500)] px-5 py-3.5 text-sm font-bold tracking-wide text-white shadow-[0_12px_28px_rgba(5,45,222,0.28)] transition hover:bg-[var(--onda-primary-600)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            {primaryLabel}
-          </button>
+        {error ? (
+          <p className="mt-3 text-center text-sm text-[var(--onda-danger)]">{error}</p>
+        ) : null}
 
-          <p className="mt-3 text-center text-xs text-[var(--onda-muted)]">{helperText}</p>
-        </motion.div>
+        <button
+          type="button"
+          onClick={() => {
+            if (!active) void activate();
+            else void darOnda();
+          }}
+          disabled={busy || (active && !canDarOnda)}
+          className="mt-5 flex w-full items-center justify-center rounded-full bg-[var(--onda-primary-500)] px-5 py-3.5 text-sm font-bold tracking-wide text-white shadow-[0_12px_28px_rgba(5,45,222,0.28)] transition hover:bg-[var(--onda-primary-600)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {primaryLabel}
+        </button>
+
+        <p className="mt-3 text-center text-xs text-[var(--onda-muted)]">{helperText}</p>
       </div>
     </section>
   );

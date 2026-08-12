@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 import { CaretDownIcon as CaretDown } from '@phosphor-icons/react/dist/csr/CaretDown';
-import { fadeUp } from '../lib/motion';
+import { easeOut, fadeUpDelay, inViewStagger, staggerItem } from '../lib/motion';
 
 const FAQS = [
   {
@@ -37,17 +37,20 @@ export function FaqSection() {
 
   return (
     <section id="faq" className="mx-auto max-w-6xl px-6 py-20 md:py-28">
-      <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
-        <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-tight text-[var(--onda-ink)]">
+      <motion.div {...inViewStagger} className="mx-auto max-w-2xl text-center">
+        <motion.h2
+          variants={staggerItem}
+          className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-tight text-[var(--onda-ink)]"
+        >
           Preguntas frecuentes
-        </h2>
-        <p className="mt-3 text-lg text-[var(--onda-muted)]">
+        </motion.h2>
+        <motion.p variants={staggerItem} className="mt-3 text-lg text-[var(--onda-muted)]">
           Lo esencial antes de poner tu negocio en la Onda.
-        </p>
+        </motion.p>
       </motion.div>
 
       <motion.div
-        {...fadeUp}
+        {...fadeUpDelay(0.08)}
         className="mx-auto mt-10 max-w-2xl divide-y divide-[var(--onda-border)] overflow-hidden rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] shadow-[0_8px_24px_rgba(26,27,46,0.06)]"
       >
         {FAQS.map((item, i) => {
@@ -88,7 +91,7 @@ export function FaqSection() {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                    transition={{ duration: 0.32, ease: easeOut }}
                     className="overflow-hidden"
                   >
                     <p className="px-5 pb-5 text-sm leading-relaxed text-[var(--onda-muted)] md:px-6 md:pb-6 md:text-base">

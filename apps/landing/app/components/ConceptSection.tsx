@@ -1,12 +1,28 @@
 'use client';
 
 import { OndaScriptMark } from '@onda/shared-ui';
-import { fadeUp } from '../lib/motion';
-import { motion } from 'framer-motion';
+import {
+  fadeUpDelay,
+  inViewStagger,
+  staggerItem,
+} from '../lib/motion';
+import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
+import { useRef } from 'react';
 
 export function ConceptSection() {
+  const ref = useRef<HTMLElement | null>(null);
+  const reduceMotion = useReducedMotion();
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ['start end', 'end start'],
+  });
+  const imageY = useTransform(scrollYProgress, [0, 1], [reduceMotion ? 0 : 28, reduceMotion ? 0 : -20]);
+
   return (
-    <section className="relative z-10 overflow-visible pt-36 text-white md:pt-48 lg:pt-56">
+    <section
+      ref={ref}
+      className="relative z-10 overflow-visible pt-36 text-white md:pt-48 lg:pt-56"
+    >
       {/* Franja azul: ella a ras del borde inferior; la cabeza sobresale por arriba */}
       <div className="relative overflow-visible bg-[var(--onda-primary-500)]">
         <OndaScriptMark
@@ -15,25 +31,29 @@ export function ConceptSection() {
         />
 
         <div className="relative mx-auto max-w-6xl px-6 py-12 md:py-14 lg:py-16">
-          <div className="relative z-10 max-w-xl md:max-w-[52%] lg:max-w-xl">
-            <motion.div {...fadeUp}>
-              <h2 className="font-display text-[clamp(2rem,5.5vw,3.75rem)] font-bold leading-[1.05] tracking-tight">
-                Ni{' '}
-                <span className="text-white/55 line-through decoration-[var(--onda-lime)] decoration-2">
-                  puntos
-                </span>{' '}
-                ni{' '}
-                <span className="text-white/55 line-through decoration-[var(--onda-lime)] decoration-2">
-                  pesos
-                </span>
-                .
-                <br />
-                <span>Ondas.</span>
-              </h2>
-            </motion.div>
+          <motion.div
+            {...inViewStagger}
+            className="relative z-10 max-w-xl md:max-w-[52%] lg:max-w-xl"
+          >
+            <motion.h2
+              variants={staggerItem}
+              className="font-display text-[clamp(2rem,5.5vw,3.75rem)] font-bold leading-[1.05] tracking-tight"
+            >
+              Ni{' '}
+              <span className="text-white/55 line-through decoration-[var(--onda-lime)] decoration-2">
+                puntos
+              </span>{' '}
+              ni{' '}
+              <span className="text-white/55 line-through decoration-[var(--onda-lime)] decoration-2">
+                pesos
+              </span>
+              .
+              <br />
+              <span>Ondas.</span>
+            </motion.h2>
 
             <motion.div
-              {...fadeUp}
+              variants={staggerItem}
               className="mt-10 grid gap-6 sm:grid-cols-2 sm:gap-5 md:grid-cols-1 md:gap-7 lg:max-w-lg"
             >
               <div className="relative pl-4 before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:rounded-full before:bg-[var(--onda-lime)]">
@@ -62,13 +82,14 @@ export function ConceptSection() {
                 </p>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         </div>
 
         {/* Anclada al borde inferior de la franja (fuera del padding del contenido) */}
         <motion.div
-          {...fadeUp}
-          className="pointer-events-none absolute bottom-0 right-4 z-20 w-[min(88%,20rem)] sm:right-8 sm:w-[22rem] md:right-[max(1.5rem,calc((100%-72rem)/2+1.5rem))] md:w-[26rem] lg:w-[28rem]"
+          {...fadeUpDelay(0.12)}
+          style={{ y: imageY }}
+          className="pointer-events-none absolute bottom-0 right-4 z-20 w-[min(88%,20rem)] will-change-transform sm:right-8 sm:w-[22rem] md:right-[max(1.5rem,calc((100%-72rem)/2+1.5rem))] md:w-[26rem] lg:w-[28rem]"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img

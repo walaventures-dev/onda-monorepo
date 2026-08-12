@@ -6,7 +6,12 @@ import { CheckIcon as Check } from '@phosphor-icons/react/dist/csr/Check';
 import { GiftIcon as Gift } from '@phosphor-icons/react/dist/csr/Gift';
 import { PackageIcon as Package } from '@phosphor-icons/react/dist/csr/Package';
 import { ShieldCheckIcon as ShieldCheck } from '@phosphor-icons/react/dist/csr/ShieldCheck';
-import { fadeUp } from '../lib/motion';
+import {
+  crossfade,
+  fadeUpDelay,
+  inViewStagger,
+  staggerItem,
+} from '../lib/motion';
 import {
   formatCop,
   onboardingUrl,
@@ -44,17 +49,20 @@ export function PricingSection() {
 
   return (
     <section id="pricing" className="mx-auto max-w-6xl px-6 py-20 md:py-28">
-      <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
-        <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-tight text-[var(--onda-ink)]">
+      <motion.div {...inViewStagger} className="mx-auto max-w-2xl text-center">
+        <motion.h2
+          variants={staggerItem}
+          className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-tight text-[var(--onda-ink)]"
+        >
           Planes que se pagan solos
-        </h2>
-        <p className="mt-3 text-lg text-[var(--onda-muted)]">
+        </motion.h2>
+        <motion.p variants={staggerItem} className="mt-3 text-lg text-[var(--onda-muted)]">
           Primer mes gratis. Elige plan y periodo — sin tarjeta para empezar.
-        </p>
+        </motion.p>
       </motion.div>
 
       <motion.div
-        {...fadeUp}
+        {...fadeUpDelay(0.06)}
         className="mx-auto mt-10 flex max-w-2xl flex-col items-center gap-3"
       >
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
@@ -141,7 +149,7 @@ export function PricingSection() {
       </motion.div>
 
       <div className="mt-12 grid gap-6 lg:grid-cols-2">
-        {ORDER.map((id) => {
+        {ORDER.map((id, index) => {
           const meta = PLAN_META[id];
           const quote = quotes[id];
           const popular = id === 'PRO';
@@ -149,8 +157,11 @@ export function PricingSection() {
           return (
             <motion.div
               key={id}
-              {...fadeUp}
-              whileHover={{ y: -4, scale: 1.01 }}
+              {...fadeUpDelay(0.08 + index * 0.08)}
+              whileHover={{
+                y: -6,
+                transition: { type: 'spring', stiffness: 380, damping: 28 },
+              }}
               className={`relative flex flex-col rounded-[1.5rem] border bg-[var(--onda-card)] p-8 shadow-[0_16px_40px_rgba(26,27,46,0.06)] ${
                 popular
                   ? 'border-[var(--onda-primary-500)] ring-1 ring-[var(--onda-primary-500)]'
@@ -173,7 +184,7 @@ export function PricingSection() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.22 }}
+                  transition={crossfade}
                   className="mt-4"
                 >
                   <div className="flex flex-wrap items-end gap-3">
@@ -255,7 +266,7 @@ export function PricingSection() {
       </div>
 
       <motion.div
-        {...fadeUp}
+        {...fadeUpDelay(0.12)}
         className="mt-16 grid items-center gap-10 lg:grid-cols-[1.15fr_0.85fr]"
       >
         <KitVisual />
@@ -295,7 +306,7 @@ export function PricingSection() {
       </motion.div>
 
       <motion.p
-        {...fadeUp}
+        {...fadeUpDelay(0.16)}
         className="mt-8 flex items-center justify-center gap-1.5 text-center text-xs text-[var(--onda-muted)]"
       >
         <ShieldCheck size={14} className="text-[var(--onda-success)]" weight="fill" />

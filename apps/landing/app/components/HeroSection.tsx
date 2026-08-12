@@ -2,13 +2,19 @@
 
 import Image from 'next/image';
 import { useRef } from 'react';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
 import { DeviceMobileIcon as DeviceMobile } from '@phosphor-icons/react/dist/csr/DeviceMobile';
 import { GiftIcon as Gift } from '@phosphor-icons/react/dist/csr/Gift';
 import { MegaphoneIcon as Megaphone } from '@phosphor-icons/react/dist/csr/Megaphone';
 import { StarIcon as Star } from '@phosphor-icons/react/dist/csr/Star';
 import { onboardingUrl } from '../lib/pricing';
-import { fadeUp } from '../lib/motion';
+import {
+  heroItem,
+  heroMount,
+  heroVisual,
+  staggerContainerFast,
+  staggerItemSoft,
+} from '../lib/motion';
 
 const VALUE_POINTS = [
   { icon: DeviceMobile, title: 'Wallet', desc: 'Sin descargar app' },
@@ -19,11 +25,13 @@ const VALUE_POINTS = [
 
 export function HeroSection() {
   const ref = useRef<HTMLElement | null>(null);
+  const reduceMotion = useReducedMotion();
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ['start start', 'end start'],
   });
-  const visualY = useTransform(scrollYProgress, [0, 1], [0, 36]);
+  const visualY = useTransform(scrollYProgress, [0, 1], [0, reduceMotion ? 0 : 56]);
+  const visualScale = useTransform(scrollYProgress, [0, 1], [1, reduceMotion ? 1 : 0.97]);
 
   return (
     <section ref={ref} className="relative overflow-hidden pb-8 pt-6 md:pb-16 md:pt-10">
@@ -35,30 +43,43 @@ export function HeroSection() {
         }}
       />
       <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-6 md:grid-cols-[1fr_1.05fr]">
-        <motion.div {...fadeUp}>
-          <h1 className="max-w-xl font-display text-[clamp(2rem,5vw,3.5rem)] font-bold leading-[1.08] tracking-tight text-[var(--onda-ink)]">
+        <motion.div {...heroMount} className="flex flex-col">
+          <motion.h1
+            variants={heroItem}
+            className="max-w-xl font-display text-[clamp(2rem,5vw,3.5rem)] font-bold leading-[1.08] tracking-tight text-[var(--onda-ink)]"
+          >
             Tu cliente se fue.{' '}
             <span className="text-[var(--onda-primary-500)]">Tu marca</span> no tiene por qué
             irse con él.
-          </h1>
-          <p className="mt-5 max-w-lg text-lg text-[var(--onda-muted)]">
+          </motion.h1>
+          <motion.p
+            variants={heroItem}
+            className="mt-5 max-w-lg text-lg text-[var(--onda-muted)]"
+          >
             Cada visita suma hacia un premio. Tú decides cuándo hacerlos volver —
             sin app que descargar.
-          </p>
+          </motion.p>
 
-          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <motion.div
+            variants={staggerContainerFast}
+            className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4"
+          >
             {VALUE_POINTS.map(({ icon: Icon, title, desc }) => (
-              <div key={title} className="flex flex-col gap-1.5">
+              <motion.div
+                key={title}
+                variants={staggerItemSoft}
+                className="flex flex-col gap-1.5"
+              >
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--onda-primary-100)] text-[var(--onda-primary-500)]">
                   <Icon size={20} weight="regular" />
                 </span>
                 <p className="text-sm font-semibold text-[var(--onda-ink)]">{title}</p>
                 <p className="text-xs text-[var(--onda-muted)]">{desc}</p>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
 
-          <div className="mt-9 flex flex-col items-start gap-3">
+          <motion.div variants={heroItem} className="mt-9 flex flex-col items-start gap-3">
             <a
               href={onboardingUrl()}
               className="inline-flex rounded-full bg-[var(--onda-primary-500)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(5,45,222,0.28)] transition hover:bg-[var(--onda-primary-600)] active:scale-[0.98]"
@@ -68,13 +89,15 @@ export function HeroSection() {
             <p className="text-sm text-[var(--onda-muted)]">
               Toma menos de 5 minutos empezar.
             </p>
-          </div>
+          </motion.div>
         </motion.div>
 
         <motion.div
-          style={{ y: visualY }}
-          className="relative mx-auto w-full max-w-xl"
-          {...fadeUp}
+          style={{ y: visualY, scale: visualScale }}
+          variants={heroVisual}
+          initial="hidden"
+          animate="show"
+          className="relative mx-auto w-full max-w-xl will-change-transform"
         >
           <Image
             src="/product/hero.webp"

@@ -17,7 +17,7 @@ import {
   type Channel,
   type Objective,
 } from '../lib/campaign-demo';
-import { fadeUp } from '../lib/motion';
+import { fadeUpDelay, inViewStagger, staggerItem } from '../lib/motion';
 import { onboardingUrl } from '../lib/pricing';
 import { IPhonePreview, LockScreen } from './mocks/IPhonePreview';
 
@@ -127,18 +127,21 @@ export function CampaignSection() {
 
   return (
     <section id="campanas" className="mx-auto max-w-6xl px-6 py-20 md:py-28">
-      <motion.div {...fadeUp} className="max-w-2xl">
-        <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-tight text-[var(--onda-ink)]">
+      <motion.div {...inViewStagger} className="max-w-2xl">
+        <motion.h2
+          variants={staggerItem}
+          className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-tight text-[var(--onda-ink)]"
+        >
           Llena el local cuando esté flojo.
-        </h2>
-        <p className="mt-3 text-lg text-[var(--onda-muted)]">
+        </motion.h2>
+        <motion.p variants={staggerItem} className="mt-3 text-lg text-[var(--onda-muted)]">
           Objetivo, audiencia y mensaje: en cuatro pasos llegas a tus clientes
           por Wallet, WhatsApp y SMS — sin Excel ni agencia.
-        </p>
+        </motion.p>
       </motion.div>
 
       <motion.div
-        {...fadeUp}
+        {...fadeUpDelay(0.1)}
         className="mt-12 overflow-hidden rounded-[1.5rem] border border-[var(--onda-border)] bg-[var(--onda-card)] shadow-[0_20px_50px_rgba(26,27,46,0.08)]"
       >
         <div className="grid lg:grid-cols-[180px_1fr_minmax(260px,300px)]">
@@ -168,10 +171,10 @@ export function CampaignSection() {
             <AnimatePresence mode="wait">
               <motion.div
                 key={step}
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               >
                 {step === 0 ? (
                   <div>
