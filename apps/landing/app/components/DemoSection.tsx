@@ -1,8 +1,14 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useMotionValue,
+  type PanInfo,
+} from 'framer-motion';
 import Image from 'next/image';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@onda/shared-ui';
 import { fadeUp } from '../lib/motion';
 import {
@@ -13,7 +19,12 @@ import {
   type DemoSpaState,
 } from '../lib/demo-device';
 import { HabladorStand } from './mocks/HabladorStand';
-import { IPhonePreview, WalletPassCard, WalletScreen } from './mocks/IPhonePreview';
+import {
+  IPhonePreview,
+  LockScreen,
+  WalletPassCard,
+  WalletScreen,
+} from './mocks/IPhonePreview';
 
 type InfoResponse = {
   name: string;
@@ -21,6 +32,10 @@ type InfoResponse = {
   design: DemoSpaDesign | null;
   promo: DemoSpaState['promo'];
 };
+
+type PhoneScreen = 'lock' | 'wallet';
+
+const NFC_THRESHOLD_PX = 140;
 
 function ConfettiBurst() {
   return (
@@ -41,6 +56,14 @@ function ConfettiBurst() {
   );
 }
 
+function centersDistance(a: DOMRect, b: DOMRect) {
+  const ax = a.left + a.width / 2;
+  const ay = a.top + a.height / 2;
+  const bx = b.left + b.width / 2;
+  const by = b.top + b.height / 2;
+  return Math.hypot(ax - bx, ay - by);
+}
+
 export function DemoSection() {
   const [info, setInfo] = useState<InfoResponse | null>(null);
   const [state, setState] = useState<DemoSpaState | null>(null);
@@ -50,6 +73,17 @@ export function DemoSection() {
   const [banner, setBanner] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [proxyUrl, setProxyUrl] = useState('');
+  const [phoneScreen, setPhoneScreen] = useState<PhoneScreen>('lock');
+  const [dragging, setDragging] = useState(false);
+  const [nfcPulse, setNfcPulse] = useState(false);
+
+  const sceneRef = useRef<HTMLDivElement>(null);
+  const habladorRef = useRef<HTMLDivElement>(null);
+  const phoneRef = useRef<HTMLDivElement>(null);
+  const activatingRef = useRef(false);
+
+  const dragX = useMotionValue(0);
+  const dragY = useMotionValue(0);
 
   const design = state?.design || info?.design;
   const maxStamps = state?.maxStamps || info?.maxStamps || 10;
@@ -58,6 +92,11 @@ export function DemoSection() {
   useEffect(() => {
     setProxyUrl(`${window.location.origin}/d/onda-spa`);
   }, []);
+
+  // Si ya hay pase activo (reload / sesión previa), mostrar wallet
+  useEffect(() => {
+    if (active) setPhoneScreen('wallet');
+  }, [active]);
 
   const qrSrc = useMemo(() => {
     if (!proxyUrl) return '';
@@ -82,31 +121,73 @@ export function DemoSection() {
     }
   }, []);
 
-  const runWelcomePulse = useCallback(
-    async (fromPoints: number) => {
-      if (hasWelcomePulseDone()) return;
-      setFlashStamp(fromPoints + 1);
+  const runWelcomePulse = useCallback(async (fromPoints: number) => {
+    if (hasWelcomePulseDone()) return;
+    setFlashStamp(fromPoints + 1);
+    setBusy(true);
+    try {
+      await new Promise((r) => setTimeout(r, 450));
+      const deviceId = getDemoDeviceId();
+      const res = await api<DemoSpaState>('/demo/onda-spa/pulse', {
+        method: 'POST',
+        body: JSON.stringify({ deviceId }),
+      });
+      setState(res);
+      setDisplayPoints(res.points);
+      markWelcomePulseDone();
+      setBanner('¡+1 onda! Ya vas por el premio.');
+      window.setTimeout(() => setBanner(null), 2200);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo acumular');
+    } finally {
+      setBusy(false);
+      window.setTimeout(() => setFlashStamp(null), 700);
+    }
+  }, []);
+
+  const springHome = useCallback(async () => {
+    await Promise.all([
+      animate(dragX, 0, { type: 'spring', stiffness: 280, damping: 26, mass: 0.9 }),
+      animate(dragY, 0, { type: 'spring', stiffness: 280, damping: 26, mass: 0.9 }),
+    ]);
+  }, [dragX, dragY]);
+
+  const activate = useCallback(
+    async (fromProximity = false) => {
+      if (activatingRef.current || busy) return;
+      activatingRef.current = true;
       setBusy(true);
+      setError('');
+      if (fromProximity) {
+        setNfcPulse(true);
+        window.setTimeout(() => setNfcPulse(false), 700);
+      }
       try {
-        await new Promise((r) => setTimeout(r, 450));
         const deviceId = getDemoDeviceId();
-        const res = await api<DemoSpaState>('/demo/onda-spa/pulse', {
+        const res = await api<DemoSpaState>('/demo/onda-spa/activate', {
           method: 'POST',
           body: JSON.stringify({ deviceId }),
         });
         setState(res);
         setDisplayPoints(res.points);
-        markWelcomePulseDone();
-        setBanner('¡+1 onda! Ya vas por el premio.');
-        window.setTimeout(() => setBanner(null), 2200);
+        setPhoneScreen('wallet');
+        if (!fromProximity) {
+          void springHome();
+        }
+        if (res.needsWelcomePulse && !hasWelcomePulseDone()) {
+          setDisplayPoints(res.points);
+          window.setTimeout(() => {
+            void runWelcomePulse(res.points);
+          }, 550);
+        }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'No se pudo acumular');
+        setError(e instanceof Error ? e.message : 'No se pudo activar');
+        activatingRef.current = false;
       } finally {
         setBusy(false);
-        window.setTimeout(() => setFlashStamp(null), 700);
       }
     },
-    [],
+    [busy, runWelcomePulse, springHome],
   );
 
   useEffect(() => {
@@ -118,6 +199,7 @@ export function DemoSection() {
         setInfo(meta);
         const current = await refreshState();
         if (cancelled || !current) return;
+        setPhoneScreen('wallet');
         if (current.needsWelcomePulse && !hasWelcomePulseDone()) {
           setDisplayPoints(current.points);
           window.setTimeout(() => {
@@ -150,28 +232,30 @@ export function DemoSection() {
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [refreshState, runWelcomePulse]);
 
-  async function activate() {
-    setBusy(true);
-    setError('');
-    try {
-      const deviceId = getDemoDeviceId();
-      const res = await api<DemoSpaState>('/demo/onda-spa/activate', {
-        method: 'POST',
-        body: JSON.stringify({ deviceId }),
-      });
-      setState(res);
-      setDisplayPoints(res.points);
-      if (res.needsWelcomePulse && !hasWelcomePulseDone()) {
-        setDisplayPoints(res.points);
-        window.setTimeout(() => {
-          void runWelcomePulse(res.points);
-        }, 500);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo activar');
-    } finally {
-      setBusy(false);
+  const checkProximityAndActivate = useCallback(() => {
+    if (active || activatingRef.current || busy) return false;
+    const hablador = habladorRef.current;
+    const phone = phoneRef.current;
+    if (!hablador || !phone) return false;
+    const dist = centersDistance(hablador.getBoundingClientRect(), phone.getBoundingClientRect());
+    if (dist <= NFC_THRESHOLD_PX) {
+      void activate(true);
+      return true;
     }
+    return false;
+  }, [active, busy, activate]);
+
+  function onPhoneDrag() {
+    checkProximityAndActivate();
+  }
+
+  function onPhoneDragEnd(_e: MouseEvent | TouchEvent | PointerEvent, _info: PanInfo) {
+    setDragging(false);
+    if (!(active || activatingRef.current)) {
+      checkProximityAndActivate();
+    }
+    // Siempre vuelve a la posición inicial con spring
+    void springHome();
   }
 
   async function darOnda() {
@@ -213,11 +297,7 @@ export function DemoSection() {
     }
   }
 
-  const canDarOnda =
-    active &&
-    !busy &&
-    state &&
-    !state.redeemedThisCycle;
+  const canDarOnda = active && !busy && state && !state.redeemedThisCycle;
 
   const primaryLabel = !active
     ? 'Activar mi tarjeta'
@@ -228,7 +308,7 @@ export function DemoSection() {
         : 'Dar una onda';
 
   const helperText = !active
-    ? 'Toca el hablador, escanea el QR o activa aquí. En segundos tienes tu tarjeta lista.'
+    ? 'Arrastra el celular hacia el hablador — como si lo acercaras en el local.'
     : state?.redeemedThisCycle
       ? 'Así de fácil es hacerlos volver — en el local y en Wallet.'
       : state?.appleUrl || state?.googleUrl
@@ -249,9 +329,11 @@ export function DemoSection() {
         </p>
       </motion.div>
 
-      {/* Escena a ancho de sección: recepción + hablador + iPhone */}
       <motion.div {...fadeUp} className="relative mt-10 w-full md:mt-12">
-        <div className="relative overflow-hidden rounded-[1.75rem]">
+        <div
+          ref={sceneRef}
+          className="relative overflow-hidden rounded-[1.75rem]"
+        >
           <Image
             src="/product/spa-reception.png"
             alt="Recepción de spa con hablador Onda y pase en Wallet"
@@ -260,72 +342,123 @@ export function DemoSection() {
             className="aspect-[16/10] h-auto w-full object-cover object-[center_55%] sm:aspect-[21/10] sm:object-[center_48%]"
             sizes="(max-width: 1152px) 100vw, 1152px"
             priority={false}
+            draggable={false}
           />
 
-          {/* Hablador centrado sobre el mostrador */}
-          <div className="absolute bottom-[11%] left-1/2 z-10 w-[36%] max-w-[260px] min-w-[120px] -translate-x-1/2 sm:bottom-[13%] sm:w-[28%]">
+          {/* Hablador centrado */}
+          <div
+            ref={habladorRef}
+            className={`absolute bottom-[11%] left-1/2 z-10 w-[36%] max-w-[260px] min-w-[120px] -translate-x-1/2 transition sm:bottom-[13%] sm:w-[28%] ${
+              nfcPulse ? 'scale-[1.04]' : ''
+            }`}
+          >
             <div
               className="origin-bottom isolate opacity-100"
               style={{ transform: 'perspective(700px) rotateX(3deg) scale(0.92)' }}
             >
-              <HabladorStand
-                qrSrc={qrSrc}
-                proxyUrl={proxyUrl}
-                busy={busy}
-                onTap={active ? undefined : () => void activate()}
-                className="!mx-0 !max-w-none"
-              />
+              <div
+                className={`rounded-[1.65rem] transition ${
+                  nfcPulse ? 'ring-4 ring-[var(--onda-lime)]/80 ring-offset-2 ring-offset-transparent' : ''
+                }`}
+              >
+                <HabladorStand
+                  qrSrc={qrSrc}
+                  proxyUrl={proxyUrl}
+                  busy={busy}
+                  onTap={active ? undefined : () => void activate(false)}
+                  className="!mx-0 !max-w-none"
+                />
+              </div>
             </div>
           </div>
 
-          {/* iPhone como parte de la escena, apoyado en la recepción */}
-          <div className="absolute bottom-[2%] right-[2%] z-20 w-[36%] max-w-[280px] min-w-[140px] sm:bottom-[3%] sm:right-[4%] sm:w-[30%] md:right-[5%] md:w-[26%] md:max-w-[300px]">
-            <IPhonePreview className="!mx-0 !max-w-none">
-              <WalletScreen>
-                {design ? (
-                  <div className="relative">
-                    <WalletPassCard
-                      backgroundColor={design.backgroundColor}
-                      foregroundColor={design.foregroundColor}
-                      title={design.title}
-                      subtitle={design.subtitle}
-                      logoUrl={design.logoUrl}
-                      points={displayPoints}
-                      maxStamps={maxStamps}
-                      memberName={
-                        state?.memberName || (active ? 'Visitante Onda' : undefined)
-                      }
-                    />
-                    <AnimatePresence>
-                      {flashStamp != null ? (
-                        <motion.div
-                          key={flashStamp}
-                          initial={{ scale: 0.6, opacity: 0 }}
-                          animate={{ scale: 1.15, opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          className="pointer-events-none absolute inset-0 flex items-center justify-center"
-                        >
-                          <span className="rounded-full bg-[var(--onda-lime)] px-3 py-1.5 text-xs font-bold text-[var(--onda-ink)]">
-                            +1 onda
-                          </span>
-                        </motion.div>
-                      ) : null}
-                    </AnimatePresence>
-                    {banner && state?.action === 'redeemed' ? <ConfettiBurst /> : null}
-                  </div>
+          {/* iPhone arrastrable */}
+          <motion.div
+            ref={phoneRef}
+            style={{ x: dragX, y: dragY }}
+            drag
+            dragConstraints={sceneRef}
+            dragElastic={0.12}
+            dragMomentum={false}
+            onDragStart={() => setDragging(true)}
+            onDrag={onPhoneDrag}
+            onDragEnd={onPhoneDragEnd}
+            whileDrag={{ scale: 1.02, zIndex: 40 }}
+            className={`absolute bottom-[2%] right-[2%] z-20 w-[36%] max-w-[280px] min-w-[140px] touch-none sm:bottom-[3%] sm:right-[4%] sm:w-[30%] md:right-[5%] md:w-[26%] md:max-w-[300px] ${
+              dragging ? 'cursor-grabbing' : 'cursor-grab'
+            }`}
+            aria-label="Arrastra el celular hacia el hablador para activar"
+          >
+            <IPhonePreview className="pointer-events-none !mx-0 !max-w-none">
+              <AnimatePresence mode="wait" initial={false}>
+                {phoneScreen === 'lock' ? (
+                  <motion.div
+                    key="lock"
+                    className="h-full"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.25 }}
+                  >
+                    <LockScreen visibleChannels={[]} message="" />
+                  </motion.div>
                 ) : (
-                  <div className="h-36 animate-pulse rounded-xl bg-white/10" />
+                  <motion.div
+                    key="wallet"
+                    className="h-full"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <WalletScreen>
+                      {design ? (
+                        <div className="relative">
+                          <WalletPassCard
+                            backgroundColor={design.backgroundColor}
+                            foregroundColor={design.foregroundColor}
+                            title={design.title}
+                            subtitle={design.subtitle}
+                            logoUrl={design.logoUrl}
+                            points={displayPoints}
+                            maxStamps={maxStamps}
+                            memberName={
+                              state?.memberName || (active ? 'Visitante Onda' : undefined)
+                            }
+                          />
+                          <AnimatePresence>
+                            {flashStamp != null ? (
+                              <motion.div
+                                key={flashStamp}
+                                initial={{ scale: 0.6, opacity: 0 }}
+                                animate={{ scale: 1.15, opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                              >
+                                <span className="rounded-full bg-[var(--onda-lime)] px-3 py-1.5 text-xs font-bold text-[var(--onda-ink)]">
+                                  +1 onda
+                                </span>
+                              </motion.div>
+                            ) : null}
+                          </AnimatePresence>
+                          {banner && state?.action === 'redeemed' ? <ConfettiBurst /> : null}
+                        </div>
+                      ) : (
+                        <div className="h-36 animate-pulse rounded-xl bg-white/10" />
+                      )}
+                    </WalletScreen>
+                  </motion.div>
                 )}
-              </WalletScreen>
+              </AnimatePresence>
             </IPhonePreview>
-          </div>
+          </motion.div>
         </div>
       </motion.div>
 
       <div className="mx-auto mt-8 max-w-md">
         {!active ? (
           <p className="text-center text-xs text-[var(--onda-muted)]">
-            Como en el local: acerca el celular o escanea el hablador en la recepción.
+            Arrastra el celular hacia el hablador — o tócalo / activa aquí.
           </p>
         ) : null}
 
@@ -349,7 +482,7 @@ export function DemoSection() {
         <button
           type="button"
           onClick={() => {
-            if (!active) void activate();
+            if (!active) void activate(false);
             else void darOnda();
           }}
           disabled={busy || (active && !canDarOnda)}

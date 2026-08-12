@@ -178,6 +178,7 @@ export function WalletPassCard({
       : remaining === 1
         ? 'Te falta 1 onda'
         : `Te faltan ${remaining}`;
+  const lightFg = isLightHex(foregroundColor);
 
   return (
     <div
@@ -215,18 +216,21 @@ export function WalletPassCard({
           return (
             <span
               key={i}
-              className="flex h-4 w-4 items-center justify-center rounded-full"
+              className="flex h-5 w-5 items-center justify-center rounded-full"
               style={{
-                backgroundColor: filled ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.06)',
+                backgroundColor: filled ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.05)',
                 boxShadow: filled ? undefined : 'inset 0 0 0 1px rgba(255,255,255,0.28)',
               }}
+              aria-label={filled ? `Onda ${i + 1} acumulada` : `Onda ${i + 1} vacía`}
             >
-              <span
-                className="block h-2 w-2 rounded-full"
-                style={{
-                  backgroundColor: foregroundColor,
-                  opacity: filled ? 1 : 0.25,
-                }}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/onda-hand.png"
+                alt=""
+                aria-hidden
+                draggable={false}
+                className={`h-3.5 w-3.5 object-contain brightness-0 ${lightFg ? 'invert' : ''}`}
+                style={{ opacity: filled ? 1 : 0.22 }}
               />
             </span>
           );
@@ -247,6 +251,23 @@ export function WalletPassCard({
       </div>
     </div>
   );
+}
+
+function isLightHex(hex: string) {
+  const raw = hex.replace('#', '');
+  if (raw.length !== 3 && raw.length !== 6) return true;
+  const full =
+    raw.length === 3
+      ? raw
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : raw;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  // Perceived luminance
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.65;
 }
 
 export function LockScreen({
