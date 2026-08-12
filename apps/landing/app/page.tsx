@@ -1,7 +1,6 @@
 'use client';
 
 import { CampaignSection } from './components/CampaignSection';
-import { ChannelsSection } from './components/ChannelsSection';
 import { ConceptSection } from './components/ConceptSection';
 import { DemoSection } from './components/DemoSection';
 import { FooterCta } from './components/FooterCta';
@@ -19,7 +18,6 @@ export default function LandingPage() {
         <DemoSection />
         <ConceptSection />
         <CampaignSection />
-        <ChannelsSection />
         <PricingCards />
         <PricingConfigurator />
       </main>

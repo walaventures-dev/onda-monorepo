@@ -56,9 +56,15 @@ export default function OndaSpaProxyPage() {
     <div className="flex min-h-dvh flex-col bg-[var(--onda-bg)] px-5 py-8 text-[var(--onda-ink)]">
       <div className="mx-auto w-full max-w-md">
         <OndaLogo />
-        <h1 className="mt-8 font-display text-2xl font-bold tracking-tight">Onda Spa</h1>
+        <h1 className="mt-8 font-display text-2xl font-bold tracking-tight">
+          Tu tarjeta Onda Spa
+        </h1>
         <p className="mt-2 text-[var(--onda-muted)]">
-          Activando tu tarjeta en este dispositivo…
+          {status === 'loading'
+            ? 'Activando tu beneficio…'
+            : status === 'ready'
+              ? 'Lista para guardar en Wallet y empezar a acumular.'
+              : 'No pudimos activar la demo. Intenta de nuevo.'}
         </p>
 
         {status === 'loading' ? (
@@ -93,7 +99,7 @@ export default function OndaSpaProxyPage() {
                   href={state.appleUrl}
                   className="inline-flex items-center justify-center rounded-full bg-[var(--onda-ink)] px-5 py-3.5 text-sm font-semibold text-white active:scale-[0.98]"
                 >
-                  Agregar a Apple Wallet
+                  Guardar en Apple Wallet
                 </a>
               ) : null}
               {state.googleUrl ? (
@@ -101,12 +107,12 @@ export default function OndaSpaProxyPage() {
                   href={state.googleUrl}
                   className="inline-flex items-center justify-center rounded-full bg-[var(--onda-primary-500)] px-5 py-3.5 text-sm font-semibold text-white active:scale-[0.98]"
                 >
-                  Agregar a Google Wallet
+                  Guardar en Google Wallet
                 </a>
               ) : null}
               {state.stub ? (
                 <p className="text-center text-xs text-[var(--onda-muted)]">
-                  Modo stub: el pase se creó en DB; configura WALLET_API_KEY para emitir real.
+                  Demo local: el pase está listo. Con WALLET_API_KEY se emite el pase real.
                 </p>
               ) : null}
             </div>
@@ -115,7 +121,7 @@ export default function OndaSpaProxyPage() {
               href="/#demo"
               className="block text-center text-sm font-medium text-[var(--onda-primary-500)]"
             >
-              Ver la demo en la landing →
+              Seguir probando la demo →
             </a>
           </div>
         ) : null}

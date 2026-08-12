@@ -207,7 +207,7 @@ async function main() {
         create: {
           title: 'Onda Spa',
           subtitle: 'Masajes y bienestar',
-          description: 'Acumula 10 ondas y obtén 30% en tu próxima sesión de masajes',
+          description: 'Completa 10 ondas y lleva 30% en tu próxima sesión de masajes',
           backgroundColor: '#C9DDD4',
           foregroundColor: '#2F4F46',
           labelColor: '#5F7F74',

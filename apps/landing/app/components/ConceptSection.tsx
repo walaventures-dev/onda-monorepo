@@ -1,80 +1,81 @@
 'use client';
 
-import { motion, useScroll, useTransform } from 'framer-motion';
 import { OndaScriptMark } from '@onda/shared-ui';
-import { useRef } from 'react';
 import { fadeUp } from '../lib/motion';
+import { motion } from 'framer-motion';
 
 export function ConceptSection() {
-  const ref = useRef<HTMLElement | null>(null);
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ['start end', 'end start'],
-  });
-  const waveScale = useTransform(scrollYProgress, [0.2, 0.6], [0.7, 1.15]);
-  const waveOpacity = useTransform(scrollYProgress, [0.15, 0.45], [0.35, 1]);
-
   return (
-    <section ref={ref} className="relative overflow-hidden bg-[var(--onda-card)] py-20 md:py-28">
-      <OndaScriptMark className="pointer-events-none absolute -right-8 top-8 h-24 w-auto opacity-[0.08] md:h-36" />
-      <div className="relative mx-auto max-w-6xl px-6">
-        <motion.div {...fadeUp}>
-          <h2 className="font-display text-[clamp(2rem,6vw,4rem)] font-bold leading-[1.05] tracking-tight text-[var(--onda-ink)]">
-            <span className="text-[var(--onda-muted)] line-through decoration-[var(--onda-danger)] decoration-2">
-              Puntos.
-            </span>{' '}
-            <span className="text-[var(--onda-muted)] line-through decoration-[var(--onda-danger)] decoration-2">
-              Pesos.
-            </span>
-            <br />
-            <span className="text-[var(--onda-primary-500)]">No. Ondas.</span>
-          </h2>
-        </motion.div>
+    <section className="relative z-10 overflow-visible pt-36 text-white md:pt-48 lg:pt-56">
+      {/* Franja azul: ella a ras del borde inferior; la cabeza sobresale por arriba */}
+      <div className="relative overflow-visible bg-[var(--onda-primary-500)]">
+        <OndaScriptMark
+          variant="onPrimary"
+          className="pointer-events-none absolute -left-4 top-4 z-0 h-16 w-auto opacity-[0.1] md:h-24"
+        />
 
-        <div className="mt-10 grid items-center gap-10 md:grid-cols-[1fr_1.1fr]">
-          <motion.div style={{ scale: waveScale, opacity: waveOpacity }} className="origin-left">
-            <svg viewBox="0 0 320 120" className="w-full max-w-md" aria-hidden>
-              <path
-                d="M10 80c30-50 70-50 100 0s70 50 100 0 70-50 100 0"
-                fill="none"
-                stroke="var(--onda-primary-200)"
-                strokeWidth="8"
-                strokeLinecap="round"
-              />
-              <path
-                d="M10 60c30-50 70-50 100 0s70 50 100 0 70-50 100 0"
-                fill="none"
-                stroke="var(--onda-sky)"
-                strokeWidth="8"
-                strokeLinecap="round"
-              />
-              <path
-                d="M10 40c30-50 70-50 100 0s70 50 100 0 70-50 100 0"
-                fill="none"
-                stroke="var(--onda-primary-500)"
-                strokeWidth="8"
-                strokeLinecap="round"
-              />
-            </svg>
-          </motion.div>
+        <div className="relative mx-auto max-w-6xl px-6 py-12 md:py-14 lg:py-16">
+          <div className="relative z-10 max-w-xl md:max-w-[52%] lg:max-w-xl">
+            <motion.div {...fadeUp}>
+              <h2 className="font-display text-[clamp(2rem,5.5vw,3.75rem)] font-bold leading-[1.05] tracking-tight">
+                Ni{' '}
+                <span className="text-white/55 line-through decoration-[var(--onda-lime)] decoration-2">
+                  puntos
+                </span>{' '}
+                ni{' '}
+                <span className="text-white/55 line-through decoration-[var(--onda-lime)] decoration-2">
+                  pesos
+                </span>
+                .
+                <br />
+                <span>Ondas.</span>
+              </h2>
+            </motion.div>
 
-          <ul className="space-y-5 text-[var(--onda-muted)]">
-            <li className="flex gap-3">
-              <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--onda-primary-500)]" />
-              <p>
-                Una Onda no es moneda ni saldo: es progreso medible hacia una recompensa que
-                tú defines.
-              </p>
-            </li>
-            <li className="flex gap-3">
-              <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--onda-sky)]" />
-              <p>
-                El cliente la ve en Wallet. Tú la usas para traerlo de vuelta cuando quieres
-                vender.
-              </p>
-            </li>
-          </ul>
+            <motion.div
+              {...fadeUp}
+              className="mt-10 grid gap-6 sm:grid-cols-2 sm:gap-5 md:grid-cols-1 md:gap-7 lg:max-w-lg"
+            >
+              <div className="relative pl-4 before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:rounded-full before:bg-[var(--onda-lime)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--onda-lime)]">
+                  Qué es
+                </p>
+                <p className="mt-2 font-display text-xl font-semibold leading-snug tracking-tight">
+                  Progreso, no saldo
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-white/80">
+                  Una Onda no es moneda: es el camino medible hacia la recompensa que tú defines.
+                </p>
+              </div>
+
+              <div className="relative pl-4 before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:rounded-full before:bg-white/55">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">
+                  Para qué sirve
+                </p>
+                <p className="mt-2 font-display text-xl font-semibold leading-snug tracking-tight">
+                  Traer al cliente de vuelta
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-white/80">
+                  Él la ve en Wallet. Tú la usas para vender de nuevo, cuando te conviene.
+                </p>
+              </div>
+            </motion.div>
+          </div>
         </div>
+
+        {/* Anclada al borde inferior de la franja (fuera del padding del contenido) */}
+        <motion.div
+          {...fadeUp}
+          className="pointer-events-none absolute bottom-0 right-4 z-20 w-[min(88%,20rem)] sm:right-8 sm:w-[22rem] md:right-[max(1.5rem,calc((100%-72rem)/2+1.5rem))] md:w-[26rem] lg:w-[28rem]"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/product/reward-moment.png"
+            alt="Cliente celebrando una recompensa canjeada en Onda"
+            className="block h-auto w-full origin-bottom select-none drop-shadow-[0_24px_48px_rgba(5,20,80,0.4)]"
+            draggable={false}
+          />
+        </motion.div>
       </div>
     </section>
   );

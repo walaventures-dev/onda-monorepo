@@ -21,7 +21,7 @@ export function HabladorStand({
         type="button"
         onClick={onTap}
         disabled={busy || !onTap}
-        aria-label="Acercar celular al hablador Onda"
+        aria-label="Activar tarjeta Onda Spa con el hablador"
         className="group relative z-10 w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary-500)] focus-visible:ring-offset-2 disabled:opacity-70"
       >
         {/* Front face — acrylic stand like hero product shot */}
@@ -65,10 +65,10 @@ export function HabladorStand({
               </svg>
             </span>
             <p className="mt-1 text-center text-[13px] font-semibold leading-tight">
-              Acerca tu celular
+              Escanea y activa
             </p>
             <p className="text-center text-[11px] font-medium text-white/85">
-              o escanea el QR
+              NFC o código QR
             </p>
           </div>
 
@@ -88,7 +88,7 @@ export function HabladorStand({
           </div>
 
           <p className="relative mt-4 text-center text-[13px] font-bold tracking-tight">
-            ¡Ponte en la Onda!
+            Gana 30% en masajes
           </p>
         </div>
 

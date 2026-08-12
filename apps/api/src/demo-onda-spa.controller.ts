@@ -15,7 +15,7 @@ import { WalletService } from './wallet.service';
 const STORE_SLUG = 'onda-spa';
 /** Arranca cerca del final para que la demo muestre slots vacíos y cierre rápido. */
 const DEMO_START_POINTS = 8;
-const REDEEM_MESSAGE = '¡30% en tu próxima sesión de masajes!';
+const REDEEM_MESSAGE = '¡Listo! 30% en tu próxima sesión de masajes.';
 
 function devicePhone(deviceId: string) {
   const hex = createHash('sha256').update(`onda-spa:${deviceId}`).digest('hex').slice(0, 10);

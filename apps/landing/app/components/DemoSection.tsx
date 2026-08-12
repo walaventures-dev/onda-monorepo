@@ -95,7 +95,7 @@ export function DemoSection() {
         setState(res);
         setDisplayPoints(res.points);
         markWelcomePulseDone();
-        setBanner('¡Nueva onda acumulada!');
+        setBanner('¡+1 onda! Ya vas por el premio.');
         window.setTimeout(() => setBanner(null), 2200);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'No se pudo acumular');
@@ -189,13 +189,17 @@ export function DemoSection() {
       if (res.action === 'accumulated') {
         setFlashStamp(before + 1);
         setDisplayPoints(res.points);
-        setBanner('¡Nueva onda acumulada!');
+        setBanner(
+          res.points >= maxStamps
+            ? '¡Completaste las 10! Canjea tu 30% en masajes.'
+            : `¡+1 onda! Te faltan ${Math.max(0, maxStamps - res.points)} para el 30%.`,
+        );
       } else if (res.action === 'redeemed') {
         setDisplayPoints(res.points);
-        setBanner(res.notification || '¡30% en tu próxima sesión de masajes!');
+        setBanner(res.notification || '¡Listo! 30% en tu próxima sesión de masajes.');
       } else if (res.action === 'already_redeemed') {
         setDisplayPoints(res.points);
-        setBanner('Ya redimiste el premio en este ciclo');
+        setBanner('Ya canjeaste tu premio. Escanea de nuevo en tu próxima visita.');
       }
 
       window.setTimeout(() => setFlashStamp(null), 800);
@@ -211,35 +215,50 @@ export function DemoSection() {
     active &&
     !busy &&
     state &&
-    !state.redeemedThisCycle &&
-    (state.points > 0 || displayPoints > 0);
+    !state.redeemedThisCycle;
 
-  const darOndaLabel =
-    state && state.points >= maxStamps && !state.redeemedThisCycle
-      ? 'Canjear 30% masajes'
-      : '+ DAR UNA ONDA';
+  const primaryLabel = !active
+    ? 'Activar mi tarjeta'
+    : state?.redeemedThisCycle
+      ? 'Premio canjeado'
+      : state && state.points >= maxStamps
+        ? 'Canjear 30% en masajes'
+        : 'Dar una onda';
+
+  const helperText = !active
+    ? 'Toca el hablador, escanea el QR o activa aquí. En segundos tienes tu tarjeta lista.'
+    : state?.redeemedThisCycle
+      ? 'Así de fácil es recompensar a tus clientes — en el local y en Wallet.'
+      : state?.appleUrl || state?.googleUrl
+        ? 'Guárdala en Wallet y sigue acumulando. El premio se actualiza al instante.'
+        : 'Sigue acumulando ondas. Al completarlas, canjeas el 30% en masajes.';
 
   return (
     <section id="demo" className="mx-auto max-w-6xl px-6 py-20 md:py-28">
       <motion.div {...fadeUp} className="max-w-2xl">
         <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-tight text-[var(--onda-ink)]">
-          Cómo funciona
+          Pruébalo en vivo
         </h2>
         <p className="mt-3 text-lg text-[var(--onda-muted)]">
-          Acerca el celular al hablador NFC o escanea el QR. Se activa la tarjeta{' '}
-          <strong className="text-[var(--onda-ink)]">Onda Spa</strong> en este dispositivo y en
-          Wallet — misma tarjeta, misma experiencia.
+          Activa la tarjeta de <strong className="text-[var(--onda-ink)]">Onda Spa</strong>,
+          acumula ondas y canjea un <strong className="text-[var(--onda-ink)]">30% en masajes</strong>.
+          Misma experiencia aquí y en Wallet — sin app que descargar.
         </p>
       </motion.div>
 
       <div className="mt-12 grid items-center gap-10 lg:grid-cols-[0.95fr_1.05fr]">
-        <motion.div {...fadeUp} className="flex flex-col items-center">
+        <motion.div {...fadeUp} className="flex flex-col items-center gap-3">
           <HabladorStand
             qrSrc={qrSrc}
             proxyUrl={proxyUrl}
             busy={busy}
             onTap={active ? undefined : () => void activate()}
           />
+          {!active ? (
+            <p className="max-w-[14rem] text-center text-xs text-[var(--onda-muted)]">
+              Como en el local: acerca el celular o escanea.
+            </p>
+          ) : null}
         </motion.div>
 
         <motion.div {...fadeUp} className="relative mx-auto w-full max-w-sm">
@@ -270,7 +289,7 @@ export function DemoSection() {
                       : undefined
                   }
                   walletBusy={busy}
-                  walletLabel="Agregar a Wallet"
+                  walletLabel="Guardar en Wallet"
                 />
                 <AnimatePresence>
                   {flashStamp != null ? (
@@ -282,7 +301,7 @@ export function DemoSection() {
                       className="pointer-events-none absolute inset-0 flex items-center justify-center"
                     >
                       <span className="rounded-full bg-[var(--onda-lime)] px-4 py-2 text-sm font-bold text-[var(--onda-ink)] shadow-lg">
-                        +1 Onda
+                        +1 onda
                       </span>
                     </motion.div>
                   ) : null}
@@ -313,18 +332,17 @@ export function DemoSection() {
 
           <button
             type="button"
-            onClick={() => void darOnda()}
-            disabled={!canDarOnda || (state?.redeemedThisCycle ?? false)}
+            onClick={() => {
+              if (!active) void activate();
+              else void darOnda();
+            }}
+            disabled={busy || (active && !canDarOnda)}
             className="mt-6 flex w-full items-center justify-center rounded-full bg-[var(--onda-primary-500)] px-5 py-3.5 text-sm font-bold tracking-wide text-white shadow-[0_12px_28px_rgba(5,45,222,0.28)] transition hover:bg-[var(--onda-primary-600)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
           >
-            {state?.redeemedThisCycle ? 'Premio redimido' : darOndaLabel}
+            {primaryLabel}
           </button>
 
-          <p className="mt-3 text-center text-xs text-[var(--onda-muted)]">
-            {active
-              ? 'Esta acción actualiza la tarjeta de la sección y el pase en Wallet del dispositivo.'
-              : 'Primero activa la tarjeta con el QR o el botón de simular lectura.'}
-          </p>
+          <p className="mt-3 text-center text-xs text-[var(--onda-muted)]">{helperText}</p>
         </motion.div>
       </div>
     </section>
