@@ -129,10 +129,12 @@ export function CampaignSection() {
     <section id="campanas" className="mx-auto max-w-6xl px-6 py-20 md:py-28">
       <motion.div {...fadeUp} className="max-w-2xl">
         <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-tight text-[var(--onda-ink)]">
-          Cuando tú quieres vender, activa una campaña.
+          Lanza una campaña en minutos.
         </h2>
         <p className="mt-3 text-lg text-[var(--onda-muted)]">
-          Segmenta, elige canal y lanza en minutos — sin Excel ni agencia.
+          Prueba este demo: elige objetivo, audiencia y mensaje. En cuatro pasos
+          ves cómo Onda llega a tus clientes por Wallet, WhatsApp y SMS — sin Excel
+          ni agencia.
         </p>
       </motion.div>
 

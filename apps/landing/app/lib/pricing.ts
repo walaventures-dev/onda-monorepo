@@ -44,11 +44,10 @@ export const PLAN_META: Record<
     name: 'Onda',
     shortName: 'Onda',
     features: [
-      'Wallet Apple y Google',
-      'Recompensas a tu manera',
-      'NFC + QR incluidos',
-      'Base de clientes',
-      'Hasta 150 msgs WhatsApp/mes',
+      'Pase en Apple y Google Wallet',
+      'Recompensas a tu medida',
+      'Base de clientes propia',
+      'Avisos push desde el Wallet',
     ],
   },
   PRO: {
@@ -56,12 +55,11 @@ export const PLAN_META: Record<
     shortName: 'Onda Pro',
     features: [
       'Todo lo de Onda',
-      'Google Reviews',
-      'Proximidad inteligente',
-      'Campañas push segmentadas',
-      'WhatsApp + SMS',
-      'Analítica avanzada',
-      'Hasta 350 msgs WhatsApp/mes',
+      '2 campañas para traer clientes de vuelta',
+      'WhatsApp y SMS (hasta 350 msgs/mes)',
+      'Más reseñas en Google',
+      'Avisos al cliente cuando está cerca del negocio',
+      'Analítica para ver qué funciona',
     ],
   },
 };
@@ -72,22 +70,36 @@ export function formatCop(amount: number) {
 
 export function quotePlan(plan: PlanId, billing: BillingPeriod) {
   const monthlyList = PLAN_MONTHLY[plan];
-  const months = BILLING_MONTHS[billing];
+  const paidMonths = BILLING_MONTHS[billing];
   const monthlyEffective = PLAN_EFFECTIVE[plan][billing];
-  const total = monthlyEffective * months;
-  const fullTotal = monthlyList * months;
-  const savings = fullTotal - total;
+  const total = monthlyEffective * paidMonths;
+  const fullTotal = monthlyList * paidMonths;
+  const discountSavings = fullTotal - total;
+  /** Primer mes gratis en todos; en 6/12 es adicional al descuento del prepago. */
+  const freeMonths = 1;
+  const serviceMonths = billing === 'monthly' ? freeMonths : paidMonths + freeMonths;
+  const freeMonthValue = monthlyList * freeMonths;
+  const savings = discountSavings + (billing === 'monthly' ? 0 : freeMonthValue);
   const includesKit = billing !== 'monthly';
-  const discount = savings > 0 ? savings / fullTotal : 0;
+  /** Ningún plan pide tarjeta para iniciar. */
+  const noCardRequired = true;
+  const discount = discountSavings > 0 ? discountSavings / fullTotal : 0;
 
   return {
     monthlyList,
     monthlyEffective,
-    months,
+    paidMonths,
+    /** @deprecated use paidMonths */
+    months: paidMonths,
+    serviceMonths,
+    freeMonths,
     total,
+    discountSavings,
+    freeMonthValue,
     savings,
     discount,
     includesKit,
+    noCardRequired,
     periodLabel:
       billing === 'monthly' ? 'mensual' : billing === '6' ? 'semestral' : 'anual',
   };

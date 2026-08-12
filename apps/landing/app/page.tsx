@@ -6,8 +6,7 @@ import { DemoSection } from './components/DemoSection';
 import { FooterCta } from './components/FooterCta';
 import { HeroSection } from './components/HeroSection';
 import { LandingHeader } from './components/LandingHeader';
-import { PricingCards } from './components/PricingCards';
-import { PricingConfigurator } from './components/PricingConfigurator';
+import { PricingSection } from './components/PricingSection';
 
 export default function LandingPage() {
   return (
@@ -18,8 +17,7 @@ export default function LandingPage() {
         <DemoSection />
         <ConceptSection />
         <CampaignSection />
-        <PricingCards />
-        <PricingConfigurator />
+        <PricingSection />
       </main>
       <FooterCta />
     </div>
