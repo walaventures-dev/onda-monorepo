@@ -400,7 +400,7 @@ export function DemoSection() {
                     exit={{ opacity: 0, y: -8 }}
                     transition={{ duration: 0.25 }}
                   >
-                    <LockScreen visibleChannels={[]} message="" />
+                    <LockScreen />
                   </motion.div>
                 ) : (
                   <motion.div

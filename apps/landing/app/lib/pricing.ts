@@ -1,3 +1,8 @@
+import {
+  PLAN_ONDA_MONTHLY_LIMIT,
+  PLAN_SMS_CAMPAIGNS_MONTHLY,
+} from '@onda/shared-types';
+
 export type PlanId = 'BASIC' | 'PRO';
 export type BillingPeriod = 'monthly' | '6' | '12';
 
@@ -45,6 +50,8 @@ export const PLAN_META: Record<
     shortName: 'Onda',
     features: [
       'Tarjeta en Apple y Google Wallet',
+      `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
+      `${PLAN_SMS_CAMPAIGNS_MONTHLY} campañas SMS gratis al mes`,
       'Recompensas que tú defines',
       'Tu propia base de clientes',
       'Avisos push desde el Wallet',
@@ -55,8 +62,9 @@ export const PLAN_META: Record<
     shortName: 'Onda Pro',
     features: [
       'Todo lo de Onda',
+      `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
+      `${PLAN_SMS_CAMPAIGNS_MONTHLY} campañas SMS gratis al mes`,
       'Campañas para llenar el local',
-      'WhatsApp y SMS (hasta 350 msgs/mes)',
       'Pide reseñas en Google al canjear',
       'Aviso cuando el cliente está cerca',
       'Analítica para ver qué sí funciona',

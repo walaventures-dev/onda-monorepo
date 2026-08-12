@@ -41,23 +41,18 @@ function ChannelIcon({ channel }: { channel: Channel }) {
   );
 }
 
-const CHANNEL_META: Record<Channel, { title: string; subtitle: string; brand: string }> = {
-  Wallet: {
-    title: 'Wallet',
-    subtitle: 'ahora',
-    brand: 'Onda Spa',
-  },
-  WhatsApp: {
-    title: 'WhatsApp',
-    subtitle: 'ahora',
-    brand: 'Onda',
-  },
-  SMS: {
-    title: 'Mensajes',
-    subtitle: 'ahora',
-    brand: 'Onda Spa',
-  },
-};
+function channelMeta(
+  channel: Channel,
+  storeName: string
+): { title: string; subtitle: string; brand: string } {
+  if (channel === 'Wallet') {
+    return { title: storeName, subtitle: 'ahora', brand: 'Wallet' };
+  }
+  if (channel === 'WhatsApp') {
+    return { title: 'WhatsApp', subtitle: 'ahora', brand: storeName };
+  }
+  return { title: 'Mensajes', subtitle: 'ahora', brand: storeName };
+}
 
 export function IPhonePreview({
   children,
@@ -270,13 +265,20 @@ function isLightHex(hex: string) {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.65;
 }
 
-export function LockScreen({
-  visibleChannels,
-  message,
-}: {
-  visibleChannels: Channel[];
+export type LockScreenNotification = {
+  id: string;
+  channel: Channel;
   message: string;
+};
+
+export function LockScreen({
+  notifications = [],
+  storeName = 'Onda Spa',
+}: {
+  notifications?: LockScreenNotification[];
+  storeName?: string;
 }) {
+  const items = notifications;
   const now = new Date();
   const time = now.toLocaleTimeString('es-CO', {
     hour: 'numeric',
@@ -304,7 +306,7 @@ export function LockScreen({
         <p className="mt-1 font-display text-[2.75rem] font-semibold leading-none tracking-tight">
           {time}
         </p>
-        {visibleChannels.length === 0 ? (
+        {items.length === 0 ? (
           <div className="mt-6 flex flex-col items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -332,11 +334,11 @@ export function LockScreen({
 
       <div className="relative z-10 mt-5 flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
         <AnimatePresence initial={false}>
-          {visibleChannels.map((channel) => {
-            const meta = CHANNEL_META[channel];
+          {items.map((item) => {
+            const meta = channelMeta(item.channel, storeName);
             return (
               <motion.div
-                key={channel}
+                key={item.id}
                 initial={{ opacity: 0, y: -18, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8 }}
@@ -344,7 +346,7 @@ export function LockScreen({
                 className="rounded-[1.1rem] bg-white/92 p-2.5 shadow-lg backdrop-blur-md"
               >
                 <div className="flex items-start gap-2">
-                  <ChannelIcon channel={channel} />
+                  <ChannelIcon channel={item.channel} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="text-[11px] font-semibold text-[var(--onda-ink)]">
@@ -356,7 +358,7 @@ export function LockScreen({
                       {meta.brand}
                     </p>
                     <p className="mt-0.5 line-clamp-3 text-[10px] leading-snug text-[var(--onda-muted)]">
-                      {message || '…'}
+                      {item.message || '…'}
                     </p>
                   </div>
                 </div>

@@ -29,6 +29,7 @@ import { CustomerAuthService } from './customer-auth.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
 import { PendingRequestsController } from './pending-requests.controller';
 import { DemoOndaSpaController } from './demo-onda-spa.controller';
+import { CampaignsController } from './campaigns.controller';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { DemoOndaSpaController } from './demo-onda-spa.controller';
     PendingRequestsController,
     ReferralsController,
     DemoOndaSpaController,
+    CampaignsController,
   ],
   providers: [PrismaService, WalletService, WhatsappService, CustomerAuthService, PendingRequestsSseService],
 })

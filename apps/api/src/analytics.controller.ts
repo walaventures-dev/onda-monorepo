@@ -11,8 +11,13 @@ import {
 } from '@nestjs/common';
 import { PlanType, PromotionType, Prisma } from '@prisma/client';
 import { PrismaService } from './prisma.service';
+import {
+  PLAN_ONDA_MONTHLY_LIMIT,
+  PLAN_SMS_CAMPAIGNS_MONTHLY,
+  monthlyOndasUsed,
+  monthlySmsCampaignsUsed,
+} from './plan-quota';
 
-const LIMITS: Record<PlanType, number> = { BASIC: 150, PRO: 350 };
 const COMPARE_MAX_STORES = 20;
 
 type CompareTone = 'success' | 'warning' | 'danger' | 'accent';
@@ -495,15 +500,16 @@ export class AnalyticsController {
         stat: String(segments.enRiesgo),
       });
     }
-    const waPct = Math.round((store.whatsappUsed / LIMITS[store.planType]) * 100);
-    if (waPct >= 80) {
+    const ondasMonthUsed = await monthlyOndasUsed(this.prisma, storeId);
+    const ondasPct = Math.round((ondasMonthUsed / PLAN_ONDA_MONTHLY_LIMIT) * 100);
+    if (ondasPct >= 80) {
       insights.push({
-        id: 'wa-limit',
+        id: 'onda-limit',
         tone: 'warning',
-        title: 'Cupo WhatsApp alto',
-        message: `Usaste ${waPct}% del cupo (${store.whatsappUsed}/${LIMITS[store.planType]}).`,
+        title: 'Cupo de ondas alto',
+        message: `Usaste ${ondasPct}% de las ${PLAN_ONDA_MONTHLY_LIMIT} ondas incluidas este mes (${ondasMonthUsed}/${PLAN_ONDA_MONTHLY_LIMIT}).`,
         action: 'Ver plan',
-        stat: `${waPct}%`,
+        stat: `${ondasPct}%`,
       });
     }
     if (activePromos.length <= 1) {
@@ -577,8 +583,10 @@ export class AnalyticsController {
         clientesNuevosDelta: pctDelta(clientesNuevos, prevClientesNuevos),
         tasaRedencion: redeemRate,
         tasaRedencionDelta: redeemRate - prevRedeemRate,
+        ondasMonthUsed,
+        ondasMonthLimit: PLAN_ONDA_MONTHLY_LIMIT,
         whatsappUsed: store.whatsappUsed,
-        whatsappLimit: LIMITS[store.planType],
+        whatsappLimit: PLAN_ONDA_MONTHLY_LIMIT,
         planType: store.planType,
         coberturaCatalogo: coverage,
         promosActivas: activePromos.length,
@@ -1174,7 +1182,7 @@ export class AnalyticsController {
           coberturaCatalogo: coverage,
           promosActivas: activePromos.length,
           whatsappUsed: store.whatsappUsed,
-          whatsappLimit: LIMITS[store.planType],
+          whatsappLimit: PLAN_ONDA_MONTHLY_LIMIT,
           rankOndas: 0,
           rankRedenciones: 0,
           rankTasa: 0,
@@ -1714,16 +1722,18 @@ export class BillingController {
   @Get('store/:storeId')
   async summary(@Param('storeId') storeId: string) {
     const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
-    const limit = store.planType === 'PRO' ? 350 : 150;
-    const overage = Math.max(0, store.whatsappUsed - limit);
+    const [ondasUsed, smsCampaignsUsed] = await Promise.all([
+      monthlyOndasUsed(this.prisma, storeId),
+      monthlySmsCampaignsUsed(this.prisma, storeId),
+    ]);
     return {
       planType: store.planType,
       billingStatus: store.billingStatus,
-      whatsappUsed: store.whatsappUsed,
-      whatsappLimit: limit,
-      overageMessages: overage,
-      overageCop: overage * 150,
-      planPriceCop: store.planType === 'PRO' ? 79900 : 49900,
+      ondasUsed,
+      ondasLimit: PLAN_ONDA_MONTHLY_LIMIT,
+      smsCampaignsUsed,
+      smsCampaignsLimit: PLAN_SMS_CAMPAIGNS_MONTHLY,
+      planPriceCop: store.planType === 'PRO' ? 69_900 : 49_900,
       freeMonthsBalance: store.freeMonthsBalance,
       wompiPublicKey: process.env.WOMPI_PUBLIC_KEY || null,
       features: {

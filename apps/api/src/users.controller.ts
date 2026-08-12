@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from './prisma.service';
 import { WhatsappService } from './whatsapp.service';
 import { WalletService } from './wallet.service';
+import { remainingOndas } from './plan-quota';
 
 function toE164Colombia(input: string): string {
   const digits = input.replace(/\D/g, '');
@@ -66,31 +67,34 @@ export class UsersController {
 
     if (!pass) {
       const serialNumber = randomSerial();
+      const welcomePoints = (await remainingOndas(this.prisma, store.id)) > 0 ? 1 : 0;
       pass = await this.prisma.pass.create({
         data: {
           userId: user.id,
           storeId: body.storeId,
           eventId: body.eventId,
           serialNumber,
-          points: 1,
+          points: welcomePoints,
         },
       });
 
-      await this.prisma.transaction.create({
-        data: {
-          passId: pass.id,
-          storeId: body.storeId,
-          type: 'ACCUMULATE',
-          points: 1,
-        },
-      });
+      if (welcomePoints > 0) {
+        await this.prisma.transaction.create({
+          data: {
+            passId: pass.id,
+            storeId: body.storeId,
+            type: 'ACCUMULATE',
+            points: welcomePoints,
+          },
+        });
+      }
 
       const design = store.passDesign;
       if (design) {
         try {
           const issued = await this.wallet.issuePass({
             serialNumber,
-            points: 1,
+            points: welcomePoints,
             holderName: user.name,
             organizationName: store.name,
             maxStamps: store.maxStamps,

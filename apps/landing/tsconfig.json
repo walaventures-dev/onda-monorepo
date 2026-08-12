@@ -13,7 +13,7 @@
     ],
     "paths": {
       "@onda/shared-types": [
-        "../../libs/shared/types/src/index.tsx"
+        "../../libs/shared/types/src/index.ts"
       ],
       "@onda/shared-ui": [
         "../../libs/shared/ui/src/index.tsx"

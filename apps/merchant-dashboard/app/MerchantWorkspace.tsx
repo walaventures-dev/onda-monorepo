@@ -36,6 +36,10 @@ import {
 } from "@onda/shared-ui";
 import { displayPhone, derivePassPalette } from "@onda/shared-utils";
 import {
+  PLAN_ONDA_MONTHLY_LIMIT,
+  PLAN_SMS_CAMPAIGNS_MONTHLY,
+} from "@onda/shared-types";
+import {
   BarChart,
   Bar,
   ResponsiveContainer,
@@ -1967,8 +1971,13 @@ export function MerchantWorkspace() {
                   </p>
                 </div>
                 <p>
-                  WhatsApp atribuido: {billing?.whatsappUsed}/
-                  {billing?.whatsappLimit} (excedente {billing?.overageCop} COP)
+                  Ondas este mes: {billing?.ondasUsed ?? 0}/
+                  {billing?.ondasLimit ?? PLAN_ONDA_MONTHLY_LIMIT}
+                </p>
+                <p>
+                  Campañas SMS este mes: {billing?.smsCampaignsUsed ?? 0}/
+                  {billing?.smsCampaignsLimit ?? PLAN_SMS_CAMPAIGNS_MONTHLY} (
+                  {PLAN_SMS_CAMPAIGNS_MONTHLY} gratis)
                 </p>
                 {billing?.planType === "BASIC" ? (
                   <GradientButton type="button" onClick={upgrade}>

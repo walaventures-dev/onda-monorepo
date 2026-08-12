@@ -9,6 +9,7 @@ import { MegaphoneIcon as Megaphone } from '@phosphor-icons/react/dist/csr/Megap
 import { StarIcon as Star } from '@phosphor-icons/react/dist/csr/Star';
 import { onboardingUrl } from '../lib/pricing';
 import {
+  easeSoft,
   heroItem,
   heroMount,
   heroVisual,
@@ -16,10 +17,58 @@ import {
   staggerItemSoft,
 } from '../lib/motion';
 
+/** S del wordmark (n→d): mismos cubics para que el morph no salte. */
+const WAVE_A =
+  'M 8 18 C 52 18 62 6 108 12 C 154 18 168 22 192 14';
+const WAVE_B =
+  'M 8 16 C 52 21 62 8 108 10 C 154 16 168 20 192 17';
+
+function HeroHighlight({ children }: { children: string }) {
+  const reduceMotion = useReducedMotion();
+
+  return (
+    <span className="relative inline-block whitespace-nowrap pb-[0.22em] text-[var(--onda-primary-500)]">
+      <span className="relative z-[1]">{children}</span>
+      <svg
+        className="pointer-events-none absolute inset-x-[-6%] bottom-0 z-0 h-[0.34em] w-[112%] overflow-visible"
+        viewBox="0 0 200 28"
+        fill="none"
+        aria-hidden
+        preserveAspectRatio="none"
+      >
+        <motion.path
+          d={WAVE_A}
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+          style={{ strokeWidth: '0.11em' }}
+          initial={reduceMotion ? false : { pathLength: 0, opacity: 0.3 }}
+          animate={{
+            pathLength: 1,
+            opacity: 1,
+            d: reduceMotion ? WAVE_A : [WAVE_A, WAVE_B, WAVE_A],
+          }}
+          transition={{
+            pathLength: { duration: 0.95, delay: 0.48, ease: easeSoft },
+            opacity: { duration: 0.35, delay: 0.48 },
+            d: {
+              duration: 3.8,
+              delay: 1.55,
+              repeat: Infinity,
+              ease: 'easeInOut',
+            },
+          }}
+        />
+      </svg>
+    </span>
+  );
+}
+
 const VALUE_POINTS = [
   { icon: DeviceMobile, title: 'Wallet', desc: 'Sin descargar app' },
   { icon: Gift, title: 'Recompensas', desc: 'Tú defines el premio' },
-  { icon: Megaphone, title: 'Campañas', desc: 'Wallet, WhatsApp y SMS' },
+  { icon: Megaphone, title: 'Campañas', desc: '4 SMS gratis al mes' },
   { icon: Star, title: 'Reseñas', desc: 'Más estrellas en Google' },
 ];
 
@@ -46,11 +95,10 @@ export function HeroSection() {
         <motion.div {...heroMount} className="flex flex-col">
           <motion.h1
             variants={heroItem}
-            className="max-w-xl font-display text-[clamp(2rem,5vw,3.5rem)] font-bold leading-[1.08] tracking-tight text-[var(--onda-ink)]"
+            className="max-w-xl overflow-visible font-display text-[clamp(2rem,5vw,3.5rem)] font-bold leading-[1.08] tracking-tight text-[var(--onda-ink)]"
           >
             Tu cliente se fue.{' '}
-            <span className="text-[var(--onda-primary-500)]">Tu marca</span> no tiene por qué
-            irse con él.
+            <HeroHighlight>Tu negocio</HeroHighlight> no tiene por qué irse con él.
           </motion.h1>
           <motion.p
             variants={heroItem}

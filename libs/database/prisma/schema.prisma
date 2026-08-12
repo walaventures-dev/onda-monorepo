@@ -42,6 +42,11 @@ enum PromotionExpiryMode {
   QUANTITY
 }
 
+enum CampaignChannel {
+  SMS
+  WALLET
+}
+
 enum PendingRequestType {
   ACCUMULATE
   CLAIM
@@ -107,7 +112,19 @@ model Store {
   eventMemberships  StoreEventMembership[]
   passDesign        PassDesign?
   pendingRequests   PendingRequest[]
+  campaigns         Campaign[]
   createdAt         DateTime               @default(now())
+}
+
+model Campaign {
+  id        String          @id @default(uuid())
+  storeId   String
+  store     Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  channel   CampaignChannel
+  title     String
+  createdAt DateTime        @default(now())
+
+  @@index([storeId, channel, createdAt])
 }
 
 model Event {

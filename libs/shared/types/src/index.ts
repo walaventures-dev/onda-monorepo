@@ -258,9 +258,8 @@ export interface KpiSummary {
   whatsappLimit: number;
 }
 
-export const PLAN_WHATSAPP_LIMITS: Record<PlanType, number> = {
-  [PlanType.BASIC]: 150,
-  [PlanType.PRO]: 350,
-};
+/** Ondas incluidas por mes en cualquier suscripción (BASIC o PRO). */
+export const PLAN_ONDA_MONTHLY_LIMIT = 300;
 
-export const WHATSAPP_OVERAGE_COP = 150;
+/** Campañas SMS incluidas gratis por mes en cualquier suscripción. */
+export const PLAN_SMS_CAMPAIGNS_MONTHLY = 4;

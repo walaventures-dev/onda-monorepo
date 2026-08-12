@@ -6,15 +6,10 @@ import { Inject, BadRequestException,
   Param,
   Post,
   Query, } from '@nestjs/common';
-import { PlanType } from '@prisma/client';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { WhatsappService } from './whatsapp.service';
-
-const LIMITS: Record<PlanType, number> = {
-  BASIC: 150,
-  PRO: 350,
-};
+import { assertCanAccumulate } from './plan-quota';
 
 @Controller('transactions')
 export class TransactionsController {
@@ -77,8 +72,9 @@ export class TransactionsController {
     }
     const requestedPoints = body.points ?? 1;
     const { pass, tx } = await this.prisma.$transaction(async (trx) => {
+      const allowed = await assertCanAccumulate(trx, store.id, requestedPoints);
       const current = await trx.pass.findUniqueOrThrow({ where: { id: body.passId } });
-      const delta = Math.max(0, Math.min(requestedPoints, store.maxStamps - current.points));
+      const delta = Math.max(0, Math.min(allowed, store.maxStamps - current.points));
       const updated = await trx.pass.update({
         where: { id: body.passId },
         data: { points: { increment: delta } },
@@ -107,12 +103,10 @@ export class TransactionsController {
       },
       storeId: store.id,
     });
-    if (store.whatsappUsed < LIMITS[store.planType]) {
-      await this.prisma.store.update({
-        where: { id: store.id },
-        data: { whatsappUsed: { increment: 1 } },
-      });
-    }
+    await this.prisma.store.update({
+      where: { id: store.id },
+      data: { whatsappUsed: { increment: 1 } },
+    });
     return { transaction: tx, pass };
   }
 

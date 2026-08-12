@@ -13,19 +13,14 @@ import {
   Sse,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import { PlanType } from '@prisma/client';
 import { PrismaService } from './prisma.service';
 import { WhatsappService } from './whatsapp.service';
 import { WalletService } from './wallet.service';
 import { CustomerAuthService } from './customer-auth.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
+import { assertCanAccumulate } from './plan-quota';
 
 const CODE_TTL_MS = 60 * 1000;
-
-const LIMITS: Record<PlanType, number> = {
-  BASIC: 150,
-  PRO: 350,
-};
 
 function randomCode(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -106,6 +101,9 @@ export class PendingRequestsController {
     const storeId = pass.storeId;
     const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
 
+    if (body.type === 'ACCUMULATE') {
+      await assertCanAccumulate(this.prisma, storeId, 1);
+    }
     if (body.type === 'ACCUMULATE' && pass.points >= store.maxStamps) {
       const hasFinalPromo = await this.prisma.promotion.findFirst({
         where: { storeId, pointsRequired: store.maxStamps, isActive: true },
@@ -239,6 +237,7 @@ export class PendingRequestsController {
 
     if (pending.type === 'ACCUMULATE') {
       await this.prisma.$transaction(async (tx) => {
+        const allowed = await assertCanAccumulate(tx, pending.storeId, 1);
         const claimed = await tx.pendingRequest.updateMany({
           where: { id, status: 'PENDING' },
           data: { status: 'CONFIRMED', resolvedAt: new Date() },
@@ -247,7 +246,7 @@ export class PendingRequestsController {
           throw new BadRequestException('Esta solicitud ya no está pendiente');
         }
         const current = await tx.pass.findUniqueOrThrow({ where: { id: pending.passId } });
-        const delta = Math.max(0, Math.min(1, store.maxStamps - current.points));
+        const delta = Math.max(0, Math.min(allowed, store.maxStamps - current.points));
         await tx.pass.update({
           where: { id: pending.passId },
           data: { points: { increment: delta } },
@@ -336,12 +335,10 @@ export class PendingRequestsController {
         },
         storeId: pending.storeId,
       });
-      if (store.whatsappUsed < LIMITS[store.planType]) {
-        await this.prisma.store.update({
-          where: { id: store.id },
-          data: { whatsappUsed: { increment: 1 } },
-        });
-      }
+      await this.prisma.store.update({
+        where: { id: store.id },
+        data: { whatsappUsed: { increment: 1 } },
+      });
     }
 
     return { ok: true as const };

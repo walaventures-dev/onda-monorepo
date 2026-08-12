@@ -23,6 +23,8 @@ import {
   STORE_CATEGORY_LABELS,
   STORE_SUBCATEGORY_LABELS,
   STORE_SUBCATEGORIES_BY_CATEGORY,
+  PLAN_ONDA_MONTHLY_LIMIT,
+  PLAN_SMS_CAMPAIGNS_MONTHLY,
 } from '@onda/shared-types';
 import { derivePassPalette, normalizeStoreSlug } from '@onda/shared-utils';
 
@@ -50,14 +52,21 @@ const PLAN_OPTIONS: Array<{
     name: 'Básico Lite',
     price: '$49.900',
     blurb: 'Ideal para empezar',
-    features: ['Pases ilimitados', '150 msgs WhatsApp/mes'],
+    features: [
+      `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
+      `${PLAN_SMS_CAMPAIGNS_MONTHLY} campañas SMS gratis al mes`,
+    ],
   },
   {
     id: 'PRO',
     name: 'PRO Crecimiento',
-    price: '$79.900',
+    price: '$69.900',
     blurb: 'Para crecer más rápido',
-    features: ['350 msgs WhatsApp/mes', 'NPS, GPS y review gating'],
+    features: [
+      `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
+      `${PLAN_SMS_CAMPAIGNS_MONTHLY} campañas SMS gratis al mes`,
+      'NPS, GPS y review gating',
+    ],
   },
 ];
 
