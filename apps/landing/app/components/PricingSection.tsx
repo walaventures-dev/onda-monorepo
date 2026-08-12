@@ -140,24 +140,6 @@ export function PricingSection() {
         </div>
       </motion.div>
 
-      <AnimatePresence mode="wait">
-        {includesKit ? (
-          <motion.div
-            key="kit-visual"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.28 }}
-            className="mx-auto mt-10 max-w-3xl"
-          >
-            <KitVisual />
-            <p className="mt-3 text-center text-xs text-[var(--onda-muted)]">
-              Kit de bienvenida · hablador NFC, QR, stickers y materiales de marca
-            </p>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-
       <div className="mt-12 grid gap-6 lg:grid-cols-2">
         {ORDER.map((id) => {
           const meta = PLAN_META[id];
@@ -271,6 +253,46 @@ export function PricingSection() {
           );
         })}
       </div>
+
+      <motion.div
+        {...fadeUp}
+        className="mt-16 grid items-center gap-10 lg:grid-cols-[1.15fr_0.85fr]"
+      >
+        <KitVisual />
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--onda-primary-500)]">
+            Kit de bienvenida
+          </p>
+          <h3 className="mt-2 font-display text-[clamp(1.5rem,3vw,2.1rem)] font-bold tracking-tight text-[var(--onda-ink)]">
+            Todo listo para poner Onda en tu local
+          </h3>
+          <p className="mt-3 text-[var(--onda-muted)]">
+            Incluido en planes de 6 o 12 meses. Llega con tu primer pago — NFC y QR
+            configurados para empezar a acumular Ondas desde el mostrador.
+          </p>
+          <ul className="mt-6 space-y-3 text-sm text-[var(--onda-ink)]">
+            {[
+              'Hablador NFC + QR para el mostrador',
+              'Señalética “Pague aquí” / acerca tu celular',
+              'Caja y materiales de marca Onda',
+              'Stickers y piezas para vitrina o barra',
+            ].map((item) => (
+              <li key={item} className="flex gap-2.5">
+                <Check
+                  size={18}
+                  className="mt-0.5 shrink-0 text-[var(--onda-primary-500)]"
+                  weight="bold"
+                />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-5 text-sm text-[var(--onda-muted)]">
+            En el plan mensual la activación es digital; el Kit físico está disponible al
+            pasar a 6 o 12 meses.
+          </p>
+        </div>
+      </motion.div>
 
       <motion.p
         {...fadeUp}
