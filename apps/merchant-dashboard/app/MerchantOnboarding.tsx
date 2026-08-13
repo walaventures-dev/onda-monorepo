@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   api,
@@ -27,7 +28,8 @@ import {
   PLAN_SMS_CAMPAIGNS_MONTHLY,
 } from '@onda/shared-types';
 import { derivePassPalette, normalizeStoreSlug } from '@onda/shared-utils';
-import { useMerchantAuth } from '../lib/MerchantAuth';
+import { useMerchantAuth, mapFirebaseAuthError } from '../lib/MerchantAuth';
+import { GoogleSignInButton } from './GoogleSignInButton';
 
 type Step = 1 | 2 | 3;
 type PlanChoice = 'BASIC' | 'PRO';
@@ -162,7 +164,8 @@ export function MerchantOnboarding({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { email: sessionEmail } = useMerchantAuth();
+  const { email: sessionEmail, firebaseEnabled, signUp, signInWithGoogle, user } =
+    useMerchantAuth();
   const refFromUrl = sanitizeReferralCode(searchParams.get('ref'));
   const planFromUrl = parsePlanParam(searchParams.get('plan'));
 
@@ -188,11 +191,17 @@ export function MerchantOnboarding({
     StoreSubcategory.CAFE
   );
   const [ownerEmail, setOwnerEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [referralCode, setReferralCode] = useState(refFromUrl);
+  const needsCredentials = firebaseEnabled && !sessionEmail;
 
   useEffect(() => {
     if (sessionEmail && !ownerEmail) setOwnerEmail(sessionEmail);
   }, [sessionEmail, ownerEmail]);
+
+  useEffect(() => {
+    if (user?.displayName && !ownerName) setOwnerName(user.displayName);
+  }, [user, ownerName]);
 
   const [design, setDesign] = useState<DesignForm>({
     title: '',
@@ -286,8 +295,31 @@ export function MerchantOnboarding({
   async function submitStep1(e: FormEvent) {
     e.preventDefault();
     setError('');
+    if (needsCredentials) {
+      if (!ownerEmail.trim()) {
+        setError('Indica el email con el que vas a entrar al panel');
+        return;
+      }
+      if (password.length < 6) {
+        setError('La contraseña debe tener al menos 6 caracteres');
+        return;
+      }
+    }
     setBusy(true);
     try {
+      if (needsCredentials) {
+        try {
+          await signUp(ownerEmail.trim(), password);
+        } catch (err) {
+          setError(
+            mapFirebaseAuthError(
+              err,
+              'No se pudo crear la cuenta. Revisa el email e intenta de nuevo.'
+            ) || 'No se pudo crear la cuenta. Revisa el email e intenta de nuevo.'
+          );
+          return;
+        }
+      }
       const created = await api<any>('/stores', {
         method: 'POST',
         body: JSON.stringify({
@@ -438,8 +470,8 @@ export function MerchantOnboarding({
               en tu negocio
             </p>
             <p className="mt-4 max-w-sm text-[var(--onda-muted)]">
-              Alta sencilla: datos del local, diseño de tu pase wallet y la
-              primera recompensa para tus clientes.
+              Registrar tu comercio es crear tu cuenta: datos del local, pase
+              wallet y la primera recompensa.
             </p>
 
             <div className="mt-8 inline-flex items-center gap-2 rounded-full bg-[var(--onda-violet-soft)] px-4 py-2 text-sm font-medium text-[var(--onda-violet)]">
@@ -486,7 +518,13 @@ export function MerchantOnboarding({
               <OndaHandMark variant="onPrimary" className="h-6 w-auto" />
             </span>
             <p className="text-xs text-[var(--onda-muted)]">
-              ¿Ya tienes cuenta? Entra al panel y selecciona tu sede.
+              ¿Ya tienes cuenta?{' '}
+              <Link
+                href="/login"
+                className="font-medium text-[var(--onda-primary-500)]"
+              >
+                Entra al panel
+              </Link>
             </p>
           </div>
         </aside>
@@ -495,9 +533,17 @@ export function MerchantOnboarding({
         <main className="flex min-h-0 flex-col px-4 py-4 sm:px-6 lg:py-8 lg:pr-10">
           <div className="mb-3 flex shrink-0 items-center justify-between gap-3 lg:hidden">
             <OndaLogo />
-            <span className="rounded-full bg-[var(--onda-card)] px-3 py-1 text-xs font-medium text-[var(--onda-muted)] ring-1 ring-[var(--onda-border)]">
-              Paso {step}/3
-            </span>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/login"
+                className="text-xs font-medium text-[var(--onda-primary-500)]"
+              >
+                Entrar
+              </Link>
+              <span className="rounded-full bg-[var(--onda-card)] px-3 py-1 text-xs font-medium text-[var(--onda-muted)] ring-1 ring-[var(--onda-border)]">
+                Paso {step}/3
+              </span>
+            </div>
           </div>
 
           {/* Mobile step pills */}
@@ -518,14 +564,14 @@ export function MerchantOnboarding({
             <header className="mb-4 shrink-0 space-y-2 border-b border-[var(--onda-border)] pb-4">
               <h1 className="font-display text-2xl font-semibold tracking-tight text-[var(--onda-ink)] sm:text-3xl">
                 {step === 1
-                  ? 'Registra tu comercio'
+                  ? 'Crea tu cuenta'
                   : step === 2
                     ? 'Diseña tu tarjeta'
                     : 'Tu primera recompensa'}
               </h1>
               <p className="max-w-lg text-sm leading-relaxed text-[var(--onda-muted)]">
                 {step === 1
-                  ? 'Completa los datos básicos. Empiezas con 1 mes gratis.'
+                  ? 'Registrar tu comercio es crear tu cuenta. Empiezas con 1 mes gratis.'
                   : step === 2
                     ? 'Así se verá el pase en Apple y Google Wallet. Puedes ajustarlo después.'
                     : 'Define qué ganan tus clientes al acumular ondas. También puedes saltar.'}
@@ -558,7 +604,11 @@ export function MerchantOnboarding({
                           disabled={busy}
                           className="min-w-[10rem]"
                         >
-                          {busy ? 'Creando…' : 'Continuar'}
+                          {busy
+                            ? 'Creando…'
+                            : needsCredentials
+                              ? 'Crear cuenta'
+                              : 'Continuar'}
                         </GradientButton>
                         <p className="text-xs text-[var(--onda-muted)]">
                           Luego personalizas el pase y la promo.
@@ -614,6 +664,74 @@ export function MerchantOnboarding({
                           />
                         </div>
                       </Field>
+                    </div>
+
+                    <div className="space-y-4">
+                      <SectionTitle>Acceso al panel</SectionTitle>
+                      {needsCredentials ? (
+                        <>
+                          <GoogleSignInButton
+                            busy={busy}
+                            label="Registrarse con Google"
+                            onClick={() => {
+                              setError('');
+                              setBusy(true);
+                              void signInWithGoogle()
+                                .catch((err) => {
+                                  setError(
+                                    mapFirebaseAuthError(
+                                      err,
+                                      'No se pudo continuar con Google. Intenta de nuevo.'
+                                    ) || ''
+                                  );
+                                })
+                                .finally(() => setBusy(false));
+                            }}
+                          />
+                          <div className="flex items-center gap-3">
+                            <span className="h-px flex-1 bg-[var(--onda-border)]" />
+                            <span className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--onda-muted)]">
+                              o con email
+                            </span>
+                            <span className="h-px flex-1 bg-[var(--onda-border)]" />
+                          </div>
+                        </>
+                      ) : null}
+                      <Field
+                        label="Email"
+                        hint={
+                          sessionEmail
+                            ? 'Entrarás con esta cuenta.'
+                            : 'Con este email entras al panel después.'
+                        }
+                      >
+                        <input
+                          type="email"
+                          required={needsCredentials}
+                          value={ownerEmail}
+                          onChange={(e) => setOwnerEmail(e.target.value)}
+                          placeholder="dueno@negocio.com"
+                          className="onda-input"
+                          autoComplete="email"
+                          readOnly={Boolean(sessionEmail)}
+                        />
+                      </Field>
+                      {needsCredentials ? (
+                        <Field
+                          label="Contraseña"
+                          hint="Mínimo 6 caracteres."
+                        >
+                          <input
+                            type="password"
+                            required
+                            minLength={6}
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="onda-input"
+                            autoComplete="new-password"
+                          />
+                        </Field>
+                      ) : null}
                     </div>
 
                     <div className="space-y-4">
@@ -698,20 +816,6 @@ export function MerchantOnboarding({
                           />
                         </Field>
                       </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <SectionTitle>Acceso</SectionTitle>
-                      <Field label="Email">
-                        <input
-                          type="email"
-                          value={ownerEmail}
-                          onChange={(e) => setOwnerEmail(e.target.value)}
-                          placeholder="dueno@negocio.com"
-                          className="onda-input"
-                          readOnly={Boolean(sessionEmail)}
-                        />
-                      </Field>
                     </div>
 
                     <div className="space-y-4">

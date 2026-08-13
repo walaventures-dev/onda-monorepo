@@ -29,7 +29,7 @@ Email/password para dueños de sede. El PWA **no** usa Firebase.
 ### Consola
 
 1. Entra a [Firebase Console](https://console.firebase.google.com/) y crea un proyecto (o usa el mismo de Google Cloud).
-2. Authentication → Sign-in method → habilita **Email/Password**.
+2. Authentication → Sign-in method → habilita **Email/Password** y **Google**.
 3. Authentication → Settings → Authorized domains: agrega `localhost` y el dominio del dashboard (ej. `app.onda.lat`).
 4. Project settings → General → Your apps → agrega una app **Web**. Copia `apiKey`, `authDomain`, `projectId`, `appId`.
 5. Project settings → Service accounts → Generate new private key. Guarda el JSON (no lo subas al git).
@@ -53,7 +53,7 @@ En `.env` la private key va en una línea con `\n` reales escapados.
 
 ### Cómo probar
 
-1. Crea un usuario en Authentication (o usa “Crear cuenta” en `http://localhost:4202`).
+1. Crea un usuario en Authentication, usa “Crear cuenta” en `http://localhost:4202/onboarding`, o entra con Google en `http://localhost:4202/login`.
 2. En Postgres, esa sede debe tener `Store.ownerEmail` igual al email de Firebase (seed: `owner0@onda.lat`).
 3. Sin estas vars, el dashboard **no** muestra login y sigue el picker de sedes local.
 
@@ -62,6 +62,7 @@ En `.env` la private key va en una línea con `\n` reales escapados.
 - `Token de Firebase inválido`: el Admin SDK no coincide con el proyecto de la app web (revisa `projectId`).
 - Login ok pero lista de sedes vacía: el email no coincide con `ownerEmail` (case-insensitive).
 - `auth/unauthorized-domain`: falta `localhost` en Authorized domains.
+- `auth/operation-not-allowed`: el proveedor Google no está habilitado en Sign-in method.
 
 ---
 
