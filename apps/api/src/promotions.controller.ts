@@ -11,8 +11,9 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PromotionType, PromotionExpiryMode } from '@prisma/client';
+import { PromotionType, PromotionExpiryMode, PromotionPool, PromotionIntent } from '@prisma/client';
 import { PrismaService } from './prisma.service';
+import { CartillaService, assignmentCap } from './cartilla.service';
 
 function parseDateStart(value?: string) {
   if (!value) return undefined;
@@ -44,57 +45,166 @@ function pctDelta(current: number, previous: number) {
   return Math.round(((current - previous) / previous) * 100);
 }
 
-function assertExpiryBody(body: {
-  expiryMode?: PromotionExpiryMode;
-  endsAt?: string | Date | null;
-  maxRedemptions?: number | null;
+function promoDisplayTitle(p: {
+  type?: string | null;
+  value?: number | null;
+  buyQuantity?: number | null;
+  getQuantity?: number | null;
+  productName?: string | null;
+  title?: string | null;
 }) {
-  const mode = body.expiryMode;
-  if (!mode) {
-    throw new BadRequestException('Debes indicar si caduca por tiempo o por cantidad');
-  }
-  if (mode === 'TIME') {
-    if (!body.endsAt) {
-      throw new BadRequestException('Indica hasta cuándo estará disponible');
+  switch (p.type) {
+    case 'PRODUCT': {
+      const name = (p.productName || '').trim();
+      return name ? `${name} Gratis` : 'Producto Gratis';
     }
-    const ends = new Date(body.endsAt);
-    if (Number.isNaN(ends.getTime())) {
-      throw new BadRequestException('Fecha de caducidad inválida');
+    case 'PERCENT_OFF':
+      return `${p.value ?? 0}% de descuento`;
+    case 'AMOUNT_OFF':
+      return `$${Number(p.value || 0).toLocaleString('es-CO')} de descuento`;
+    case 'BUY_GET':
+      return `${p.buyQuantity || 1}x${p.getQuantity || 1}`;
+    default:
+      return (p.title || '').trim() || 'Promo';
+  }
+}
+
+function promoConditions(p: {
+  type: string;
+  value?: number | null;
+  buyQuantity?: number | null;
+  getQuantity?: number | null;
+  productName?: string | null;
+  maxRedemptions?: number | null;
+  pool?: string | null;
+}) {
+  return JSON.stringify({
+    type: p.type,
+    value: p.value ?? null,
+    buyQuantity: p.buyQuantity ?? null,
+    getQuantity: p.getQuantity ?? null,
+    productName: p.productName || null,
+    maxRedemptions: p.maxRedemptions ?? null,
+    pool: p.pool || 'RETENCION',
+  });
+}
+
+function assertPromoConfig(body: {
+  type?: PromotionType;
+  value?: number | null;
+  buyQuantity?: number | null;
+  getQuantity?: number | null;
+  productName?: string | null;
+  title?: string;
+}) {
+  const type = body.type || 'OTHER';
+  if (type === 'PRODUCT') {
+    if (!String(body.productName || '').trim()) {
+      throw new BadRequestException('Indica el nombre del producto');
+    }
+    if (body.value == null || Number(body.value) <= 0) {
+      throw new BadRequestException(
+        'Indica el precio del producto para poder hacer seguimiento'
+      );
     }
   }
-  if (mode === 'QUANTITY') {
-    const max = Number(body.maxRedemptions);
-    if (!max || max < 1) {
-      throw new BadRequestException('Indica cuántas redenciones máximas');
+  if (type === 'PERCENT_OFF') {
+    const n = Number(body.value);
+    if (!Number.isFinite(n) || n < 1 || n > 100) {
+      throw new BadRequestException('El porcentaje debe estar entre 1 y 100');
     }
   }
+  if (type === 'AMOUNT_OFF') {
+    if (body.value == null || Number(body.value) <= 0) {
+      throw new BadRequestException('Indica el valor del descuento');
+    }
+  }
+  if (type === 'BUY_GET') {
+    if (!body.buyQuantity || !body.getQuantity) {
+      throw new BadRequestException('Indica cuántos compra y cuántos lleva');
+    }
+  }
+}
+
+function intentForPoints(points: number, maxStamps: number): PromotionIntent {
+  if (points >= maxStamps) return 'PREMIO';
+  if (points <= Math.max(1, Math.floor(maxStamps / 3))) return 'GANCHO';
+  return 'INTERMEDIA';
 }
 
 @Controller('promotions')
 export class PromotionsController {
   constructor(
-    @Inject(PrismaService) private prisma: PrismaService
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(CartillaService) private cartillas: CartillaService
   ) {}
 
   @Get()
-  list(
+  async list(
     @Query('storeId') storeId?: string,
     @Query('eventId') eventId?: string,
     @Query('type') type?: string,
-    @Query('isActive') isActive?: string
+    @Query('isActive') isActive?: string,
+    @Query('pool') pool?: string
   ) {
     const types = type
       ? (type.split(',').filter(Boolean) as PromotionType[])
       : undefined;
-    return this.prisma.promotion.findMany({
+    const rows = await this.prisma.promotion.findMany({
       where: {
         ...(storeId ? { storeId } : {}),
         ...(eventId ? { eventId } : {}),
         ...(types?.length ? { type: { in: types } } : {}),
         ...(isActive === 'true' ? { isActive: true } : {}),
         ...(isActive === 'false' ? { isActive: false } : {}),
+        ...(pool === 'BIENVENIDA' || pool === 'RETENCION' ? { pool } : {}),
       },
       orderBy: { createdAt: 'desc' },
+    });
+    const ids = rows.map((r) => r.id);
+    const [redeemGroups, assignGroups] = await Promise.all([
+      ids.length
+        ? this.prisma.transaction.groupBy({
+            by: ['promotionId'],
+            where: { promotionId: { in: ids }, type: 'REDEEM' },
+            _count: { _all: true },
+          })
+        : [],
+      ids.length
+        ? this.prisma.passPromoAssignment.groupBy({
+            by: ['promotionId'],
+            where: { promotionId: { in: ids } },
+            _count: { _all: true },
+          })
+        : [],
+    ]);
+    const redeemMap = new Map(
+      redeemGroups.map((g) => [g.promotionId, g._count._all])
+    );
+    const assignMap = new Map(
+      assignGroups.map((g) => [g.promotionId, g._count._all])
+    );
+    const canMove = await Promise.all(ids.map((id) => this.cartillas.canMovePool(id)));
+    return rows.map((p, i) => {
+      const redemptionCount = redeemMap.get(p.id) || 0;
+      const assignmentCount = assignMap.get(p.id) || 0;
+      const cap = assignmentCap(p.maxRedemptions);
+      const remaining =
+        p.maxRedemptions != null
+          ? Math.max(0, p.maxRedemptions - redemptionCount)
+          : null;
+      const needsReplacement =
+        remaining === 0 || (cap != null && assignmentCount >= cap);
+      return {
+        ...p,
+        redemptionCount,
+        assignmentCount,
+        assignmentCap: cap,
+        remaining,
+        needsReplacement,
+        canMovePool: canMove[i],
+        locked: redemptionCount > 0,
+      };
     });
   }
 
@@ -102,7 +212,8 @@ export class PromotionsController {
   async analytics(
     @Param('id') id: string,
     @Query('from') fromQ?: string,
-    @Query('to') toQ?: string
+    @Query('to') toQ?: string,
+    @Query('cartillaId') cartillaId?: string
   ) {
     const promo = await this.prisma.promotion.findUnique({ where: { id } });
     if (!promo) throw new NotFoundException('Promoción no encontrada');
@@ -127,33 +238,42 @@ export class PromotionsController {
     const redeemWhere = {
       promotionId: id,
       type: 'REDEEM' as const,
+      ...(cartillaId ? { cartillaId } : {}),
     };
 
-    const [txs, prevCount, allTimeCount, storePasses] = await Promise.all([
-      this.prisma.transaction.findMany({
-        where: {
-          ...redeemWhere,
-          createdAt: { gte: from, lte: to },
-        },
-        include: {
-          pass: { include: { user: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.transaction.count({
-        where: {
-          ...redeemWhere,
-          createdAt: { gte: prevFrom, lte: prevTo },
-        },
-      }),
-      this.prisma.transaction.count({ where: redeemWhere }),
-      promo.storeId
-        ? this.prisma.pass.findMany({
-            where: { storeId: promo.storeId },
-            select: { id: true, points: true, userId: true },
-          })
-        : Promise.resolve([]),
-    ]);
+    const [txs, prevCount, allTimeCount, allTimeGlobal, storePasses, links] =
+      await Promise.all([
+        this.prisma.transaction.findMany({
+          where: {
+            ...redeemWhere,
+            createdAt: { gte: from, lte: to },
+          },
+          include: {
+            pass: { include: { user: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.transaction.count({
+          where: {
+            ...redeemWhere,
+            createdAt: { gte: prevFrom, lte: prevTo },
+          },
+        }),
+        this.prisma.transaction.count({ where: redeemWhere }),
+        this.prisma.transaction.count({
+          where: { promotionId: id, type: 'REDEEM' },
+        }),
+        promo.storeId
+          ? this.prisma.pass.findMany({
+              where: { storeId: promo.storeId },
+              select: { id: true, points: true, userId: true, cartillaId: true },
+            })
+          : Promise.resolve([]),
+        this.prisma.cartillaPromo.findMany({
+          where: { promotionId: id },
+          include: { cartilla: true },
+        }),
+      ]);
 
     const seriesMap = new Map<
       string,
@@ -210,21 +330,9 @@ export class PromotionsController {
         b.lastRedeemAt.getTime() - a.lastRedeemAt.getTime()
     );
 
-    const elegibles = storePasses.filter(
-      (p) => p.points >= promo.pointsRequired
-    ).length;
-    const uniqueRedeemers = redeemers.length;
-    const ondasCost = txs.reduce((s, t) => s + t.points, 0);
-    const canjes = txs.length;
-    const repeatRedeemers = redeemers.filter((r) => r.redemptions > 1).length;
-
     const remaining =
-      promo.expiryMode === 'QUANTITY' && promo.maxRedemptions != null
-        ? Math.max(0, promo.maxRedemptions - allTimeCount)
-        : null;
-    const daysLeft =
-      promo.expiryMode === 'TIME' && promo.endsAt
-        ? Math.ceil((promo.endsAt.getTime() - Date.now()) / 86400000)
+      promo.maxRedemptions != null
+        ? Math.max(0, promo.maxRedemptions - allTimeGlobal)
         : null;
 
     const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: h, canjes: 0 }));
@@ -232,12 +340,67 @@ export class PromotionsController {
       hourly[tx.createdAt.getHours()].canjes += 1;
     }
 
+    const assignmentCount = await this.prisma.passPromoAssignment.count({
+      where: {
+        promotionId: id,
+        ...(cartillaId ? { cartillaId } : {}),
+      },
+    });
+    const cap = assignmentCap(promo.maxRedemptions);
+
+    const assignmentRows = await this.prisma.passPromoAssignment.findMany({
+      where: {
+        promotionId: id,
+        ...(cartillaId ? { cartillaId } : {}),
+      },
+      select: { passId: true, pointsRequired: true },
+    });
+    const needByPass = new Map(
+      assignmentRows.map((a) => [a.passId, a.pointsRequired])
+    );
+    const elegibles = storePasses.filter((p) => {
+      const need = needByPass.get(p.id);
+      return need != null && p.points >= need;
+    }).length;
+
+    const byCartilla = await Promise.all(
+      links.map(async (link) => {
+        const canjesC = await this.prisma.transaction.count({
+          where: {
+            promotionId: id,
+            type: 'REDEEM',
+            cartillaId: link.cartillaId,
+          },
+        });
+        const assignmentsC = await this.prisma.passPromoAssignment.count({
+          where: { promotionId: id, cartillaId: link.cartillaId },
+        });
+        return {
+          cartillaId: link.cartillaId,
+          name: link.cartilla.name,
+          status: link.cartilla.status,
+          isDefault: link.cartilla.isDefault,
+          canjes: canjesC,
+          assignmentCount: assignmentsC,
+          assignmentCap: cap,
+          remaining:
+            promo.maxRedemptions != null
+              ? Math.max(0, promo.maxRedemptions - allTimeGlobal)
+              : null,
+        };
+      })
+    );
+
+    const uniqueRedeemers = redeemers.length;
+    const ondasCost = txs.reduce((s, t) => s + t.points, 0);
+    const canjes = txs.length;
+    const repeatRedeemers = redeemers.filter((r) => r.redemptions > 1).length;
+
     return {
       promotion: promo,
-      locked: allTimeCount > 0,
-      redemptionCount: allTimeCount,
+      locked: allTimeGlobal > 0,
+      redemptionCount: allTimeGlobal,
       remaining,
-      daysLeft,
       range: { from: from.toISOString(), to: to.toISOString() },
       previousRange: {
         from: prevFrom.toISOString(),
@@ -247,6 +410,7 @@ export class PromotionsController {
         canjes,
         canjesDelta: pctDelta(canjes, prevCount),
         canjesAllTime: allTimeCount,
+        canjesGlobal: allTimeGlobal,
         clientesUnicos: uniqueRedeemers,
         clientesRepetidores: repeatRedeemers,
         ondasGastadas: ondasCost,
@@ -256,9 +420,11 @@ export class PromotionsController {
         costeMedioOndas:
           canjes > 0 ? Math.round(ondasCost / canjes) : promo.pointsRequired,
         remaining,
-        daysLeft,
         maxRedemptions: promo.maxRedemptions,
+        assignmentCount,
+        assignmentCap: cap,
       },
+      byCartilla,
       series,
       hourly,
       redeemers,
@@ -267,6 +433,7 @@ export class PromotionsController {
         points: tx.points,
         createdAt: tx.createdAt,
         passId: tx.passId,
+        cartillaId: tx.cartillaId,
         user: {
           id: tx.pass.user.id,
           name: tx.pass.user.name,
@@ -283,15 +450,33 @@ export class PromotionsController {
     const redemptionCount = await this.prisma.transaction.count({
       where: { promotionId: id, type: 'REDEEM' },
     });
-    return { ...promo, redemptionCount, locked: redemptionCount > 0 };
+    const assignmentCount = await this.prisma.passPromoAssignment.count({
+      where: { promotionId: id },
+    });
+    const cap = assignmentCap(promo.maxRedemptions);
+    const remaining =
+      promo.maxRedemptions != null
+        ? Math.max(0, promo.maxRedemptions - redemptionCount)
+        : null;
+    return {
+      ...promo,
+      redemptionCount,
+      assignmentCount,
+      assignmentCap: cap,
+      remaining,
+      needsReplacement:
+        remaining === 0 || (cap != null && assignmentCount >= cap),
+      canMovePool: await this.cartillas.canMovePool(id),
+      locked: redemptionCount > 0,
+    };
   }
 
   @Post()
   async create(
     @Body()
     body: {
-      title: string;
-      pointsRequired: number;
+      title?: string;
+      pointsRequired?: number;
       storeId?: string;
       eventId?: string;
       description?: string;
@@ -302,43 +487,87 @@ export class PromotionsController {
       buyQuantity?: number;
       getQuantity?: number;
       productName?: string;
-      expiryMode: PromotionExpiryMode;
+      pool?: PromotionPool;
+      intent?: PromotionIntent;
+      duplicatedFromId?: string;
+      expiryMode?: PromotionExpiryMode;
       endsAt?: string;
       maxRedemptions?: number;
     }
   ) {
-    assertExpiryBody(body);
-    if (body.storeId) {
-      const store = await this.prisma.store.findUniqueOrThrow({ where: { id: body.storeId } });
-      if (Number(body.pointsRequired) > store.maxStamps) {
-        throw new BadRequestException(
-          `El sello no puede superar el tope de ${store.maxStamps} de esta tienda`
-        );
+    if (body.eventId && !body.storeId) {
+      if (body.expiryMode === 'TIME' && !body.endsAt) {
+        throw new BadRequestException('Indica hasta cuándo estará disponible');
       }
+    }
+    const type = body.type || 'OTHER';
+    if (body.storeId) {
+      assertPromoConfig(body);
+      if (body.duplicatedFromId) {
+        const source = await this.prisma.promotion.findUniqueOrThrow({
+          where: { id: body.duplicatedFromId },
+        });
+        const next = {
+          type,
+          value: body.value ?? null,
+          buyQuantity: body.buyQuantity ?? null,
+          getQuantity: body.getQuantity ?? null,
+          productName: body.productName || null,
+          maxRedemptions: body.maxRedemptions ?? null,
+          pool: body.pool || 'RETENCION',
+        };
+        if (promoConditions(source) === promoConditions(next)) {
+          throw new BadRequestException(
+            'Para duplicar debes cambiar al menos una condición (beneficio, cupo o bolsa)'
+          );
+        }
+      }
+      await this.cartillas.ensureDefaultCartilla(body.storeId);
+    }
+    const pool = body.pool === 'BIENVENIDA' ? 'BIENVENIDA' : 'RETENCION';
+    const title = promoDisplayTitle({
+      type,
+      value: body.value,
+      buyQuantity: body.buyQuantity,
+      getQuantity: body.getQuantity,
+      productName: body.productName,
+      title: body.title,
+    });
+    const pointsRequired = body.eventId
+      ? Number(body.pointsRequired) || 1
+      : 0;
+    let intent = body.intent;
+    if (!intent && body.storeId) {
+      intent = 'INTERMEDIA';
+    } else if (!intent && body.eventId) {
+      intent = intentForPoints(pointsRequired, 10);
     }
     return this.prisma.promotion.create({
       data: {
-        title: body.title,
-        pointsRequired: Number(body.pointsRequired),
+        title,
+        pointsRequired,
         storeId: body.storeId,
         eventId: body.eventId,
         description: body.description,
         imageUrl: body.imageUrl,
         isActive: body.isActive ?? true,
-        type: body.type || 'OTHER',
+        type,
         value: body.value != null ? Number(body.value) : undefined,
-        buyQuantity: body.buyQuantity != null ? Number(body.buyQuantity) : undefined,
-        getQuantity: body.getQuantity != null ? Number(body.getQuantity) : undefined,
+        buyQuantity:
+          body.buyQuantity != null ? Number(body.buyQuantity) : undefined,
+        getQuantity:
+          body.getQuantity != null ? Number(body.getQuantity) : undefined,
         productName: body.productName,
-        expiryMode: body.expiryMode,
+        pool: body.storeId ? pool : 'RETENCION',
+        intent: intent || 'INTERMEDIA',
+        duplicatedFromId: body.duplicatedFromId,
+        expiryMode: body.eventId ? body.expiryMode || 'TIME' : 'QUANTITY',
         endsAt:
-          body.expiryMode === 'TIME' && body.endsAt
+          body.eventId && body.expiryMode === 'TIME' && body.endsAt
             ? new Date(body.endsAt)
             : null,
         maxRedemptions:
-          body.expiryMode === 'QUANTITY'
-            ? Number(body.maxRedemptions)
-            : null,
+          body.maxRedemptions != null ? Number(body.maxRedemptions) : null,
       },
     });
   }
@@ -358,20 +587,26 @@ export class PromotionsController {
       buyQuantity: number | null;
       getQuantity: number | null;
       productName: string | null;
-      expiryMode: PromotionExpiryMode;
-      endsAt: string | null;
+      pool: PromotionPool;
+      intent: PromotionIntent;
       maxRedemptions: number | null;
     }>
   ) {
-    if (body.pointsRequired != null) {
-      const existing = await this.prisma.promotion.findUniqueOrThrow({ where: { id } });
-      if (existing.storeId) {
-        const store = await this.prisma.store.findUniqueOrThrow({ where: { id: existing.storeId } });
-        if (Number(body.pointsRequired) > store.maxStamps) {
-          throw new BadRequestException(
-            `El sello no puede superar el tope de ${store.maxStamps} de esta tienda`
-          );
-        }
+    const existing = await this.prisma.promotion.findUniqueOrThrow({
+      where: { id },
+    });
+    if (body.pointsRequired != null && existing.eventId) {
+      if (Number(body.pointsRequired) < 1) {
+        throw new BadRequestException('Onda inválida');
+      }
+    }
+
+    if (body.pool && body.pool !== existing.pool) {
+      const can = await this.cartillas.canMovePool(id);
+      if (!can) {
+        throw new BadRequestException(
+          'Ya hay clientes en una cartilla con esta promo. Duplica y cambia una condición.'
+        );
       }
     }
 
@@ -380,7 +615,6 @@ export class PromotionsController {
     });
 
     if (redemptionCount > 0) {
-      // Solo foto (e isActive es operativo, permitido)
       const allowed: Record<string, unknown> = {};
       if ('imageUrl' in body) allowed.imageUrl = body.imageUrl;
       if ('isActive' in body) allowed.isActive = body.isActive;
@@ -392,39 +626,40 @@ export class PromotionsController {
       return this.prisma.promotion.update({ where: { id }, data: allowed });
     }
 
-    if (body.expiryMode) {
-      assertExpiryBody({
-        expiryMode: body.expiryMode,
-        endsAt: body.endsAt,
-        maxRedemptions: body.maxRedemptions ?? undefined,
-      });
-    }
+    const type = body.type || existing.type;
+    const merged = {
+      type,
+      value: 'value' in body ? body.value : existing.value,
+      buyQuantity: 'buyQuantity' in body ? body.buyQuantity : existing.buyQuantity,
+      getQuantity: 'getQuantity' in body ? body.getQuantity : existing.getQuantity,
+      productName: 'productName' in body ? body.productName : existing.productName,
+      title: 'title' in body ? body.title : existing.title,
+    };
+    if (existing.storeId) assertPromoConfig(merged);
 
     return this.prisma.promotion.update({
       where: { id },
       data: {
-        ...('title' in body ? { title: body.title } : {}),
+        title: promoDisplayTitle(merged),
         ...('description' in body ? { description: body.description } : {}),
         ...('imageUrl' in body ? { imageUrl: body.imageUrl } : {}),
         ...('isActive' in body ? { isActive: body.isActive } : {}),
         ...('type' in body ? { type: body.type } : {}),
         ...('productName' in body ? { productName: body.productName } : {}),
-        pointsRequired:
-          body.pointsRequired != null ? Number(body.pointsRequired) : undefined,
+        ...('pool' in body && body.pool ? { pool: body.pool } : {}),
+        ...('intent' in body && body.intent ? { intent: body.intent } : {}),
+        ...(existing.eventId && body.pointsRequired != null
+          ? { pointsRequired: Number(body.pointsRequired) }
+          : {}),
         value: body.value != null ? Number(body.value) : body.value,
         buyQuantity:
           body.buyQuantity != null ? Number(body.buyQuantity) : body.buyQuantity,
         getQuantity:
           body.getQuantity != null ? Number(body.getQuantity) : body.getQuantity,
-        ...(body.expiryMode
+        ...('maxRedemptions' in body
           ? {
-              expiryMode: body.expiryMode,
-              endsAt:
-                body.expiryMode === 'TIME' && body.endsAt
-                  ? new Date(body.endsAt)
-                  : null,
               maxRedemptions:
-                body.expiryMode === 'QUANTITY' && body.maxRedemptions != null
+                body.maxRedemptions != null
                   ? Number(body.maxRedemptions)
                   : null,
             }

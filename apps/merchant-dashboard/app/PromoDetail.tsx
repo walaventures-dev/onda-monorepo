@@ -8,6 +8,7 @@ import {
   ImageUploadField,
   promoTypeLabel,
   formatPromoBenefit,
+  promoDisplayTitle,
   PROMO_TYPE_OPTIONS,
   api,
   type PromoTypeKey,
@@ -47,6 +48,7 @@ export function PromoDetail({
   onDelete,
   onDuplicate,
   onSaved,
+  onMovePool,
 }: {
   detail: any | null;
   loading: boolean;
@@ -55,48 +57,66 @@ export function PromoDetail({
   onDelete: (id: string) => void | Promise<void>;
   onDuplicate: (promo: any) => void;
   onSaved: () => void | Promise<void>;
+  onMovePool?: (promo: any) => void | Promise<void>;
 }) {
-  const promo = detail?.promotion;
-  const k = detail?.kpis;
-  const locked = Boolean(detail?.locked);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [scope, setScope] = useState<string>('global');
+  const [scoped, setScoped] = useState<any | null>(null);
+  const promo = detail?.promotion;
+  const view = scoped && scope !== 'global' ? scoped : detail;
+  const k = view?.kpis;
+  const locked = Boolean(detail?.locked);
   const [form, setForm] = useState({
-    title: '',
     description: '',
-    pointsRequired: '5',
     imageUrl: '',
     type: 'PRODUCT' as PromoTypeKey,
     value: '',
     buyQuantity: '2',
     getQuantity: '1',
     productName: '',
-    expiryMode: 'QUANTITY' as 'TIME' | 'QUANTITY',
-    endsAt: '',
     maxRedemptions: '',
   });
 
   useEffect(() => {
     if (!promo) return;
     setForm({
-      title: promo.title || '',
       description: promo.description || '',
-      pointsRequired: String(promo.pointsRequired ?? 5),
       imageUrl: promo.imageUrl || '',
       type: (promo.type as PromoTypeKey) || 'PRODUCT',
       value: promo.value != null ? String(promo.value) : '',
       buyQuantity: promo.buyQuantity != null ? String(promo.buyQuantity) : '2',
       getQuantity: promo.getQuantity != null ? String(promo.getQuantity) : '1',
       productName: promo.productName || '',
-      expiryMode: promo.expiryMode === 'TIME' ? 'TIME' : 'QUANTITY',
-      endsAt: isoDateInput(promo.endsAt),
       maxRedemptions:
         promo.maxRedemptions != null ? String(promo.maxRedemptions) : '',
     });
     setEditing(false);
     setError('');
+    setScope('global');
+    setScoped(null);
   }, [promo?.id, detail?.redemptionCount, detail?.locked]);
+
+  useEffect(() => {
+    if (!promo?.id || scope === 'global') {
+      setScoped(null);
+      return;
+    }
+    const from = detail?.range?.from?.slice(0, 10);
+    const to = detail?.range?.to?.slice(0, 10);
+    const q = new URLSearchParams();
+    if (from) q.set('from', from);
+    if (to) q.set('to', to);
+    q.set('cartillaId', scope);
+    let cancelled = false;
+    void api(`/promotions/${promo.id}/analytics?${q}`).then((data) => {
+      if (!cancelled) setScoped(data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [scope, promo?.id, detail?.range?.from, detail?.range?.to]);
 
   if (loading && !promo) {
     return (
@@ -122,7 +142,7 @@ export function PromoDetail({
   }
 
   const benefit = formatPromoBenefit(promo);
-  const hasHourly = (detail?.hourly || []).some((h: any) => h.canjes > 0);
+  const hasHourly = (view?.hourly || []).some((h: any) => h.canjes > 0);
 
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
@@ -134,15 +154,12 @@ export function PromoDetail({
         body = { imageUrl: form.imageUrl || null };
       } else {
         body = {
-          title: form.title.trim(),
           description: form.description.trim() || null,
-          pointsRequired: Number(form.pointsRequired) || 1,
           imageUrl: form.imageUrl || null,
           type: form.type,
-          expiryMode: form.expiryMode,
-          endsAt: form.expiryMode === 'TIME' ? form.endsAt : null,
-          maxRedemptions:
-            form.expiryMode === 'QUANTITY' ? Number(form.maxRedemptions) : null,
+          maxRedemptions: form.maxRedemptions
+            ? Number(form.maxRedemptions)
+            : null,
           productName: form.productName || null,
           value: form.value ? Number(form.value) : null,
           buyQuantity: form.buyQuantity ? Number(form.buyQuantity) : null,
@@ -174,7 +191,9 @@ export function PromoDetail({
             ← Todas las promociones
           </button>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-display text-xl font-semibold">{promo.title}</h2>
+            <h2 className="font-display text-xl font-semibold">
+              {promoDisplayTitle(promo)}
+            </h2>
             <span className="inline-flex items-center gap-1 rounded-full bg-[var(--onda-violet-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--onda-violet)]">
               {PROMO_TYPE_OPTIONS.find((t) => t.id === promo.type)?.icon ||
                 OndaIcons.other}
@@ -199,11 +218,10 @@ export function PromoDetail({
           </div>
           <p className="mt-1 text-sm text-[var(--onda-muted)]">{benefit}</p>
           <p className="mt-1 text-xs text-[var(--onda-muted)]">
-            {promo.expiryMode === 'TIME'
-              ? promo.endsAt
-                ? `Caduca el ${new Date(promo.endsAt).toLocaleDateString('es-CO')}`
-                : 'Caduca por tiempo'
-              : `Cupo: ${detail?.redemptionCount ?? 0}/${promo.maxRedemptions ?? '—'} redenciones`}
+            {promo.pool === 'BIENVENIDA' ? 'Bolsa Bienvenida' : 'Bolsa Retención'}
+            {' · '}
+            Cupo: {detail?.redemptionCount ?? 0}/{promo.maxRedemptions ?? '∞'}{' '}
+            redenciones
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -223,6 +241,15 @@ export function PromoDetail({
             {OndaIcons.copy}
             Duplicar
           </button>
+          {onMovePool ? (
+            <button
+              type="button"
+              className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium"
+              onClick={() => onMovePool(promo)}
+            >
+              Mover de bolsa
+            </button>
+          ) : null}
           <button
             type="button"
             className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium"
@@ -272,12 +299,14 @@ export function PromoDetail({
                     </FilterChip>
                   ))}
                 </div>
-                <input
-                  required
-                  className="w-full rounded-xl border border-[var(--onda-border)] px-3 py-2.5 text-sm"
-                  value={form.title}
-                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                />
+                <p className="rounded-xl bg-[var(--onda-bg)] px-3 py-2 text-sm font-medium">
+                  {promoDisplayTitle({
+                    ...form,
+                    value: form.value ? Number(form.value) : null,
+                    buyQuantity: Number(form.buyQuantity) || null,
+                    getQuantity: Number(form.getQuantity) || null,
+                  })}
+                </p>
                 <textarea
                   rows={2}
                   className="w-full rounded-xl border border-[var(--onda-border)] px-3 py-2.5 text-sm"
@@ -286,56 +315,103 @@ export function PromoDetail({
                     setForm((f) => ({ ...f, description: e.target.value }))
                   }
                 />
-                <label className="text-sm text-[var(--onda-muted)]">
-                  Ondas
+                {form.type === 'PERCENT_OFF' ? (
+                  <label className="block text-sm text-[var(--onda-muted)]">
+                    Porcentaje (1–100)
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      required
+                      className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+                      value={form.value}
+                      onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
+                    />
+                  </label>
+                ) : null}
+                {form.type === 'AMOUNT_OFF' ? (
+                  <label className="block text-sm text-[var(--onda-muted)]">
+                    Valor de descuento (COP)
+                    <input
+                      type="number"
+                      min={1}
+                      required
+                      className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+                      value={form.value}
+                      onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
+                    />
+                  </label>
+                ) : null}
+                {form.type === 'BUY_GET' ? (
+                  <div className="flex flex-wrap gap-3">
+                    <label className="text-sm text-[var(--onda-muted)]">
+                      Compra N
+                      <input
+                        type="number"
+                        min={1}
+                        required
+                        className="ml-2 w-20 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+                        value={form.buyQuantity}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, buyQuantity: e.target.value }))
+                        }
+                      />
+                    </label>
+                    <label className="text-sm text-[var(--onda-muted)]">
+                      Lleva M
+                      <input
+                        type="number"
+                        min={1}
+                        required
+                        className="ml-2 w-20 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+                        value={form.getQuantity}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, getQuantity: e.target.value }))
+                        }
+                      />
+                    </label>
+                  </div>
+                ) : null}
+                {form.type === 'PRODUCT' ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-sm text-[var(--onda-muted)]">
+                      Nombre del producto
+                      <input
+                        required
+                        className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+                        value={form.productName}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, productName: e.target.value }))
+                        }
+                      />
+                    </label>
+                    <label className="text-sm text-[var(--onda-muted)]">
+                      Precio del producto (COP)
+                      <input
+                        type="number"
+                        min={1}
+                        required
+                        className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+                        value={form.value}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, value: e.target.value }))
+                        }
+                      />
+                    </label>
+                  </div>
+                ) : null}
+                <label className="block text-sm text-[var(--onda-muted)]">
+                  Cupo de redenciones (opcional)
                   <input
                     type="number"
                     min={1}
-                    required
-                    className="ml-2 w-24 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                    value={form.pointsRequired}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, pointsRequired: e.target.value }))
-                    }
-                  />
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  <FilterChip
-                    selected={form.expiryMode === 'TIME'}
-                    icon={OndaIcons.calendar}
-                    onClick={() => setForm((f) => ({ ...f, expiryMode: 'TIME' }))}
-                  >
-                    Por tiempo
-                  </FilterChip>
-                  <FilterChip
-                    selected={form.expiryMode === 'QUANTITY'}
-                    icon={OndaIcons.nXm}
-                    onClick={() => setForm((f) => ({ ...f, expiryMode: 'QUANTITY' }))}
-                  >
-                    Por cantidad
-                  </FilterChip>
-                </div>
-                {form.expiryMode === 'TIME' ? (
-                  <input
-                    type="date"
-                    required
-                    className="w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm"
-                    value={form.endsAt}
-                    onChange={(e) => setForm((f) => ({ ...f, endsAt: e.target.value }))}
-                  />
-                ) : (
-                  <input
-                    type="number"
-                    min={1}
-                    required
-                    placeholder="Máx. redenciones"
-                    className="w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm"
+                    className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
                     value={form.maxRedemptions}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, maxRedemptions: e.target.value }))
                     }
                   />
-                )}
+                </label>
               </>
             )}
             {error ? <p className="text-sm text-[var(--onda-danger)]">{error}</p> : null}
@@ -345,6 +421,59 @@ export function PromoDetail({
             </GradientButton>
           </div>
         </form>
+      ) : null}
+
+      <div className="flex flex-wrap gap-1.5">
+        <FilterChip selected={scope === 'global'} onClick={() => setScope('global')}>
+          Global
+        </FilterChip>
+        {(detail?.byCartilla || []).map((c: any) => (
+          <FilterChip
+            key={c.cartillaId}
+            selected={scope === c.cartillaId}
+            onClick={() => setScope(c.cartillaId)}
+          >
+            {c.name}
+          </FilterChip>
+        ))}
+      </div>
+
+      {scope === 'global' && (detail?.byCartilla || []).length > 0 ? (
+        <div className="onda-card overflow-hidden">
+          <div className="border-b border-[var(--onda-border)] px-4 py-3">
+            <h3 className="font-display font-semibold">Rendimiento por cartilla</h3>
+          </div>
+          <table className="w-full text-left text-sm">
+            <thead className="text-[var(--onda-muted)]">
+              <tr>
+                <th className="p-3 font-medium">Cartilla</th>
+                <th className="p-3 font-medium">Estado</th>
+                <th className="p-3 font-medium">Canjes</th>
+                <th className="p-3 font-medium">Asignados</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.byCartilla.map((c: any) => (
+                <tr key={c.cartillaId} className="border-t border-[var(--onda-border)]">
+                  <td className="p-3 font-medium">{c.name}</td>
+                  <td className="p-3 text-[var(--onda-muted)]">{c.status}</td>
+                  <td className="p-3">{c.canjes}</td>
+                  <td className="p-3">
+                    {c.assignmentCount}
+                    {c.assignmentCap != null ? ` / ${c.assignmentCap}` : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {scope !== 'global' ? (
+        <p className="text-xs text-[var(--onda-muted)]">
+          KPIs y gráficos del rango, filtrados a esta cartilla. Recarga el detalle
+          desde el listado si acabas de cambiar el filtro en la URL.
+        </p>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[180px_1fr]">
@@ -371,12 +500,8 @@ export function PromoDetail({
           />
           <KpiCard label="Clientes únicos" value={k?.clientesUnicos ?? 0} />
           <KpiCard
-            label={promo.expiryMode === 'QUANTITY' ? 'Restantes' : 'Días restantes'}
-            value={
-              promo.expiryMode === 'QUANTITY'
-                ? (k?.remaining ?? '—')
-                : (k?.daysLeft ?? '—')
-            }
+            label="Restantes"
+            value={k?.remaining ?? '∞'}
           />
           <KpiCard
             label="Conv. elegibles"
@@ -392,7 +517,7 @@ export function PromoDetail({
           <h3 className="font-display font-semibold">Canjes por día</h3>
           <div className="mt-4 h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={detail?.series || []}>
+              <BarChart data={view?.series || []}>
                 <XAxis
                   dataKey="date"
                   tickFormatter={(v) => String(v).slice(5)}
@@ -418,7 +543,7 @@ export function PromoDetail({
           <div className="mt-4 h-56">
             {hasHourly ? (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={detail?.hourly || []}>
+                <LineChart data={view?.hourly || []}>
                   <XAxis dataKey="hour" fontSize={11} />
                   <YAxis fontSize={11} allowDecimals={false} />
                   <Tooltip />
@@ -435,7 +560,7 @@ export function PromoDetail({
             ) : (
               <div className="flex h-full flex-col justify-center">
                 <p className="font-display text-4xl font-semibold">
-                  {k?.costeMedioOndas ?? promo.pointsRequired}
+                  {k?.costeMedioOndas ?? '—'}
                 </p>
                 <p className="mt-2 text-sm text-[var(--onda-muted)]">
                   Ondas promedio por canje · {k?.clientesRepetidores ?? 0} clientes
@@ -453,7 +578,7 @@ export function PromoDetail({
             <h3 className="font-display font-semibold">
               Clientes que redimieron
               <span className="ml-2 text-sm font-normal text-[var(--onda-muted)]">
-                {detail?.redeemers?.length ?? 0}
+                {view?.redeemers?.length ?? 0}
               </span>
             </h3>
           </div>
@@ -468,7 +593,7 @@ export function PromoDetail({
                 </tr>
               </thead>
               <tbody>
-                {(detail?.redeemers || []).map((r: any) => (
+                {(view?.redeemers || []).map((r: any) => (
                   <tr key={r.userId} className="border-t border-[var(--onda-border)]">
                     <td className="p-3 font-medium">{r.name}</td>
                     <td className="p-3 text-[var(--onda-muted)]">
@@ -480,7 +605,7 @@ export function PromoDetail({
                     </td>
                   </tr>
                 ))}
-                {!detail?.redeemers?.length ? (
+                {!view?.redeemers?.length ? (
                   <tr>
                     <td colSpan={4} className="p-6 text-center text-[var(--onda-muted)]">
                       Nadie ha redimido esta promo en el rango.

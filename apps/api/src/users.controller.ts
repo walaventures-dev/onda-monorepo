@@ -4,6 +4,7 @@ import { PrismaService } from './prisma.service';
 import { WhatsappService } from './whatsapp.service';
 import { WalletService } from './wallet.service';
 import { remainingOndas } from './plan-quota';
+import { CartillaService } from './cartilla.service';
 
 function toE164Colombia(input: string): string {
   const digits = input.replace(/\D/g, '');
@@ -23,7 +24,8 @@ export class UsersController {
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(JwtService) private jwt: JwtService,
     @Inject(WhatsappService) private whatsapp: WhatsappService,
-    @Inject(WalletService) private wallet: WalletService
+    @Inject(WalletService) private wallet: WalletService,
+    @Inject(CartillaService) private cartillas: CartillaService
   ) {}
 
   @Get('users/:id')
@@ -68,11 +70,13 @@ export class UsersController {
     if (!pass) {
       const serialNumber = randomSerial();
       const welcomePoints = (await remainingOndas(this.prisma, store.id)) > 0 ? 1 : 0;
+      const active = await this.cartillas.resolveActiveCartilla(body.storeId);
       pass = await this.prisma.pass.create({
         data: {
           userId: user.id,
           storeId: body.storeId,
           eventId: body.eventId,
+          cartillaId: active.id,
           serialNumber,
           points: welcomePoints,
         },
@@ -85,11 +89,13 @@ export class UsersController {
             storeId: body.storeId,
             type: 'ACCUMULATE',
             points: welcomePoints,
+            cartillaId: active.id,
           },
         });
       }
+      await this.cartillas.assignPassPromos(pass.id);
 
-      const design = store.passDesign;
+      const design = active.passDesign || store.passDesign;
       if (design) {
         try {
           const issued = await this.wallet.issuePass({

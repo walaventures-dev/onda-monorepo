@@ -30,9 +30,13 @@ async function main() {
   await prisma.transaction.deleteMany();
   await prisma.feedback.deleteMany();
   await prisma.draw.deleteMany();
+  await prisma.pendingRequest.deleteMany().catch(() => undefined);
+  await prisma.passPromoAssignment.deleteMany().catch(() => undefined);
+  await prisma.cartillaPromo.deleteMany().catch(() => undefined);
   await prisma.pass.deleteMany();
   await prisma.promotion.deleteMany();
   await prisma.passDesign.deleteMany();
+  await prisma.cartilla.deleteMany().catch(() => undefined);
   await prisma.storeEventMembership.deleteMany();
   await prisma.pendingRequest.deleteMany().catch(() => undefined);
   await prisma.lead.deleteMany();
@@ -65,31 +69,33 @@ async function main() {
 
   const promoTemplates = [
     {
-      title: 'Café cortesía',
+      title: 'Café americano Gratis',
       pointsRequired: 3,
       type: PromotionType.PRODUCT,
       productName: 'Café americano',
+      value: 4000,
       expiryMode: PromotionExpiryMode.QUANTITY,
       maxRedemptions: 5,
     },
     {
-      title: 'Postre gratis',
+      title: 'Postre del día Gratis',
       pointsRequired: 5,
       type: PromotionType.PRODUCT,
       productName: 'Postre del día',
+      value: 8000,
       expiryMode: PromotionExpiryMode.QUANTITY,
       maxRedemptions: 20,
     },
     {
-      title: '10% descuento',
+      title: '15% de descuento',
       pointsRequired: 8,
       type: PromotionType.PERCENT_OFF,
-      value: 10,
-      expiryMode: PromotionExpiryMode.TIME,
-      endsAt: new Date(Date.now() + 3 * 86400000),
+      value: 15,
+      expiryMode: PromotionExpiryMode.QUANTITY,
+      maxRedemptions: 40,
     },
     {
-      title: 'Entrada 2x1',
+      title: '2x1',
       pointsRequired: 10,
       type: PromotionType.BUY_GET,
       buyQuantity: 2,
@@ -98,12 +104,12 @@ async function main() {
       maxRedemptions: 50,
     },
     {
-      title: '$5.000 off',
+      title: '$8.000 de descuento',
       pointsRequired: 12,
       type: PromotionType.AMOUNT_OFF,
-      value: 5000,
-      expiryMode: PromotionExpiryMode.TIME,
-      endsAt: new Date(Date.now() + 14 * 86400000),
+      value: 8000,
+      expiryMode: PromotionExpiryMode.QUANTITY,
+      maxRedemptions: 30,
     },
   ];
 
@@ -187,7 +193,11 @@ async function main() {
           },
         },
         promotions: {
-          create: promoTemplates.map((p) => ({ ...p, isActive: true })),
+          create: promoTemplates.map((p) => ({
+            ...p,
+            isActive: true,
+            pool: 'RETENCION' as const,
+          })),
         },
       },
       include: { promotions: true },
@@ -228,7 +238,7 @@ async function main() {
       promotions: {
         create: [
           {
-            title: '30% en masajes',
+            title: '30% de descuento',
             description: '30% de descuento en tu próxima sesión de masajes',
             pointsRequired: 10,
             isActive: true,
@@ -243,6 +253,99 @@ async function main() {
     include: { promotions: true, passDesign: true },
   });
   stores.push(ondaSpa);
+
+  for (const store of stores) {
+    const def = await prisma.cartilla.create({
+      data: {
+        storeId: store.id,
+        name: 'Cartilla permanente',
+        isDefault: true,
+        status: 'ACTIVE',
+        maxStamps: store.maxStamps || 12,
+      },
+    });
+    const design = await prisma.passDesign.findUnique({
+      where: { storeId: store.id },
+    });
+    if (design) {
+      await prisma.passDesign.update({
+        where: { id: design.id },
+        data: { cartillaId: def.id },
+      });
+    }
+    const existing = await prisma.promotion.findMany({
+      where: { storeId: store.id },
+    });
+    for (const p of existing) {
+      await prisma.cartillaPromo.create({
+        data: {
+          cartillaId: def.id,
+          promotionId: p.id,
+          pointsRequired: p.pointsRequired,
+          pool: 'RETENCION',
+        },
+      });
+      const welcome = await prisma.promotion.create({
+        data: {
+          storeId: store.id,
+          title: `${p.title} (bienvenida)`,
+          description: p.description,
+          pointsRequired: p.pointsRequired,
+          isActive: true,
+          type: p.type,
+          value: p.value != null ? Number(p.value) * 1.2 : p.value,
+          buyQuantity: p.buyQuantity,
+          getQuantity: p.getQuantity,
+          productName: p.productName,
+          pool: 'BIENVENIDA',
+          intent:
+            p.pointsRequired >= (store.maxStamps || 12)
+              ? 'PREMIO'
+              : p.pointsRequired <= 3
+                ? 'GANCHO'
+                : 'INTERMEDIA',
+          maxRedemptions: p.maxRedemptions,
+        },
+      });
+      await prisma.cartillaPromo.create({
+        data: {
+          cartillaId: def.id,
+          promotionId: welcome.id,
+          pointsRequired: welcome.pointsRequired,
+          pool: 'BIENVENIDA',
+        },
+      });
+    }
+    if (store.id === stores[0].id) {
+      const occStart = new Date();
+      occStart.setMonth(occStart.getMonth() + 1, 1);
+      const occEnd = new Date(occStart);
+      occEnd.setMonth(occEnd.getMonth() + 1, 0);
+      const occ = await prisma.cartilla.create({
+        data: {
+          storeId: store.id,
+          name: 'Temporada festiva',
+          isDefault: false,
+          status: 'DRAFT',
+          startsAt: occStart,
+          endsAt: occEnd,
+          maxStamps: store.maxStamps || 12,
+          passDesign: {
+            create: {
+              title: `${store.name} · Festiva`,
+              subtitle: 'Cartilla de temporada',
+              description: 'Premios especiales este mes',
+              backgroundColor: '#052DDE',
+              foregroundColor: '#FFFFFF',
+              labelColor: '#E5F6FC',
+              logoUrl: design?.logoUrl,
+            },
+          },
+        },
+      });
+      void occ;
+    }
+  }
 
   await prisma.storeEventMembership.create({
     data: {
@@ -275,6 +378,10 @@ async function main() {
     },
   });
 
+  const defaultCartilla0 = await prisma.cartilla.findFirst({
+    where: { storeId: stores[0].id, isDefault: true },
+  });
+
   const users = await Promise.all(
     [
       { name: 'Ana Pérez', phone: '+573001112233', points: 8 },
@@ -293,6 +400,7 @@ async function main() {
               eventId: i < 2 ? event.id : undefined,
               serialNumber: `ONDA-DEMO00${i + 1}`,
               points: u.points,
+              cartillaId: defaultCartilla0?.id,
             },
           },
         },
@@ -326,6 +434,7 @@ async function main() {
           type: 'REDEEM',
           points: promo.pointsRequired,
           promotionId: promo.id,
+          cartillaId: defaultCartilla0?.id,
           createdAt: new Date(day.getTime() + 3600000),
         },
       });
@@ -347,6 +456,7 @@ async function main() {
           type: 'REDEEM',
           points: cafePromo.pointsRequired,
           promotionId: cafePromo.id,
+          cartillaId: defaultCartilla0?.id,
           createdAt: new Date(now - i * 3600000),
         },
       });

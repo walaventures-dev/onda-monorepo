@@ -19,6 +19,7 @@ import { WalletService } from './wallet.service';
 import { CustomerAuthService } from './customer-auth.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
 import { assertCanAccumulate } from './plan-quota';
+import { CartillaService } from './cartilla.service';
 
 const CODE_TTL_MS = 60 * 1000;
 
@@ -40,7 +41,8 @@ export class PendingRequestsController {
     @Inject(WhatsappService) private whatsapp: WhatsappService,
     @Inject(WalletService) private wallet: WalletService,
     @Inject(CustomerAuthService) private auth: CustomerAuthService,
-    @Inject(PendingRequestsSseService) private sse: PendingRequestsSseService
+    @Inject(PendingRequestsSseService) private sse: PendingRequestsSseService,
+    @Inject(CartillaService) private cartillas: CartillaService
   ) {}
 
   @Sse('stream')
@@ -98,10 +100,14 @@ export class PendingRequestsController {
       await assertCanAccumulate(this.prisma, storeId, 1);
     }
     if (body.type === 'ACCUMULATE' && pass.points >= store.maxStamps) {
-      const hasFinalPromo = await this.prisma.promotion.findFirst({
-        where: { storeId, pointsRequired: store.maxStamps, isActive: true },
+      const assignment = await this.prisma.passPromoAssignment.findFirst({
+        where: {
+          passId: pass.id,
+          cartillaId: pass.cartillaId || undefined,
+          pointsRequired: store.maxStamps,
+        },
       });
-      if (hasFinalPromo) {
+      if (assignment) {
         throw new BadRequestException('Ya alcanzaste el máximo de sellos de este ciclo, reclama tu premio primero');
       }
     }
@@ -133,33 +139,12 @@ export class PendingRequestsController {
       pointsRequired: number;
       storeId: string | null;
       isActive: boolean;
-      expiryMode: string;
-      endsAt: Date | null;
       maxRedemptions: number | null;
     } | null = null;
     if (body.type === 'CLAIM') {
       if (!body.promotionId) throw new BadRequestException('Falta la promoción a reclamar');
-      promotion = await this.prisma.promotion.findUniqueOrThrow({ where: { id: body.promotionId } });
-      if (promotion.storeId !== storeId) {
-        throw new BadRequestException('Promoción no pertenece a este negocio');
-      }
-      if (!promotion.isActive) {
-        throw new BadRequestException('Promoción inactiva');
-      }
-      if (promotion.expiryMode === 'TIME' && promotion.endsAt && promotion.endsAt < new Date()) {
-        throw new BadRequestException('Esta promoción ya caducó');
-      }
-      if (promotion.expiryMode === 'QUANTITY' && promotion.maxRedemptions != null) {
-        const used = await this.prisma.transaction.count({
-          where: { promotionId: promotion.id, type: 'REDEEM' },
-        });
-        if (used >= promotion.maxRedemptions) {
-          throw new BadRequestException('Se agotaron las redenciones de esta promo');
-        }
-      }
-      if (pass.points < promotion.pointsRequired) {
-        throw new BadRequestException('Aún no alcanzas este premio');
-      }
+      const checked = await this.cartillas.assertCanRedeem(pass.id, body.promotionId);
+      promotion = checked.promo;
       const alreadyClaimed = await this.prisma.transaction.findFirst({
         where: {
           passId: pass.id,
@@ -242,7 +227,13 @@ export class PendingRequestsController {
           data: { points: { increment: delta } },
         });
         await tx.transaction.create({
-          data: { passId: pending.passId, storeId: pending.storeId, type: 'ACCUMULATE', points: delta },
+          data: {
+            passId: pending.passId,
+            storeId: pending.storeId,
+            type: 'ACCUMULATE',
+            points: delta,
+            cartillaId: current.cartillaId,
+          },
         });
       });
     } else {
@@ -252,21 +243,12 @@ export class PendingRequestsController {
       const promotion = await this.prisma.promotion.findUniqueOrThrow({
         where: { id: pending.promotionId },
       });
-      if (!promotion.isActive) {
-        throw new BadRequestException('Promoción inactiva');
-      }
-      if (promotion.expiryMode === 'TIME' && promotion.endsAt && promotion.endsAt < new Date()) {
-        throw new BadRequestException('Esta promoción ya caducó');
-      }
-      if (promotion.expiryMode === 'QUANTITY' && promotion.maxRedemptions != null) {
-        const used = await this.prisma.transaction.count({
-          where: { promotionId: promotion.id, type: 'REDEEM' },
-        });
-        if (used >= promotion.maxRedemptions) {
-          throw new BadRequestException('Se agotaron las redenciones de esta promo');
-        }
-      }
-      const isFinalReward = promotion.pointsRequired === store.maxStamps;
+      const { assignment } = await this.cartillas.assertCanRedeem(
+        pending.passId,
+        promotion.id
+      );
+      const need = assignment.pointsRequired;
+      const isFinalReward = need === store.maxStamps;
 
       await this.prisma.$transaction(async (tx) => {
         const claimed = await tx.pendingRequest.updateMany({
@@ -277,7 +259,7 @@ export class PendingRequestsController {
           throw new BadRequestException('Esta solicitud ya no está pendiente');
         }
         const currentPass = await tx.pass.findUniqueOrThrow({ where: { id: pending.passId } });
-        if (currentPass.points < promotion.pointsRequired) {
+        if (currentPass.points < need) {
           throw new BadRequestException('Aún no alcanzas este premio');
         }
         const alreadyClaimed = await tx.transaction.findFirst({
@@ -296,8 +278,9 @@ export class PendingRequestsController {
             passId: pending.passId,
             storeId: pending.storeId,
             type: 'REDEEM',
-            points: promotion.pointsRequired,
+            points: need,
             promotionId: promotion.id,
+            cartillaId: currentPass.cartillaId,
           },
         });
         await tx.pass.update({

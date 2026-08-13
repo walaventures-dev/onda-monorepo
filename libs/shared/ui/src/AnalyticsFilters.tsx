@@ -72,6 +72,30 @@ export function promoTypeLabel(type?: string | null) {
   return found?.label || type || 'Otro';
 }
 
+export function promoDisplayTitle(p: {
+  type?: string | null;
+  value?: number | null;
+  buyQuantity?: number | null;
+  getQuantity?: number | null;
+  productName?: string | null;
+  title?: string | null;
+}) {
+  switch (p.type) {
+    case 'PRODUCT': {
+      const name = (p.productName || '').trim();
+      return name ? `${name} Gratis` : 'Producto Gratis';
+    }
+    case 'PERCENT_OFF':
+      return `${p.value ?? 0}% de descuento`;
+    case 'AMOUNT_OFF':
+      return `$${Number(p.value || 0).toLocaleString('es-CO')} de descuento`;
+    case 'BUY_GET':
+      return `${p.buyQuantity || 1}x${p.getQuantity || 1}`;
+    default:
+      return (p.title || '').trim() || 'Promo';
+  }
+}
+
 export function formatPromoBenefit(p: {
   type?: string;
   value?: number | null;
@@ -81,19 +105,12 @@ export function formatPromoBenefit(p: {
   pointsRequired?: number;
   title?: string;
 }) {
-  const pts = p.pointsRequired != null ? ` · ${p.pointsRequired} ondas` : '';
-  switch (p.type) {
-    case 'PERCENT_OFF':
-      return `${p.value ?? 0}% de descuento${pts}`;
-    case 'AMOUNT_OFF':
-      return `$${Number(p.value || 0).toLocaleString('es-CO')} off${pts}`;
-    case 'BUY_GET':
-      return `${p.buyQuantity || 1}x${p.getQuantity || 1}${pts}`;
-    case 'PRODUCT':
-      return `${p.productName || p.title || 'Producto'}${pts}`;
-    default:
-      return p.title ? `${p.title}${pts}` : `Promo${pts}`;
-  }
+  const name = promoDisplayTitle(p);
+  const pts =
+    p.pointsRequired != null && p.pointsRequired > 0
+      ? ` · ${p.pointsRequired} ondas`
+      : '';
+  return `${name}${pts}`;
 }
 
 function formatRangeLabel(from: string, to: string) {

@@ -19,6 +19,7 @@ export function PassDesigner({
   onSubmit,
   requireLogo = false,
   saveLabel = "Guardar preview",
+  lockCycle = false,
 }: {
   design: any;
   onChange: (next: any) => void;
@@ -28,6 +29,7 @@ export function PassDesigner({
   onSubmit: (e: FormEvent) => void | Promise<void>;
   requireLogo?: boolean;
   saveLabel?: string;
+  lockCycle?: boolean;
 }) {
   return (
     <div className="onda-pass-designer-layout">
@@ -106,6 +108,7 @@ export function PassDesigner({
             />
           </label>
 
+          {!lockCycle ? (
           <label>
             <span>Número de sellos del ciclo</span>
             <input
@@ -117,6 +120,7 @@ export function PassDesigner({
               onChange={(e) => onMaxStampsChange(Number(e.target.value))}
             />
           </label>
+          ) : null}
 
           <div className="flex justify-end pt-1">
             <GradientButton type="submit">

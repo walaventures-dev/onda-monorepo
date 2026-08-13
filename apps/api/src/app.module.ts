@@ -9,6 +9,7 @@ import { PassesController } from './passes.controller';
 import { PassDesignsController } from './pass-designs.controller';
 import { TransactionsController } from './transactions.controller';
 import { PromotionsController } from './promotions.controller';
+import { CartillasController } from './cartillas.controller';
 import { MembershipsController } from './memberships.controller';
 import {
   AnalyticsController,
@@ -35,6 +36,7 @@ import { JobsService } from './jobs.service';
 import { JobsController } from './jobs.controller';
 import { BrevoService } from './brevo.service';
 import { WompiService } from './wompi.service';
+import { CartillaService } from './cartilla.service';
 
 @Module({
   imports: [
@@ -56,6 +58,7 @@ import { WompiService } from './wompi.service';
     PassDesignsController,
     TransactionsController,
     PromotionsController,
+    CartillasController,
     MembershipsController,
     LeadsController,
     AnalyticsController,
@@ -80,6 +83,7 @@ import { WompiService } from './wompi.service';
     JobsService,
     BrevoService,
     WompiService,
+    CartillaService,
   ],
 })
 export class AppModule {}

@@ -42,6 +42,23 @@ enum PromotionExpiryMode {
   QUANTITY
 }
 
+enum PromotionPool {
+  BIENVENIDA
+  RETENCION
+}
+
+enum PromotionIntent {
+  GANCHO
+  INTERMEDIA
+  PREMIO
+}
+
+enum CartillaStatus {
+  DRAFT
+  ACTIVE
+  ENDED
+}
+
 enum CampaignChannel {
   SMS
   WALLET
@@ -151,6 +168,8 @@ model Store {
   billingPeriod     String                 @default("monthly")
   whatsappUsed      Int                    @default(0)
   maxStamps         Int                    @default(12)
+  currency          String                 @default("COP")
+  ondaValue         Float?
   lat               Float?
   lng               Float?
   ownerName         String
@@ -166,6 +185,7 @@ model Store {
   transactions      Transaction[]
   feedbacks         Feedback[]
   promotions        Promotion[]
+  cartillas         Cartilla[]
   eventMemberships  StoreEventMembership[]
   passDesign        PassDesign?
   pendingRequests   PendingRequest[]
@@ -230,6 +250,7 @@ model Pass {
   userId       String
   storeId      String?
   eventId      String?
+  cartillaId   String?
   serialNumber String        @unique
   points       Int           @default(0)
   cycleStartedAt DateTime    @default(now())
@@ -238,11 +259,14 @@ model Pass {
   user         User          @relation(fields: [userId], references: [id])
   store        Store?        @relation(fields: [storeId], references: [id])
   event        Event?        @relation(fields: [eventId], references: [id])
+  cartilla     Cartilla?     @relation(fields: [cartillaId], references: [id])
   transactions Transaction[]
   pendingRequests PendingRequest[]
+  promoAssignments PassPromoAssignment[]
 
   @@index([userId, storeId])
   @@index([userId, eventId])
+  @@index([cartillaId])
 }
 
 model Transaction {
@@ -252,13 +276,16 @@ model Transaction {
   type        TransactionType
   points      Int             @default(1)
   promotionId String?
+  cartillaId  String?
   createdAt   DateTime        @default(now())
   pass        Pass            @relation(fields: [passId], references: [id])
   store       Store           @relation(fields: [storeId], references: [id])
   promotion   Promotion?      @relation(fields: [promotionId], references: [id])
+  cartilla    Cartilla?       @relation(fields: [cartillaId], references: [id])
 
   @@index([storeId, createdAt])
   @@index([promotionId])
+  @@index([cartillaId])
 }
 
 model Feedback {
@@ -274,33 +301,41 @@ model Feedback {
 }
 
 model Promotion {
-  id             String               @id @default(uuid())
-  storeId        String?
-  eventId        String?
-  title          String
-  description    String?
-  imageUrl       String?              @db.Text
-  pointsRequired Int
-  isActive       Boolean              @default(true)
-  type           PromotionType        @default(OTHER)
-  value          Float?
-  buyQuantity    Int?
-  getQuantity    Int?
-  productName    String?
-  expiryMode     PromotionExpiryMode  @default(QUANTITY)
-  endsAt         DateTime?
-  maxRedemptions Int?
-  store          Store?               @relation(fields: [storeId], references: [id])
-  event          Event?               @relation(fields: [eventId], references: [id])
-  transactions   Transaction[]
-  pendingRequests PendingRequest[]
-  createdAt      DateTime             @default(now())
+  id               String               @id @default(uuid())
+  storeId          String?
+  eventId          String?
+  title            String
+  description      String?
+  imageUrl         String?              @db.Text
+  pointsRequired   Int
+  isActive         Boolean              @default(true)
+  type             PromotionType        @default(OTHER)
+  value            Float?
+  buyQuantity      Int?
+  getQuantity      Int?
+  productName      String?
+  pool             PromotionPool        @default(RETENCION)
+  intent           PromotionIntent      @default(INTERMEDIA)
+  duplicatedFromId String?
+  expiryMode       PromotionExpiryMode  @default(QUANTITY)
+  endsAt           DateTime?
+  maxRedemptions   Int?
+  store            Store?               @relation(fields: [storeId], references: [id])
+  event            Event?               @relation(fields: [eventId], references: [id])
+  transactions     Transaction[]
+  pendingRequests  PendingRequest[]
+  cartillaItems    CartillaPromo[]
+  assignments      PassPromoAssignment[]
+  createdAt        DateTime             @default(now())
+
+  @@index([storeId, pool])
 }
 
 model PassDesign {
   id              String  @id @default(uuid())
   storeId         String? @unique
   eventId         String? @unique
+  cartillaId      String? @unique
   backgroundColor String  @default("#6E5AE6")
   foregroundColor String  @default("#FFFFFF")
   labelColor      String? @default("#E5F6FC")
@@ -312,6 +347,56 @@ model PassDesign {
   updatedAt       DateTime @updatedAt
   store           Store?  @relation(fields: [storeId], references: [id])
   event           Event?  @relation(fields: [eventId], references: [id])
+  cartilla        Cartilla? @relation(fields: [cartillaId], references: [id])
+}
+
+model Cartilla {
+  id            String         @id @default(uuid())
+  storeId       String
+  name          String
+  isDefault     Boolean        @default(false)
+  status        CartillaStatus @default(DRAFT)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  maxStamps     Int            @default(12)
+  smsRemindedAt DateTime?
+  createdAt     DateTime       @default(now())
+  store         Store          @relation(fields: [storeId], references: [id])
+  passDesign    PassDesign?
+  items         CartillaPromo[]
+  passes        Pass[]
+  transactions  Transaction[]
+  assignments   PassPromoAssignment[]
+
+  @@index([storeId, status])
+}
+
+model CartillaPromo {
+  id             String         @id @default(uuid())
+  cartillaId     String
+  promotionId    String
+  pointsRequired Int
+  pool           PromotionPool
+  cartilla       Cartilla       @relation(fields: [cartillaId], references: [id], onDelete: Cascade)
+  promotion      Promotion      @relation(fields: [promotionId], references: [id])
+
+  @@unique([cartillaId, pointsRequired, pool])
+  @@index([promotionId])
+}
+
+model PassPromoAssignment {
+  id             String    @id @default(uuid())
+  passId         String
+  cartillaId     String
+  promotionId    String
+  pointsRequired Int
+  createdAt      DateTime  @default(now())
+  pass           Pass      @relation(fields: [passId], references: [id], onDelete: Cascade)
+  cartilla       Cartilla  @relation(fields: [cartillaId], references: [id])
+  promotion      Promotion @relation(fields: [promotionId], references: [id])
+
+  @@unique([passId, cartillaId, pointsRequired])
+  @@index([promotionId, cartillaId])
 }
 
 model Lead {

@@ -9,13 +9,15 @@ import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { WhatsappService } from './whatsapp.service';
 import { assertCanAccumulate } from './plan-quota';
+import { CartillaService } from './cartilla.service';
 
 @Controller('transactions')
 export class TransactionsController {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(WalletService) private wallet: WalletService,
-    @Inject(WhatsappService) private whatsapp: WhatsappService
+    @Inject(WhatsappService) private whatsapp: WhatsappService,
+    @Inject(CartillaService) private cartillas: CartillaService
   ) {}
 
   @Get()
@@ -82,6 +84,7 @@ export class TransactionsController {
           storeId: store.id,
           type: 'ACCUMULATE',
           points: delta,
+          cartillaId: current.cartillaId,
         },
       });
       return { pass: updated, tx: created };
@@ -118,33 +121,13 @@ export class TransactionsController {
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: body.storeId },
     });
-    const promo = await this.prisma.promotion.findUniqueOrThrow({
-      where: { id: body.promotionId },
-    });
-    if (!promo.isActive) {
-      throw new BadRequestException('Promoción inactiva');
-    }
-    if (promo.expiryMode === 'TIME' && promo.endsAt && promo.endsAt < new Date()) {
-      throw new BadRequestException('Esta promoción ya caducó');
-    }
-    if (promo.expiryMode === 'QUANTITY' && promo.maxRedemptions != null) {
-      const used = await this.prisma.transaction.count({
-        where: { promotionId: promo.id, type: 'REDEEM' },
-      });
-      if (used >= promo.maxRedemptions) {
-        throw new BadRequestException('Se agotaron las redenciones de esta promo');
-      }
-    }
-    const current = await this.prisma.pass.findUniqueOrThrow({
-      where: { id: body.passId },
-      include: { user: true },
-    });
-    if (current.points < promo.pointsRequired) {
-      throw new BadRequestException('Puntos insuficientes');
-    }
+    const { pass: currentPass, promo, assignment } = await this.cartillas.assertCanRedeem(
+      body.passId,
+      body.promotionId
+    );
     const pass = await this.prisma.pass.update({
       where: { id: body.passId },
-      data: { points: { decrement: promo.pointsRequired } },
+      data: { points: { decrement: assignment.pointsRequired } },
       include: { user: true },
     });
     const tx = await this.prisma.transaction.create({
@@ -152,8 +135,9 @@ export class TransactionsController {
         passId: pass.id,
         storeId: store.id,
         type: 'REDEEM',
-        points: promo.pointsRequired,
+        points: assignment.pointsRequired,
         promotionId: promo.id,
+        cartillaId: currentPass.cartillaId,
       },
     });
     if (pass.walletRef) {

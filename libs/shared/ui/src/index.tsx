@@ -41,6 +41,7 @@ export {
   rangeFromPreset,
   isoDate,
   promoTypeLabel,
+  promoDisplayTitle,
   formatPromoBenefit,
 } from './AnalyticsFilters';
 export type {

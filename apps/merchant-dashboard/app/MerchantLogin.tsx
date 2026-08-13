@@ -71,13 +71,11 @@ export function MerchantLogin() {
             <p className="font-display text-4xl font-semibold leading-[1.12] tracking-tight text-[var(--onda-ink)] xl:text-[2.75rem]">
               Hola de nuevo
             </p>
-            <div className="mt-6 h-[min(50vh,22rem)] w-full max-w-md overflow-hidden rounded-2xl ring-1 ring-[var(--onda-border)]">
-              <img
-                src="/brand/login.jpg"
-                alt=""
-                className="h-full w-full object-cover object-[center_18%]"
-              />
-            </div>
+            <img
+              src="/brand/login.jpg"
+              alt=""
+              className="mt-6 h-auto w-full max-w-md max-h-[min(62vh,36rem)] rounded-2xl object-contain ring-1 ring-[var(--onda-border)]"
+            />
           </aside>
 
           <main className="flex min-h-0 justify-center">

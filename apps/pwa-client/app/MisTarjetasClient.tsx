@@ -98,7 +98,7 @@ export function MisTarjetasClient() {
             <Link key={p.id} href={`/r/${p.store?.slug || p.storeId}`} className="block">
               <PassPreview
                 compact
-                {...(p.store?.passDesign || {})}
+                {...(p.passDesign || p.cartilla?.passDesign || p.store?.passDesign || {})}
                 points={p.points}
                 maxStamps={p.store?.maxStamps ?? 12}
                 memberName={session?.user.name ?? ''}

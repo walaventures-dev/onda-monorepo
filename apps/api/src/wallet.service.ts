@@ -147,12 +147,14 @@ export class WalletService {
         user: true,
         store: { include: { passDesign: true } },
         event: { include: { passDesign: true } },
+        cartilla: { include: { passDesign: true } },
       },
     });
 
     if (!pass) return null;
 
     const design =
+      pass.cartilla?.passDesign ||
       pass.store?.passDesign ||
       pass.event?.passDesign ||
       FALLBACK_DESIGN;

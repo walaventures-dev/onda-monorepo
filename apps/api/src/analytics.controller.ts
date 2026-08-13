@@ -53,6 +53,31 @@ function previousPeriod(from: Date, to: Date) {
   return { prevFrom, prevTo };
 }
 
+function rewardsFromAssignments(
+  assignments?: Array<{
+    pointsRequired: number;
+    promotion: { id: string; title: string; type: string; isActive: boolean };
+  }>
+) {
+  return (assignments || [])
+    .filter((a) => a.promotion?.isActive)
+    .map((a) => ({
+      id: a.promotion.id,
+      title: a.promotion.title,
+      type: a.promotion.type,
+      pointsRequired: a.pointsRequired,
+    }));
+}
+
+function nearestReward<T extends { pointsRequired: number }>(
+  points: number,
+  rewards: T[]
+) {
+  return rewards
+    .filter((r) => points < r.pointsRequired)
+    .sort((a, b) => a.pointsRequired - b.pointsRequired)[0];
+}
+
 function dayKey(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -203,6 +228,7 @@ export class AnalyticsController {
         where: { storeId, ...(eventId ? { eventId } : {}) },
         include: {
           user: true,
+          promoAssignments: { include: { promotion: true } },
           transactions: {
             where: { storeId },
             orderBy: { createdAt: 'desc' },
@@ -314,9 +340,8 @@ export class AnalyticsController {
       const daysSince = lastTx
         ? (now - lastTx.createdAt.getTime()) / 86400000
         : 999;
-      const nearPromo = activePromos
-        .filter((pr) => p.points < pr.pointsRequired)
-        .sort((a, b) => a.pointsRequired - b.pointsRequired)[0];
+      const rewards = rewardsFromAssignments(p.promoAssignments);
+      const nearPromo = nearestReward(p.points, rewards);
       const gap = nearPromo ? nearPromo.pointsRequired - p.points : null;
 
       let badge: string | null = null;
@@ -365,8 +390,10 @@ export class AnalyticsController {
       if (target && !target.badge) target.badge = 'VIP';
     });
 
-    const eligible = customers.filter((c) =>
-      activePromos.some((p) => c.points >= p.pointsRequired)
+    const eligible = passes.filter((p) =>
+      rewardsFromAssignments(p.promoAssignments).some(
+        (r) => p.points >= r.pointsRequired
+      )
     ).length;
     const coverage =
       customers.length > 0 ? Math.round((eligible / customers.length) * 100) : 0;
@@ -416,13 +443,10 @@ export class AnalyticsController {
           }),
         ]);
         const remaining =
-          p.expiryMode === 'QUANTITY' && p.maxRedemptions != null
+          p.maxRedemptions != null
             ? Math.max(0, p.maxRedemptions - canjesAllTime)
             : null;
-        const daysLeft =
-          p.expiryMode === 'TIME' && p.endsAt
-            ? Math.ceil((p.endsAt.getTime() - Date.now()) / 86400000)
-            : null;
+        const daysLeft = null;
         return {
           ...p,
           canjesInRange: canjes,
@@ -438,7 +462,6 @@ export class AnalyticsController {
     // Priorizar stock / caducidad de promos activas
     for (const p of promoStats.filter((x) => x.isActive)) {
       if (
-        p.expiryMode === 'QUANTITY' &&
         p.maxRedemptions != null &&
         p.remaining != null &&
         (p.remaining <= 3 || p.remaining / p.maxRedemptions <= 0.2)
@@ -448,13 +471,13 @@ export class AnalyticsController {
           tone: p.remaining === 0 ? 'danger' : 'warning',
           title:
             p.remaining === 0
-              ? `Se agotó “${p.title}”`
+              ? `Se agotó “${p.title}” (onda ${p.pointsRequired})`
               : `Se está por agotar “${p.title}”`,
           message:
             p.remaining === 0
-              ? 'Ya no tiene canjes restantes. Duplícala o crea una nueva.'
-              : `Queda ${p.remaining} de ${p.maxRedemptions} canjes. Duplícala antes de que se agote.`,
-          action: 'Duplicar promo',
+              ? 'Actualiza o crea otra promo para esa onda. Las tarjetas nuevas no verán recompensa ahí.'
+              : `Queda ${p.remaining} de ${p.maxRedemptions} canjes. Crea otra promo para esa onda antes de que se agote.`,
+          action: 'Ver promo',
           promoId: p.id,
           stat: String(p.remaining ?? 0),
         });
@@ -660,7 +683,7 @@ export class AnalyticsController {
       })();
     const { prevFrom, prevTo } = previousPeriod(from, to);
 
-    const [txs, prevTxs, lastTx, allTimeAgg, activePromos] = await Promise.all([
+    const [txs, prevTxs, lastTx, allTimeAgg, assignments] = await Promise.all([
       this.prisma.transaction.findMany({
         where: { passId, storeId, createdAt: { gte: from, lte: to } },
         include: { promotion: true },
@@ -680,8 +703,9 @@ export class AnalyticsController {
         _count: { _all: true },
         _sum: { points: true },
       }),
-      this.prisma.promotion.findMany({
-        where: { storeId, isActive: true },
+      this.prisma.passPromoAssignment.findMany({
+        where: { passId },
+        include: { promotion: true },
         orderBy: { pointsRequired: 'asc' },
       }),
     ]);
@@ -749,9 +773,8 @@ export class AnalyticsController {
       count,
     }));
 
-    const nearPromo = activePromos
-      .filter((pr) => pass.points < pr.pointsRequired)
-      .sort((a, b) => a.pointsRequired - b.pointsRequired)[0];
+    const rewards = rewardsFromAssignments(assignments);
+    const nearPromo = nearestReward(pass.points, rewards);
     const gap = nearPromo ? nearPromo.pointsRequired - pass.points : null;
 
     let badge: string | null = null;
@@ -764,7 +787,7 @@ export class AnalyticsController {
       badge = badge || 'Dormido';
     }
 
-    const eligiblePromos = activePromos.map((p) => ({
+    const eligiblePromos = rewards.map((p) => ({
       id: p.id,
       title: p.title,
       type: p.type,
@@ -963,6 +986,7 @@ export class AnalyticsController {
         where: { storeId: { in: storeIds } },
         include: {
           user: true,
+          promoAssignments: { include: { promotion: true } },
           transactions: {
             where: { storeId: { in: storeIds } },
             orderBy: { createdAt: 'desc' },
@@ -1114,9 +1138,10 @@ export class AnalyticsController {
         const daysSince = lastTx
           ? (now - lastTx.createdAt.getTime()) / 86400000
           : 999;
-        const nearPromo = activePromos
-          .filter((pr) => p.points < pr.pointsRequired)
-          .sort((a, b) => a.pointsRequired - b.pointsRequired)[0];
+        const rewards = rewardsFromAssignments(
+          (p as { promoAssignments?: any[] }).promoAssignments
+        );
+        const nearPromo = nearestReward(p.points, rewards);
         const gap = nearPromo ? nearPromo.pointsRequired - p.points : null;
 
         if (p.user.createdAt >= from && p.user.createdAt <= to) {
@@ -1136,7 +1161,9 @@ export class AnalyticsController {
       }
 
       const eligible = storePasses.filter((c) =>
-        activePromos.some((pr) => c.points >= pr.pointsRequired),
+        rewardsFromAssignments(
+          (c as { promoAssignments?: any[] }).promoAssignments
+        ).some((r) => c.points >= r.pointsRequired)
       ).length;
       const coverage =
         storePasses.length > 0

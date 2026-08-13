@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { JobsService } from './jobs.service';
+import { CartillaService } from './cartilla.service';
 import {
   generateReferralCode,
   defaultSegmentFor,
@@ -36,6 +37,8 @@ const storePublicSelect = {
   billingPeriod: true,
   whatsappUsed: true,
   maxStamps: true,
+  currency: true,
+  ondaValue: true,
   lat: true,
   lng: true,
   ownerName: true,
@@ -54,7 +57,8 @@ export class StoresController {
 
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
-    @Inject(JobsService) private jobs: JobsService
+    @Inject(JobsService) private jobs: JobsService,
+    @Inject(CartillaService) private cartillas: CartillaService
   ) {}
 
   @Get()
@@ -208,6 +212,8 @@ export class StoresController {
       return created;
     });
 
+    await this.cartillas.ensureDefaultCartilla(store.id);
+
     if (store.ownerEmail) {
       try {
         await this.jobs.enqueue('brevo-email', {
@@ -242,6 +248,8 @@ export class StoresController {
       planType: 'BASIC' | 'PRO';
       billingStatus: string;
       maxStamps: number;
+      currency: string;
+      ondaValue: number | null;
       ownerName: string;
     }>
   ) {
@@ -253,18 +261,28 @@ export class StoresController {
           'El tope de sellos debe ser un número entre 1 y 12'
         );
       }
-      const finalPromo = await this.prisma.promotion.findFirst({
-        where: { storeId: id, pointsRequired: maxStamps, isActive: true },
-      });
-      if (!finalPromo) {
-        throw new BadRequestException(
-          `Debes tener una promoción activa en el sello ${maxStamps} antes de guardar este tope`
-        );
+    }
+    let currency: string | undefined;
+    if (body.currency != null) {
+      currency = String(body.currency).trim().toUpperCase();
+      if (!/^[A-Z]{3}$/.test(currency)) {
+        throw new BadRequestException('La moneda debe ser un código de 3 letras (ej. COP)');
+      }
+    }
+    let ondaValue: number | null | undefined;
+    if ('ondaValue' in body) {
+      if (body.ondaValue == null) {
+        ondaValue = null;
+      } else {
+        ondaValue = Number(body.ondaValue);
+        if (!Number.isFinite(ondaValue) || ondaValue < 0) {
+          throw new BadRequestException('El valor de una onda debe ser un número positivo');
+        }
       }
     }
     return this.prisma.store.update({
       where: { id },
-      data: { ...body, maxStamps },
+      data: { ...body, maxStamps, currency, ondaValue },
     });
   }
 

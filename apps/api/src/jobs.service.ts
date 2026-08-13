@@ -15,6 +15,7 @@ import { WompiService } from './wompi.service';
 import type {
   BrevoEmailJobPayload,
   BrevoSmsJobPayload,
+  CartillaEndingSmsPayload,
   JobPayloadMap,
   JobType,
   JobsEnqueueOptions,
@@ -22,6 +23,7 @@ import type {
   WhatsappJobPayload,
   WompiRenewJobPayload,
 } from './jobs.types';
+import { CartillaService } from './cartilla.service';
 
 const QUEUE_NAME = 'onda-jobs';
 const MS_30_DAYS = 30 * 24 * 60 * 60 * 1000;
@@ -37,7 +39,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     @Inject(forwardRef(() => WhatsappService)) private whatsapp: WhatsappService,
     @Inject(BrevoService) private brevo: BrevoService,
     @Inject(WalletService) private wallet: WalletService,
-    @Inject(WompiService) private wompi: WompiService
+    @Inject(WompiService) private wompi: WompiService,
+    @Inject(forwardRef(() => CartillaService)) private cartillas: CartillaService
   ) {}
 
   get usesCloudTasks(): boolean {
@@ -133,6 +136,9 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       }
       case 'wompi-renew':
         await this.dispatchWompiRenew(payload as WompiRenewJobPayload);
+        return;
+      case 'cartilla-ending-sms':
+        await this.cartillas.sendEndingSms(payload as CartillaEndingSmsPayload);
         return;
       default:
         this.logger.warn(`Job desconocido: ${type}`);

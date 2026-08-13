@@ -52,6 +52,8 @@ import {
 } from "recharts";
 import { PromoDetail } from "./PromoDetail";
 import { CreatePromo } from "./CreatePromo";
+import { CartillaEditor } from "./CartillaEditor";
+import { CartillaCalendar } from "./CartillaCalendar";
 import { CustomerDetail } from "./CustomerDetail";
 import {
   CompareStores,
@@ -60,7 +62,6 @@ import {
 import { ActivityHeatmap } from "./ActivityHeatmap";
 import { PendingRequestsPanel } from "./PendingRequestsPanel";
 import { ReferralsPanel } from "./ReferralsPanel";
-import { PassDesigner } from "./PassDesigner";
 import { SetupChecklist } from "./SetupChecklist";
 import {
   isSetupAllowedTab,
@@ -92,6 +93,22 @@ type CustomerSegment =
 const COMPARATIVA_ENABLED = false;
 const REGISTER_STORE_ENABLED = false;
 const EVENTOS_ENABLED = false;
+
+const STORE_CURRENCIES = [
+  { id: "COP", label: "COP — peso colombiano" },
+  { id: "USD", label: "USD — dólar" },
+  { id: "EUR", label: "EUR — euro" },
+] as const;
+
+function formatMoneyInput(raw: string) {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  return Number(digits).toLocaleString("es-CO");
+}
+
+function parseMoneyInput(raw: string) {
+  return raw.replace(/\D/g, "");
+}
 
 const SECTIONS: Tab[] = [
   "completar",
@@ -394,27 +411,49 @@ function parseRoute(pathname: string): {
   tab: Tab;
   promoId: string | null;
   customerPassId: string | null;
+  cartillaId: string | null;
 } {
   const parts = pathname.split("/").filter(Boolean);
   const raw = parts[0] || "resumen";
-  // /pase quedó dentro de Configuración
+  if (raw === "cartillas") {
+    return {
+      tab: "promos",
+      promoId: null,
+      customerPassId: null,
+      cartillaId: parts[1] || null,
+    };
+  }
   const section = (raw === "pase" ? "config" : raw) as Tab;
   const tab = SECTIONS.includes(section) ? section : "resumen";
-  const promoId = tab === "promos" && parts[1] ? parts[1] : null;
+  let promoId: string | null = null;
+  let cartillaId: string | null = null;
+  if (tab === "promos") {
+    if (parts[1] === "cartilla") {
+      cartillaId = parts[2] || null;
+    } else if (parts[1]) {
+      promoId = parts[1];
+    }
+  }
   const customerPassId = tab === "clientes" && parts[1] ? parts[1] : null;
-  return { tab, promoId, customerPassId };
+  return { tab, promoId, customerPassId, cartillaId };
 }
 
 export function MerchantWorkspace() {
   const pathname = usePathname();
   const router = useRouter();
   const { firebaseEnabled, logout } = useMerchantAuth();
-  const { tab, promoId: selectedPromoId, customerPassId: selectedCustomerPassId } =
+  const { tab, promoId: selectedPromoId, customerPassId: selectedCustomerPassId, cartillaId: selectedCartillaId } =
     parseRoute(pathname);
 
   useEffect(() => {
     if (pathname === "/pase" || pathname.startsWith("/pase/")) {
       router.replace("/config");
+    }
+    if (pathname === "/cartillas" || pathname === "/cartillas/") {
+      router.replace("/promos");
+    } else if (pathname.startsWith("/cartillas/")) {
+      const rest = pathname.slice("/cartillas/".length);
+      router.replace(`/promos/cartilla/${rest}`);
     }
     if (
       !EVENTOS_ENABLED &&
@@ -443,6 +482,10 @@ export function MerchantWorkspace() {
   const [promoStatusFilter, setPromoStatusFilter] = useState<
     "all" | "active" | "inactive"
   >("active");
+  const [promoPoolFilter, setPromoPoolFilter] = useState<
+    "ALL" | "BIENVENIDA" | "RETENCION"
+  >("ALL");
+  const [cartillasData, setCartillasData] = useState<any>(null);
   const [promoDetail, setPromoDetail] = useState<any>(null);
   const [promoDetailLoading, setPromoDetailLoading] = useState(false);
   const [customerDetail, setCustomerDetail] = useState<any>(null);
@@ -456,6 +499,9 @@ export function MerchantWorkspace() {
   const [compareLoading, setCompareLoading] = useState(false);
   const [compareError, setCompareError] = useState<string | null>(null);
   const [storesReady, setStoresReady] = useState(false);
+  const [storeCurrency, setStoreCurrency] = useState("COP");
+  const [storeOndaValue, setStoreOndaValue] = useState("");
+  const [savingStoreEconomics, setSavingStoreEconomics] = useState(false);
   const { confirm, alert, dialogs } = useOndaDialogs();
 
   const initialRange = rangeFromPreset("14d");
@@ -468,6 +514,13 @@ export function MerchantWorkspace() {
 
   const store = stores.find((s) => s.id === storeId);
   const setup = useMemo(() => storeSetupStatus(store), [store]);
+
+  useEffect(() => {
+    setStoreCurrency(store?.currency || "COP");
+    setStoreOndaValue(
+      store?.ondaValue != null ? String(store.ondaValue) : "",
+    );
+  }, [store?.id, store?.currency, store?.ondaValue]);
   const showSetupNav =
     storesReady && stores.length > 0 && !setup.complete;
   const kpis = overview?.kpis;
@@ -552,8 +605,14 @@ export function MerchantWorkspace() {
       params.set("type", filters.promoTypes.join(","));
     if (promoStatusFilter === "active") params.set("isActive", "true");
     if (promoStatusFilter === "inactive") params.set("isActive", "false");
+    if (promoPoolFilter !== "ALL") params.set("pool", promoPoolFilter);
     setPromos((await api(`/promotions?${params}`)) as any[]);
-  }, [storeId, filters.promoTypes, promoStatusFilter]);
+  }, [storeId, filters.promoTypes, promoStatusFilter, promoPoolFilter]);
+
+  const loadCartillas = useCallback(async () => {
+    if (!storeId) return;
+    setCartillasData(await api(`/cartillas?storeId=${storeId}`));
+  }, [storeId]);
 
   useEffect(() => {
     api<any[]>("/auth/merchant/stores").then((list) => {
@@ -651,12 +710,13 @@ export function MerchantWorkspace() {
     loadOverview();
     loadTxs();
     loadPromos();
+    loadCartillas();
     api<any[]>(`/memberships?storeId=${storeId}`).then(setMemberships);
     api(`/pass-designs/store/${storeId}`)
       .then(setDesign)
       .catch(() => setDesign(null));
     api(`/billing/store/${storeId}`).then(setBilling);
-  }, [storeId, mode, eventId, loadOverview, loadTxs, loadPromos]);
+  }, [storeId, mode, eventId, loadOverview, loadTxs, loadPromos, loadCartillas]);
 
   useEffect(() => {
     if (!selectedPromoId || selectedPromoId === "nueva") {
@@ -922,6 +982,33 @@ export function MerchantWorkspace() {
         message: "La vista previa del pase quedó actualizada.",
         tone: "success",
       });
+    }
+  }
+
+  async function saveStoreEconomics(e: FormEvent) {
+    e.preventDefault();
+    if (!storeId) return;
+    setSavingStoreEconomics(true);
+    try {
+      const updated = await api<any>(`/stores/${storeId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          currency: storeCurrency || "COP",
+          ondaValue: storeOndaValue === "" ? null : Number(storeOndaValue),
+        }),
+      });
+      setStores((prev) =>
+        prev.map((s) => (s.id === storeId ? { ...s, ...updated } : s)),
+      );
+      toast.success("Configuración guardada");
+    } catch (err: any) {
+      await alert({
+        title: "No se pudo guardar",
+        message: err.message || "Intenta de nuevo.",
+        tone: "danger",
+      });
+    } finally {
+      setSavingStoreEconomics(false);
     }
   }
 
@@ -1263,7 +1350,7 @@ export function MerchantWorkspace() {
         {stores.length > 0 &&
         ((setup.complete &&
           ["resumen", "comparativa", "clientes", "actividad"].includes(tab)) ||
-          (tab === "promos" && !selectedPromoId)) ? (
+          (tab === "promos" && !selectedPromoId && !selectedCartillaId)) ? (
           <AnalyticsFiltersBar
             value={filters}
             onChange={setFilters}
@@ -1326,6 +1413,30 @@ export function MerchantWorkspace() {
                               { id: "all", label: "Todas", icon: OndaIcons.all },
                             ]}
                           />
+                          ),
+                        },
+                        {
+                          id: "promo-pool",
+                          label: "Bolsa",
+                          children: (
+                            <SegmentedControl
+                              aria-label="Bolsa de promoción"
+                              value={promoPoolFilter}
+                              onChange={setPromoPoolFilter}
+                              options={[
+                                { id: "ALL", label: "Ambas", icon: OndaIcons.all },
+                                {
+                                  id: "BIENVENIDA",
+                                  label: "Bienvenida",
+                                  icon: OndaIcons.sparkle,
+                                },
+                                {
+                                  id: "RETENCION",
+                                  label: "Retención",
+                                  icon: OndaIcons.users,
+                                },
+                              ]}
+                            />
                           ),
                         },
                       ]
@@ -1774,6 +1885,44 @@ export function MerchantWorkspace() {
               await loadPromos();
               await loadOverview();
             }}
+            onMovePool={async (promo) => {
+              if (!promo.canMovePool) {
+                await alert({
+                  title: "No se puede mover",
+                  message:
+                    "Ya hay clientes en una cartilla con esta promo. Duplica y cambia una condición.",
+                  tone: "warning",
+                });
+                return;
+              }
+              const next =
+                promo.pool === "BIENVENIDA" ? "RETENCION" : "BIENVENIDA";
+              try {
+                await api(`/promotions/${promo.id}`, {
+                  method: "PATCH",
+                  body: JSON.stringify({ pool: next }),
+                });
+                toast.success(
+                  next === "BIENVENIDA"
+                    ? "Movida a Bienvenida"
+                    : "Movida a Retención",
+                );
+                await loadPromos();
+                const q = new URLSearchParams({
+                  from: filters.from,
+                  to: filters.to,
+                });
+                setPromoDetail(
+                  await api(`/promotions/${promo.id}/analytics?${q}`),
+                );
+              } catch (err: any) {
+                await alert({
+                  title: "No se pudo mover",
+                  message: err.message || "Intenta de nuevo.",
+                  tone: "danger",
+                });
+              }
+            }}
           />
         ) : null}
 
@@ -1789,7 +1938,30 @@ export function MerchantWorkspace() {
           />
         ) : null}
 
-        {tab === "promos" && !selectedPromoId && (
+        {tab === "promos" && selectedCartillaId === "calendario" ? (
+          <CartillaCalendar
+            storeId={storeId}
+            onOpen={(id) => router.push(`/promos/cartilla/${id}`)}
+            onCreate={() => router.push("/promos/cartilla/nueva")}
+            onClose={() => router.push("/promos")}
+          />
+        ) : null}
+
+        {tab === "promos" &&
+        selectedCartillaId &&
+        selectedCartillaId !== "calendario" ? (
+          <CartillaEditor
+            storeId={storeId}
+            store={store}
+            cartillaId={selectedCartillaId}
+            onClose={() => {
+              void loadCartillas();
+              router.push("/promos");
+            }}
+          />
+        ) : null}
+
+        {tab === "promos" && !selectedPromoId && !selectedCartillaId && (
           <div className="space-y-5">
             <div className="onda-kpi-grid">
               <KpiCard
@@ -1805,11 +1977,76 @@ export function MerchantWorkspace() {
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
+                <h2 className="font-display text-xl font-semibold">Cartillas</h2>
+                <p className="text-sm text-[var(--onda-muted)]">
+                  Arma el año de promos. Al activar una ocasional se reinicia el
+                  ciclo.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-full border border-[var(--onda-border)] px-4 py-2 text-sm font-medium"
+                  onClick={() => router.push("/promos/cartilla/calendario")}
+                >
+                  Calendario
+                </button>
+                <GradientButton
+                  type="button"
+                  onClick={() => router.push("/promos/cartilla/nueva")}
+                >
+                  {OndaIcons.plus}
+                  Nueva cartilla
+                </GradientButton>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(cartillasData?.cartillas || []).map((c: any) => (
+                <article
+                  key={c.id}
+                  role="button"
+                  tabIndex={0}
+                  className="onda-card cursor-pointer p-5"
+                  onClick={() => router.push(`/promos/cartilla/${c.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      router.push(`/promos/cartilla/${c.id}`);
+                    }
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-display font-semibold">{c.name}</h3>
+                    <span className="text-xs text-[var(--onda-muted)]">
+                      {c.isDefault
+                        ? "Permanente"
+                        : cartillasData?.activeId === c.id
+                          ? "Vigente"
+                          : c.status}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-[var(--onda-muted)]">
+                    {c.isDefault
+                      ? "Fallback cuando no hay una ocasional activa"
+                      : c.startsAt && c.endsAt
+                        ? `${new Date(c.startsAt).toLocaleDateString("es-CO")} – ${new Date(c.endsAt).toLocaleDateString("es-CO")}`
+                        : "Sin fechas aún"}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--onda-muted)]">
+                    {c.maxStamps ?? 12} ondas · {(c.items || []).length}{" "}
+                    promos
+                  </p>
+                </article>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
                 <h2 className="font-display text-xl font-semibold">
                   Promociones
                 </h2>
                 <p className="text-sm text-[var(--onda-muted)]">
-                  Tipología de beneficio + performance del rango filtrado.
+                  Dos bolsas: Bienvenida (Onda capta clientes) y Retención.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -1880,6 +2117,12 @@ export function MerchantWorkspace() {
                 </GradientButton>
               </div>
             </div>
+            {promoPoolFilter === "BIENVENIDA" ? (
+              <p className="rounded-2xl bg-[var(--onda-violet-soft)] px-4 py-3 text-sm text-[var(--onda-violet)]">
+                Onda usa estas promociones para captar clientes con estrategias
+                comerciales y publicitarias administradas por Onda.
+              </p>
+            ) : null}
 
             <div
               className={
@@ -1892,7 +2135,13 @@ export function MerchantWorkspace() {
                 const stats = promoStatsMap.get(p.id);
                 const canjes = stats?.canjesInRange ?? 0;
                 const badge =
-                  canjes >= 3 ? "Top" : canjes === 0 ? "Sin tracción" : null;
+                  p.needsReplacement
+                    ? "Sin stock"
+                    : canjes >= 3
+                      ? "Top"
+                      : canjes === 0
+                        ? "Sin tracción"
+                        : null;
                 const benefit = formatPromoBenefit(p);
 
                 return promoView === "grid" ? (
@@ -2209,38 +2458,53 @@ export function MerchantWorkspace() {
               </div>
             </div>
 
-            {design ? (
+            <form
+              onSubmit={(e) => void saveStoreEconomics(e)}
+              className="onda-card space-y-4 p-5"
+            >
               <div>
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="text-[var(--onda-violet)]" aria-hidden>
-                    {OndaIcons.pass}
-                  </span>
-                  <h3 className="font-display text-lg font-semibold">
-                    Diseño del pase
-                  </h3>
-                </div>
-                <PassDesigner
-                  design={design}
-                  onChange={setDesign}
-                  maxStamps={store?.maxStamps ?? 12}
-                  onMaxStampsChange={(maxStamps) => {
-                    setStores((prev) =>
-                      prev.map((s) =>
-                        s.id === storeId ? { ...s, maxStamps } : s,
-                      ),
-                    );
-                  }}
-                  milestoneStamps={promos
-                    .filter((p: any) => p.isActive)
-                    .map((p: any) => p.pointsRequired)}
-                  onSubmit={saveDesign}
-                />
+                <h3 className="font-display font-semibold">Valor de la onda</h3>
+                <p className="mt-1 text-sm text-[var(--onda-muted)]">
+                  Cuánto cuesta una onda en tu negocio. Sirve para seguimiento
+                  de recompensas. Por defecto la moneda es peso colombiano
+                  (COP).
+                </p>
               </div>
-            ) : (
-              <div className="onda-card p-5 text-sm text-[var(--onda-muted)]">
-                Cargando diseño del pase…
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-sm text-[var(--onda-muted)]">
+                  Moneda
+                  <select
+                    className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2.5 text-sm text-[var(--onda-ink)]"
+                    value={storeCurrency}
+                    onChange={(e) => setStoreCurrency(e.target.value)}
+                  >
+                    {STORE_CURRENCIES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm text-[var(--onda-muted)]">
+                  Una onda cuesta ({storeCurrency || "COP"})
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2.5 text-sm text-[var(--onda-ink)]"
+                    value={formatMoneyInput(storeOndaValue)}
+                    onChange={(e) =>
+                      setStoreOndaValue(parseMoneyInput(e.target.value))
+                    }
+                    placeholder="Ej. 8.000"
+                  />
+                </label>
               </div>
-            )}
+              <GradientButton type="submit" disabled={savingStoreEconomics || !storeId}>
+                {OndaIcons.save}
+                {savingStoreEconomics ? "Guardando…" : "Guardar"}
+              </GradientButton>
+            </form>
           </div>
         )}
       </AppShell>

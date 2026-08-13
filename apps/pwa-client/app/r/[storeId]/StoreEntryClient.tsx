@@ -198,10 +198,10 @@ export default function StoreEntryPage() {
     setStep("home");
   }
 
-  const promotions = useMemo(
-    () => (store?.promotions || []).filter((p: any) => p.isActive),
-    [store],
-  );
+  const promotions = useMemo(() => {
+    if (pass?.promotions?.length) return pass.promotions;
+    return (store?.promotions || []).filter((p: any) => p.isActive);
+  }, [pass, store]);
   const milestoneStamps = useMemo(
     () => promotions.map((p: any) => p.pointsRequired as number),
     [promotions],
@@ -221,7 +221,7 @@ export default function StoreEntryPage() {
       }));
   }, [pass, promotions]);
 
-  const storeDesign = store?.passDesign;
+  const storeDesign = pass?.passDesign || pass?.cartilla?.passDesign || store?.passDesign;
   const storeName = store?.name || "tu visita";
   const walletLabel = "Agregar a billetera digital";
   const logoUrl = storeDesign?.logoUrl as string | undefined;
@@ -361,6 +361,20 @@ export default function StoreEntryPage() {
               walletBusy={busy}
               walletLabel={walletLabel}
             />
+            {pass?.cartilla?.endsAt ? (
+              <p className="mt-3 text-center text-sm text-[var(--onda-muted)]">
+                Tienes hasta el{" "}
+                {new Date(pass.cartilla.endsAt).toLocaleDateString("es-CO", {
+                  day: "numeric",
+                  month: "long",
+                })}{" "}
+                para acumular y redimir.
+              </p>
+            ) : pass?.cartilla?.isDefault ? (
+              <p className="mt-3 text-center text-sm text-[var(--onda-muted)]">
+                Cartilla vigente hasta nuevo aviso.
+              </p>
+            ) : null}
             {pass && promotionsWithStatus.length > 0 ? (
               <div className="mt-4 flex flex-col gap-3">
                 {promotionsWithStatus.map((p: any) => {

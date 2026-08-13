@@ -3,7 +3,8 @@ export type JobType =
   | 'brevo-email'
   | 'brevo-sms'
   | 'wallet-notify'
-  | 'wompi-renew';
+  | 'wompi-renew'
+  | 'cartilla-ending-sms';
 
 export type WhatsappJobPayload = {
   to: string;
@@ -35,12 +36,19 @@ export type WompiRenewJobPayload = {
   storeId: string;
 };
 
+export type CartillaEndingSmsPayload = {
+  cartillaId: string;
+  storeId: string;
+  endsAt: string;
+};
+
 export type JobPayloadMap = {
   'whatsapp-send': WhatsappJobPayload;
   'brevo-email': BrevoEmailJobPayload;
   'brevo-sms': BrevoSmsJobPayload;
   'wallet-notify': WalletNotifyJobPayload;
   'wompi-renew': WompiRenewJobPayload;
+  'cartilla-ending-sms': CartillaEndingSmsPayload;
 };
 
 export type JobsEnqueueOptions = {
