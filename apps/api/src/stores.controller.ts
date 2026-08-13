@@ -15,6 +15,8 @@ import { PrismaService } from './prisma.service';
 import { JobsService } from './jobs.service';
 import {
   generateReferralCode,
+  defaultSegmentFor,
+  isSegmentOfSubcategory,
   isSubcategoryOfCategory,
   normalizeStoreSlug,
 } from './store-taxonomy';
@@ -25,6 +27,7 @@ const storePublicSelect = {
   slug: true,
   category: true,
   subcategory: true,
+  segment: true,
   googlePlaceId: true,
   address: true,
   planType: true,
@@ -83,6 +86,7 @@ export class StoresController {
       ownerName: string;
       category: string;
       subcategory: string;
+      segment?: string;
       googlePlaceId?: string;
       address?: string;
       ownerEmail?: string;
@@ -104,7 +108,14 @@ export class StoresController {
     }
     if (!isSubcategoryOfCategory(body.category, body.subcategory)) {
       throw new BadRequestException(
-        'La subcategoría no corresponde al tipo de negocio'
+        'La categoría no corresponde al tipo de negocio'
+      );
+    }
+    const segment =
+      body.segment || defaultSegmentFor(body.subcategory) || undefined;
+    if (!segment || !isSegmentOfSubcategory(body.subcategory, segment)) {
+      throw new BadRequestException(
+        'La subcategoría no corresponde a la categoría del negocio'
       );
     }
 
@@ -159,6 +170,7 @@ export class StoresController {
           ownerName: body.ownerName.trim(),
           category: body.category as any,
           subcategory: body.subcategory as any,
+          segment: segment as any,
           googlePlaceId: body.googlePlaceId,
           address: body.address?.trim() || undefined,
           ownerEmail: body.ownerEmail?.trim() || undefined,

@@ -21,12 +21,14 @@ export enum TransactionType {
   REDEEM = 'REDEEM',
 }
 
+/** Tipo de negocio: comida, servicios u hospitalidad. */
 export enum StoreCategory {
   RESTAURANT = 'RESTAURANT',
   SERVICE = 'SERVICE',
   HOSPITALITY = 'HOSPITALITY',
 }
 
+/** Categoría dentro del tipo (belleza, café, hotel…). */
 export enum StoreSubcategory {
   CAFE = 'CAFE',
   RESTAURANT_FULL = 'RESTAURANT_FULL',
@@ -44,6 +46,61 @@ export enum StoreSubcategory {
   HOSTEL = 'HOSTEL',
   VACATION_RENTAL = 'VACATION_RENTAL',
   EVENT_VENUE = 'EVENT_VENUE',
+}
+
+/** Tercer nivel: subcategoría dentro de cada categoría. */
+export enum StoreSegment {
+  CAFE_COFFEE = 'CAFE_COFFEE',
+  CAFE_SPECIALTY = 'CAFE_SPECIALTY',
+  CAFE_ROASTERY = 'CAFE_ROASTERY',
+  REST_CASUAL = 'REST_CASUAL',
+  REST_FINE = 'REST_FINE',
+  REST_TRADITIONAL = 'REST_TRADITIONAL',
+  REST_SEAFOOD = 'REST_SEAFOOD',
+  BAR_PUB = 'BAR_PUB',
+  BAR_BREWERY = 'BAR_BREWERY',
+  BAR_COCKTAIL = 'BAR_COCKTAIL',
+  BAKERY_BREAD = 'BAKERY_BREAD',
+  BAKERY_PASTRY = 'BAKERY_PASTRY',
+  BAKERY_DESSERT = 'BAKERY_DESSERT',
+  FAST_BURGER = 'FAST_BURGER',
+  FAST_PIZZA = 'FAST_PIZZA',
+  FAST_CHICKEN = 'FAST_CHICKEN',
+  FAST_OTHER = 'FAST_OTHER',
+  TRUCK_FOOD = 'TRUCK_FOOD',
+  TRUCK_CART = 'TRUCK_CART',
+  RETAIL_FASHION = 'RETAIL_FASHION',
+  RETAIL_BOUTIQUE = 'RETAIL_BOUTIQUE',
+  RETAIL_MARKET = 'RETAIL_MARKET',
+  RETAIL_OTHER = 'RETAIL_OTHER',
+  BEAUTY_HAIR = 'BEAUTY_HAIR',
+  BEAUTY_BARBER = 'BEAUTY_BARBER',
+  BEAUTY_SALON = 'BEAUTY_SALON',
+  BEAUTY_SPA = 'BEAUTY_SPA',
+  BEAUTY_NAILS = 'BEAUTY_NAILS',
+  BEAUTY_BROWS = 'BEAUTY_BROWS',
+  HEALTH_CLINIC = 'HEALTH_CLINIC',
+  HEALTH_AESTHETIC = 'HEALTH_AESTHETIC',
+  HEALTH_PHARMA = 'HEALTH_PHARMA',
+  HEALTH_GYM = 'HEALTH_GYM',
+  HEALTH_DENTAL = 'HEALTH_DENTAL',
+  AUTO_SHOP = 'AUTO_SHOP',
+  AUTO_WASH = 'AUTO_WASH',
+  AUTO_TIRES = 'AUTO_TIRES',
+  EDU_ACADEMY = 'EDU_ACADEMY',
+  EDU_LANGUAGE = 'EDU_LANGUAGE',
+  EDU_TUTOR = 'EDU_TUTOR',
+  OTHER_PETS = 'OTHER_PETS',
+  OTHER_CLEANING = 'OTHER_CLEANING',
+  OTHER_GENERIC = 'OTHER_GENERIC',
+  HOTEL_STANDARD = 'HOTEL_STANDARD',
+  HOTEL_BOUTIQUE = 'HOTEL_BOUTIQUE',
+  HOSTEL_STANDARD = 'HOSTEL_STANDARD',
+  STAY_CABIN = 'STAY_CABIN',
+  STAY_GLAMPING = 'STAY_GLAMPING',
+  STAY_APARTMENT = 'STAY_APARTMENT',
+  VENUE_HALL = 'VENUE_HALL',
+  VENUE_TERRACE = 'VENUE_TERRACE',
 }
 
 export const STORE_SUBCATEGORIES_BY_CATEGORY: Record<
@@ -99,6 +156,153 @@ export const STORE_SUBCATEGORY_LABELS: Record<StoreSubcategory, string> = {
   [StoreSubcategory.EVENT_VENUE]: 'Venue de eventos',
 };
 
+export const STORE_SEGMENT_LABELS: Record<StoreSegment, string> = {
+  [StoreSegment.CAFE_COFFEE]: 'Cafetería',
+  [StoreSegment.CAFE_SPECIALTY]: 'Coffee shop',
+  [StoreSegment.CAFE_ROASTERY]: 'Tostaduría',
+  [StoreSegment.REST_CASUAL]: 'Casual',
+  [StoreSegment.REST_FINE]: 'Alta cocina',
+  [StoreSegment.REST_TRADITIONAL]: 'Comida típica',
+  [StoreSegment.REST_SEAFOOD]: 'Marisquería',
+  [StoreSegment.BAR_PUB]: 'Bar',
+  [StoreSegment.BAR_BREWERY]: 'Cervecería',
+  [StoreSegment.BAR_COCKTAIL]: 'Coctelería',
+  [StoreSegment.BAKERY_BREAD]: 'Panadería',
+  [StoreSegment.BAKERY_PASTRY]: 'Pastelería',
+  [StoreSegment.BAKERY_DESSERT]: 'Repostería',
+  [StoreSegment.FAST_BURGER]: 'Hamburguesas',
+  [StoreSegment.FAST_PIZZA]: 'Pizza',
+  [StoreSegment.FAST_CHICKEN]: 'Pollo',
+  [StoreSegment.FAST_OTHER]: 'Otra comida rápida',
+  [StoreSegment.TRUCK_FOOD]: 'Food truck',
+  [StoreSegment.TRUCK_CART]: 'Carrito',
+  [StoreSegment.RETAIL_FASHION]: 'Ropa',
+  [StoreSegment.RETAIL_BOUTIQUE]: 'Boutique',
+  [StoreSegment.RETAIL_MARKET]: 'Minimercado',
+  [StoreSegment.RETAIL_OTHER]: 'Otra tienda',
+  [StoreSegment.BEAUTY_HAIR]: 'Peluquería',
+  [StoreSegment.BEAUTY_BARBER]: 'Barbería',
+  [StoreSegment.BEAUTY_SALON]: 'Salón de belleza',
+  [StoreSegment.BEAUTY_SPA]: 'Spa',
+  [StoreSegment.BEAUTY_NAILS]: 'Uñas',
+  [StoreSegment.BEAUTY_BROWS]: 'Cejas y pestañas',
+  [StoreSegment.HEALTH_CLINIC]: 'Consultorio',
+  [StoreSegment.HEALTH_AESTHETIC]: 'Clínica estética',
+  [StoreSegment.HEALTH_PHARMA]: 'Farmacia',
+  [StoreSegment.HEALTH_GYM]: 'Gimnasio',
+  [StoreSegment.HEALTH_DENTAL]: 'Odontología',
+  [StoreSegment.AUTO_SHOP]: 'Taller',
+  [StoreSegment.AUTO_WASH]: 'Lavadero',
+  [StoreSegment.AUTO_TIRES]: 'Llantas',
+  [StoreSegment.EDU_ACADEMY]: 'Academia',
+  [StoreSegment.EDU_LANGUAGE]: 'Idiomas',
+  [StoreSegment.EDU_TUTOR]: 'Tutorías',
+  [StoreSegment.OTHER_PETS]: 'Mascotas',
+  [StoreSegment.OTHER_CLEANING]: 'Limpieza',
+  [StoreSegment.OTHER_GENERIC]: 'Otro',
+  [StoreSegment.HOTEL_STANDARD]: 'Hotel',
+  [StoreSegment.HOTEL_BOUTIQUE]: 'Hotel boutique',
+  [StoreSegment.HOSTEL_STANDARD]: 'Hostel',
+  [StoreSegment.STAY_CABIN]: 'Cabaña',
+  [StoreSegment.STAY_GLAMPING]: 'Glamping',
+  [StoreSegment.STAY_APARTMENT]: 'Apartamento',
+  [StoreSegment.VENUE_HALL]: 'Salón de eventos',
+  [StoreSegment.VENUE_TERRACE]: 'Terraza',
+};
+
+export const STORE_SEGMENTS_BY_SUBCATEGORY: Record<
+  StoreSubcategory,
+  StoreSegment[]
+> = {
+  [StoreSubcategory.CAFE]: [
+    StoreSegment.CAFE_COFFEE,
+    StoreSegment.CAFE_SPECIALTY,
+    StoreSegment.CAFE_ROASTERY,
+  ],
+  [StoreSubcategory.RESTAURANT_FULL]: [
+    StoreSegment.REST_CASUAL,
+    StoreSegment.REST_FINE,
+    StoreSegment.REST_TRADITIONAL,
+    StoreSegment.REST_SEAFOOD,
+  ],
+  [StoreSubcategory.BAR]: [
+    StoreSegment.BAR_PUB,
+    StoreSegment.BAR_BREWERY,
+    StoreSegment.BAR_COCKTAIL,
+  ],
+  [StoreSubcategory.BAKERY]: [
+    StoreSegment.BAKERY_BREAD,
+    StoreSegment.BAKERY_PASTRY,
+    StoreSegment.BAKERY_DESSERT,
+  ],
+  [StoreSubcategory.FAST_FOOD]: [
+    StoreSegment.FAST_BURGER,
+    StoreSegment.FAST_PIZZA,
+    StoreSegment.FAST_CHICKEN,
+    StoreSegment.FAST_OTHER,
+  ],
+  [StoreSubcategory.FOOD_TRUCK]: [
+    StoreSegment.TRUCK_FOOD,
+    StoreSegment.TRUCK_CART,
+  ],
+  [StoreSubcategory.RETAIL]: [
+    StoreSegment.RETAIL_FASHION,
+    StoreSegment.RETAIL_BOUTIQUE,
+    StoreSegment.RETAIL_MARKET,
+    StoreSegment.RETAIL_OTHER,
+  ],
+  [StoreSubcategory.BEAUTY]: [
+    StoreSegment.BEAUTY_HAIR,
+    StoreSegment.BEAUTY_BARBER,
+    StoreSegment.BEAUTY_SALON,
+    StoreSegment.BEAUTY_SPA,
+    StoreSegment.BEAUTY_NAILS,
+    StoreSegment.BEAUTY_BROWS,
+  ],
+  [StoreSubcategory.HEALTH]: [
+    StoreSegment.HEALTH_CLINIC,
+    StoreSegment.HEALTH_AESTHETIC,
+    StoreSegment.HEALTH_PHARMA,
+    StoreSegment.HEALTH_GYM,
+    StoreSegment.HEALTH_DENTAL,
+  ],
+  [StoreSubcategory.AUTO]: [
+    StoreSegment.AUTO_SHOP,
+    StoreSegment.AUTO_WASH,
+    StoreSegment.AUTO_TIRES,
+  ],
+  [StoreSubcategory.EDUCATION]: [
+    StoreSegment.EDU_ACADEMY,
+    StoreSegment.EDU_LANGUAGE,
+    StoreSegment.EDU_TUTOR,
+  ],
+  [StoreSubcategory.OTHER_SERVICE]: [
+    StoreSegment.OTHER_PETS,
+    StoreSegment.OTHER_CLEANING,
+    StoreSegment.OTHER_GENERIC,
+  ],
+  [StoreSubcategory.HOTEL]: [
+    StoreSegment.HOTEL_STANDARD,
+    StoreSegment.HOTEL_BOUTIQUE,
+  ],
+  [StoreSubcategory.HOSTEL]: [StoreSegment.HOSTEL_STANDARD],
+  [StoreSubcategory.VACATION_RENTAL]: [
+    StoreSegment.STAY_CABIN,
+    StoreSegment.STAY_GLAMPING,
+    StoreSegment.STAY_APARTMENT,
+  ],
+  [StoreSubcategory.EVENT_VENUE]: [
+    StoreSegment.VENUE_HALL,
+    StoreSegment.VENUE_TERRACE,
+  ],
+};
+
+export function defaultSegmentFor(
+  subcategory: StoreSubcategory
+): StoreSegment {
+  return STORE_SEGMENTS_BY_SUBCATEGORY[subcategory][0];
+}
+
 export enum BillingStatus {
   ACTIVE = 'ACTIVE',
   PAST_DUE = 'PAST_DUE',
@@ -125,6 +329,7 @@ export interface StoreDto {
   slug: string;
   category: StoreCategory | string;
   subcategory: StoreSubcategory | string;
+  segment?: StoreSegment | string | null;
   googlePlaceId?: string | null;
   address?: string | null;
   planType: PlanType | string;

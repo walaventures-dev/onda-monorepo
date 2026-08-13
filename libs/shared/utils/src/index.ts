@@ -1,7 +1,9 @@
 import {
   StoreCategory,
   StoreSubcategory,
+  StoreSegment,
   STORE_SUBCATEGORIES_BY_CATEGORY,
+  STORE_SEGMENTS_BY_SUBCATEGORY,
 } from '@onda/shared-types';
 
 /** E.164 phone validation and helpers */
@@ -25,6 +27,15 @@ export function isSubcategoryOfCategory(
   const list =
     STORE_SUBCATEGORIES_BY_CATEGORY[category as StoreCategory] || [];
   return list.includes(subcategory as StoreSubcategory);
+}
+
+export function isSegmentOfSubcategory(
+  subcategory: StoreSubcategory | string,
+  segment: StoreSegment | string
+): boolean {
+  const list =
+    STORE_SEGMENTS_BY_SUBCATEGORY[subcategory as StoreSubcategory] || [];
+  return list.includes(segment as StoreSegment);
 }
 
 export function generateReferralCode(length = 8): string {

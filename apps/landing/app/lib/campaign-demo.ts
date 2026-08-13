@@ -1,17 +1,30 @@
 import {
   StoreCategory,
   StoreSubcategory,
+  StoreSegment,
   STORE_CATEGORY_LABELS,
   STORE_SUBCATEGORIES_BY_CATEGORY,
   STORE_SUBCATEGORY_LABELS,
+  STORE_SEGMENT_LABELS,
+  STORE_SEGMENTS_BY_SUBCATEGORY,
+  defaultSegmentFor,
 } from '@onda/shared-types';
 
-export { StoreCategory, StoreSubcategory, STORE_CATEGORY_LABELS, STORE_SUBCATEGORY_LABELS };
+export {
+  StoreCategory,
+  StoreSubcategory,
+  StoreSegment,
+  STORE_CATEGORY_LABELS,
+  STORE_SUBCATEGORY_LABELS,
+  STORE_SEGMENT_LABELS,
+  defaultSegmentFor,
+};
 
 export const DEMO_STORE = {
   name: 'Onda Spa',
   category: StoreCategory.SERVICE,
   subcategory: StoreSubcategory.BEAUTY,
+  segment: StoreSegment.BEAUTY_SPA,
 } as const;
 
 export type ObjectiveKind =
@@ -192,6 +205,13 @@ export function subcategoryOptions(category: StoreCategory) {
   return STORE_SUBCATEGORIES_BY_CATEGORY[category].map((id) => ({
     id,
     label: STORE_SUBCATEGORY_LABELS[id],
+  }));
+}
+
+export function segmentOptions(subcategory: StoreSubcategory) {
+  return STORE_SEGMENTS_BY_SUBCATEGORY[subcategory].map((id) => ({
+    id,
+    label: STORE_SEGMENT_LABELS[id],
   }));
 }
 

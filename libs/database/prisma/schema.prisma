@@ -83,12 +83,67 @@ enum StoreSubcategory {
   EVENT_VENUE
 }
 
+enum StoreSegment {
+  CAFE_COFFEE
+  CAFE_SPECIALTY
+  CAFE_ROASTERY
+  REST_CASUAL
+  REST_FINE
+  REST_TRADITIONAL
+  REST_SEAFOOD
+  BAR_PUB
+  BAR_BREWERY
+  BAR_COCKTAIL
+  BAKERY_BREAD
+  BAKERY_PASTRY
+  BAKERY_DESSERT
+  FAST_BURGER
+  FAST_PIZZA
+  FAST_CHICKEN
+  FAST_OTHER
+  TRUCK_FOOD
+  TRUCK_CART
+  RETAIL_FASHION
+  RETAIL_BOUTIQUE
+  RETAIL_MARKET
+  RETAIL_OTHER
+  BEAUTY_HAIR
+  BEAUTY_BARBER
+  BEAUTY_SALON
+  BEAUTY_SPA
+  BEAUTY_NAILS
+  BEAUTY_BROWS
+  HEALTH_CLINIC
+  HEALTH_AESTHETIC
+  HEALTH_PHARMA
+  HEALTH_GYM
+  HEALTH_DENTAL
+  AUTO_SHOP
+  AUTO_WASH
+  AUTO_TIRES
+  EDU_ACADEMY
+  EDU_LANGUAGE
+  EDU_TUTOR
+  OTHER_PETS
+  OTHER_CLEANING
+  OTHER_GENERIC
+  HOTEL_STANDARD
+  HOTEL_BOUTIQUE
+  HOSTEL_STANDARD
+  STAY_CABIN
+  STAY_GLAMPING
+  STAY_APARTMENT
+  VENUE_HALL
+  VENUE_TERRACE
+}
+
 model Store {
   id                String                 @id @default(uuid())
   name              String
   slug              String                 @unique
   category          StoreCategory          @default(RESTAURANT)
   subcategory       StoreSubcategory
+  segment           StoreSegment?
   googlePlaceId     String?
   address           String?
   planType          PlanType               @default(BASIC)

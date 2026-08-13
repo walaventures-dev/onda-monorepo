@@ -23,6 +23,7 @@ import {
   STORE_CATEGORY_LABELS,
   StoreCategory,
   StoreSubcategory,
+  StoreSegment,
   buildCampaignMessages,
   defaultPromo,
   demoStoreName,
@@ -30,6 +31,8 @@ import {
   promoForType,
   promoHeadline,
   subcategoryOptions,
+  segmentOptions,
+  defaultSegmentFor,
   voiceFor,
   type CampaignMessage,
   type DemoPromo,
@@ -63,6 +66,7 @@ export function CampaignSection() {
   const [subcategory, setSubcategory] = useState<StoreSubcategory>(
     DEMO_STORE.subcategory
   );
+  const [segment, setSegment] = useState<StoreSegment>(DEMO_STORE.segment);
   const [objectiveKind, setObjectiveKind] = useState<ObjectiveKind>('reactivate');
   const [promo, setPromo] = useState<DemoPromo>(() =>
     defaultPromo('reactivate', voiceFor(DEMO_STORE.subcategory))
@@ -106,9 +110,14 @@ export function CampaignSection() {
 
   useEffect(() => () => clearLaunchTimers(), []);
 
-  const applyVertical = (nextCategory: StoreCategory, nextSub: StoreSubcategory) => {
+  const applyVertical = (
+    nextCategory: StoreCategory,
+    nextSub: StoreSubcategory,
+    nextSegment?: StoreSegment
+  ) => {
     setCategory(nextCategory);
     setSubcategory(nextSub);
+    setSegment(nextSegment ?? defaultSegmentFor(nextSub));
     setObjectiveKind('reactivate');
     setPromo(defaultPromo('reactivate', voiceFor(nextSub)));
     resetLaunch();
@@ -196,12 +205,17 @@ export function CampaignSection() {
                   <ObjectiveStep
                     category={category}
                     subcategory={subcategory}
+                    segment={segment}
                     objectiveKind={objectiveKind}
                     onCategoryChange={(next) => {
                       const subs = subcategoryOptions(next);
                       applyVertical(next, subs[0]?.id ?? StoreSubcategory.BEAUTY);
                     }}
                     onSubcategoryChange={(next) => applyVertical(category, next)}
+                    onSegmentChange={(next) => {
+                      setSegment(next);
+                      resetLaunch();
+                    }}
                     onObjectiveChange={(kind) => {
                       setObjectiveKind(kind);
                       setPromo(defaultPromo(kind, voice));
@@ -278,16 +292,20 @@ export function CampaignSection() {
 function ObjectiveStep({
   category,
   subcategory,
+  segment,
   objectiveKind,
   onCategoryChange,
   onSubcategoryChange,
+  onSegmentChange,
   onObjectiveChange,
 }: {
   category: StoreCategory;
   subcategory: StoreSubcategory;
+  segment: StoreSegment;
   objectiveKind: ObjectiveKind;
   onCategoryChange: (category: StoreCategory) => void;
   onSubcategoryChange: (subcategory: StoreSubcategory) => void;
+  onSegmentChange: (segment: StoreSegment) => void;
   onObjectiveChange: (kind: ObjectiveKind) => void;
 }) {
   const voice = voiceFor(subcategory);
@@ -296,19 +314,31 @@ function ObjectiveStep({
     <div>
       <h3 className="font-display text-xl font-semibold">¿Qué quieres lograr?</h3>
       <p className="mt-1 text-sm text-[var(--onda-muted)]">
-        El objetivo se ajusta al tipo de negocio — categoría y subcategoría.
+        El objetivo se ajusta al tipo de negocio, categoría y subcategoría.
       </p>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <label className="block text-xs font-medium text-[var(--onda-muted)]">
+          Tipo de negocio
+          <div className="mt-1.5">
+            <OndaSelect
+              compact
+              aria-label="Tipo de negocio"
+              value={category}
+              options={CATEGORY_OPTIONS}
+              onChange={(id) => onCategoryChange(id as StoreCategory)}
+            />
+          </div>
+        </label>
         <label className="block text-xs font-medium text-[var(--onda-muted)]">
           Categoría
           <div className="mt-1.5">
             <OndaSelect
               compact
               aria-label="Categoría del negocio"
-              value={category}
-              options={CATEGORY_OPTIONS}
-              onChange={(id) => onCategoryChange(id as StoreCategory)}
+              value={subcategory}
+              options={subcategoryOptions(category)}
+              onChange={(id) => onSubcategoryChange(id as StoreSubcategory)}
             />
           </div>
         </label>
@@ -318,9 +348,9 @@ function ObjectiveStep({
             <OndaSelect
               compact
               aria-label="Subcategoría del negocio"
-              value={subcategory}
-              options={subcategoryOptions(category)}
-              onChange={(id) => onSubcategoryChange(id as StoreSubcategory)}
+              value={segment}
+              options={segmentOptions(subcategory)}
+              onChange={(id) => onSegmentChange(id as StoreSegment)}
             />
           </div>
         </label>

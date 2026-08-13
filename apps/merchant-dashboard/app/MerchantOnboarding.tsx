@@ -15,9 +15,13 @@ import {
 import {
   StoreCategory,
   StoreSubcategory,
+  StoreSegment,
   STORE_CATEGORY_LABELS,
   STORE_SUBCATEGORY_LABELS,
   STORE_SUBCATEGORIES_BY_CATEGORY,
+  STORE_SEGMENT_LABELS,
+  STORE_SEGMENTS_BY_SUBCATEGORY,
+  defaultSegmentFor,
 } from '@onda/shared-types';
 import {
   normalizeStoreSlug,
@@ -40,7 +44,7 @@ import {
   readStoredOwnerName,
 } from './onboardingQuery';
 
-type SetupStep = 'plan' | 'local' | 'link';
+type SetupStep = 'local' | 'link' | 'plan';
 
 const CATEGORY_OPTIONS = (
   Object.keys(STORE_CATEGORY_LABELS) as StoreCategory[]
@@ -52,9 +56,9 @@ const STEPS: Array<{
   hint: string;
   icon: ReactNode;
 }> = [
-  { id: 'plan', label: 'Plan', hint: 'Suscripción', icon: OndaIcons.crown },
   { id: 'local', label: 'Local', hint: 'Nombre y ubicación', icon: OndaIcons.near },
   { id: 'link', label: 'Enlace', hint: 'Slug y referido', icon: OndaIcons.globe },
+  { id: 'plan', label: 'Plan', hint: 'Suscripción', icon: OndaIcons.crown },
 ];
 
 function Field({
@@ -112,7 +116,7 @@ function MerchantBusinessSetup() {
   const searchParams = useSearchParams();
   const { email: sessionEmail, user, logout } = useMerchantAuth();
 
-  const [step, setStep] = useState<SetupStep>('plan');
+  const [step, setStep] = useState<SetupStep>('local');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [referrerName, setReferrerName] = useState<string | null>(null);
@@ -137,6 +141,9 @@ function MerchantBusinessSetup() {
   const [subcategory, setSubcategory] = useState<StoreSubcategory>(
     StoreSubcategory.CAFE
   );
+  const [segment, setSegment] = useState<StoreSegment>(
+    StoreSegment.CAFE_COFFEE
+  );
   const [ownerName, setOwnerName] = useState(user?.displayName?.trim() || '');
   const [ownerEmail, setOwnerEmail] = useState(
     sessionEmail || user?.email || ''
@@ -155,6 +162,15 @@ function MerchantBusinessSetup() {
         label: STORE_SUBCATEGORY_LABELS[id],
       })),
     [category]
+  );
+
+  const segmentOptions = useMemo(
+    () =>
+      STORE_SEGMENTS_BY_SUBCATEGORY[subcategory].map((id) => ({
+        id,
+        label: STORE_SEGMENT_LABELS[id],
+      })),
+    [subcategory]
   );
 
   useEffect(() => {
@@ -207,6 +223,13 @@ function MerchantBusinessSetup() {
   }, [category, subcategory]);
 
   useEffect(() => {
+    const allowed = STORE_SEGMENTS_BY_SUBCATEGORY[subcategory];
+    if (!allowed.includes(segment)) {
+      setSegment(allowed[0] ?? defaultSegmentFor(subcategory));
+    }
+  }, [subcategory, segment]);
+
+  useEffect(() => {
     if (!slugTouched) {
       setSlug(normalizeStoreSlug(name));
     }
@@ -241,10 +264,15 @@ function MerchantBusinessSetup() {
     router.push('/resumen');
   }
 
-  function goNextFromPlan() {
+  function goNextFromLink(e: FormEvent) {
+    e.preventDefault();
     setError('');
-    rememberPlanChoice(planType, billingPeriod);
-    setStep('local');
+    const slugValue = normalizeStoreSlug(slug);
+    if (!slugValue) {
+      setError('El slug es inválido');
+      return;
+    }
+    setStep('plan');
   }
 
   function goNextFromLocal(e: FormEvent) {
@@ -274,6 +302,7 @@ function MerchantBusinessSetup() {
       return;
     }
     setBusy(true);
+    rememberPlanChoice(planType, billingPeriod);
     try {
       const created = await api<{ id: string }>('/stores', {
         method: 'POST',
@@ -283,6 +312,7 @@ function MerchantBusinessSetup() {
           ownerName: ownerName.trim() || user?.displayName?.trim() || 'Encargado',
           category,
           subcategory,
+          segment,
           ownerEmail: ownerEmail.trim() || sessionEmail || undefined,
           address: address.trim() || undefined,
           googlePlaceId,
@@ -307,19 +337,19 @@ function MerchantBusinessSetup() {
 
   const stepIndex = STEPS.findIndex((s) => s.id === step);
   const header =
-    step === 'plan'
+    step === 'local'
       ? {
-          title: 'Elige tu plan',
-          sub: 'Ya estás dentro. Escoge cómo quieres pagar — el primer mes es gratis.',
+          title: 'Tu negocio',
+          sub: 'Ya estás dentro. Datos del local; el pase y las recompensas los configuras después en el panel.',
         }
-      : step === 'local'
+      : step === 'link'
         ? {
-            title: 'Tu negocio',
-            sub: 'Datos del local. El pase y las recompensas los configuras después en el panel.',
-          }
-        : {
             title: 'Tu enlace público',
             sub: 'Así te encuentran en Onda. El código de referido es opcional.',
+          }
+        : {
+            title: 'Elige tu plan',
+            sub: 'Último paso. El primer mes es gratis y no necesitas tarjeta.',
           };
 
   return (
@@ -349,8 +379,8 @@ function MerchantBusinessSetup() {
             </p>
             <p className="mt-4 max-w-sm text-[var(--onda-muted)]">
               Ya tienes cuenta
-              {user?.displayName ? ` · ${user.displayName}` : ''}. Elige plan y
-              registra el local para entrar al panel.
+              {user?.displayName ? ` · ${user.displayName}` : ''}. Completa el
+              local y elige plan para entrar al panel.
             </p>
 
             <div className="mt-8 inline-flex items-center gap-2 rounded-full bg-[var(--onda-violet-soft)] px-4 py-2 text-sm font-medium text-[var(--onda-violet)]">
@@ -469,36 +499,6 @@ function MerchantBusinessSetup() {
               key={step}
               className="min-h-0 flex-1 duration-300 ease-out animate-[fadeIn_0.28s_ease-out]"
             >
-              {step === 'plan' ? (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    goNextFromPlan();
-                  }}
-                  className="flex h-full min-h-0 flex-col"
-                >
-                  <FormShell
-                    footer={
-                      <div className="flex flex-wrap items-center gap-3">
-                        <GradientButton type="submit" className="min-w-[10rem]">
-                          Continuar con {PLAN_META[planType].shortName}
-                        </GradientButton>
-                        <p className="text-xs text-[var(--onda-muted)]">
-                          Sin tarjeta. El cobro empieza después del mes gratis.
-                        </p>
-                      </div>
-                    }
-                  >
-                    <PlanPicker
-                      plan={planType}
-                      billing={billingPeriod}
-                      onPlan={setPlanType}
-                      onBilling={setBillingPeriod}
-                    />
-                  </FormShell>
-                </form>
-              ) : null}
-
               {step === 'local' ? (
                 <form
                   onSubmit={goNextFromLocal}
@@ -510,13 +510,6 @@ function MerchantBusinessSetup() {
                         <GradientButton type="submit" className="min-w-[10rem]">
                           Continuar
                         </GradientButton>
-                        <button
-                          type="button"
-                          className="rounded-full px-4 py-2.5 text-sm font-medium text-[var(--onda-muted)] transition hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
-                          onClick={() => setStep('plan')}
-                        >
-                          Volver
-                        </button>
                       </div>
                     }
                   >
@@ -539,7 +532,7 @@ function MerchantBusinessSetup() {
                           setLng(next.lng);
                         }}
                       />
-                      <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid gap-4 sm:grid-cols-3">
                         <Field label="Tipo de negocio">
                           <OndaSelect
                             aria-label="Tipo de negocio"
@@ -548,14 +541,22 @@ function MerchantBusinessSetup() {
                             options={CATEGORY_OPTIONS}
                           />
                         </Field>
-                        <Field label="Subcategoría">
+                        <Field label="Categoría">
                           <OndaSelect
-                            aria-label="Subcategoría"
+                            aria-label="Categoría"
                             value={subcategory}
                             onChange={(v) =>
                               setSubcategory(v as StoreSubcategory)
                             }
                             options={subcategoryOptions}
+                          />
+                        </Field>
+                        <Field label="Subcategoría">
+                          <OndaSelect
+                            aria-label="Subcategoría"
+                            value={segment}
+                            onChange={(v) => setSegment(v as StoreSegment)}
+                            options={segmentOptions}
                           />
                         </Field>
                       </div>
@@ -592,23 +593,18 @@ function MerchantBusinessSetup() {
 
               {step === 'link' ? (
                 <form
-                  onSubmit={submitBusiness}
+                  onSubmit={goNextFromLink}
                   className="flex h-full min-h-0 flex-col"
                 >
                   <FormShell
                     footer={
                       <div className="flex flex-wrap items-center gap-3">
-                        <GradientButton
-                          type="submit"
-                          disabled={busy}
-                          className="min-w-[10rem]"
-                        >
-                          {busy ? 'Creando…' : 'Crear negocio y entrar'}
+                        <GradientButton type="submit" className="min-w-[10rem]">
+                          Continuar
                         </GradientButton>
                         <button
                           type="button"
                           className="rounded-full px-4 py-2.5 text-sm font-medium text-[var(--onda-muted)] transition hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
-                          disabled={busy}
                           onClick={() => setStep('local')}
                         >
                           Volver
@@ -661,6 +657,49 @@ function MerchantBusinessSetup() {
                         <p className="text-sm text-[var(--onda-danger)]">{error}</p>
                       ) : null}
                     </div>
+                  </FormShell>
+                </form>
+              ) : null}
+
+              {step === 'plan' ? (
+                <form
+                  onSubmit={submitBusiness}
+                  className="flex h-full min-h-0 flex-col"
+                >
+                  <FormShell
+                    footer={
+                      <div className="flex flex-wrap items-center gap-3">
+                        <GradientButton
+                          type="submit"
+                          disabled={busy}
+                          className="min-w-[10rem]"
+                        >
+                          {busy
+                            ? 'Creando…'
+                            : `Activar ${PLAN_META[planType].shortName}`}
+                        </GradientButton>
+                        <button
+                          type="button"
+                          className="rounded-full px-4 py-2.5 text-sm font-medium text-[var(--onda-muted)] transition hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
+                          disabled={busy}
+                          onClick={() => setStep('link')}
+                        >
+                          Volver
+                        </button>
+                      </div>
+                    }
+                  >
+                    <PlanPicker
+                      plan={planType}
+                      billing={billingPeriod}
+                      onPlan={setPlanType}
+                      onBilling={setBillingPeriod}
+                    />
+                    {error ? (
+                      <p className="mt-4 text-sm text-[var(--onda-danger)]">
+                        {error}
+                      </p>
+                    ) : null}
                   </FormShell>
                 </form>
               ) : null}
