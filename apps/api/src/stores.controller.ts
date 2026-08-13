@@ -5,6 +5,7 @@ import {
   ConflictException,
   Controller,
   Get,
+  Logger,
   NotFoundException,
   Param,
   Patch,
@@ -49,6 +50,8 @@ const storePublicSelect = {
 
 @Controller('stores')
 export class StoresController {
+  private readonly logger = new Logger(StoresController.name);
+
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(JobsService) private jobs: JobsService
@@ -206,13 +209,21 @@ export class StoresController {
     });
 
     if (store.ownerEmail) {
-      await this.jobs.enqueue('brevo-email', {
-        to: store.ownerEmail,
-        toName: store.ownerName,
-        subject: `Tu negocio ${store.name} ya está en Onda`,
-        html: `<p>Hola ${store.ownerName},</p><p>Tu sede <strong>${store.name}</strong> quedó creada.</p>`,
-        text: `Hola ${store.ownerName}, tu sede ${store.name} quedó creada.`,
-      });
+      try {
+        await this.jobs.enqueue('brevo-email', {
+          to: store.ownerEmail,
+          toName: store.ownerName,
+          subject: `Tu negocio ${store.name} ya está en Onda`,
+          html: `<p>Hola ${store.ownerName},</p><p>Tu sede <strong>${store.name}</strong> quedó creada.</p>`,
+          text: `Hola ${store.ownerName}, tu sede ${store.name} quedó creada.`,
+        });
+      } catch (e) {
+        this.logger.warn(
+          `No se pudo encolar el email de bienvenida: ${
+            e instanceof Error ? e.message : e
+          }`
+        );
+      }
     }
 
     return store;

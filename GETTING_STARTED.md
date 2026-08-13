@@ -102,6 +102,9 @@ pnpm db:push
 
 # Datos demo
 pnpm db:seed
+
+# Visor para ver y editar tablas (http://localhost:5555)
+pnpm db:studio
 ```
 
 Alternativa con migraciones (cuando quieras versionar cambios de schema):

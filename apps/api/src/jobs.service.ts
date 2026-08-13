@@ -41,7 +41,9 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   get usesCloudTasks(): boolean {
-    return Boolean(process.env.GCP_PROJECT && process.env.CLOUD_TASKS_QUEUE);
+    return Boolean(
+      process.env.GCP_PROJECT?.trim() && process.env.CLOUD_TASKS_QUEUE?.trim()
+    );
   }
 
   async onModuleInit() {
@@ -82,8 +84,16 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     opts?: JobsEnqueueOptions
   ) {
     if (this.usesCloudTasks) {
-      await this.enqueueCloudTask(type, payload, opts);
-      return { queued: true as const, via: 'cloud-tasks' as const };
+      try {
+        await this.enqueueCloudTask(type, payload, opts);
+        return { queued: true as const, via: 'cloud-tasks' as const };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.warn(`Cloud Tasks falló (${type}): ${msg}`);
+        if (opts?.delayMs) {
+          return { queued: false as const, via: 'inline' as const };
+        }
+      }
     }
     if (this.queue) {
       await this.queue.add(type, payload, {

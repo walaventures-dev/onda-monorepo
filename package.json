@@ -13,6 +13,7 @@
     "db:migrate": "prisma migrate dev --schema=libs/database/prisma/schema.prisma",
     "db:push": "prisma db push --schema=libs/database/prisma/schema.prisma",
     "db:seed": "tsx libs/database/prisma/seed.ts",
+    "db:studio": "prisma studio --schema=libs/database/prisma/schema.prisma",
     "docker:up": "docker compose up -d"
   },
   "private": true,
