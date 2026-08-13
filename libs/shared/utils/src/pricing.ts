@@ -1,0 +1,175 @@
+import {
+  PLAN_ONDA_MONTHLY_LIMIT,
+  PLAN_SMS_CAMPAIGNS_MONTHLY,
+} from '@onda/shared-types';
+
+export type PlanId = 'BASIC' | 'PRO';
+export type BillingPeriod = 'monthly' | '6' | '12';
+
+export const PLAN_MONTHLY: Record<PlanId, number> = {
+  BASIC: 49_900,
+  PRO: 69_900,
+};
+
+/** Precio / mes efectivo según la propuesta de marketing. */
+export const PLAN_EFFECTIVE: Record<PlanId, Record<BillingPeriod, number>> = {
+  BASIC: {
+    monthly: 49_900,
+    '6': 43_900,
+    '12': 41_400,
+  },
+  PRO: {
+    monthly: 69_900,
+    '6': 61_500,
+    '12': 59_900,
+  },
+};
+
+export const BILLING_MONTHS: Record<BillingPeriod, number> = {
+  monthly: 1,
+  '6': 6,
+  '12': 12,
+};
+
+export const PLAN_META: Record<
+  PlanId,
+  { name: string; shortName: string; features: string[] }
+> = {
+  BASIC: {
+    name: 'Onda',
+    shortName: 'Onda',
+    features: [
+      'Tarjeta en Apple y Google Wallet',
+      `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
+      `${PLAN_SMS_CAMPAIGNS_MONTHLY} campañas SMS gratis al mes`,
+      'Recompensas que tú defines',
+      'Tu propia base de clientes',
+      'Avisos push desde el Wallet',
+    ],
+  },
+  PRO: {
+    name: 'Onda Pro',
+    shortName: 'Onda Pro',
+    features: [
+      'Todo lo de Onda',
+      `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
+      `${PLAN_SMS_CAMPAIGNS_MONTHLY} campañas SMS gratis al mes`,
+      'Campañas para llenar el local',
+      'Pide reseñas en Google al canjear',
+      'Aviso cuando el cliente está cerca',
+      'Analítica para ver qué sí funciona',
+    ],
+  },
+};
+
+export function formatCop(amount: number) {
+  return `$${Math.round(amount).toLocaleString('es-CO')}`;
+}
+
+export function parsePlanId(raw: string | null | undefined): PlanId | null {
+  const v = (raw || '').trim().toUpperCase();
+  return v === 'PRO' || v === 'BASIC' ? v : null;
+}
+
+export function parseBillingPeriod(
+  raw: string | null | undefined
+): BillingPeriod | null {
+  const v = (raw || '').trim();
+  return v === 'monthly' || v === '6' || v === '12' ? v : null;
+}
+
+export function quotePlan(plan: PlanId, billing: BillingPeriod) {
+  const monthlyList = PLAN_MONTHLY[plan];
+  const paidMonths = BILLING_MONTHS[billing];
+  const monthlyEffective = PLAN_EFFECTIVE[plan][billing];
+  const total = monthlyEffective * paidMonths;
+  const fullTotal = monthlyList * paidMonths;
+  const discountSavings = fullTotal - total;
+  /** Primer mes gratis en todos; en 6/12 es adicional al descuento del prepago. */
+  const freeMonths = 1;
+  const serviceMonths =
+    billing === 'monthly' ? freeMonths : paidMonths + freeMonths;
+  const freeMonthValue = monthlyList * freeMonths;
+  const savings = discountSavings + (billing === 'monthly' ? 0 : freeMonthValue);
+  const includesKit = billing !== 'monthly';
+  /** Ningún plan pide tarjeta para iniciar. */
+  const noCardRequired = true;
+  const discount = discountSavings > 0 ? discountSavings / fullTotal : 0;
+
+  return {
+    monthlyList,
+    monthlyEffective,
+    paidMonths,
+    /** @deprecated use paidMonths */
+    months: paidMonths,
+    serviceMonths,
+    freeMonths,
+    total,
+    discountSavings,
+    freeMonthValue,
+    savings,
+    discount,
+    includesKit,
+    noCardRequired,
+    periodLabel:
+      billing === 'monthly'
+        ? 'mensual'
+        : billing === '6'
+          ? 'semestral'
+          : 'anual',
+  };
+}
+
+export type TimelineMonthKind = 'free' | 'paid' | 'renewal';
+
+export type SubscriptionMonth = {
+  key: string;
+  label: string;
+  year: number;
+  kind: TimelineMonthKind;
+};
+
+function addCalendarMonths(from: Date, n: number): Date {
+  return new Date(from.getFullYear(), from.getMonth() + n, from.getDate());
+}
+
+export function formatChargeDate(date: Date) {
+  return date.toLocaleDateString('es-CO', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+/** Meses visibles: gratis + cubiertos + el mes en que vuelve a pagar. */
+export function subscriptionCalendar(
+  billing: BillingPeriod,
+  from = new Date()
+): SubscriptionMonth[] {
+  const { freeMonths, serviceMonths } = quotePlan('BASIC', billing);
+  const total = serviceMonths + 1;
+  const months: SubscriptionMonth[] = [];
+  for (let i = 0; i < total; i++) {
+    const d = new Date(from.getFullYear(), from.getMonth() + i, 1);
+    const kind: TimelineMonthKind =
+      i < freeMonths ? 'free' : i < serviceMonths ? 'paid' : 'renewal';
+    months.push({
+      key: `${d.getFullYear()}-${d.getMonth()}`,
+      label: d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', ''),
+      year: d.getFullYear(),
+      kind,
+    });
+  }
+  return months;
+}
+
+export function subscriptionChargeDates(
+  billing: BillingPeriod,
+  from = new Date()
+) {
+  const { serviceMonths } = quotePlan('BASIC', billing);
+  return {
+    firstCharge: addCalendarMonths(from, 1),
+    nextCharge: addCalendarMonths(from, serviceMonths),
+  };
+}

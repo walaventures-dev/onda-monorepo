@@ -251,7 +251,7 @@ export function PricingSection() {
               </ul>
 
               <a
-                href={onboardingUrl(id)}
+                href={onboardingUrl(id, billing)}
                 className={`mt-8 flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition active:scale-[0.98] ${
                   popular
                     ? 'bg-[var(--onda-primary-500)] text-white shadow-[0_10px_24px_rgba(5,45,222,0.28)] hover:bg-[var(--onda-primary-600)]'

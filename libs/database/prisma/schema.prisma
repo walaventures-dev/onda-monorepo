@@ -93,6 +93,7 @@ model Store {
   address           String?
   planType          PlanType               @default(BASIC)
   billingStatus     String                 @default("ACTIVE")
+  billingPeriod     String                 @default("monthly")
   whatsappUsed      Int                    @default(0)
   maxStamps         Int                    @default(12)
   lat               Float?

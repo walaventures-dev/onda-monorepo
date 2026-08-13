@@ -29,6 +29,7 @@ const storePublicSelect = {
   address: true,
   planType: true,
   billingStatus: true,
+  billingPeriod: true,
   whatsappUsed: true,
   maxStamps: true,
   lat: true,
@@ -89,6 +90,7 @@ export class StoresController {
       lng?: number;
       referralCode?: string;
       planType?: 'BASIC' | 'PRO';
+      billingPeriod?: 'monthly' | '6' | '12';
     }
   ) {
     if (!body.name?.trim()) {
@@ -133,6 +135,12 @@ export class StoresController {
       body.planType === 'PRO' || body.planType === 'BASIC'
         ? body.planType
         : 'BASIC';
+    const billingPeriod =
+      body.billingPeriod === '6' ||
+      body.billingPeriod === '12' ||
+      body.billingPeriod === 'monthly'
+        ? body.billingPeriod
+        : 'monthly';
 
     let referralCode = generateReferralCode();
     for (let i = 0; i < 5; i++) {
@@ -158,6 +166,7 @@ export class StoresController {
           lng: body.lng,
           referralCode,
           planType,
+          billingPeriod,
           freeMonthsBalance: 1,
           referredByStoreId,
           passDesign: {

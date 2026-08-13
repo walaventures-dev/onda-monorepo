@@ -15,6 +15,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
+  updateProfile,
   type User,
 } from 'firebase/auth';
 import { setApiAuthTokenGetter } from '@onda/shared-ui';
@@ -26,7 +27,7 @@ type MerchantAuthValue = {
   user: User | null;
   email: string | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, name?: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -108,8 +109,18 @@ export function MerchantAuthProvider({ children }: { children: ReactNode }) {
       signIn: async (email, password) => {
         await signInWithEmailAndPassword(getMerchantAuth(), email, password);
       },
-      signUp: async (email, password) => {
-        await createUserWithEmailAndPassword(getMerchantAuth(), email, password);
+      signUp: async (email, password, name) => {
+        const cred = await createUserWithEmailAndPassword(
+          getMerchantAuth(),
+          email,
+          password
+        );
+        const displayName = name?.trim();
+        if (displayName) {
+          await updateProfile(cred.user, { displayName });
+          await cred.user.reload();
+          setUser(getMerchantAuth().currentUser);
+        }
       },
       signInWithGoogle: async () => {
         const provider = new GoogleAuthProvider();

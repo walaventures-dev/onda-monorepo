@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   api,
@@ -11,12 +10,7 @@ import {
   OndaScriptMark,
   OndaSelect,
   PlacesAddressField,
-  PassPreview,
-  ImageUploadField,
-  OndaColorPicker,
   OndaIcons,
-  PROMO_TYPE_OPTIONS,
-  type PromoTypeKey,
 } from '@onda/shared-ui';
 import {
   StoreCategory,
@@ -24,90 +18,43 @@ import {
   STORE_CATEGORY_LABELS,
   STORE_SUBCATEGORY_LABELS,
   STORE_SUBCATEGORIES_BY_CATEGORY,
-  PLAN_ONDA_MONTHLY_LIMIT,
-  PLAN_SMS_CAMPAIGNS_MONTHLY,
 } from '@onda/shared-types';
-import { derivePassPalette, normalizeStoreSlug } from '@onda/shared-utils';
-import { useMerchantAuth, mapFirebaseAuthError } from '../lib/MerchantAuth';
-import { GoogleSignInButton } from './GoogleSignInButton';
+import {
+  normalizeStoreSlug,
+  parseBillingPeriod,
+  parsePlanId,
+  PLAN_META,
+  type BillingPeriod,
+  type PlanId,
+} from '@onda/shared-utils';
+import { useMerchantAuth } from '../lib/MerchantAuth';
+import { MerchantSignup } from './MerchantSignup';
+import { PlanPicker } from './PlanPicker';
+import {
+  persistOnboardingQuery,
+  readStoredBilling,
+  readStoredPlan,
+  readStoredReferral,
+  rememberPlanChoice,
+  sanitizeReferralCode,
+  readStoredOwnerName,
+} from './onboardingQuery';
 
-type Step = 1 | 2 | 3;
-type PlanChoice = 'BASIC' | 'PRO';
-
-type DesignForm = {
-  title: string;
-  subtitle: string;
-  logoUrl: string;
-  backgroundColor: string;
-  foregroundColor: string;
-  labelColor: string;
-};
-
-const PLAN_OPTIONS: Array<{
-  id: PlanChoice;
-  name: string;
-  price: string;
-  blurb: string;
-  features: string[];
-}> = [
-  {
-    id: 'BASIC',
-    name: 'Básico Lite',
-    price: '$49.900',
-    blurb: 'Ideal para empezar',
-    features: [
-      `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
-      `${PLAN_SMS_CAMPAIGNS_MONTHLY} campañas SMS gratis al mes`,
-    ],
-  },
-  {
-    id: 'PRO',
-    name: 'PRO Crecimiento',
-    price: '$69.900',
-    blurb: 'Para crecer más rápido',
-    features: [
-      `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
-      `${PLAN_SMS_CAMPAIGNS_MONTHLY} campañas SMS gratis al mes`,
-      'NPS, GPS y review gating',
-    ],
-  },
-];
-
-function parsePlanParam(raw: string | null): PlanChoice {
-  const v = (raw || '').trim().toUpperCase();
-  return v === 'PRO' ? 'PRO' : 'BASIC';
-}
-
-/** Extrae solo el código limpio de ?ref= (evita texto pegado por share). */
-function sanitizeReferralCode(raw: string | null): string {
-  const decoded = (raw || '').trim().toUpperCase();
-  const match = decoded.match(/^[A-Z0-9]{4,16}/);
-  return match?.[0] || '';
-}
+type SetupStep = 'plan' | 'local' | 'link';
 
 const CATEGORY_OPTIONS = (
   Object.keys(STORE_CATEGORY_LABELS) as StoreCategory[]
 ).map((id) => ({ id, label: STORE_CATEGORY_LABELS[id] }));
 
-const STEPS: Array<{ id: Step; label: string; hint: string; icon: ReactNode }> = [
-  {
-    id: 1,
-    label: 'Negocio',
-    hint: 'Datos y ubicación',
-    icon: OndaIcons.near,
-  },
-  {
-    id: 2,
-    label: 'Tarjeta',
-    hint: 'Diseño wallet',
-    icon: OndaIcons.pass,
-  },
-  {
-    id: 3,
-    label: 'Promo',
-    hint: 'Primera recompensa',
-    icon: OndaIcons.redeem,
-  },
+const STEPS: Array<{
+  id: SetupStep;
+  label: string;
+  hint: string;
+  icon: ReactNode;
+}> = [
+  { id: 'plan', label: 'Plan', hint: 'Suscripción', icon: OndaIcons.crown },
+  { id: 'local', label: 'Local', hint: 'Nombre y ubicación', icon: OndaIcons.near },
+  { id: 'link', label: 'Enlace', hint: 'Slug y referido', icon: OndaIcons.globe },
 ];
 
 function Field({
@@ -130,14 +77,6 @@ function Field({
   );
 }
 
-function SectionTitle({ children }: { children: ReactNode }) {
-  return (
-    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
-      {children}
-    </p>
-  );
-}
-
 function FormShell({
   children,
   footer,
@@ -157,31 +96,39 @@ function FormShell({
   );
 }
 
-export function MerchantOnboarding({
-  onCompleted,
-}: {
-  onCompleted?: (storeId: string) => void;
-}) {
+export function MerchantOnboarding() {
+  const { firebaseEnabled, user } = useMerchantAuth();
+  const needsAuth = firebaseEnabled && !user;
+
+  if (needsAuth) {
+    return <MerchantSignup />;
+  }
+
+  return <MerchantBusinessSetup />;
+}
+
+function MerchantBusinessSetup() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { email: sessionEmail, firebaseEnabled, signUp, signInWithGoogle, user } =
-    useMerchantAuth();
-  const refFromUrl = sanitizeReferralCode(searchParams.get('ref'));
-  const planFromUrl = parsePlanParam(searchParams.get('plan'));
+  const { email: sessionEmail, user, logout } = useMerchantAuth();
 
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] = useState<SetupStep>('plan');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [storeId, setStoreId] = useState('');
   const [referrerName, setReferrerName] = useState<string | null>(null);
-  const [planType, setPlanType] = useState<PlanChoice>(planFromUrl);
+
+  const [planType, setPlanType] = useState<PlanId>(
+    () => parsePlanId(searchParams.get('plan')) ?? 'BASIC'
+  );
+  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(
+    () => parseBillingPeriod(searchParams.get('billing')) ?? '12'
+  );
 
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [googlePlaceId, setGooglePlaceId] = useState<string | undefined>();
   const [lat, setLat] = useState<number | undefined>();
   const [lng, setLng] = useState<number | undefined>();
-  const [ownerName, setOwnerName] = useState('');
   const [slug, setSlug] = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
   const [category, setCategory] = useState<StoreCategory>(
@@ -190,40 +137,16 @@ export function MerchantOnboarding({
   const [subcategory, setSubcategory] = useState<StoreSubcategory>(
     StoreSubcategory.CAFE
   );
-  const [ownerEmail, setOwnerEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [referralCode, setReferralCode] = useState(refFromUrl);
-  const needsCredentials = firebaseEnabled && !sessionEmail;
-
-  useEffect(() => {
-    if (sessionEmail && !ownerEmail) setOwnerEmail(sessionEmail);
-  }, [sessionEmail, ownerEmail]);
-
-  useEffect(() => {
-    if (user?.displayName && !ownerName) setOwnerName(user.displayName);
-  }, [user, ownerName]);
-
-  const [design, setDesign] = useState<DesignForm>({
-    title: '',
-    subtitle: 'Programa de lealtad Onda',
-    logoUrl: '',
-    backgroundColor: '#052DDE',
-    foregroundColor: '#FFFFFF',
-    labelColor: '#E5F6FC',
-  });
-
-  const [promoTitle, setPromoTitle] = useState('');
-  const [promoType, setPromoType] = useState<PromoTypeKey>('PRODUCT');
-  const [promoPoints, setPromoPoints] = useState('5');
-  const [productName, setProductName] = useState('');
-  const [promoValue, setPromoValue] = useState('');
-  const [buyQuantity, setBuyQuantity] = useState('2');
-  const [getQuantity, setGetQuantity] = useState('1');
-  const [expiryMode, setExpiryMode] = useState<'' | 'TIME' | 'QUANTITY'>(
-    'QUANTITY'
+  const [ownerName, setOwnerName] = useState(user?.displayName?.trim() || '');
+  const [ownerEmail, setOwnerEmail] = useState(
+    sessionEmail || user?.email || ''
   );
-  const [endsAt, setEndsAt] = useState('');
-  const [maxRedemptions, setMaxRedemptions] = useState('50');
+  const [referralCode, setReferralCode] = useState(
+    () => sanitizeReferralCode(searchParams.get('ref'))
+  );
+
+  const needsOwnerName = !ownerName.trim();
+  const needsOwnerEmail = !ownerEmail.trim();
 
   const subcategoryOptions = useMemo(
     () =>
@@ -235,8 +158,35 @@ export function MerchantOnboarding({
   );
 
   useEffect(() => {
-    setPlanType(parsePlanParam(searchParams.get('plan')));
-  }, [searchParams]);
+    persistOnboardingQuery(searchParams);
+    if (!parsePlanId(searchParams.get('plan'))) {
+      setPlanType(readStoredPlan());
+    }
+    if (!parseBillingPeriod(searchParams.get('billing'))) {
+      setBillingPeriod(readStoredBilling());
+    }
+    if (!sanitizeReferralCode(searchParams.get('ref'))) {
+      const storedRef = readStoredReferral();
+      if (storedRef) setReferralCode(storedRef);
+    }
+    // Solo hidrata desde sessionStorage en el primer montaje.
+  }, []);
+
+  useEffect(() => {
+    rememberPlanChoice(planType, billingPeriod);
+  }, [planType, billingPeriod]);
+
+  useEffect(() => {
+    if (user?.displayName && !ownerName) setOwnerName(user.displayName);
+    else if (!ownerName) {
+      const stored = readStoredOwnerName();
+      if (stored) setOwnerName(stored);
+    }
+  }, [user, ownerName]);
+
+  useEffect(() => {
+    if (sessionEmail && !ownerEmail) setOwnerEmail(sessionEmail);
+  }, [sessionEmail, ownerEmail]);
 
   useEffect(() => {
     const prevHtml = document.documentElement.style.overflow;
@@ -283,7 +233,6 @@ export function MerchantOnboarding({
   }, [referralCode]);
 
   function finish(id: string) {
-    onCompleted?.(id);
     try {
       localStorage.setItem('onda-merchant-store-id', id);
     } catch {
@@ -292,156 +241,86 @@ export function MerchantOnboarding({
     router.push('/resumen');
   }
 
-  async function submitStep1(e: FormEvent) {
+  function goNextFromPlan() {
+    setError('');
+    rememberPlanChoice(planType, billingPeriod);
+    setStep('local');
+  }
+
+  function goNextFromLocal(e: FormEvent) {
     e.preventDefault();
     setError('');
-    if (needsCredentials) {
-      if (!ownerEmail.trim()) {
-        setError('Indica el email con el que vas a entrar al panel');
-        return;
-      }
-      if (password.length < 6) {
-        setError('La contraseña debe tener al menos 6 caracteres');
-        return;
-      }
+    if (!name.trim()) {
+      setError('Indica el nombre del negocio');
+      return;
+    }
+    if (needsOwnerName && !ownerName.trim()) {
+      setError('Indica tu nombre');
+      return;
+    }
+    if (needsOwnerEmail && !ownerEmail.trim()) {
+      setError('Indica el email del encargado');
+      return;
+    }
+    setStep('link');
+  }
+
+  async function submitBusiness(e: FormEvent) {
+    e.preventDefault();
+    setError('');
+    const slugValue = normalizeStoreSlug(slug);
+    if (!slugValue) {
+      setError('El slug es inválido');
+      return;
     }
     setBusy(true);
     try {
-      if (needsCredentials) {
-        try {
-          await signUp(ownerEmail.trim(), password);
-        } catch (err) {
-          setError(
-            mapFirebaseAuthError(
-              err,
-              'No se pudo crear la cuenta. Revisa el email e intenta de nuevo.'
-            ) || 'No se pudo crear la cuenta. Revisa el email e intenta de nuevo.'
-          );
-          return;
-        }
-      }
-      const created = await api<any>('/stores', {
+      const created = await api<{ id: string }>('/stores', {
         method: 'POST',
         body: JSON.stringify({
           name: name.trim(),
-          slug: normalizeStoreSlug(slug),
-          ownerName: ownerName.trim(),
+          slug: slugValue,
+          ownerName: ownerName.trim() || user?.displayName?.trim() || 'Encargado',
           category,
           subcategory,
-          ownerEmail: ownerEmail.trim() || undefined,
+          ownerEmail: ownerEmail.trim() || sessionEmail || undefined,
           address: address.trim() || undefined,
           googlePlaceId,
           lat,
           lng,
           referralCode: referralCode.trim() || undefined,
           planType,
+          billingPeriod,
         }),
       });
-      setStoreId(created.id);
-      setDesign((d) => ({
-        ...d,
-        title: created.passDesign?.title || name.trim(),
-        subtitle:
-          created.passDesign?.subtitle || 'Programa de lealtad Onda',
-        backgroundColor:
-          created.passDesign?.backgroundColor || d.backgroundColor,
-        foregroundColor:
-          created.passDesign?.foregroundColor || d.foregroundColor,
-        labelColor: created.passDesign?.labelColor || d.labelColor,
-        logoUrl: created.passDesign?.logoUrl || '',
-      }));
-      setStep(2);
-    } catch (err: any) {
-      setError(err?.message || 'No se pudo crear el negocio');
+      finish(created.id);
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'No se pudo crear el negocio';
+      setError(message);
     } finally {
       setBusy(false);
     }
   }
 
-  async function submitStep2(e: FormEvent) {
-    e.preventDefault();
-    if (!storeId) return;
-    setError('');
-    setBusy(true);
-    try {
-      await api(`/pass-designs/store/${storeId}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          title: design.title.trim() || name.trim(),
-          subtitle: design.subtitle.trim() || undefined,
-          logoUrl: design.logoUrl || undefined,
-          backgroundColor: design.backgroundColor,
-          foregroundColor: design.foregroundColor,
-          labelColor: design.labelColor,
-        }),
-      });
-      setStep(3);
-    } catch (err: any) {
-      setError(err?.message || 'No se pudo guardar el diseño');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submitStep3(e: FormEvent) {
-    e.preventDefault();
-    if (!storeId) return;
-    setError('');
-    if (!promoTitle.trim()) {
-      setError('Indica el título de la recompensa');
-      return;
-    }
-    if (!expiryMode) {
-      setError('Indica cómo caduca la promo');
-      return;
-    }
-    if (expiryMode === 'TIME' && !endsAt) {
-      setError('Indica la fecha de caducidad');
-      return;
-    }
-    if (
-      expiryMode === 'QUANTITY' &&
-      (!maxRedemptions || Number(maxRedemptions) < 1)
-    ) {
-      setError('Indica el máximo de redenciones');
-      return;
-    }
-    setBusy(true);
-    try {
-      const body: Record<string, unknown> = {
-        storeId,
-        title: promoTitle.trim(),
-        pointsRequired: Number(promoPoints) || 5,
-        isActive: true,
-        type: promoType,
-        expiryMode,
-      };
-      if (expiryMode === 'TIME') body.endsAt = endsAt;
-      if (expiryMode === 'QUANTITY') {
-        body.maxRedemptions = Number(maxRedemptions);
-      }
-      if (promoType === 'PERCENT_OFF' || promoType === 'AMOUNT_OFF') {
-        body.value = Number(promoValue) || 0;
-      }
-      if (promoType === 'BUY_GET') {
-        body.buyQuantity = Number(buyQuantity) || 1;
-        body.getQuantity = Number(getQuantity) || 1;
-      }
-      if (promoType === 'PRODUCT') {
-        body.productName = productName.trim() || promoTitle.trim();
-        if (promoValue) body.value = Number(promoValue);
-      }
-      await api('/promotions', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      });
-      finish(storeId);
-    } catch (err: any) {
-      setError(err?.message || 'No se pudo crear la promo');
-    } finally {
-      setBusy(false);
-    }
-  }
+  const stepIndex = STEPS.findIndex((s) => s.id === step);
+  const header =
+    step === 'plan'
+      ? {
+          title: 'Elige tu plan',
+          sub: 'Ya estás dentro. Escoge cómo quieres pagar — el primer mes es gratis.',
+        }
+      : step === 'local'
+        ? {
+            title: 'Tu negocio',
+            sub: 'Datos del local. El pase y las recompensas los configuras después en el panel.',
+          }
+        : {
+            title: 'Tu enlace público',
+            sub: 'Así te encuentran en Onda. El código de referido es opcional.',
+          };
 
   return (
     <div className="relative h-dvh max-h-dvh overflow-hidden bg-[var(--onda-bg)]">
@@ -459,30 +338,30 @@ export function MerchantOnboarding({
       />
 
       <div className="relative mx-auto grid h-full max-w-6xl min-h-0 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-        {/* Brand panel */}
         <aside className="relative hidden min-h-0 flex-col justify-between overflow-y-auto overscroll-contain px-10 py-10 lg:flex xl:px-14">
           <OndaScriptMark className="pointer-events-none absolute bottom-10 right-6 h-20 w-auto opacity-[0.08]" />
           <div>
             <OndaLogo />
             <p className="mt-10 font-display text-4xl font-semibold leading-tight tracking-tight text-[var(--onda-ink)] xl:text-5xl">
-              Activa Onda
+              Completa tu
               <br />
-              en tu negocio
+              negocio
             </p>
             <p className="mt-4 max-w-sm text-[var(--onda-muted)]">
-              Registrar tu comercio es crear tu cuenta: datos del local, pase
-              wallet y la primera recompensa.
+              Ya tienes cuenta
+              {user?.displayName ? ` · ${user.displayName}` : ''}. Elige plan y
+              registra el local para entrar al panel.
             </p>
 
             <div className="mt-8 inline-flex items-center gap-2 rounded-full bg-[var(--onda-violet-soft)] px-4 py-2 text-sm font-medium text-[var(--onda-violet)]">
               {OndaIcons.sparkle}
-              1 mes gratis al registrarte
+              {PLAN_META[planType].name} · 1 mes gratis
             </div>
 
             <ul className="mt-10 space-y-4">
-              {STEPS.map((s) => {
+              {STEPS.map((s, i) => {
                 const active = s.id === step;
-                const done = s.id < step;
+                const done = i < stepIndex;
                 return (
                   <li
                     key={s.id}
@@ -517,42 +396,44 @@ export function MerchantOnboarding({
             <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--onda-primary-500)]">
               <OndaHandMark variant="onPrimary" className="h-6 w-auto" />
             </span>
-            <p className="text-xs text-[var(--onda-muted)]">
-              ¿Ya tienes cuenta?{' '}
-              <Link
-                href="/login"
-                className="font-medium text-[var(--onda-primary-500)]"
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-[var(--onda-ink)]">
+                {sessionEmail || user?.email || 'Sesión activa'}
+              </p>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="text-xs font-medium text-[var(--onda-primary-500)]"
               >
-                Entra al panel
-              </Link>
-            </p>
+                Cerrar sesión
+              </button>
+            </div>
           </div>
         </aside>
 
-        {/* Form panel */}
         <main className="flex min-h-0 flex-col px-4 py-4 sm:px-6 lg:py-8 lg:pr-10">
           <div className="mb-3 flex shrink-0 items-center justify-between gap-3 lg:hidden">
             <OndaLogo />
             <div className="flex items-center gap-2">
-              <Link
-                href="/login"
+              <button
+                type="button"
+                onClick={() => void logout()}
                 className="text-xs font-medium text-[var(--onda-primary-500)]"
               >
-                Entrar
-              </Link>
+                Salir
+              </button>
               <span className="rounded-full bg-[var(--onda-card)] px-3 py-1 text-xs font-medium text-[var(--onda-muted)] ring-1 ring-[var(--onda-border)]">
-                Paso {step}/3
+                Paso {stepIndex + 1}/3
               </span>
             </div>
           </div>
 
-          {/* Mobile step pills */}
           <div className="mb-3 flex shrink-0 gap-2 lg:hidden" aria-label="Progreso">
-            {STEPS.map((s) => (
+            {STEPS.map((s, i) => (
               <div
                 key={s.id}
                 className={`h-1.5 flex-1 rounded-full transition-colors ${
-                  s.id <= step
+                  i <= stepIndex
                     ? 'bg-[var(--onda-violet)]'
                     : 'bg-[var(--onda-border)]'
                 }`}
@@ -563,24 +444,18 @@ export function MerchantOnboarding({
           <div className="onda-card flex min-h-0 flex-1 flex-col overflow-hidden p-5 sm:p-7">
             <header className="mb-4 shrink-0 space-y-2 border-b border-[var(--onda-border)] pb-4">
               <h1 className="font-display text-2xl font-semibold tracking-tight text-[var(--onda-ink)] sm:text-3xl">
-                {step === 1
-                  ? 'Crea tu cuenta'
-                  : step === 2
-                    ? 'Diseña tu tarjeta'
-                    : 'Tu primera recompensa'}
+                {header.title}
               </h1>
               <p className="max-w-lg text-sm leading-relaxed text-[var(--onda-muted)]">
-                {step === 1
-                  ? 'Registrar tu comercio es crear tu cuenta. Empiezas con 1 mes gratis.'
-                  : step === 2
-                    ? 'Así se verá el pase en Apple y Google Wallet. Puedes ajustarlo después.'
-                    : 'Define qué ganan tus clientes al acumular ondas. También puedes saltar.'}
+                {header.sub}
               </p>
             </header>
 
-            {referrerName && step === 1 ? (
+            {referrerName && step === 'link' ? (
               <div className="mb-4 flex shrink-0 items-start gap-3 rounded-2xl bg-[var(--onda-sky-soft)] px-4 py-3 text-sm text-[var(--onda-ink)]">
-                <span className="mt-0.5 text-[var(--onda-sky)]">{OndaIcons.users}</span>
+                <span className="mt-0.5 text-[var(--onda-sky)]">
+                  {OndaIcons.users}
+                </span>
                 <div>
                   <p className="font-medium">Invitado por {referrerName}</p>
                   <p className="text-[var(--onda-muted)]">
@@ -594,31 +469,58 @@ export function MerchantOnboarding({
               key={step}
               className="min-h-0 flex-1 duration-300 ease-out animate-[fadeIn_0.28s_ease-out]"
             >
-              {step === 1 ? (
-                <form onSubmit={submitStep1} className="flex h-full min-h-0 flex-col">
+              {step === 'plan' ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    goNextFromPlan();
+                  }}
+                  className="flex h-full min-h-0 flex-col"
+                >
                   <FormShell
                     footer={
                       <div className="flex flex-wrap items-center gap-3">
-                        <GradientButton
-                          type="submit"
-                          disabled={busy}
-                          className="min-w-[10rem]"
-                        >
-                          {busy
-                            ? 'Creando…'
-                            : needsCredentials
-                              ? 'Crear cuenta'
-                              : 'Continuar'}
+                        <GradientButton type="submit" className="min-w-[10rem]">
+                          Continuar con {PLAN_META[planType].shortName}
                         </GradientButton>
                         <p className="text-xs text-[var(--onda-muted)]">
-                          Luego personalizas el pase y la promo.
+                          Sin tarjeta. El cobro empieza después del mes gratis.
                         </p>
                       </div>
                     }
                   >
-                  <div className="space-y-6 pb-2">
-                    <div className="space-y-4">
-                      <SectionTitle>Identidad</SectionTitle>
+                    <PlanPicker
+                      plan={planType}
+                      billing={billingPeriod}
+                      onPlan={setPlanType}
+                      onBilling={setBillingPeriod}
+                    />
+                  </FormShell>
+                </form>
+              ) : null}
+
+              {step === 'local' ? (
+                <form
+                  onSubmit={goNextFromLocal}
+                  className="flex h-full min-h-0 flex-col"
+                >
+                  <FormShell
+                    footer={
+                      <div className="flex flex-wrap items-center gap-3">
+                        <GradientButton type="submit" className="min-w-[10rem]">
+                          Continuar
+                        </GradientButton>
+                        <button
+                          type="button"
+                          className="rounded-full px-4 py-2.5 text-sm font-medium text-[var(--onda-muted)] transition hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
+                          onClick={() => setStep('plan')}
+                        >
+                          Volver
+                        </button>
+                      </div>
+                    }
+                  >
+                    <div className="space-y-4 pb-2">
                       <Field label="Nombre del negocio">
                         <input
                           required
@@ -637,165 +539,6 @@ export function MerchantOnboarding({
                           setLng(next.lng);
                         }}
                       />
-                      <Field label="Nombre del encargado">
-                        <input
-                          required
-                          value={ownerName}
-                          onChange={(e) => setOwnerName(e.target.value)}
-                          placeholder="Ana Pérez"
-                          className="onda-input"
-                        />
-                      </Field>
-                      <Field
-                        label="Slug público"
-                        hint="Tu enlace público en Onda (ej. /r/cafe-del-rio). Solo letras, números y guiones."
-                      >
-                        <div className="onda-input-group">
-                          <span className="onda-input-group__prefix">/r/</span>
-                          <input
-                            required
-                            value={slug}
-                            onChange={(e) => {
-                              setSlugTouched(true);
-                              setSlug(normalizeStoreSlug(e.target.value));
-                            }}
-                            placeholder="cafe-del-rio"
-                            className="onda-input"
-                          />
-                        </div>
-                      </Field>
-                    </div>
-
-                    <div className="space-y-4">
-                      <SectionTitle>Acceso al panel</SectionTitle>
-                      {needsCredentials ? (
-                        <>
-                          <GoogleSignInButton
-                            busy={busy}
-                            label="Registrarse con Google"
-                            onClick={() => {
-                              setError('');
-                              setBusy(true);
-                              void signInWithGoogle()
-                                .catch((err) => {
-                                  setError(
-                                    mapFirebaseAuthError(
-                                      err,
-                                      'No se pudo continuar con Google. Intenta de nuevo.'
-                                    ) || ''
-                                  );
-                                })
-                                .finally(() => setBusy(false));
-                            }}
-                          />
-                          <div className="flex items-center gap-3">
-                            <span className="h-px flex-1 bg-[var(--onda-border)]" />
-                            <span className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--onda-muted)]">
-                              o con email
-                            </span>
-                            <span className="h-px flex-1 bg-[var(--onda-border)]" />
-                          </div>
-                        </>
-                      ) : null}
-                      <Field
-                        label="Email"
-                        hint={
-                          sessionEmail
-                            ? 'Entrarás con esta cuenta.'
-                            : 'Con este email entras al panel después.'
-                        }
-                      >
-                        <input
-                          type="email"
-                          required={needsCredentials}
-                          value={ownerEmail}
-                          onChange={(e) => setOwnerEmail(e.target.value)}
-                          placeholder="dueno@negocio.com"
-                          className="onda-input"
-                          autoComplete="email"
-                          readOnly={Boolean(sessionEmail)}
-                        />
-                      </Field>
-                      {needsCredentials ? (
-                        <Field
-                          label="Contraseña"
-                          hint="Mínimo 6 caracteres."
-                        >
-                          <input
-                            type="password"
-                            required
-                            minLength={6}
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="onda-input"
-                            autoComplete="new-password"
-                          />
-                        </Field>
-                      ) : null}
-                    </div>
-
-                    <div className="space-y-4">
-                      <SectionTitle>Plan</SectionTitle>
-                      <p className="text-xs text-[var(--onda-muted)]">
-                        El primer mes es gratis en ambos planes.
-                        {planFromUrl === planType && searchParams.get('plan') ? (
-                          <> Seleccionado desde la landing.</>
-                        ) : null}
-                      </p>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {PLAN_OPTIONS.map((p) => {
-                          const selected = planType === p.id;
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => setPlanType(p.id)}
-                              className={`rounded-2xl border px-4 py-4 text-left transition ${
-                                selected
-                                  ? 'border-[var(--onda-violet)] bg-[var(--onda-violet-soft)] shadow-[0_8px_20px_rgba(5,45,222,0.12)]'
-                                  : 'border-[var(--onda-border)] bg-[var(--onda-card)] hover:border-[var(--onda-bridge)]'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <div>
-                                  <p className="font-display text-base font-semibold text-[var(--onda-ink)]">
-                                    {p.name}
-                                  </p>
-                                  <p className="mt-0.5 text-xs text-[var(--onda-muted)]">
-                                    {p.blurb}
-                                  </p>
-                                </div>
-                                <span
-                                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                                    selected
-                                      ? 'bg-[var(--onda-violet)] text-white'
-                                      : 'ring-1 ring-[var(--onda-border)]'
-                                  }`}
-                                  aria-hidden
-                                >
-                                  {selected ? OndaIcons.check : null}
-                                </span>
-                              </div>
-                              <p className="mt-3 font-display text-xl font-semibold text-[var(--onda-violet)]">
-                                {p.price}
-                                <span className="text-sm font-normal text-[var(--onda-muted)]">
-                                  {' '}
-                                  /mes
-                                </span>
-                              </p>
-                              <ul className="mt-3 space-y-1 text-xs text-[var(--onda-muted)]">
-                                {p.features.map((f) => (
-                                  <li key={f}>• {f}</li>
-                                ))}
-                              </ul>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <SectionTitle>Categoría</SectionTitle>
                       <div className="grid gap-4 sm:grid-cols-2">
                         <Field label="Tipo de negocio">
                           <OndaSelect
@@ -816,10 +559,82 @@ export function MerchantOnboarding({
                           />
                         </Field>
                       </div>
+                      {needsOwnerName ? (
+                        <Field label="Tu nombre">
+                          <input
+                            required
+                            value={ownerName}
+                            onChange={(e) => setOwnerName(e.target.value)}
+                            placeholder="Ana Pérez"
+                            className="onda-input"
+                          />
+                        </Field>
+                      ) : null}
+                      {needsOwnerEmail ? (
+                        <Field label="Email">
+                          <input
+                            type="email"
+                            required
+                            value={ownerEmail}
+                            onChange={(e) => setOwnerEmail(e.target.value)}
+                            placeholder="dueno@negocio.com"
+                            className="onda-input"
+                          />
+                        </Field>
+                      ) : null}
+                      {error ? (
+                        <p className="text-sm text-[var(--onda-danger)]">{error}</p>
+                      ) : null}
                     </div>
+                  </FormShell>
+                </form>
+              ) : null}
 
-                    <div className="space-y-4">
-                      <SectionTitle>Referido</SectionTitle>
+              {step === 'link' ? (
+                <form
+                  onSubmit={submitBusiness}
+                  className="flex h-full min-h-0 flex-col"
+                >
+                  <FormShell
+                    footer={
+                      <div className="flex flex-wrap items-center gap-3">
+                        <GradientButton
+                          type="submit"
+                          disabled={busy}
+                          className="min-w-[10rem]"
+                        >
+                          {busy ? 'Creando…' : 'Crear negocio y entrar'}
+                        </GradientButton>
+                        <button
+                          type="button"
+                          className="rounded-full px-4 py-2.5 text-sm font-medium text-[var(--onda-muted)] transition hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
+                          disabled={busy}
+                          onClick={() => setStep('local')}
+                        >
+                          Volver
+                        </button>
+                      </div>
+                    }
+                  >
+                    <div className="space-y-4 pb-2">
+                      <Field
+                        label="Slug público"
+                        hint="Tu enlace público en Onda (ej. /r/cafe-del-rio). Solo letras, números y guiones."
+                      >
+                        <div className="onda-input-group">
+                          <span className="onda-input-group__prefix">/r/</span>
+                          <input
+                            required
+                            value={slug}
+                            onChange={(e) => {
+                              setSlugTouched(true);
+                              setSlug(normalizeStoreSlug(e.target.value));
+                            }}
+                            placeholder="cafe-del-rio"
+                            className="onda-input"
+                          />
+                        </div>
+                      </Field>
                       <Field
                         label="Código de referido"
                         hint="Opcional. Si alguien te invitó, pégalo aquí."
@@ -842,282 +657,10 @@ export function MerchantOnboarding({
                           Verificando código…
                         </p>
                       ) : null}
-                    </div>
-                  </div>
-
-                  {error ? (
-                    <p className="mt-5 text-sm text-[var(--onda-danger)]">{error}</p>
-                  ) : null}
-                  </FormShell>
-                </form>
-              ) : null}
-
-              {step === 2 ? (
-                <form onSubmit={submitStep2} className="flex h-full min-h-0 flex-col">
-                  <FormShell
-                    footer={
-                      <div className="flex flex-wrap items-center gap-3">
-                        <GradientButton type="submit" disabled={busy} className="min-w-[10rem]">
-                          {busy ? 'Guardando…' : 'Continuar'}
-                        </GradientButton>
-                        <button
-                          type="button"
-                          className="rounded-full px-4 py-2.5 text-sm font-medium text-[var(--onda-muted)] transition hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
-                          disabled={busy}
-                          onClick={() => setStep(3)}
-                        >
-                          Saltar por ahora
-                        </button>
-                      </div>
-                    }
-                  >
-                  <div className="grid gap-8 pb-2 lg:grid-cols-[1fr_minmax(240px,280px)]">
-                    <div className="space-y-4">
-                      <SectionTitle>Marca</SectionTitle>
-                      <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
-                        <ImageUploadField
-                          label="Logo"
-                          hint="JPG, PNG o WEBP"
-                          aspectClass="aspect-square"
-                          value={design.logoUrl}
-                          onChange={(logoUrl) =>
-                            setDesign({ ...design, logoUrl })
-                          }
-                        />
-                        <div className="space-y-4">
-                          <OndaColorPicker
-                            label="Color de marca"
-                            value={design.backgroundColor}
-                            fallback="#052DDE"
-                            onChange={(backgroundColor) =>
-                              setDesign({
-                                ...design,
-                                ...derivePassPalette(backgroundColor),
-                              })
-                            }
-                          />
-                          <p className="text-xs leading-snug text-[var(--onda-muted)]">
-                            El texto y las etiquetas se ajustan solos para
-                            contraste.
-                          </p>
-                        </div>
-                      </div>
-                      <Field label="Título">
-                        <input
-                          value={design.title}
-                          onChange={(e) =>
-                            setDesign({ ...design, title: e.target.value })
-                          }
-                          className="onda-input"
-                        />
-                      </Field>
-                      <Field label="Subtítulo">
-                        <input
-                          value={design.subtitle}
-                          onChange={(e) =>
-                            setDesign({ ...design, subtitle: e.target.value })
-                          }
-                          className="onda-input"
-                        />
-                      </Field>
-                    </div>
-
-                    <div className="flex flex-col items-center gap-3">
-                      <SectionTitle>Vista previa</SectionTitle>
-                      <div className="w-full max-w-[280px]">
-                        <PassPreview
-                          title={design.title || name || 'Tu negocio'}
-                          subtitle={design.subtitle}
-                          logoUrl={design.logoUrl || undefined}
-                          backgroundColor={design.backgroundColor}
-                          foregroundColor={design.foregroundColor}
-                          labelColor={design.labelColor}
-                          points={3}
-                          maxStamps={12}
-                          memberName="Cliente"
-                          compact
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {error ? (
-                    <p className="mt-5 text-sm text-[var(--onda-danger)]">{error}</p>
-                  ) : null}
-                  </FormShell>
-                </form>
-              ) : null}
-
-              {step === 3 ? (
-                <form onSubmit={submitStep3} className="flex h-full min-h-0 flex-col">
-                  <FormShell
-                    footer={
-                      <div className="flex flex-wrap items-center gap-3">
-                        <GradientButton type="submit" disabled={busy}>
-                          {busy ? 'Creando…' : 'Crear y entrar al panel'}
-                        </GradientButton>
-                        <button
-                          type="button"
-                          className="rounded-full px-4 py-2.5 text-sm font-medium text-[var(--onda-muted)] transition hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
-                          disabled={busy}
-                          onClick={() => finish(storeId)}
-                        >
-                          Saltar por ahora
-                        </button>
-                      </div>
-                    }
-                  >
-                  <div className="space-y-6 pb-2">
-                    <div className="space-y-4">
-                      <SectionTitle>Recompensa</SectionTitle>
-                      <Field label="Título">
-                        <input
-                          required
-                          value={promoTitle}
-                          onChange={(e) => setPromoTitle(e.target.value)}
-                          placeholder="Café cortesía"
-                          className="onda-input"
-                        />
-                      </Field>
-
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium text-[var(--onda-ink)]">
-                          Tipo
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {PROMO_TYPE_OPTIONS.map((o) => {
-                            const selected = promoType === o.id;
-                            return (
-                              <button
-                                key={o.id}
-                                type="button"
-                                onClick={() => setPromoType(o.id)}
-                                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium transition ${
-                                  selected
-                                    ? 'bg-[var(--onda-violet)] text-white shadow-[0_6px_16px_rgba(5,45,222,0.22)]'
-                                    : 'bg-[var(--onda-bg)] text-[var(--onda-muted)] ring-1 ring-[var(--onda-border)] hover:text-[var(--onda-ink)]'
-                                }`}
-                              >
-                                {o.icon}
-                                {o.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {promoType === 'PRODUCT' ? (
-                        <Field label="Producto">
-                          <input
-                            value={productName}
-                            onChange={(e) => setProductName(e.target.value)}
-                            placeholder="Café americano"
-                            className="onda-input"
-                          />
-                        </Field>
-                      ) : null}
-
-                      {promoType === 'PERCENT_OFF' ||
-                      promoType === 'AMOUNT_OFF' ? (
-                        <Field
-                          label={
-                            promoType === 'PERCENT_OFF'
-                              ? 'Porcentaje'
-                              : 'Valor (COP)'
-                          }
-                        >
-                          <input
-                            inputMode="decimal"
-                            value={promoValue}
-                            onChange={(e) => setPromoValue(e.target.value)}
-                            placeholder={
-                              promoType === 'PERCENT_OFF' ? '10' : '5000'
-                            }
-                            className="onda-input"
-                          />
-                        </Field>
-                      ) : null}
-
-                      {promoType === 'BUY_GET' ? (
-                        <div className="grid grid-cols-2 gap-4">
-                          <Field label="Compra">
-                            <input
-                              inputMode="numeric"
-                              value={buyQuantity}
-                              onChange={(e) => setBuyQuantity(e.target.value)}
-                              className="onda-input"
-                            />
-                          </Field>
-                          <Field label="Lleva">
-                            <input
-                              inputMode="numeric"
-                              value={getQuantity}
-                              onChange={(e) => setGetQuantity(e.target.value)}
-                              className="onda-input"
-                            />
-                          </Field>
-                        </div>
+                      {error ? (
+                        <p className="text-sm text-[var(--onda-danger)]">{error}</p>
                       ) : null}
                     </div>
-
-                    <div className="space-y-4">
-                      <SectionTitle>Reglas</SectionTitle>
-                      <Field
-                        label="Ondas requeridas"
-                        hint="Cuántos sellos necesita el cliente para canjear"
-                      >
-                        <input
-                          inputMode="numeric"
-                          value={promoPoints}
-                          onChange={(e) => setPromoPoints(e.target.value)}
-                          className="onda-input"
-                        />
-                      </Field>
-
-                      <Field label="Caducidad">
-                        <OndaSelect
-                          aria-label="Caducidad"
-                          value={expiryMode}
-                          onChange={(v) =>
-                            setExpiryMode(v as '' | 'TIME' | 'QUANTITY')
-                          }
-                          options={[
-                            {
-                              id: 'QUANTITY',
-                              label: 'Por cantidad de redenciones',
-                            },
-                            { id: 'TIME', label: 'Por fecha' },
-                          ]}
-                        />
-                      </Field>
-
-                      {expiryMode === 'TIME' ? (
-                        <Field label="Disponible hasta">
-                          <input
-                            type="date"
-                            value={endsAt}
-                            onChange={(e) => setEndsAt(e.target.value)}
-                            className="onda-input"
-                          />
-                        </Field>
-                      ) : null}
-
-                      {expiryMode === 'QUANTITY' ? (
-                        <Field label="Máximo de redenciones">
-                          <input
-                            inputMode="numeric"
-                            value={maxRedemptions}
-                            onChange={(e) => setMaxRedemptions(e.target.value)}
-                            className="onda-input"
-                          />
-                        </Field>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {error ? (
-                    <p className="mt-5 text-sm text-[var(--onda-danger)]">{error}</p>
-                  ) : null}
                   </FormShell>
                 </form>
               ) : null}

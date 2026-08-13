@@ -129,6 +129,7 @@ export interface StoreDto {
   address?: string | null;
   planType: PlanType | string;
   billingStatus: string;
+  billingPeriod?: string | null;
   whatsappUsed: number;
   freeMonthsBalance?: number;
   referralCode?: string;

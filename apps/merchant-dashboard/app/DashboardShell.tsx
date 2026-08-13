@@ -59,6 +59,23 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    if (user && isOnboarding) {
+      let cancelled = false;
+      void (async () => {
+        try {
+          const stores = await api<unknown[]>("/auth/merchant/stores");
+          if (!cancelled && Array.isArray(stores) && stores.length > 0) {
+            router.replace("/resumen");
+          }
+        } catch {
+          /* si falla el listado, deja completar el negocio */
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (user && isLogin) {
       const raw = new URLSearchParams(window.location.search).get("next");
       let dest = safeReturnPath(raw) || "/resumen";
@@ -67,7 +84,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         try {
           const stores = await api<unknown[]>("/auth/merchant/stores");
           if (!Array.isArray(stores) || stores.length === 0) {
-            dest = "/onboarding";
+            const params = new URLSearchParams(window.location.search);
+            params.delete("next");
+            const qs = params.toString();
+            dest = qs ? `/onboarding?${qs}` : "/onboarding";
           }
         } catch {
           /* si falla el listado, entra al panel */

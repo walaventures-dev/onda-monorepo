@@ -19,7 +19,7 @@
         "../../libs/shared/ui/src/index.tsx"
       ],
       "@onda/shared-utils": [
-        "../../libs/shared/utils/src/index.tsx"
+        "../../libs/shared/utils/src/index.ts"
       ],
       "@/*": [
         "./*"
