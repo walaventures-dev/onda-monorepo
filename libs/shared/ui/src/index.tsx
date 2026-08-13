@@ -7,7 +7,7 @@ import { ONDA_BRAND, OndaLogo } from './brand';
 import { TxActivityRow, type TxActivityItem } from './TxActivity';
 
 export { Button, Card, Chip, Avatar, Badge, Spinner, Form, TextField, Input, TextArea, InputOTP, Table, ColorPicker, Tabs, toast, ToastProvider } from '@heroui/react';
-export { api, API_URL, getApiUrl } from './api';
+export { api, API_URL, getApiUrl, setApiAuthTokenGetter } from './api';
 export { HeatmapPoints } from './HeatmapPoints';
 export { PhoneInput } from './PhoneInput';
 export type { PhoneInputProps } from './PhoneInput';
@@ -414,6 +414,7 @@ export function AppShell({
   userName = 'Usuario',
   toolbar,
   linkComponent,
+  onLogout,
 }: {
   title: string;
   nav: NavItem[];
@@ -422,6 +423,7 @@ export function AppShell({
   toolbar?: React.ReactNode;
   /** p.ej. next/link para SPA navigation */
   linkComponent?: React.ElementType;
+  onLogout?: () => void;
 }) {
   const Link = linkComponent || 'a';
   const [navOpen, setNavOpen] = React.useState(false);
@@ -541,6 +543,19 @@ export function AppShell({
               {collapsed ? 'Expandir' : 'Colapsar'}
             </span>
           </button>
+          {onLogout ? (
+            <button
+              type="button"
+              className="onda-sidebar-collapse"
+              onClick={onLogout}
+              title="Cerrar sesión"
+            >
+              <span className="onda-nav-icon" aria-hidden>
+                {OndaIcons.logout}
+              </span>
+              <span className="onda-nav-label">Cerrar sesión</span>
+            </button>
+          ) : null}
         </div>
       </aside>
       <div className="onda-shell-main">

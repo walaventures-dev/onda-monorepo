@@ -27,6 +27,7 @@ import {
   PLAN_SMS_CAMPAIGNS_MONTHLY,
 } from '@onda/shared-types';
 import { derivePassPalette, normalizeStoreSlug } from '@onda/shared-utils';
+import { useMerchantAuth } from '../lib/MerchantAuth';
 
 type Step = 1 | 2 | 3;
 type PlanChoice = 'BASIC' | 'PRO';
@@ -161,6 +162,7 @@ export function MerchantOnboarding({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { email: sessionEmail } = useMerchantAuth();
   const refFromUrl = sanitizeReferralCode(searchParams.get('ref'));
   const planFromUrl = parsePlanParam(searchParams.get('plan'));
 
@@ -187,6 +189,10 @@ export function MerchantOnboarding({
   );
   const [ownerEmail, setOwnerEmail] = useState('');
   const [referralCode, setReferralCode] = useState(refFromUrl);
+
+  useEffect(() => {
+    if (sessionEmail && !ownerEmail) setOwnerEmail(sessionEmail);
+  }, [sessionEmail, ownerEmail]);
 
   const [design, setDesign] = useState<DesignForm>({
     title: '',
@@ -703,6 +709,7 @@ export function MerchantOnboarding({
                           onChange={(e) => setOwnerEmail(e.target.value)}
                           placeholder="dueno@negocio.com"
                           className="onda-input"
+                          readOnly={Boolean(sessionEmail)}
                         />
                       </Field>
                     </div>

@@ -12,6 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import { JobsService } from './jobs.service';
 import {
   generateReferralCode,
   isSubcategoryOfCategory,
@@ -44,7 +45,10 @@ const storePublicSelect = {
 
 @Controller('stores')
 export class StoresController {
-  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(JobsService) private jobs: JobsService
+  ) {}
 
   @Get()
   list() {
@@ -179,6 +183,16 @@ export class StoresController {
 
       return created;
     });
+
+    if (store.ownerEmail) {
+      await this.jobs.enqueue('brevo-email', {
+        to: store.ownerEmail,
+        toName: store.ownerName,
+        subject: `Tu negocio ${store.name} ya está en Onda`,
+        html: `<p>Hola ${store.ownerName},</p><p>Tu sede <strong>${store.name}</strong> quedó creada.</p>`,
+        text: `Hola ${store.ownerName}, tu sede ${store.name} quedó creada.`,
+      });
+    }
 
     return store;
   }

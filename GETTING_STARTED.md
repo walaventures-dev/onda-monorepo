@@ -39,11 +39,15 @@ El `.env.example` ya apunta a los servicios de Docker locales. Variables mínima
 | `API_PORT` | Puerto del API (default `3333`) |
 | `NEXT_PUBLIC_API_URL` | URL del API para frontends (`http://localhost:3333`) |
 
-Opcionales (integraciones externas; pueden quedar vacías en local):
+Opcionales (integraciones externas; pueden quedar vacías en local). Guía completa: [docs/proveedores.md](docs/proveedores.md).
 
+- Firebase Auth (solo merchant-dashboard): `FIREBASE_*`, `NEXT_PUBLIC_FIREBASE_*`
+- Google Places: `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
+- Cloud Tasks (prod): `GCP_PROJECT`, `CLOUD_TASKS_QUEUE`, `JOBS_WORKER_URL`
 - Kapso (WhatsApp): `KAPSO_API_KEY`, `KAPSO_PHONE_NUMBER_ID`, `KAPSO_WEBHOOK_SECRET`
-- Wallets: `WALLET_API_KEY`, `WALLET_API_BASE_URL`
-- Wompi: `WOMPI_PUBLIC_KEY`, `WOMPI_PRIVATE_KEY`
+- WalletWallet: `WALLET_API_KEY`, `WALLET_API_BASE_URL`
+- Wompi: `WOMPI_PUBLIC_KEY`, `WOMPI_PRIVATE_KEY`, `WOMPI_INTEGRITY_SECRET`, `WOMPI_EVENTS_SECRET`
+- Brevo (email + SMS): `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`
 
 ## 3. Docker (Postgres + Redis)
 

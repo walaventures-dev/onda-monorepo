@@ -54,8 +54,10 @@ export async function sendKapsoTemplate(job: KapsoMessageJob) {
 }
 
 export const ONDA_WHATSAPP_TEMPLATES = [
+  'onda_otp_login',
   'onda_bienvenida',
   'onda_puntos',
+  'onda_confirmar_codigo',
   'onda_resena_pro',
   'onda_invitacion_evento',
 ] as const;

@@ -64,11 +64,18 @@ Hero UI v3 + Tailwind 4. Brand palette: celeste `#3DB9E8`, violeta `#6E5AE6`. Ic
 **[DESIGN.md](DESIGN.md) is the single source of truth for UI work** — color tokens, typography scale, spacing/radius/shadow system, icon conventions, component guidelines (buttons/inputs/cards/tables/modals, PWA vs. dashboard differences), and explicit AI generation guardrails (what never to do when building components). Read it before generating or modifying any UI in this repo — the notes above are just a summary.
 
 ### External integrations
-- **Kapso** — WhatsApp messaging at the Onda platform level (`libs/whatsapp`, `WhatsappService`).
-- **Wallet API** — Apple/Google Wallet pass issuance (`libs/wallets`, `WalletService`).
-- **Wompi** — payments (`WOMPI_PUBLIC_KEY`/`WOMPI_PRIVATE_KEY`).
 
-Env vars are documented in `.env.example`; copy to `.env` before running anything locally.
+Guía de alta paso a paso: [docs/proveedores.md](docs/proveedores.md).
+
+- **Postgres / Prisma** — fuente de verdad (`libs/database`). No se usa Firestore.
+- **Firebase Auth** — solo merchant-dashboard (email/password). Clientes PWA: OTP WhatsApp interno.
+- **Google** — Places (autocomplete onboarding) y Cloud Tasks (cola en prod; local = Redis/BullMQ).
+- **Kapso** — WhatsApp de plataforma (`libs/whatsapp`, `WhatsappService`).
+- **WalletWallet** — pases Apple/Google y push (`libs/wallets`, `WalletService`).
+- **Wompi** — cobro de suscripción PRO (`WompiService`).
+- **Brevo** — email transaccional y SMS de campañas (`BrevoService`).
+
+Env vars en `.env.example`; copy to `.env` before running anything locally.
 
 ## Superpowers skills
 

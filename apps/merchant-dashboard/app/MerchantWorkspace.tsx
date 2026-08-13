@@ -62,6 +62,7 @@ import {
 import { ActivityHeatmap } from "./ActivityHeatmap";
 import { PendingRequestsPanel } from "./PendingRequestsPanel";
 import { ReferralsPanel } from "./ReferralsPanel";
+import { useMerchantAuth } from "../lib/MerchantAuth";
 
 type Tab =
   | "resumen"
@@ -338,6 +339,51 @@ function buildStorePublicUrl(slug: string) {
   return `${pwa}/r/${slug}`;
 }
 
+type WompiCheckout = {
+  reference: string;
+  amountInCents: number;
+  currency: string;
+  publicKey: string;
+  integrity: string;
+  redirectUrl: string;
+};
+
+declare global {
+  interface Window {
+    WidgetCheckout?: new (opts: {
+      currency: string;
+      amountInCents: number;
+      reference: string;
+      publicKey: string;
+      signature: { integrity: string };
+      redirectUrl?: string;
+    }) => { open: (cb: (result: { transaction?: { status?: string } }) => void) => void };
+  }
+}
+
+function loadWompiWidget(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  if (window.WidgetCheckout) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(
+      'script[src="https://checkout.wompi.co/widget.js"]'
+    );
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () =>
+        reject(new Error("No se pudo cargar Wompi"))
+      );
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.wompi.co/widget.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("No se pudo cargar Wompi"));
+    document.head.appendChild(script);
+  });
+}
+
 function parseRoute(pathname: string): {
   tab: Tab;
   promoId: string | null;
@@ -356,6 +402,7 @@ function parseRoute(pathname: string): {
 export function MerchantWorkspace() {
   const pathname = usePathname();
   const router = useRouter();
+  const { firebaseEnabled, logout } = useMerchantAuth();
   const { tab, promoId: selectedPromoId, customerPassId: selectedCustomerPassId } =
     parseRoute(pathname);
 
@@ -495,7 +542,7 @@ export function MerchantWorkspace() {
   }, [storeId, filters.promoTypes, promoStatusFilter]);
 
   useEffect(() => {
-    api<any[]>("/stores").then((list) => {
+    api<any[]>("/auth/merchant/stores").then((list) => {
       setStores(list);
       let preferred = "";
       try {
@@ -833,19 +880,54 @@ export function MerchantWorkspace() {
   async function upgrade() {
     const ok = await confirm({
       title: "Upgrade a PRO",
-      message:
-        "Se actualizará el plan de esta sede a PRO (sandbox Wompi). ¿Continuar?",
-      confirmLabel: "Subir a PRO",
+      message: "Se abrirá el checkout de Wompi para activar PRO ($69.900/mes).",
+      confirmLabel: "Continuar",
       tone: "accent",
     });
     if (!ok) return;
-    await api(`/billing/store/${storeId}/upgrade`, { method: "POST" });
-    setBilling(await api(`/billing/store/${storeId}`));
-    await alert({
-      title: "Plan actualizado",
-      message: "La sede ahora está en plan PRO.",
-      tone: "success",
-    });
+    const res = await api<{
+      stub?: boolean;
+      checkout?: WompiCheckout | null;
+    }>(`/billing/store/${storeId}/upgrade`, { method: "POST" });
+    if (res.stub || !res.checkout) {
+      setBilling(await api(`/billing/store/${storeId}`));
+      await alert({
+        title: "Plan actualizado",
+        message: "La sede ahora está en plan PRO (modo desarrollo, sin cobro).",
+        tone: "success",
+      });
+      return;
+    }
+    try {
+      await loadWompiWidget();
+      if (!window.WidgetCheckout) {
+        throw new Error("Widget Wompi no disponible");
+      }
+      const checkout = new window.WidgetCheckout({
+        currency: res.checkout.currency,
+        amountInCents: res.checkout.amountInCents,
+        reference: res.checkout.reference,
+        publicKey: res.checkout.publicKey,
+        signature: { integrity: res.checkout.integrity },
+        redirectUrl: res.checkout.redirectUrl,
+      });
+      checkout.open(async (result) => {
+        if (result?.transaction?.status === "APPROVED") {
+          setBilling(await api(`/billing/store/${storeId}`));
+          await alert({
+            title: "Pago aprobado",
+            message: "La sede queda en plan PRO cuando Wompi confirme el webhook.",
+            tone: "success",
+          });
+        }
+      });
+    } catch (err) {
+      await alert({
+        title: "No se pudo abrir Wompi",
+        message: err instanceof Error ? err.message : "Intenta de nuevo",
+        tone: "danger",
+      });
+    }
   }
 
   function duplicatePromo(source: any) {
@@ -985,6 +1067,7 @@ export function MerchantWorkspace() {
         nav={nav}
         userName={store?.name || "M"}
         linkComponent={Link}
+        onLogout={firebaseEnabled ? () => void logout() : undefined}
         toolbar={
           <div className="onda-toolbar">
             <OndaSelect
@@ -1999,7 +2082,7 @@ export function MerchantWorkspace() {
                 {billing?.planType === "BASIC" ? (
                   <GradientButton type="button" onClick={upgrade}>
                     {OndaIcons.upgrade}
-                    Upgrade a PRO (Wompi sandbox)
+                    Upgrade a PRO
                   </GradientButton>
                 ) : null}
               </div>

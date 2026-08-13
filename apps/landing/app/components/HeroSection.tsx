@@ -98,14 +98,14 @@ export function HeroSection() {
             className="max-w-xl overflow-visible font-display text-[clamp(2rem,5vw,3.5rem)] font-bold leading-[1.08] tracking-tight text-[var(--onda-ink)]"
           >
             Tu cliente se fue.{' '}
-            <HeroHighlight>Tu negocio</HeroHighlight> no tiene por qué irse con él.
+            Vuelve por <HeroHighlight>el premio</HeroHighlight>.
           </motion.h1>
           <motion.p
             variants={heroItem}
             className="mt-5 max-w-lg text-lg text-[var(--onda-muted)]"
           >
-            Cada visita suma hacia un premio. Tú decides cuándo hacerlos volver —
-            sin app que descargar.
+            Cada visita suma hacia un premio que tú defines. El pase queda en
+            Wallet — sin app que descargar.
           </motion.p>
 
           <motion.div

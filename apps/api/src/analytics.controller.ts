@@ -4,13 +4,21 @@ import {
   Controller,
   Get,
   BadRequestException,
+  ForbiddenException,
+  Headers,
   NotFoundException,
   Param,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { PlanType, PromotionType, Prisma } from '@prisma/client';
+import type { RawBodyRequest } from '@nestjs/common';
+import type { Request } from 'express';
 import { PrismaService } from './prisma.service';
+import { WompiService } from './wompi.service';
+import { JobsService } from './jobs.service';
+import { WhatsappService } from './whatsapp.service';
 import {
   PLAN_ONDA_MONTHLY_LIMIT,
   PLAN_SMS_CAMPAIGNS_MONTHLY,
@@ -1693,10 +1701,13 @@ export class DrawsController {
 
 @Controller('leads')
 export class LeadsController {
-  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(JobsService) private jobs: JobsService
+  ) {}
 
   @Post()
-  create(
+  async create(
     @Body()
     body: {
       name: string;
@@ -1706,7 +1717,17 @@ export class LeadsController {
       message?: string;
     }
   ) {
-    return this.prisma.lead.create({ data: body });
+    const lead = await this.prisma.lead.create({ data: body });
+    if (body.email) {
+      await this.jobs.enqueue('brevo-email', {
+        to: body.email,
+        toName: body.name,
+        subject: 'Recibimos tu mensaje — Onda',
+        html: `<p>Hola ${body.name || ''},</p><p>Gracias por escribirnos. El equipo de Onda te contactará pronto.</p>`,
+        text: `Hola ${body.name || ''}, gracias por escribirnos. El equipo de Onda te contactará pronto.`,
+      });
+    }
+    return lead;
   }
 
   @Get()
@@ -1717,7 +1738,11 @@ export class LeadsController {
 
 @Controller('billing')
 export class BillingController {
-  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(WompiService) private wompi: WompiService,
+    @Inject(JobsService) private jobs: JobsService
+  ) {}
 
   @Get('store/:storeId')
   async summary(@Param('storeId') storeId: string) {
@@ -1747,15 +1772,52 @@ export class BillingController {
 
   @Post('store/:storeId/upgrade')
   async upgrade(@Param('storeId') storeId: string) {
-    return this.prisma.store.update({
+    await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
+    if (!this.wompi.isConfigured) {
+      const store = await this.prisma.store.update({
+        where: { id: storeId },
+        data: { planType: 'PRO', billingStatus: 'ACTIVE' },
+      });
+      return { store, stub: true as const, checkout: null };
+    }
+
+    const checkout = this.wompi.createCheckout(storeId);
+    await this.prisma.store.update({
       where: { id: storeId },
-      data: { planType: 'PRO', billingStatus: 'ACTIVE' },
+      data: { wompiTransactionId: checkout.reference },
     });
+    return { stub: false as const, checkout };
   }
 
   @Post('wompi/webhook')
-  wompiWebhook(@Body() body: Record<string, unknown>) {
-    return { received: true, body };
+  async wompiWebhook(@Body() body: Record<string, unknown>) {
+    if (!this.wompi.verifyEventChecksum(body)) {
+      throw new ForbiddenException('Firma Wompi inválida');
+    }
+    const tx = this.wompi.transactionFromEvent(body);
+    if (!tx?.reference || tx.status !== 'APPROVED') {
+      return { received: true, ignored: true };
+    }
+    const store = await this.prisma.store.findFirst({
+      where: { wompiTransactionId: tx.reference },
+    });
+    if (!store) {
+      return { received: true, store: null };
+    }
+    const paymentSourceId =
+      tx.paymentSourceId != null ? String(tx.paymentSourceId) : store.wompiPaymentSourceId;
+    await this.prisma.store.update({
+      where: { id: store.id },
+      data: {
+        planType: 'PRO',
+        billingStatus: 'ACTIVE',
+        wompiPaymentSourceId: paymentSourceId,
+      },
+    });
+    if (paymentSourceId) {
+      await this.jobs.scheduleWompiRenew(store.id);
+    }
+    return { received: true, storeId: store.id, status: 'PRO' };
   }
 }
 
@@ -1811,10 +1873,25 @@ export class FeedbackController {
 
 @Controller('webhooks')
 export class WebhooksController {
-  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(WhatsappService) private whatsapp: WhatsappService
+  ) {}
 
   @Post('kapso')
-  async kapso(@Body() body: Record<string, unknown>) {
+  async kapso(
+    @Req() req: RawBodyRequest<Request>,
+    @Headers('x-kapso-signature') kapsoSig: string | undefined,
+    @Headers('x-webhook-signature') webhookSig: string | undefined,
+    @Body() body: Record<string, unknown>
+  ) {
+    const raw =
+      req.rawBody?.toString('utf8') ||
+      (typeof body === 'object' ? JSON.stringify(body) : '');
+    const signature = kapsoSig || webhookSig;
+    if (!this.whatsapp.verifyWebhookSignature(raw, signature)) {
+      throw new ForbiddenException('Firma Kapso inválida');
+    }
     return { ok: true, event: body['event'] ?? body['type'] ?? 'unknown' };
   }
 }

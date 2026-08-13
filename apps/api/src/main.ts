@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { json, urlencoded } from 'express';
+import type { IncomingMessage } from 'http';
 import { join } from 'path';
 import { AppModule } from './app.module';
 
@@ -14,7 +15,14 @@ async function bootstrap() {
     rawBody: true,
     bodyParser: false,
   });
-  app.use(json({ limit: '3mb' }));
+  app.use(
+    json({
+      limit: '3mb',
+      verify: (req: IncomingMessage & { rawBody?: Buffer }, _res, buf: Buffer) => {
+        req.rawBody = buf;
+      },
+    })
+  );
   app.use(urlencoded({ extended: true, limit: '3mb' }));
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
   app.enableCors({ origin: true, credentials: true });

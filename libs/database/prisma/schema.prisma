@@ -100,6 +100,8 @@ model Store {
   ownerName         String
   ownerEmail        String?
   referralCode      String                 @unique
+  wompiTransactionId   String?
+  wompiPaymentSourceId String?
   referredByStoreId String?
   freeMonthsBalance Int                    @default(1)
   referredBy        Store?                 @relation("StoreReferrals", fields: [referredByStoreId], references: [id])
@@ -113,6 +115,8 @@ model Store {
   pendingRequests   PendingRequest[]
   campaigns         Campaign[]
   createdAt         DateTime               @default(now())
+
+  @@index([ownerEmail])
 }
 
 model Campaign {

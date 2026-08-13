@@ -46,6 +46,7 @@
   },
   "packageManager": "pnpm@10.15.1+sha512.34e538c329b5553014ca8e8f4535997f96180a1d0f614339357449935350d924e22f8614682191264ec33d1462ac21561aff97f6bb18065351c162c7e8f6de67",
   "dependencies": {
+    "@google-cloud/tasks": "^7.0.0",
     "@heroui/react": "^3.2.3",
     "@heroui/styles": "^3.2.3",
     "@nestjs/bullmq": "^11.0.4",
@@ -67,6 +68,8 @@
     "class-validator": "^0.15.1",
     "date-fns": "^4.4.0",
     "express": "^5.2.1",
+    "firebase": "^12.17.1",
+    "firebase-admin": "^14.2.0",
     "framer-motion": "^12.43.0",
     "ioredis": "^6.0.0",
     "leaflet": "^1.9.4",

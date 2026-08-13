@@ -30,6 +30,11 @@ import { PendingRequestsSseService } from './pending-requests-sse.service';
 import { PendingRequestsController } from './pending-requests.controller';
 import { DemoOndaSpaController } from './demo-onda-spa.controller';
 import { CampaignsController } from './campaigns.controller';
+import { FirebaseAuthService } from './firebase-auth.service';
+import { JobsService } from './jobs.service';
+import { JobsController } from './jobs.controller';
+import { BrevoService } from './brevo.service';
+import { WompiService } from './wompi.service';
 
 @Module({
   imports: [
@@ -63,7 +68,18 @@ import { CampaignsController } from './campaigns.controller';
     ReferralsController,
     DemoOndaSpaController,
     CampaignsController,
+    JobsController,
   ],
-  providers: [PrismaService, WalletService, WhatsappService, CustomerAuthService, PendingRequestsSseService],
+  providers: [
+    PrismaService,
+    WalletService,
+    WhatsappService,
+    CustomerAuthService,
+    PendingRequestsSseService,
+    FirebaseAuthService,
+    JobsService,
+    BrevoService,
+    WompiService,
+  ],
 })
 export class AppModule {}

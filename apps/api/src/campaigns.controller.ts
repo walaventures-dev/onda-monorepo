@@ -8,6 +8,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import { JobsService } from './jobs.service';
 import {
   PLAN_SMS_CAMPAIGNS_MONTHLY,
   assertCanLaunchSmsCampaign,
@@ -16,7 +17,10 @@ import {
 
 @Controller('campaigns')
 export class CampaignsController {
-  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(JobsService) private jobs: JobsService
+  ) {}
 
   @Get()
   async list(@Query('storeId') storeId: string) {
@@ -45,7 +49,8 @@ export class CampaignsController {
     }
   ) {
     const channel = body.channel === 'WALLET' ? 'WALLET' : 'SMS';
-    return this.prisma.$transaction(async (tx) => {
+    const title = (body.title || '').trim() || 'Campaña SMS';
+    const campaign = await this.prisma.$transaction(async (tx) => {
       if (channel === 'SMS') {
         await assertCanLaunchSmsCampaign(tx, body.storeId);
       }
@@ -53,10 +58,32 @@ export class CampaignsController {
         data: {
           storeId: body.storeId,
           channel,
-          title: (body.title || '').trim() || 'Campaña SMS',
+          title,
         },
       });
     });
+
+    if (channel === 'SMS') {
+      await this.jobs.enqueue('brevo-sms', {
+        storeId: body.storeId,
+        title,
+        campaignId: campaign.id,
+      });
+    } else {
+      const passes = await this.prisma.pass.findMany({
+        where: { storeId: body.storeId, walletRef: { not: null } },
+        select: { walletRef: true },
+      });
+      for (const pass of passes) {
+        if (!pass.walletRef) continue;
+        await this.jobs.enqueue('wallet-notify', {
+          walletRef: pass.walletRef,
+          message: title,
+        });
+      }
+    }
+
+    return campaign;
   }
 
   @Get('store/:storeId')

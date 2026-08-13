@@ -1,5 +1,14 @@
 const FALLBACK = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
 
+let authTokenGetter: (() => Promise<string | null>) | null = null;
+
+/** Permite que un frontend (p.ej. merchant-dashboard) inyecte el ID token. */
+export function setApiAuthTokenGetter(
+  getter: (() => Promise<string | null>) | null
+) {
+  authTokenGetter = getter;
+}
+
 /**
  * En el navegador siempre pega al mismo origen que sirvió la PWA; next.config.js
  * reescribe /api/* hacia el backend en :3333 del lado del servidor. Esto evita
@@ -15,12 +24,14 @@ export async function api<T = unknown>(
   options: RequestInit = {}
 ): Promise<T> {
   const base = getApiUrl();
+  const token = authTokenGetter ? await authTokenGetter() : null;
   let res: Response;
   try {
     res = await fetch(`${base}/api${path}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers || {}),
       },
       cache: 'no-store',
