@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -14,11 +15,8 @@ import {
   AppShell,
   KpiCard,
   ActivityTimeline,
-  PassPreview,
   GradientButton,
   OndaSelect,
-  OndaColorPicker,
-  ImageUploadField,
   useOndaDialogs,
   AnalyticsFiltersBar,
   InsightsPanel,
@@ -62,9 +60,16 @@ import {
 import { ActivityHeatmap } from "./ActivityHeatmap";
 import { PendingRequestsPanel } from "./PendingRequestsPanel";
 import { ReferralsPanel } from "./ReferralsPanel";
+import { PassDesigner } from "./PassDesigner";
+import { SetupChecklist } from "./SetupChecklist";
+import {
+  isSetupAllowedTab,
+  storeSetupStatus,
+} from "./setupStatus";
 import { useMerchantAuth } from "../lib/MerchantAuth";
 
 type Tab =
+  | "completar"
   | "resumen"
   | "comparativa"
   | "clientes"
@@ -89,6 +94,7 @@ const REGISTER_STORE_ENABLED = false;
 const EVENTOS_ENABLED = false;
 
 const SECTIONS: Tab[] = [
+  "completar",
   "resumen",
   ...(COMPARATIVA_ENABLED ? (["comparativa"] as const) : []),
   "clientes",
@@ -461,26 +467,34 @@ export function MerchantWorkspace() {
   });
 
   const store = stores.find((s) => s.id === storeId);
+  const setup = useMemo(() => storeSetupStatus(store), [store]);
+  const showSetupNav =
+    storesReady && stores.length > 0 && !setup.complete;
   const kpis = overview?.kpis;
   const customers = overview?.customers || [];
 
   const nav = useMemo(() => {
-    const items: Array<
-      readonly [Tab, string, ReactNode, boolean]
-    > = [
-      ["resumen", "Resumen", OndaIcons.chart, false],
-      ...(COMPARATIVA_ENABLED && stores.length >= 2
-        ? ([["comparativa", "Comparativa", OndaIcons.target, false]] as const)
-        : []),
-      ["clientes", "Clientes", OndaIcons.users, false],
-      ["actividad", "Actividad", OndaIcons.activity, false],
-      ["promos", "Promociones", OndaIcons.redeem, false],
-      ...(EVENTOS_ENABLED
-        ? ([["eventos", "Eventos", OndaIcons.ticket, false]] as const)
-        : []),
-      ["referidos", "Referidos", OndaIcons.users, false],
-      ["config", "Configuración", OndaIcons.gear, true],
-    ];
+    const items: Array<readonly [Tab, string, ReactNode, boolean]> =
+      showSetupNav
+        ? [
+            ["completar", "Completar", OndaIcons.check, false],
+            ["promos", "Promociones", OndaIcons.redeem, false],
+            ["config", "Configuración", OndaIcons.gear, true],
+          ]
+        : [
+            ["resumen", "Resumen", OndaIcons.chart, false],
+            ...(COMPARATIVA_ENABLED && stores.length >= 2
+              ? ([["comparativa", "Comparativa", OndaIcons.target, false]] as const)
+              : []),
+            ["clientes", "Clientes", OndaIcons.users, false],
+            ["actividad", "Actividad", OndaIcons.activity, false],
+            ["promos", "Promociones", OndaIcons.redeem, false],
+            ...(EVENTOS_ENABLED
+              ? ([["eventos", "Eventos", OndaIcons.ticket, false]] as const)
+              : []),
+            ["referidos", "Referidos", OndaIcons.users, false],
+            ["config", "Configuración", OndaIcons.gear, true],
+          ];
     return items.map(([href, label, icon, footer]) => ({
       href: `/${href}`,
       label,
@@ -488,7 +502,7 @@ export function MerchantWorkspace() {
       footer,
       active: tab === href,
     }));
-  }, [tab, stores.length]);
+  }, [tab, stores.length, showSetupNav]);
 
   const overviewQuery = useMemo(() => {
     const params = new URLSearchParams({
@@ -568,6 +582,35 @@ export function MerchantWorkspace() {
       router.replace("/resumen");
     }
   }, [tab, stores.length, storesReady, router]);
+
+  const setupWasComplete = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    setupWasComplete.current = null;
+  }, [storeId]);
+
+  useEffect(() => {
+    if (!storesReady || !storeId || stores.length === 0) return;
+    if (!setup.complete && !isSetupAllowedTab(tab)) {
+      router.replace("/completar");
+    } else if (setup.complete && tab === "completar") {
+      router.replace("/resumen");
+    }
+    if (setupWasComplete.current === false && setup.complete) {
+      toast.success("Tu negocio ya está listo", {
+        description: "Ya puedes usar el panel completo.",
+      });
+      router.replace("/resumen");
+    }
+    setupWasComplete.current = setup.complete;
+  }, [
+    storesReady,
+    storeId,
+    stores.length,
+    setup.complete,
+    tab,
+    router,
+  ]);
 
   const loadCompare = useCallback(async () => {
     if (!compareStoreIds.length) return;
@@ -690,7 +733,7 @@ export function MerchantWorkspace() {
 
   function closeCreatePromo() {
     setDuplicateSource(null);
-    router.push("/promos");
+    router.push(setup.complete ? "/promos" : "/completar");
   }
 
   async function handlePromoCreated(promo: any) {
@@ -698,7 +741,17 @@ export function MerchantWorkspace() {
     await loadOverview();
     setJustCreatedPromoId(promo.id);
     setDuplicateSource(null);
-    router.push("/promos");
+    const nextCount = (store?._count?.promotions ?? 0) + 1;
+    setStores((prev) =>
+      prev.map((s) =>
+        s.id === storeId
+          ? { ...s, _count: { promotions: nextCount } }
+          : s,
+      ),
+    );
+    if (!storeSetupStatus({ ...store, _count: { promotions: nextCount } }).complete) {
+      router.push("/completar");
+    }
   }
 
   function openCustomerDetail(passId: string) {
@@ -815,24 +868,45 @@ export function MerchantWorkspace() {
     return { tone, title, line };
   }, [overview, emptyRange, kpis, filters.preset, pulseSeed]);
 
-  async function saveDesign(e: FormEvent) {
+  async function saveDesign(e: FormEvent, opts?: { notify?: boolean }) {
     e.preventDefault();
     const payload = {
       ...design,
       ...derivePassPalette(design.backgroundColor || "#6E5AE6"),
     };
-    const saved = await api(`/pass-designs/store/${storeId}`, {
+    const saved = await api<any>(`/pass-designs/store/${storeId}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     });
     setDesign(saved);
-    if (store?.maxStamps != null) {
+    setStores((prev) =>
+      prev.map((s) =>
+        s.id === storeId
+          ? { ...s, passDesign: { ...s.passDesign, logoUrl: saved.logoUrl } }
+          : s,
+      ),
+    );
+    if (store?.maxStamps != null && (store._count?.promotions ?? 0) > 0) {
       try {
-        const updatedStore = await api(`/stores/${storeId}`, {
+        const updatedStore = await api<any>(`/stores/${storeId}`, {
           method: "PATCH",
           body: JSON.stringify({ maxStamps: store.maxStamps }),
         });
-        setStores((prev) => prev.map((s) => (s.id === storeId ? updatedStore : s)));
+        setStores((prev) =>
+          prev.map((s) =>
+            s.id === storeId
+              ? {
+                  ...s,
+                  ...updatedStore,
+                  passDesign: {
+                    ...s.passDesign,
+                    logoUrl: saved.logoUrl,
+                  },
+                  _count: s._count,
+                }
+              : s,
+          ),
+        );
       } catch (err: any) {
         await alert({
           title: "Diseño guardado, pero el tope de sellos no se actualizó",
@@ -842,11 +916,13 @@ export function MerchantWorkspace() {
         return;
       }
     }
-    await alert({
-      title: "Diseño guardado",
-      message: "La vista previa del pase quedó actualizada.",
-      tone: "success",
-    });
+    if (opts?.notify !== false) {
+      await alert({
+        title: "Diseño guardado",
+        message: "La vista previa del pase quedó actualizada.",
+        tone: "success",
+      });
+    }
   }
 
   async function shareStoreUrl() {
@@ -967,6 +1043,18 @@ export function MerchantWorkspace() {
     await api(`/promotions/${id}`, { method: "DELETE" });
     await loadPromos();
     await loadOverview();
+    setStores((prev) =>
+      prev.map((s) =>
+        s.id === storeId
+          ? {
+              ...s,
+              _count: {
+                promotions: Math.max(0, (s._count?.promotions ?? 1) - 1),
+              },
+            }
+          : s,
+      ),
+    );
     await alert({
       title: "Promoción eliminada",
       message: "La recompensa ya no aparece en el listado.",
@@ -1151,8 +1239,30 @@ export function MerchantWorkspace() {
           </div>
         ) : null}
 
+        {tab === "completar" && stores.length > 0 ? (
+          <SetupChecklist
+            status={setup}
+            design={design}
+            onDesignChange={setDesign}
+            maxStamps={store?.maxStamps ?? 12}
+            onMaxStampsChange={(maxStamps) => {
+              setStores((prev) =>
+                prev.map((s) =>
+                  s.id === storeId ? { ...s, maxStamps } : s,
+                ),
+              );
+            }}
+            milestoneStamps={promos
+              .filter((p: any) => p.isActive)
+              .map((p: any) => p.pointsRequired)}
+            onSaveDesign={(e) => saveDesign(e, { notify: false })}
+            onCreatePromo={() => router.push("/promos/nueva")}
+          />
+        ) : null}
+
         {stores.length > 0 &&
-        (["resumen", "comparativa", "clientes", "actividad"].includes(tab) ||
+        ((setup.complete &&
+          ["resumen", "comparativa", "clientes", "actividad"].includes(tab)) ||
           (tab === "promos" && !selectedPromoId)) ? (
           <AnalyticsFiltersBar
             value={filters}
@@ -2109,119 +2219,22 @@ export function MerchantWorkspace() {
                     Diseño del pase
                   </h3>
                 </div>
-                <div className="onda-pass-designer-layout">
-                  <form
-                    onSubmit={saveDesign}
-                    className="onda-card onda-pass-designer p-6"
-                  >
-                    <div className="onda-pass-designer-brand">
-                      <ImageUploadField
-                        label="Logo"
-                        hint="JPG, PNG o WEBP"
-                        aspectClass="aspect-square"
-                        className="onda-pass-designer-logo"
-                        value={design.logoUrl || ""}
-                        onChange={(logoUrl) =>
-                          setDesign({ ...design, logoUrl })
-                        }
-                      />
-                      <div className="onda-pass-designer-brand-color">
-                        <OndaColorPicker
-                          label="Color de marca"
-                          value={design.backgroundColor || "#6E5AE6"}
-                          fallback="#6E5AE6"
-                          onChange={(backgroundColor) =>
-                            setDesign({
-                              ...design,
-                              ...derivePassPalette(backgroundColor),
-                            })
-                          }
-                        />
-                        <p className="mt-2 text-xs leading-snug text-[var(--onda-muted)]">
-                          El texto y las etiquetas se ajustan solos para contraste
-                          y jerarquía.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="onda-pass-designer-fields">
-                      <div className="onda-pass-designer-row">
-                        <label>
-                          <span>Título</span>
-                          <input
-                            value={design.title || ""}
-                            onChange={(e) =>
-                              setDesign({ ...design, title: e.target.value })
-                            }
-                          />
-                        </label>
-                        <label>
-                          <span>Subtítulo</span>
-                          <input
-                            value={design.subtitle || ""}
-                            onChange={(e) =>
-                              setDesign({
-                                ...design,
-                                subtitle: e.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                      </div>
-
-                      <label>
-                        <span>Descripción</span>
-                        <textarea
-                          rows={3}
-                          value={design.description || ""}
-                          onChange={(e) =>
-                            setDesign({
-                              ...design,
-                              description: e.target.value,
-                            })
-                          }
-                        />
-                      </label>
-
-                      <label>
-                        <span>Número de sellos del ciclo</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={12}
-                          required
-                          value={store?.maxStamps ?? 12}
-                          onChange={(e) => {
-                            const maxStamps = Number(e.target.value);
-                            setStores((prev) =>
-                              prev.map((s) => (s.id === storeId ? { ...s, maxStamps } : s))
-                            );
-                          }}
-                        />
-                      </label>
-
-                      <div className="flex justify-end pt-1">
-                        <GradientButton type="submit">
-                          {OndaIcons.save}
-                          Guardar preview
-                        </GradientButton>
-                      </div>
-                    </div>
-                  </form>
-
-                  <div className="onda-pass-designer-preview">
-                    <p className="onda-pass-designer-label mb-3">Vista previa</p>
-                    <PassPreview
-                      {...design}
-                      points={Math.min(3, store?.maxStamps ?? 12)}
-                      maxStamps={store?.maxStamps ?? 12}
-                      milestoneStamps={promos
-                        .filter((p: any) => p.isActive)
-                        .map((p: any) => p.pointsRequired)}
-                      memberName="Cliente demo"
-                    />
-                  </div>
-                </div>
+                <PassDesigner
+                  design={design}
+                  onChange={setDesign}
+                  maxStamps={store?.maxStamps ?? 12}
+                  onMaxStampsChange={(maxStamps) => {
+                    setStores((prev) =>
+                      prev.map((s) =>
+                        s.id === storeId ? { ...s, maxStamps } : s,
+                      ),
+                    );
+                  }}
+                  milestoneStamps={promos
+                    .filter((p: any) => p.isActive)
+                    .map((p: any) => p.pointsRequired)}
+                  onSubmit={saveDesign}
+                />
               </div>
             ) : (
               <div className="onda-card p-5 text-sm text-[var(--onda-muted)]">

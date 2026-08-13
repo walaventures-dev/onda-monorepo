@@ -261,7 +261,7 @@ function MerchantBusinessSetup() {
     } catch {
       /* ignore */
     }
-    router.push('/resumen');
+    router.push('/completar');
   }
 
   function goNextFromLink(e: FormEvent) {

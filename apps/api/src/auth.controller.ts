@@ -11,6 +11,11 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from './prisma.service';
 import { FirebaseAuthService } from './firebase-auth.service';
 
+const merchantStoreInclude = {
+  passDesign: { select: { logoUrl: true } },
+  _count: { select: { promotions: true } },
+} as const;
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -55,7 +60,10 @@ export class AuthController {
   @Get('merchant/stores')
   async merchantStores(@Headers('authorization') authHeader: string | undefined) {
     if (!this.firebase.isConfigured) {
-      return this.prisma.store.findMany({ orderBy: { createdAt: 'desc' } });
+      return this.prisma.store.findMany({
+        include: merchantStoreInclude,
+        orderBy: { createdAt: 'desc' },
+      });
     }
     const email = await this.firebase.emailFromAuthHeader(authHeader);
     return this.storesForEmail(email);
@@ -77,6 +85,7 @@ export class AuthController {
   private storesForEmail(email: string) {
     return this.prisma.store.findMany({
       where: { ownerEmail: { equals: email, mode: 'insensitive' } },
+      include: merchantStoreInclude,
       orderBy: { createdAt: 'desc' },
     });
   }

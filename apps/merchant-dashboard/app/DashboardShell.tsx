@@ -7,6 +7,11 @@ import { MerchantWorkspace } from "./MerchantWorkspace";
 import { MerchantOnboarding } from "./MerchantOnboarding";
 import { MerchantLogin } from "./MerchantLogin";
 import { MerchantAuthProvider, useMerchantAuth } from "../lib/MerchantAuth";
+import {
+  isSetupAllowedPath,
+  merchantHomePath,
+  type StoreSetupFields,
+} from "./setupStatus";
 
 function LoadingScreen() {
   return (
@@ -63,9 +68,9 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       let cancelled = false;
       void (async () => {
         try {
-          const stores = await api<unknown[]>("/auth/merchant/stores");
+          const stores = await api<StoreSetupFields[]>("/auth/merchant/stores");
           if (!cancelled && Array.isArray(stores) && stores.length > 0) {
-            router.replace("/resumen");
+            router.replace(merchantHomePath(stores));
           }
         } catch {
           /* si falla el listado, deja completar el negocio */
@@ -78,16 +83,24 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
     if (user && isLogin) {
       const raw = new URLSearchParams(window.location.search).get("next");
-      let dest = safeReturnPath(raw) || "/resumen";
+      const next = safeReturnPath(raw);
+      let dest = next || "/resumen";
       let cancelled = false;
       void (async () => {
         try {
-          const stores = await api<unknown[]>("/auth/merchant/stores");
+          const stores = await api<StoreSetupFields[]>("/auth/merchant/stores");
           if (!Array.isArray(stores) || stores.length === 0) {
             const params = new URLSearchParams(window.location.search);
             params.delete("next");
             const qs = params.toString();
             dest = qs ? `/onboarding?${qs}` : "/onboarding";
+          } else {
+            const home = merchantHomePath(stores);
+            if (home === "/completar") {
+              dest = next && isSetupAllowedPath(next) ? next : "/completar";
+            } else {
+              dest = next || "/resumen";
+            }
           }
         } catch {
           /* si falla el listado, entra al panel */

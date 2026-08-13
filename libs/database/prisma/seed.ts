@@ -21,6 +21,11 @@ function slugify(name: string) {
     .replace(/^-+|-+$/g, '');
 }
 
+function demoLogoDataUri(letter: string, bg: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img"><rect width="128" height="128" rx="28" fill="${bg}"/><text x="64" y="84" text-anchor="middle" font-size="64" font-family="system-ui,sans-serif" font-weight="700" fill="#ffffff">${letter}</text></svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+}
+
 async function main() {
   await prisma.transaction.deleteMany();
   await prisma.feedback.deleteMany();
@@ -175,6 +180,10 @@ async function main() {
             backgroundColor: i === 0 ? '#3DB9E8' : i === 1 ? '#6E5AE6' : '#5B8AF0',
             foregroundColor: '#FFFFFF',
             labelColor: '#E5F6FC',
+            logoUrl: demoLogoDataUri(
+              s.name.trim().charAt(0).toUpperCase(),
+              i === 0 ? '#3DB9E8' : i === 1 ? '#6E5AE6' : '#5B8AF0',
+            ),
           },
         },
         promotions: {
