@@ -370,7 +370,7 @@ export function CreatePromo({
                 selected={form.pool === "BIENVENIDA"}
                 onClick={() => setForm((f) => ({ ...f, pool: "BIENVENIDA" }))}
               >
-                Bienvenida
+                Adquisición
               </FilterChip>
               <FilterChip
                 selected={form.pool === "RETENCION"}
@@ -381,8 +381,8 @@ export function CreatePromo({
             </div>
             {form.pool === "BIENVENIDA" ? (
               <p className="text-xs text-[var(--onda-muted)]">
-                Onda usa estas promociones para captar clientes con estrategias
-                comerciales y publicitarias administradas por Onda.
+                Estas promociones serán utilizadas con estrategias comerciales y
+                publicitarias administradas por Onda.
               </p>
             ) : null}
             {duplicateFrom ? (

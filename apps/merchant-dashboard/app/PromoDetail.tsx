@@ -13,6 +13,7 @@ import {
   api,
   type PromoTypeKey,
   OndaIcons,
+  SegmentedControl,
 } from '@onda/shared-ui';
 import { displayPhone, formatMoneyInput, parseMoneyInput } from '@onda/shared-utils';
 import {
@@ -57,7 +58,10 @@ export function PromoDetail({
   onDelete: (id: string) => void | Promise<void>;
   onDuplicate: (promo: any) => void;
   onSaved: () => void | Promise<void>;
-  onMovePool?: (promo: any) => void | Promise<void>;
+  onMovePool?: (
+    promo: any,
+    pool: 'BIENVENIDA' | 'RETENCION',
+  ) => void | Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -218,13 +222,26 @@ export function PromoDetail({
           </div>
           <p className="mt-1 text-sm text-[var(--onda-muted)]">{benefit}</p>
           <p className="mt-1 text-xs text-[var(--onda-muted)]">
-            {promo.pool === 'BIENVENIDA' ? 'Bolsa Bienvenida' : 'Bolsa Retención'}
+            {promo.pool === 'BIENVENIDA' ? 'Bolsa Adquisición' : 'Bolsa Retención'}
             {' · '}
             Cupo: {detail?.redemptionCount ?? 0}/{promo.maxRedemptions ?? '∞'}{' '}
             redenciones
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {onMovePool ? (
+            <SegmentedControl
+              aria-label="Bolsa de la promoción"
+              value={promo.pool === 'BIENVENIDA' ? 'BIENVENIDA' : 'RETENCION'}
+              onChange={(pool) => {
+                if (pool !== promo.pool) void onMovePool(promo, pool);
+              }}
+              options={[
+                { id: 'BIENVENIDA', label: 'Adquisición', icon: OndaIcons.sparkle },
+                { id: 'RETENCION', label: 'Retención', icon: OndaIcons.users },
+              ]}
+            />
+          ) : null}
           <button
             type="button"
             className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium"
@@ -241,15 +258,6 @@ export function PromoDetail({
             {OndaIcons.copy}
             Duplicar
           </button>
-          {onMovePool ? (
-            <button
-              type="button"
-              className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium"
-              onClick={() => onMovePool(promo)}
-            >
-              Mover de bolsa
-            </button>
-          ) : null}
           <button
             type="button"
             className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium"

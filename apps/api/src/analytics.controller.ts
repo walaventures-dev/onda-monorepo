@@ -453,7 +453,11 @@ export class AnalyticsController {
           canjesAllTime,
           remaining,
           daysLeft,
-          elegibles: customers.filter((c) => c.points >= p.pointsRequired).length,
+          elegibles: passes.filter((pass) =>
+            pass.promoAssignments.some(
+              (a) => a.promotionId === p.id && pass.points >= a.pointsRequired
+            )
+          ).length,
           locked: canjesAllTime > 0,
         };
       })

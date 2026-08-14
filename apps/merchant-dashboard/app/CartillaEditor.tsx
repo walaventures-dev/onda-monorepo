@@ -41,7 +41,7 @@ function isBetterWelcome(a: any, b: any) {
 }
 
 function poolLabel(pool: string) {
-  return pool === "BIENVENIDA" ? "Bienvenida" : "Retención";
+  return pool === "BIENVENIDA" ? "Adquisición" : "Retención";
 }
 
 export function CartillaEditor({
@@ -436,7 +436,7 @@ export function CartillaEditor({
 
             {warnings.length > 0 ? (
               <p className="text-xs text-amber-800">
-                En la onda {warnings.join(", ")} conviene que Bienvenida sea más
+                En la onda {warnings.join(", ")} conviene que Adquisición sea más
                 atractiva que Retención.
               </p>
             ) : null}
@@ -490,7 +490,7 @@ export function CartillaEditor({
                     onChange={setPickPool}
                     options={[
                       { id: "ALL", label: "Ambas" },
-                      { id: "BIENVENIDA", label: "Bienvenida" },
+                      { id: "BIENVENIDA", label: "Adquisición" },
                       { id: "RETENCION", label: "Retención" },
                     ]}
                   />

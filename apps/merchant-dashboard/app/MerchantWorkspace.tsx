@@ -25,7 +25,6 @@ import {
   rangeFromPreset,
   promoTypeLabel,
   promoTypeIcon,
-  formatPromoBenefit,
   api,
   toast,
   type AnalyticsFiltersValue,
@@ -145,10 +144,254 @@ function PromoTag({
   );
 }
 
-const promoBtnBase =
-  "inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition";
-const promoBtnNeutral = `${promoBtnBase} border-[var(--onda-border)] bg-[var(--onda-card)] text-[var(--onda-ink)] hover:border-[var(--onda-violet)]/40 hover:bg-[var(--onda-violet-soft)] hover:text-[var(--onda-violet)]`;
-const promoBtnDanger = `${promoBtnBase} border-transparent bg-transparent text-[var(--onda-danger)] hover:border-[var(--onda-danger)]/25 hover:bg-[var(--onda-danger)]/10`;
+type PromoPoolKey = "BIENVENIDA" | "RETENCION";
+
+const PROMO_POOL_OPTIONS: { id: PromoPoolKey; label: string; icon: ReactNode }[] =
+  [
+    { id: "BIENVENIDA", label: "Adquisición", icon: OndaIcons.sparkle },
+    { id: "RETENCION", label: "Retención", icon: OndaIcons.users },
+  ];
+
+function PromoIconBtn({
+  label,
+  danger,
+  onClick,
+  children,
+}: {
+  label: string;
+  danger?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      className={`inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full transition ${
+        danger
+          ? "text-[var(--onda-muted)] hover:bg-[var(--onda-danger)]/10 hover:text-[var(--onda-danger)]"
+          : "text-[var(--onda-muted)] hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
+      }`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function promoInsightBadge(promo: any, canjes: number) {
+  if (promo.needsReplacement) return "Sin stock";
+  if (canjes >= 3) return "Top";
+  if (canjes === 0) return "Sin tracción";
+  return null;
+}
+
+function PromoCatalogCard({
+  promo,
+  view,
+  stats,
+  highlight,
+  showTypeTag,
+  showStatusTag,
+  showPoolTag,
+  onOpen,
+  onToggle,
+  onDelete,
+}: {
+  promo: any;
+  view: "grid" | "list";
+  stats: any;
+  highlight: boolean;
+  showTypeTag: boolean;
+  showStatusTag: boolean;
+  showPoolTag: boolean;
+  onOpen: () => void;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  const canjes = stats?.canjesInRange ?? promo.redemptionCount ?? 0;
+  const elegibles = stats?.elegibles ?? 0;
+  const badge = promoInsightBadge(promo, canjes);
+  const pool: PromoPoolKey =
+    promo.pool === "BIENVENIDA" ? "BIENVENIDA" : "RETENCION";
+  const poolOpt = PROMO_POOL_OPTIONS.find((o) => o.id === pool);
+  const highlightCls = highlight
+    ? "ring-2 ring-[var(--onda-violet)] ring-offset-2"
+    : "";
+  const inactiveCls = showStatusTag && !promo.isActive ? "opacity-70" : "";
+
+  const insightTag = badge ? (
+    <PromoTag
+      icon={badge === "Top" ? OndaIcons.sparkle : OndaIcons.snowflake}
+      className={
+        badge === "Top"
+          ? "bg-[var(--onda-success)] text-white"
+          : "bg-amber-100 text-amber-800"
+      }
+    >
+      {badge}
+    </PromoTag>
+  ) : null;
+
+  const contextLine =
+    showStatusTag && !promo.isActive
+      ? "Inactiva"
+      : showPoolTag
+        ? poolOpt?.label
+        : null;
+
+  const statsList = (
+    <dl className="space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className="shrink-0 text-[var(--onda-violet)]" aria-hidden>
+          {OndaIcons.redeem}
+        </span>
+        <div className="min-w-0">
+          <dt className="text-[10px] font-medium leading-none text-[var(--onda-muted)]">
+            Canjes
+          </dt>
+          <dd className="tabular-nums text-sm font-semibold leading-tight text-[var(--onda-ink)]">
+            {canjes}
+          </dd>
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="shrink-0 text-[var(--onda-sky)]" aria-hidden>
+          {OndaIcons.users}
+        </span>
+        <div className="min-w-0">
+          <dt className="text-[10px] font-medium leading-none text-[var(--onda-muted)]">
+            Elegibles
+          </dt>
+          <dd className="tabular-nums text-sm font-semibold leading-tight text-[var(--onda-ink)]">
+            {elegibles}
+          </dd>
+        </div>
+      </div>
+    </dl>
+  );
+
+  const actions = (
+    <div className="flex shrink-0 items-center">
+      <PromoIconBtn
+        label={promo.isActive ? "Desactivar" : "Activar"}
+        onClick={onToggle}
+      >
+        {OndaIcons.power}
+      </PromoIconBtn>
+      <PromoIconBtn label="Eliminar" danger onClick={onDelete}>
+        {OndaIcons.trash}
+      </PromoIconBtn>
+    </div>
+  );
+
+  if (view === "list") {
+    return (
+      <article
+        role="button"
+        tabIndex={0}
+        onClick={onOpen}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onOpen();
+          }
+        }}
+        className={`onda-card flex cursor-pointer items-start gap-2.5 p-2.5 transition hover:shadow-[0_1px_2px_rgba(26,27,46,0.08)] ${highlightCls} ${inactiveCls}`}
+      >
+        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-[var(--onda-bg)]">
+          {promo.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={promo.imageUrl}
+              alt={promo.title}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center onda-gradient text-[10px] font-bold text-white">
+              O
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {showTypeTag ? (
+              <span className="shrink-0 text-[var(--onda-violet)]" aria-hidden>
+                {promoTypeIcon(promo.type)}
+              </span>
+            ) : null}
+            <h3 className="truncate font-display text-sm font-semibold">
+              {promo.title}
+            </h3>
+            {insightTag}
+          </div>
+          {contextLine ? (
+            <p className="text-[11px] text-[var(--onda-muted)]">{contextLine}</p>
+          ) : null}
+          {statsList}
+        </div>
+        {actions}
+      </article>
+    );
+  }
+
+  return (
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className={`onda-card cursor-pointer overflow-hidden transition hover:shadow-[0_1px_2px_rgba(26,27,46,0.08)] ${highlightCls} ${inactiveCls}`}
+    >
+      <div className="relative h-[4.5rem] bg-[var(--onda-bg)] sm:h-20 lg:h-24">
+        {promo.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={promo.imageUrl}
+            alt={promo.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center onda-gradient text-sm font-bold text-white/90">
+            Onda
+          </div>
+        )}
+        {insightTag ? (
+          <div className="absolute left-1.5 top-1.5">{insightTag}</div>
+        ) : null}
+      </div>
+      <div className="space-y-2 p-2.5">
+        <div className="flex items-start gap-1">
+          {showTypeTag ? (
+            <span
+              className="mt-0.5 shrink-0 text-[var(--onda-violet)]"
+              aria-hidden
+            >
+              {promoTypeIcon(promo.type)}
+            </span>
+          ) : null}
+          <h3 className="min-h-[2.25rem] flex-1 font-display text-xs font-semibold leading-snug line-clamp-2">
+            {promo.title}
+          </h3>
+        </div>
+        {contextLine ? (
+          <p className="text-[11px] text-[var(--onda-muted)]">{contextLine}</p>
+        ) : null}
+        {statsList}
+        <div className="flex justify-end">{actions}</div>
+      </div>
+    </article>
+  );
+}
 
 type PulseTone = "good" | "ok" | "warn" | "bad" | "neutral";
 
@@ -1047,6 +1290,49 @@ export function MerchantWorkspace() {
     router.push("/promos/nueva");
   }
 
+  async function movePromoPool(promo: any, next: PromoPoolKey) {
+    if (!promo?.id || promo.pool === next) return;
+    if (promo.locked) {
+      await alert({
+        title: "No se puede mover",
+        message:
+          "Esta promo ya fue redimida. Duplica y cambia una condición.",
+        tone: "warning",
+      });
+      return;
+    }
+    if (!promo.canMovePool) {
+      await alert({
+        title: "No se puede mover",
+        message:
+          "Ya hay clientes en una cartilla con esta promo. Duplica y cambia una condición.",
+        tone: "warning",
+      });
+      return;
+    }
+    try {
+      await api(`/promotions/${promo.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ pool: next }),
+      });
+      toast.success(
+        next === "BIENVENIDA" ? "Movida a Adquisición" : "Movida a Retención",
+      );
+      await loadPromos();
+      if (selectedPromoId === promo.id) {
+        const q = new URLSearchParams({
+          from: filters.from,
+          to: filters.to,
+        });
+        setPromoDetail(await api(`/promotions/${promo.id}/analytics?${q}`));
+      }
+    } catch (err: any) {
+      toast.danger("No se pudo mover", {
+        description: err.message || "Intenta de nuevo.",
+      });
+    }
+  }
+
   async function togglePromo(id: string, isActive: boolean) {
     const next = !isActive;
     const ok = await confirm({
@@ -1390,30 +1676,6 @@ export function MerchantWorkspace() {
                               { id: "all", label: "Todas", icon: OndaIcons.all },
                             ]}
                           />
-                          ),
-                        },
-                        {
-                          id: "promo-pool",
-                          label: "Bolsa",
-                          children: (
-                            <SegmentedControl
-                              aria-label="Bolsa de promoción"
-                              value={promoPoolFilter}
-                              onChange={setPromoPoolFilter}
-                              options={[
-                                { id: "ALL", label: "Ambas", icon: OndaIcons.all },
-                                {
-                                  id: "BIENVENIDA",
-                                  label: "Bienvenida",
-                                  icon: OndaIcons.sparkle,
-                                },
-                                {
-                                  id: "RETENCION",
-                                  label: "Retención",
-                                  icon: OndaIcons.users,
-                                },
-                              ]}
-                            />
                           ),
                         },
                       ]
@@ -1862,43 +2124,8 @@ export function MerchantWorkspace() {
               await loadPromos();
               await loadOverview();
             }}
-            onMovePool={async (promo) => {
-              if (!promo.canMovePool) {
-                await alert({
-                  title: "No se puede mover",
-                  message:
-                    "Ya hay clientes en una cartilla con esta promo. Duplica y cambia una condición.",
-                  tone: "warning",
-                });
-                return;
-              }
-              const next =
-                promo.pool === "BIENVENIDA" ? "RETENCION" : "BIENVENIDA";
-              try {
-                await api(`/promotions/${promo.id}`, {
-                  method: "PATCH",
-                  body: JSON.stringify({ pool: next }),
-                });
-                toast.success(
-                  next === "BIENVENIDA"
-                    ? "Movida a Bienvenida"
-                    : "Movida a Retención",
-                );
-                await loadPromos();
-                const q = new URLSearchParams({
-                  from: filters.from,
-                  to: filters.to,
-                });
-                setPromoDetail(
-                  await api(`/promotions/${promo.id}/analytics?${q}`),
-                );
-              } catch (err: any) {
-                await alert({
-                  title: "No se pudo mover",
-                  message: err.message || "Intenta de nuevo.",
-                  tone: "danger",
-                });
-              }
+            onMovePool={async (promo, next) => {
+              await movePromoPool(promo, next);
             }}
           />
         ) : null}
@@ -1978,9 +2205,10 @@ export function MerchantWorkspace() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  className="rounded-full border border-[var(--onda-border)] px-4 py-2 text-sm font-medium"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--onda-border)] px-4 py-2 text-sm font-medium"
                   onClick={() => router.push("/promos/cartilla/calendario")}
                 >
+                  {OndaIcons.calendar}
                   Calendario
                 </button>
                 <GradientButton
@@ -2038,10 +2266,19 @@ export function MerchantWorkspace() {
                   Promociones
                 </h2>
                 <p className="text-sm text-[var(--onda-muted)]">
-                  Dos bolsas: Bienvenida (Onda capta clientes) y Retención.
+                  Dos bolsas: Adquisición (Onda capta clientes) y Retención.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <SegmentedControl
+                  aria-label="Bolsa de promoción"
+                  value={promoPoolFilter}
+                  onChange={setPromoPoolFilter}
+                  options={[
+                    { id: "ALL", label: "Ambas", icon: OndaIcons.all },
+                    ...PROMO_POOL_OPTIONS,
+                  ]}
+                />
                 <div
                   className="inline-flex rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] p-0.5"
                   role="group"
@@ -2111,264 +2348,35 @@ export function MerchantWorkspace() {
             </div>
             {promoPoolFilter === "BIENVENIDA" ? (
               <p className="rounded-2xl bg-[var(--onda-violet-soft)] px-4 py-3 text-sm text-[var(--onda-violet)]">
-                Onda usa estas promociones para captar clientes con estrategias
-                comerciales y publicitarias administradas por Onda.
+                Estas promociones serán utilizadas con estrategias comerciales y
+                publicitarias administradas por Onda.
               </p>
             ) : null}
 
             <div
               className={
                 promoView === "grid"
-                  ? "grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
-                  : "flex flex-col gap-2"
+                  ? "grid justify-start gap-2 grid-cols-2 sm:[grid-template-columns:repeat(auto-fill,10.5rem)] lg:[grid-template-columns:repeat(auto-fill,11.25rem)]"
+                  : "flex flex-col gap-1.5"
               }
             >
-              {promos.map((p) => {
-                const stats = promoStatsMap.get(p.id);
-                const canjes = stats?.canjesInRange ?? 0;
-                const badge =
-                  p.needsReplacement
-                    ? "Sin stock"
-                    : canjes >= 3
-                      ? "Top"
-                      : canjes === 0
-                        ? "Sin tracción"
-                        : null;
-                const benefit = formatPromoBenefit(p);
-
-                return promoView === "grid" ? (
-                  <article
-                    key={p.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openPromoDetail(p.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        openPromoDetail(p.id);
-                      }
-                    }}
-                    className={`onda-card cursor-pointer overflow-hidden transition hover:shadow-lg ${
-                      p.id === justCreatedPromoId
-                        ? "ring-2 ring-[var(--onda-violet)] ring-offset-2"
-                        : ""
-                    }`}
-                  >
-                    <div className="relative aspect-[16/10] bg-[var(--onda-bg)]">
-                      {p.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.imageUrl}
-                          alt={p.title}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center onda-gradient text-xl font-bold text-white/90">
-                          Onda
-                        </div>
-                      )}
-                      <div className="absolute left-2 top-2 flex flex-wrap gap-1">
-                        <PromoTag
-                          icon={promoTypeIcon(p.type)}
-                          className="bg-white/90 text-[var(--onda-violet)]"
-                        >
-                          {promoTypeLabel(p.type)}
-                        </PromoTag>
-                        {badge ? (
-                          <PromoTag
-                            icon={
-                              badge === "Top"
-                                ? OndaIcons.sparkle
-                                : OndaIcons.snowflake
-                            }
-                            className={
-                              badge === "Top"
-                                ? "bg-[var(--onda-success)] text-white"
-                                : "bg-amber-100 text-amber-800"
-                            }
-                          >
-                            {badge}
-                          </PromoTag>
-                        ) : null}
-                      </div>
-                      <PromoTag
-                        icon={p.isActive ? OndaIcons.check : OndaIcons.close}
-                        className={`absolute right-2 top-2 ${
-                          p.isActive
-                            ? "bg-[var(--onda-success)] text-white"
-                            : "bg-white/90 text-[var(--onda-muted)]"
-                        }`}
-                      >
-                        {p.isActive ? "Activa" : "Inactiva"}
-                      </PromoTag>
-                    </div>
-                    <div className="space-y-1.5 p-3">
-                      <h3 className="font-display text-sm font-semibold leading-snug line-clamp-2">
-                        {p.title}
-                      </h3>
-                      <p className="line-clamp-2 text-xs text-[var(--onda-muted)]">
-                        {benefit}
-                      </p>
-                      <p className="text-xs text-[var(--onda-muted)]">
-                        {canjes} canjes · {stats?.elegibles ?? 0} elegibles
-                        {stats?.remaining != null
-                          ? ` · ${stats.remaining} rest.`
-                          : stats?.daysLeft != null
-                            ? ` · ${stats.daysLeft}d`
-                            : ""}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5 pt-0.5">
-                        <button
-                          type="button"
-                          className={promoBtnNeutral}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openPromoDetail(p.id);
-                          }}
-                        >
-                          {OndaIcons.eye}
-                          Ver detalle
-                        </button>
-                        <button
-                          type="button"
-                          className={promoBtnNeutral}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            togglePromo(p.id, p.isActive);
-                          }}
-                        >
-                          {OndaIcons.power}
-                          {p.isActive ? "Desactivar" : "Activar"}
-                        </button>
-                        <button
-                          type="button"
-                          className={promoBtnDanger}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deletePromo(p.id);
-                          }}
-                        >
-                          {OndaIcons.trash}
-                          Eliminar
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                ) : (
-                  <article
-                    key={p.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openPromoDetail(p.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        openPromoDetail(p.id);
-                      }
-                    }}
-                    className={`onda-card flex cursor-pointer items-center gap-3 p-2.5 pr-3 transition hover:shadow-md ${
-                      p.id === justCreatedPromoId
-                        ? "ring-2 ring-[var(--onda-violet)] ring-offset-2"
-                        : ""
-                    }`}
-                  >
-                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[var(--onda-bg)]">
-                      {p.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.imageUrl}
-                          alt={p.title}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center onda-gradient text-xs font-bold text-white">
-                          O
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="truncate font-display text-sm font-semibold">
-                          {p.title}
-                        </h3>
-                        <PromoTag
-                          icon={promoTypeIcon(p.type)}
-                          className="bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]"
-                        >
-                          {promoTypeLabel(p.type)}
-                        </PromoTag>
-                        {badge ? (
-                          <PromoTag
-                            icon={
-                              badge === "Top"
-                                ? OndaIcons.sparkle
-                                : OndaIcons.snowflake
-                            }
-                            className={
-                              badge === "Top"
-                                ? "bg-[var(--onda-success)] text-white"
-                                : "bg-amber-100 text-amber-800"
-                            }
-                          >
-                            {badge}
-                          </PromoTag>
-                        ) : null}
-                        <PromoTag
-                          icon={p.isActive ? OndaIcons.check : OndaIcons.close}
-                          className={
-                            p.isActive
-                              ? "bg-[var(--onda-success)]/15 text-[var(--onda-success)]"
-                              : "bg-[var(--onda-bg)] text-[var(--onda-muted)]"
-                          }
-                        >
-                          {p.isActive ? "Activa" : "Inactiva"}
-                        </PromoTag>
-                      </div>
-                      <p className="mt-0.5 line-clamp-1 text-xs text-[var(--onda-muted)]">
-                        {benefit} · {canjes} canjes · {stats?.elegibles ?? 0}{" "}
-                        elegibles
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
-                      <button
-                        type="button"
-                        className={promoBtnNeutral}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openPromoDetail(p.id);
-                        }}
-                      >
-                        {OndaIcons.eye}
-                        Detalle
-                      </button>
-                      <button
-                        type="button"
-                        className={promoBtnNeutral}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          togglePromo(p.id, p.isActive);
-                        }}
-                      >
-                        {OndaIcons.power}
-                        {p.isActive ? "Desactivar" : "Activar"}
-                      </button>
-                      <button
-                        type="button"
-                        className={promoBtnDanger}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deletePromo(p.id);
-                        }}
-                      >
-                        {OndaIcons.trash}
-                        Eliminar
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
+              {promos.map((p) => (
+                <PromoCatalogCard
+                  key={p.id}
+                  promo={p}
+                  view={promoView}
+                  stats={promoStatsMap.get(p.id)}
+                  highlight={p.id === justCreatedPromoId}
+                  showTypeTag={filters.promoTypes.length !== 1}
+                  showStatusTag={promoStatusFilter === "all"}
+                  showPoolTag={promoPoolFilter === "ALL"}
+                  onOpen={() => openPromoDetail(p.id)}
+                  onToggle={() => void togglePromo(p.id, p.isActive)}
+                  onDelete={() => void deletePromo(p.id)}
+                />
+              ))}
               {!promos.length ? (
-                <p className="text-[var(--onda-muted)] xl:col-span-5">
+                <p className="col-span-full text-sm text-[var(--onda-muted)]">
                   No hay promociones con estos filtros. Crea una con “+ Nueva
                   promo”.
                 </p>

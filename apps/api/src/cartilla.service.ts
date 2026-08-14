@@ -675,7 +675,7 @@ export class CartillaService {
       const key = `${n}:${pool}`;
       if (used.has(key)) {
         throw new BadRequestException(
-          `Ya hay una promo de ${pool === 'BIENVENIDA' ? 'Bienvenida' : 'Retención'} en la onda ${n}`
+          `Ya hay una promo de ${pool === 'BIENVENIDA' ? 'Adquisición' : 'Retención'} en la onda ${n}`
         );
       }
       used.add(key);
