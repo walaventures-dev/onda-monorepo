@@ -66,6 +66,16 @@ export function formatCop(amount: number) {
   return `$${Math.round(amount).toLocaleString('es-CO')}`;
 }
 
+export function formatMoneyInput(raw: string) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return Number(digits).toLocaleString('es-CO');
+}
+
+export function parseMoneyInput(raw: string) {
+  return String(raw || '').replace(/\D/g, '');
+}
+
 export function parsePlanId(raw: string | null | undefined): PlanId | null {
   const v = (raw || '').trim().toUpperCase();
   return v === 'PRO' || v === 'BASIC' ? v : null;

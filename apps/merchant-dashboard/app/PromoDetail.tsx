@@ -14,7 +14,7 @@ import {
   type PromoTypeKey,
   OndaIcons,
 } from '@onda/shared-ui';
-import { displayPhone } from '@onda/shared-utils';
+import { displayPhone, formatMoneyInput, parseMoneyInput } from '@onda/shared-utils';
 import {
   ResponsiveContainer,
   BarChart,
@@ -333,12 +333,15 @@ export function PromoDetail({
                   <label className="block text-sm text-[var(--onda-muted)]">
                     Valor de descuento (COP)
                     <input
-                      type="number"
-                      min={1}
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
                       required
                       className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                      value={form.value}
-                      onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
+                      value={formatMoneyInput(form.value)}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, value: parseMoneyInput(e.target.value) }))
+                      }
                     />
                   </label>
                 ) : null}
@@ -388,13 +391,17 @@ export function PromoDetail({
                     <label className="text-sm text-[var(--onda-muted)]">
                       Precio del producto (COP)
                       <input
-                        type="number"
-                        min={1}
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
                         required
                         className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                        value={form.value}
+                        value={formatMoneyInput(form.value)}
                         onChange={(e) =>
-                          setForm((f) => ({ ...f, value: e.target.value }))
+                          setForm((f) => ({
+                            ...f,
+                            value: parseMoneyInput(e.target.value),
+                          }))
                         }
                       />
                     </label>

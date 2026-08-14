@@ -50,6 +50,7 @@
     "@google-cloud/tasks": "^7.0.0",
     "@heroui/react": "^3.2.3",
     "@heroui/styles": "^3.2.3",
+    "@internationalized/date": "^3.12.3",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.1.28",
     "@nestjs/config": "^4.0.4",

@@ -14,6 +14,14 @@ import { FirebaseAuthService } from './firebase-auth.service';
 const merchantStoreInclude = {
   passDesign: { select: { logoUrl: true } },
   _count: { select: { promotions: true } },
+  cartillas: {
+    where: { isDefault: true },
+    select: {
+      id: true,
+      isDefault: true,
+      _count: { select: { items: true } },
+    },
+  },
 } as const;
 
 @Controller('auth')

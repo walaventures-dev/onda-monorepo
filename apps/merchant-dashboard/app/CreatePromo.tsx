@@ -13,6 +13,7 @@ import {
   type PromoTypeKey,
   OndaIcons,
 } from "@onda/shared-ui";
+import { formatMoneyInput, parseMoneyInput } from "@onda/shared-utils";
 
 type PromoFormState = {
   description: string;
@@ -78,6 +79,7 @@ export function CreatePromo({
   alert,
   onCreated,
   onClose,
+  backLabel = "← Todas las promociones",
 }: {
   storeId: string;
   store: { maxStamps?: number } | null;
@@ -97,6 +99,7 @@ export function CreatePromo({
   }) => Promise<void>;
   onCreated: (promo: any) => void | Promise<void>;
   onClose: () => void;
+  backLabel?: string;
 }) {
   const initialForm = duplicateFrom
     ? formFromSource(duplicateFrom)
@@ -140,13 +143,17 @@ export function CreatePromo({
       if (!form.productName.trim() || !form.value || Number(form.value) <= 0) {
         await alert({
           title: "Falta el producto",
-          message: "Indica el nombre y el precio del producto para el seguimiento.",
+          message:
+            "Indica el nombre y el precio del producto para el seguimiento.",
           tone: "warning",
         });
         return;
       }
     }
-    if (duplicateFrom && conditionsKey(form) === conditionsKey(formFromSource(duplicateFrom))) {
+    if (
+      duplicateFrom &&
+      conditionsKey(form) === conditionsKey(formFromSource(duplicateFrom))
+    ) {
       await alert({
         title: "Cambia una condición",
         message:
@@ -209,14 +216,13 @@ export function CreatePromo({
         onClick={handleBack}
         className="cursor-pointer text-xs font-medium text-[var(--onda-muted)] hover:text-[var(--onda-ink)]"
       >
-        ← Todas las promociones
+        {backLabel}
       </button>
 
       <div>
         <h2 className="font-display text-xl font-semibold">Nueva promoción</h2>
         <p className="text-sm text-[var(--onda-muted)]">
-          El nombre se arma solo según el beneficio. La cartilla decide en qué
-          onda se reclama.
+          Agrega beneficios a tus clientes.
         </p>
       </div>
 
@@ -268,7 +274,9 @@ export function CreatePromo({
                 required
                 className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
                 value={form.value}
-                onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, value: e.target.value }))
+                }
               />
             </label>
           ) : null}
@@ -276,12 +284,16 @@ export function CreatePromo({
             <label className="block text-sm text-[var(--onda-muted)]">
               Valor de descuento (COP)
               <input
-                type="number"
-                min={1}
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
                 required
                 className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                value={form.value}
-                onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
+                value={formatMoneyInput(form.value)}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, value: parseMoneyInput(e.target.value) }))
+                }
+                placeholder="Ej. 8.000"
               />
             </label>
           ) : null}
@@ -332,15 +344,16 @@ export function CreatePromo({
               <label className="text-sm text-[var(--onda-muted)]">
                 Precio del producto (COP)
                 <input
-                  type="number"
-                  min={1}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
                   required
                   className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                  value={form.value}
+                  value={formatMoneyInput(form.value)}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, value: e.target.value }))
+                    setForm((f) => ({ ...f, value: parseMoneyInput(e.target.value) }))
                   }
-                  placeholder="Ej. 8000"
+                  placeholder="Ej. 8.000"
                 />
               </label>
             </div>

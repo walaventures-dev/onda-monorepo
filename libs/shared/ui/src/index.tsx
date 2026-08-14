@@ -13,6 +13,8 @@ export { PhoneInput } from './PhoneInput';
 export type { PhoneInputProps } from './PhoneInput';
 export { OndaSelect } from './OndaSelect';
 export type { OndaSelectProps, OndaSelectOption } from './OndaSelect';
+export { OndaDatePicker } from './OndaDatePicker';
+export type { OndaDatePickerProps } from './OndaDatePicker';
 export {
   LegalLayout,
   PrivacyPolicyContent,

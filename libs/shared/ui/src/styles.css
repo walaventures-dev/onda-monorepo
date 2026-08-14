@@ -1131,3 +1131,76 @@ button.onda-gradient:focus-visible:not(:disabled) {
 .onda-legal h2 {
   margin-top: 0.25rem;
 }
+
+/* Hero UI DatePicker */
+.onda-date-picker {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.onda-date-picker-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--onda-muted);
+}
+
+.onda-date-field {
+  display: flex !important;
+  align-items: center;
+  min-height: 2.5rem;
+  width: 100%;
+  padding: 0.35rem 0.45rem 0.35rem 0.85rem !important;
+  border-radius: 0.85rem !important;
+  border: 1px solid var(--onda-border) !important;
+  background: var(--onda-card) !important;
+  box-shadow: 0 1px 2px rgba(26, 27, 46, 0.04);
+}
+
+.onda-date-picker--compact .onda-date-field {
+  min-height: 2rem;
+  padding: 0.2rem 0.3rem 0.2rem 0.55rem !important;
+  font-size: 0.75rem;
+}
+
+.onda-date-field:hover {
+  border-color: var(--onda-bridge) !important;
+}
+
+.onda-date-field[data-focus-within],
+.onda-date-field:focus-within {
+  outline: 2px solid var(--onda-violet-soft);
+  outline-offset: 2px;
+  border-color: var(--onda-bridge) !important;
+}
+
+.onda-date-picker-trigger {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 999px !important;
+  color: var(--onda-muted);
+  cursor: pointer;
+}
+
+.onda-date-picker-trigger:hover {
+  background: var(--onda-violet-soft);
+  color: var(--onda-violet);
+}
+
+.onda-date-popover {
+  border-radius: 1rem !important;
+  border: 1px solid var(--onda-border) !important;
+  background: var(--onda-card) !important;
+  box-shadow: 0 16px 40px rgba(26, 27, 46, 0.12) !important;
+  padding: 0.75rem !important;
+}
+
+.onda-date-popover [data-selected],
+.onda-date-popover [aria-selected="true"] {
+  background: var(--onda-primary-500) !important;
+  color: #fff !important;
+}

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { OndaSelect } from './OndaSelect';
+import { OndaDatePicker } from './OndaDatePicker';
 import { OndaIcons } from './icons';
 
 export type PromoTypeKey =
@@ -282,19 +283,19 @@ export function AnalyticsFiltersBar({
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-[11px] font-medium text-[var(--onda-muted)]">Rango</span>
           {value.preset === 'custom' ? (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <input
-                type="date"
-                className="cursor-pointer rounded-md border border-[var(--onda-border)] bg-[var(--onda-bg)] px-2 py-1 text-xs text-[var(--onda-ink)]"
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <OndaDatePicker
+                compact
+                aria-label="Desde"
                 value={value.from}
-                onChange={(e) => onChange({ ...value, from: e.target.value })}
+                onChange={(from) => onChange({ ...value, from })}
               />
               <span className="text-xs text-[var(--onda-muted)]">→</span>
-              <input
-                type="date"
-                className="cursor-pointer rounded-md border border-[var(--onda-border)] bg-[var(--onda-bg)] px-2 py-1 text-xs text-[var(--onda-ink)]"
+              <OndaDatePicker
+                compact
+                aria-label="Hasta"
                 value={value.to}
-                onChange={(e) => onChange({ ...value, to: e.target.value })}
+                onChange={(to) => onChange({ ...value, to })}
               />
             </div>
           ) : (

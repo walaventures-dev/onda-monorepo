@@ -194,6 +194,8 @@ export {
   BILLING_MONTHS,
   PLAN_META,
   formatCop,
+  formatMoneyInput,
+  parseMoneyInput,
   parsePlanId,
   parseBillingPeriod,
   quotePlan,

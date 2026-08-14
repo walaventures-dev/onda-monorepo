@@ -33,7 +33,7 @@ import {
   BadgePill,
   TxActivityRow,
 } from "@onda/shared-ui";
-import { displayPhone, derivePassPalette } from "@onda/shared-utils";
+import { displayPhone, formatMoneyInput, parseMoneyInput } from "@onda/shared-utils";
 import {
   PLAN_ONDA_MONTHLY_LIMIT,
   PLAN_SMS_CAMPAIGNS_MONTHLY,
@@ -99,16 +99,6 @@ const STORE_CURRENCIES = [
   { id: "USD", label: "USD — dólar" },
   { id: "EUR", label: "EUR — euro" },
 ] as const;
-
-function formatMoneyInput(raw: string) {
-  const digits = raw.replace(/\D/g, "");
-  if (!digits) return "";
-  return Number(digits).toLocaleString("es-CO");
-}
-
-function parseMoneyInput(raw: string) {
-  return raw.replace(/\D/g, "");
-}
 
 const SECTIONS: Tab[] = [
   "completar",
@@ -472,7 +462,6 @@ export function MerchantWorkspace() {
   const [txs, setTxs] = useState<any[]>([]);
   const [promos, setPromos] = useState<any[]>([]);
   const [memberships, setMemberships] = useState<any[]>([]);
-  const [design, setDesign] = useState<any>(null);
   const [billing, setBilling] = useState<any>(null);
   const [duplicateSource, setDuplicateSource] = useState<any>(null);
   const [justCreatedPromoId, setJustCreatedPromoId] = useState<string | null>(
@@ -611,7 +600,28 @@ export function MerchantWorkspace() {
 
   const loadCartillas = useCallback(async () => {
     if (!storeId) return;
-    setCartillasData(await api(`/cartillas?storeId=${storeId}`));
+    const data = await api<any>(`/cartillas?storeId=${storeId}`);
+    setCartillasData(data);
+    const def =
+      (data?.cartillas || []).find((c: any) => c.isDefault) ||
+      data?.cartillas?.[0];
+    if (!def) return;
+    setStores((prev) =>
+      prev.map((s) =>
+        s.id === storeId
+          ? {
+              ...s,
+              cartillas: [
+                {
+                  id: def.id,
+                  isDefault: true,
+                  _count: { items: def.items?.length ?? 0 },
+                },
+              ],
+            }
+          : s,
+      ),
+    );
   }, [storeId]);
 
   useEffect(() => {
@@ -712,9 +722,6 @@ export function MerchantWorkspace() {
     loadPromos();
     loadCartillas();
     api<any[]>(`/memberships?storeId=${storeId}`).then(setMemberships);
-    api(`/pass-designs/store/${storeId}`)
-      .then(setDesign)
-      .catch(() => setDesign(null));
     api(`/billing/store/${storeId}`).then(setBilling);
   }, [storeId, mode, eventId, loadOverview, loadTxs, loadPromos, loadCartillas]);
 
@@ -809,9 +816,7 @@ export function MerchantWorkspace() {
           : s,
       ),
     );
-    if (!storeSetupStatus({ ...store, _count: { promotions: nextCount } }).complete) {
-      router.push("/completar");
-    }
+    router.push("/promos");
   }
 
   function openCustomerDetail(passId: string) {
@@ -927,63 +932,6 @@ export function MerchantWorkspace() {
 
     return { tone, title, line };
   }, [overview, emptyRange, kpis, filters.preset, pulseSeed]);
-
-  async function saveDesign(e: FormEvent, opts?: { notify?: boolean }) {
-    e.preventDefault();
-    const payload = {
-      ...design,
-      ...derivePassPalette(design.backgroundColor || "#6E5AE6"),
-    };
-    const saved = await api<any>(`/pass-designs/store/${storeId}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
-    setDesign(saved);
-    setStores((prev) =>
-      prev.map((s) =>
-        s.id === storeId
-          ? { ...s, passDesign: { ...s.passDesign, logoUrl: saved.logoUrl } }
-          : s,
-      ),
-    );
-    if (store?.maxStamps != null && (store._count?.promotions ?? 0) > 0) {
-      try {
-        const updatedStore = await api<any>(`/stores/${storeId}`, {
-          method: "PATCH",
-          body: JSON.stringify({ maxStamps: store.maxStamps }),
-        });
-        setStores((prev) =>
-          prev.map((s) =>
-            s.id === storeId
-              ? {
-                  ...s,
-                  ...updatedStore,
-                  passDesign: {
-                    ...s.passDesign,
-                    logoUrl: saved.logoUrl,
-                  },
-                  _count: s._count,
-                }
-              : s,
-          ),
-        );
-      } catch (err: any) {
-        await alert({
-          title: "Diseño guardado, pero el tope de sellos no se actualizó",
-          message: err.message || "Intenta de nuevo.",
-          tone: "danger",
-        });
-        return;
-      }
-    }
-    if (opts?.notify !== false) {
-      await alert({
-        title: "Diseño guardado",
-        message: "La vista previa del pase quedó actualizada.",
-        tone: "success",
-      });
-    }
-  }
 
   async function saveStoreEconomics(e: FormEvent) {
     e.preventDefault();
@@ -1329,21 +1277,50 @@ export function MerchantWorkspace() {
         {tab === "completar" && stores.length > 0 ? (
           <SetupChecklist
             status={setup}
-            design={design}
-            onDesignChange={setDesign}
-            maxStamps={store?.maxStamps ?? 12}
-            onMaxStampsChange={(maxStamps) => {
+            storeId={storeId}
+            store={store}
+            cartillaId={
+              setup.defaultCartillaId ||
+              (cartillasData?.cartillas || []).find((c: any) => c.isDefault)
+                ?.id ||
+              null
+            }
+            onCartillaSaved={(cartilla) => {
               setStores((prev) =>
                 prev.map((s) =>
-                  s.id === storeId ? { ...s, maxStamps } : s,
+                  s.id === storeId
+                    ? {
+                        ...s,
+                        cartillas: [
+                          {
+                            id: cartilla.id,
+                            isDefault: true,
+                            _count: {
+                              items: cartilla.items?.length ?? 0,
+                            },
+                          },
+                        ],
+                      }
+                    : s,
+                ),
+              );
+              void loadCartillas();
+            }}
+            onPromoCreated={async () => {
+              await loadPromos();
+              setStores((prev) =>
+                prev.map((s) =>
+                  s.id === storeId
+                    ? {
+                        ...s,
+                        _count: {
+                          promotions: (s._count?.promotions ?? 0) + 1,
+                        },
+                      }
+                    : s,
                 ),
               );
             }}
-            milestoneStamps={promos
-              .filter((p: any) => p.isActive)
-              .map((p: any) => p.pointsRequired)}
-            onSaveDesign={(e) => saveDesign(e, { notify: false })}
-            onCreatePromo={() => router.push("/promos/nueva")}
           />
         ) : null}
 
@@ -1957,6 +1934,21 @@ export function MerchantWorkspace() {
             onClose={() => {
               void loadCartillas();
               router.push("/promos");
+            }}
+            onPromoCreated={async () => {
+              await loadPromos();
+              setStores((prev) =>
+                prev.map((s) =>
+                  s.id === storeId
+                    ? {
+                        ...s,
+                        _count: {
+                          promotions: (s._count?.promotions ?? 0) + 1,
+                        },
+                      }
+                    : s,
+                ),
+              );
             }}
           />
         ) : null}

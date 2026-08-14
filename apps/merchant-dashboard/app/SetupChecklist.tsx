@@ -1,8 +1,7 @@
 "use client";
 
-import type { FormEvent } from "react";
-import { GradientButton, OndaIcons, toast } from "@onda/shared-ui";
-import { PassDesigner } from "./PassDesigner";
+import { OndaIcons } from "@onda/shared-ui";
+import { CartillaEditor } from "./CartillaEditor";
 import type { StoreSetupStatus } from "./setupStatus";
 
 function TaskBadge({ done }: { done: boolean }) {
@@ -21,40 +20,20 @@ function TaskBadge({ done }: { done: boolean }) {
 
 export function SetupChecklist({
   status,
-  design,
-  onDesignChange,
-  maxStamps,
-  onMaxStampsChange,
-  milestoneStamps,
-  onSaveDesign,
-  onCreatePromo,
+  storeId,
+  store,
+  cartillaId,
+  onCartillaSaved,
+  onPromoCreated,
 }: {
   status: StoreSetupStatus;
-  design: any;
-  onDesignChange: (next: any) => void;
-  maxStamps: number;
-  onMaxStampsChange: (n: number) => void;
-  milestoneStamps: number[];
-  onSaveDesign: (e: FormEvent) => Promise<void>;
-  onCreatePromo: () => void;
+  storeId: string;
+  store: { maxStamps?: number; name?: string } | null;
+  cartillaId: string | null;
+  onCartillaSaved: (cartilla: any) => void;
+  onPromoCreated: (promo: any) => void | Promise<void>;
 }) {
   const progressPct = (status.doneCount / 2) * 100;
-
-  async function handleSaveDesign(e: FormEvent) {
-    e.preventDefault();
-    if (!design?.logoUrl?.trim()) {
-      toast.danger("Falta el logo", {
-        description: "Sube el logo de tu negocio para configurar la tarjeta.",
-      });
-      return;
-    }
-    await onSaveDesign(e);
-    if (!status.hasPromo) {
-      toast.success("Tarjeta guardada", {
-        description: "Sigue con tu primera promoción.",
-      });
-    }
-  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -63,8 +42,8 @@ export function SetupChecklist({
           Completa tu negocio
         </h2>
         <p className="mt-1 text-sm text-[var(--onda-muted)]">
-          Antes de abrir el panel, define la tarjeta de lealtad (con logo) y al
-          menos una promoción.
+          Antes de abrir el panel, arma tu cartilla de lealtad y al menos una
+          promoción. Puedes crear la promo desde la misma cartilla.
         </p>
       </div>
 
@@ -90,63 +69,35 @@ export function SetupChecklist({
             style={{ width: `${progressPct}%` }}
           />
         </div>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          <li className="flex items-center gap-2 text-sm">
+            <TaskBadge done={status.hasCartilla} />
+            Cartilla con al menos una promo
+          </li>
+          <li className="flex items-center gap-2 text-sm">
+            <TaskBadge done={status.hasPromo} />
+            {status.hasPromo
+              ? `${status.promoCount} ${
+                  status.promoCount === 1 ? "promoción" : "promociones"
+                }`
+              : "Primera promoción"}
+          </li>
+        </ul>
       </div>
 
-      <section className="onda-card space-y-4 p-5">
-        <div className="flex items-start gap-3">
-          <TaskBadge done={status.hasCard} />
-          <div className="min-w-0 flex-1">
-            <h3 className="font-display text-lg font-semibold">
-              Tarjeta de lealtad
-            </h3>
-            <p className="text-sm text-[var(--onda-muted)]">
-              {status.hasCard
-                ? "El logo ya está en tu pase. Puedes ajustar el diseño cuando quieras."
-                : "Sube el logo y guarda el diseño. Sin logo la tarjeta no cuenta como configurada."}
-            </p>
-          </div>
-        </div>
-        {design ? (
-          <PassDesigner
-            design={design}
-            onChange={onDesignChange}
-            maxStamps={maxStamps}
-            onMaxStampsChange={onMaxStampsChange}
-            milestoneStamps={milestoneStamps}
-            onSubmit={handleSaveDesign}
-            requireLogo
-            saveLabel="Guardar tarjeta"
-          />
-        ) : (
-          <p className="text-sm text-[var(--onda-muted)]">
-            Cargando diseño del pase…
-          </p>
-        )}
-      </section>
-
-      <section className="onda-card space-y-4 p-5">
-        <div className="flex items-start gap-3">
-          <TaskBadge done={status.hasPromo} />
-          <div className="min-w-0 flex-1">
-            <h3 className="font-display text-lg font-semibold">
-              Primera promoción
-            </h3>
-            <p className="text-sm text-[var(--onda-muted)]">
-              {status.hasPromo
-                ? `Ya tienes ${status.promoCount} ${
-                    status.promoCount === 1 ? "promoción" : "promociones"
-                  }.`
-                : "Define el beneficio que van a canjear tus clientes."}
-            </p>
-          </div>
-        </div>
-        {status.hasPromo ? null : (
-          <GradientButton type="button" onClick={onCreatePromo}>
-            {OndaIcons.plus}
-            Crear promoción
-          </GradientButton>
-        )}
-      </section>
+      {cartillaId ? (
+        <CartillaEditor
+          embedded
+          storeId={storeId}
+          store={store}
+          cartillaId={cartillaId}
+          onClose={() => undefined}
+          onSaved={onCartillaSaved}
+          onPromoCreated={onPromoCreated}
+        />
+      ) : (
+        <p className="text-sm text-[var(--onda-muted)]">Cargando cartilla…</p>
+      )}
     </div>
   );
 }
