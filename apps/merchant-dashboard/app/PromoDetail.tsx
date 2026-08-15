@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 import {
   KpiCard,
   GradientButton,
@@ -14,8 +14,12 @@ import {
   type PromoTypeKey,
   OndaIcons,
   SegmentedControl,
-} from '@onda/shared-ui';
-import { displayPhone, formatMoneyInput, parseMoneyInput } from '@onda/shared-utils';
+} from "@onda/shared-ui";
+import {
+  displayPhone,
+  formatMoneyInput,
+  parseMoneyInput,
+} from "@onda/shared-utils";
 import {
   ResponsiveContainer,
   BarChart,
@@ -26,18 +30,18 @@ import {
   Legend,
   LineChart,
   Line,
-} from 'recharts';
+} from "recharts";
 
 function deltaLabel(n?: number | null) {
   if (n == null) return undefined;
-  const sign = n > 0 ? '+' : '';
+  const sign = n > 0 ? "+" : "";
   return `${sign}${n}%`;
 }
 
 function isoDateInput(d?: string | Date | null) {
-  if (!d) return '';
-  const date = typeof d === 'string' ? new Date(d) : d;
-  if (Number.isNaN(date.getTime())) return '';
+  if (!d) return "";
+  const date = typeof d === "string" ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return "";
   return date.toISOString().slice(0, 10);
 }
 
@@ -60,59 +64,59 @@ export function PromoDetail({
   onSaved: () => void | Promise<void>;
   onMovePool?: (
     promo: any,
-    pool: 'BIENVENIDA' | 'RETENCION',
+    pool: "BIENVENIDA" | "RETENCION",
   ) => void | Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [scope, setScope] = useState<string>('global');
+  const [error, setError] = useState("");
+  const [scope, setScope] = useState<string>("global");
   const [scoped, setScoped] = useState<any | null>(null);
   const promo = detail?.promotion;
-  const view = scoped && scope !== 'global' ? scoped : detail;
+  const view = scoped && scope !== "global" ? scoped : detail;
   const k = view?.kpis;
   const locked = Boolean(detail?.locked);
   const [form, setForm] = useState({
-    description: '',
-    imageUrl: '',
-    type: 'PRODUCT' as PromoTypeKey,
-    value: '',
-    buyQuantity: '2',
-    getQuantity: '1',
-    productName: '',
-    maxRedemptions: '',
+    description: "",
+    imageUrl: "",
+    type: "PRODUCT" as PromoTypeKey,
+    value: "",
+    buyQuantity: "2",
+    getQuantity: "1",
+    productName: "",
+    maxRedemptions: "",
   });
 
   useEffect(() => {
     if (!promo) return;
     setForm({
-      description: promo.description || '',
-      imageUrl: promo.imageUrl || '',
-      type: (promo.type as PromoTypeKey) || 'PRODUCT',
-      value: promo.value != null ? String(promo.value) : '',
-      buyQuantity: promo.buyQuantity != null ? String(promo.buyQuantity) : '2',
-      getQuantity: promo.getQuantity != null ? String(promo.getQuantity) : '1',
-      productName: promo.productName || '',
+      description: promo.description || "",
+      imageUrl: promo.imageUrl || "",
+      type: (promo.type as PromoTypeKey) || "PRODUCT",
+      value: promo.value != null ? String(promo.value) : "",
+      buyQuantity: promo.buyQuantity != null ? String(promo.buyQuantity) : "2",
+      getQuantity: promo.getQuantity != null ? String(promo.getQuantity) : "1",
+      productName: promo.productName || "",
       maxRedemptions:
-        promo.maxRedemptions != null ? String(promo.maxRedemptions) : '',
+        promo.maxRedemptions != null ? String(promo.maxRedemptions) : "",
     });
     setEditing(false);
-    setError('');
-    setScope('global');
+    setError("");
+    setScope("global");
     setScoped(null);
   }, [promo?.id, detail?.redemptionCount, detail?.locked]);
 
   useEffect(() => {
-    if (!promo?.id || scope === 'global') {
+    if (!promo?.id || scope === "global") {
       setScoped(null);
       return;
     }
     const from = detail?.range?.from?.slice(0, 10);
     const to = detail?.range?.to?.slice(0, 10);
     const q = new URLSearchParams();
-    if (from) q.set('from', from);
-    if (to) q.set('to', to);
-    q.set('cartillaId', scope);
+    if (from) q.set("from", from);
+    if (to) q.set("to", to);
+    q.set("cartillaId", scope);
     let cancelled = false;
     void api(`/promotions/${promo.id}/analytics?${q}`).then((data) => {
       if (!cancelled) setScoped(data);
@@ -133,7 +137,9 @@ export function PromoDetail({
   if (!promo) {
     return (
       <div className="onda-card space-y-3 p-6 text-center">
-        <p className="text-sm text-[var(--onda-muted)]">No se pudo cargar la promoción.</p>
+        <p className="text-sm text-[var(--onda-muted)]">
+          No se pudo cargar la promoción.
+        </p>
         <button
           type="button"
           className="cursor-pointer text-sm font-medium text-[var(--onda-violet)]"
@@ -151,7 +157,7 @@ export function PromoDetail({
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError('');
+    setError("");
     try {
       let body: Record<string, unknown>;
       if (locked) {
@@ -171,13 +177,13 @@ export function PromoDetail({
         };
       }
       await api(`/promotions/${promo.id}`, {
-        method: 'PATCH',
+        method: "PATCH",
         body: JSON.stringify(body),
       });
       setEditing(false);
       await onSaved();
     } catch (err: any) {
-      setError(err.message || 'No se pudo guardar');
+      setError(err.message || "No se pudo guardar");
     } finally {
       setBusy(false);
     }
@@ -206,12 +212,12 @@ export function PromoDetail({
             <span
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
                 promo.isActive
-                  ? 'bg-[var(--onda-success)]/15 text-[var(--onda-success)]'
-                  : 'bg-[var(--onda-bg)] text-[var(--onda-muted)]'
+                  ? "bg-[var(--onda-success)]/15 text-[var(--onda-success)]"
+                  : "bg-[var(--onda-bg)] text-[var(--onda-muted)]"
               }`}
             >
               {promo.isActive ? OndaIcons.check : OndaIcons.close}
-              {promo.isActive ? 'Activa' : 'Inactiva'}
+              {promo.isActive ? "Activa" : "Inactiva"}
             </span>
             {locked ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-medium text-amber-800">
@@ -222,9 +228,11 @@ export function PromoDetail({
           </div>
           <p className="mt-1 text-sm text-[var(--onda-muted)]">{benefit}</p>
           <p className="mt-1 text-xs text-[var(--onda-muted)]">
-            {promo.pool === 'BIENVENIDA' ? 'Bolsa Adquisición' : 'Bolsa Retención'}
-            {' · '}
-            Cupo: {detail?.redemptionCount ?? 0}/{promo.maxRedemptions ?? '∞'}{' '}
+            {promo.pool === "BIENVENIDA"
+              ? "Bolsa Adquisición"
+              : "Bolsa Retención"}
+            {" · "}
+            Cupo: {detail?.redemptionCount ?? 0}/{promo.maxRedemptions ?? "∞"}{" "}
             redenciones
           </p>
         </div>
@@ -232,13 +240,17 @@ export function PromoDetail({
           {onMovePool ? (
             <SegmentedControl
               aria-label="Bolsa de la promoción"
-              value={promo.pool === 'BIENVENIDA' ? 'BIENVENIDA' : 'RETENCION'}
+              value={promo.pool === "BIENVENIDA" ? "BIENVENIDA" : "RETENCION"}
               onChange={(pool) => {
                 if (pool !== promo.pool) void onMovePool(promo, pool);
               }}
               options={[
-                { id: 'BIENVENIDA', label: 'Adquisición', icon: OndaIcons.sparkle },
-                { id: 'RETENCION', label: 'Retención', icon: OndaIcons.users },
+                {
+                  id: "BIENVENIDA",
+                  label: "Adquisición",
+                  icon: OndaIcons.sparkle,
+                },
+                { id: "RETENCION", label: "Retención", icon: OndaIcons.users },
               ]}
             />
           ) : null}
@@ -248,7 +260,7 @@ export function PromoDetail({
             onClick={() => setEditing((v) => !v)}
           >
             {editing ? OndaIcons.close : OndaIcons.edit}
-            {editing ? 'Cerrar edición' : 'Editar'}
+            {editing ? "Cerrar edición" : "Editar"}
           </button>
           <button
             type="button"
@@ -264,7 +276,7 @@ export function PromoDetail({
             onClick={() => onToggle(promo.id, promo.isActive)}
           >
             {OndaIcons.power}
-            {promo.isActive ? 'Desactivar' : 'Activar'}
+            {promo.isActive ? "Desactivar" : "Activar"}
           </button>
           <button
             type="button"
@@ -290,8 +302,9 @@ export function PromoDetail({
           <div className="space-y-3">
             {locked ? (
               <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Ya hubo al menos un canje: solo puedes actualizar la foto. El resto queda
-                bloqueado para no alterar lo ya reclamado. Usa “Duplicar” para una nueva.
+                Ya hubo al menos un canje: solo puedes actualizar la foto. El
+                resto queda bloqueado para no alterar lo ya reclamado. Usa
+                “Duplicar” para una nueva.
               </p>
             ) : (
               <>
@@ -323,7 +336,7 @@ export function PromoDetail({
                     setForm((f) => ({ ...f, description: e.target.value }))
                   }
                 />
-                {form.type === 'PERCENT_OFF' ? (
+                {form.type === "PERCENT_OFF" ? (
                   <label className="block text-sm text-[var(--onda-muted)]">
                     Porcentaje (1–100)
                     <input
@@ -333,11 +346,13 @@ export function PromoDetail({
                       required
                       className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
                       value={form.value}
-                      onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, value: e.target.value }))
+                      }
                     />
                   </label>
                 ) : null}
-                {form.type === 'AMOUNT_OFF' ? (
+                {form.type === "AMOUNT_OFF" ? (
                   <label className="block text-sm text-[var(--onda-muted)]">
                     Valor de descuento (COP)
                     <input
@@ -348,12 +363,15 @@ export function PromoDetail({
                       className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
                       value={formatMoneyInput(form.value)}
                       onChange={(e) =>
-                        setForm((f) => ({ ...f, value: parseMoneyInput(e.target.value) }))
+                        setForm((f) => ({
+                          ...f,
+                          value: parseMoneyInput(e.target.value),
+                        }))
                       }
                     />
                   </label>
                 ) : null}
-                {form.type === 'BUY_GET' ? (
+                {form.type === "BUY_GET" ? (
                   <div className="flex flex-wrap gap-3">
                     <label className="text-sm text-[var(--onda-muted)]">
                       Compra N
@@ -364,7 +382,10 @@ export function PromoDetail({
                         className="ml-2 w-20 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
                         value={form.buyQuantity}
                         onChange={(e) =>
-                          setForm((f) => ({ ...f, buyQuantity: e.target.value }))
+                          setForm((f) => ({
+                            ...f,
+                            buyQuantity: e.target.value,
+                          }))
                         }
                       />
                     </label>
@@ -377,13 +398,16 @@ export function PromoDetail({
                         className="ml-2 w-20 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
                         value={form.getQuantity}
                         onChange={(e) =>
-                          setForm((f) => ({ ...f, getQuantity: e.target.value }))
+                          setForm((f) => ({
+                            ...f,
+                            getQuantity: e.target.value,
+                          }))
                         }
                       />
                     </label>
                   </div>
                 ) : null}
-                {form.type === 'PRODUCT' ? (
+                {form.type === "PRODUCT" ? (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="text-sm text-[var(--onda-muted)]">
                       Nombre del producto
@@ -392,7 +416,10 @@ export function PromoDetail({
                         className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
                         value={form.productName}
                         onChange={(e) =>
-                          setForm((f) => ({ ...f, productName: e.target.value }))
+                          setForm((f) => ({
+                            ...f,
+                            productName: e.target.value,
+                          }))
                         }
                       />
                     </label>
@@ -429,17 +456,22 @@ export function PromoDetail({
                 </label>
               </>
             )}
-            {error ? <p className="text-sm text-[var(--onda-danger)]">{error}</p> : null}
+            {error ? (
+              <p className="text-sm text-[var(--onda-danger)]">{error}</p>
+            ) : null}
             <GradientButton type="submit" disabled={busy}>
               {OndaIcons.save}
-              {busy ? 'Guardando…' : 'Guardar cambios'}
+              {busy ? "Guardando…" : "Guardar cambios"}
             </GradientButton>
           </div>
         </form>
       ) : null}
 
       <div className="flex flex-wrap gap-1.5">
-        <FilterChip selected={scope === 'global'} onClick={() => setScope('global')}>
+        <FilterChip
+          selected={scope === "global"}
+          onClick={() => setScope("global")}
+        >
           Global
         </FilterChip>
         {(detail?.byCartilla || []).map((c: any) => (
@@ -453,10 +485,12 @@ export function PromoDetail({
         ))}
       </div>
 
-      {scope === 'global' && (detail?.byCartilla || []).length > 0 ? (
+      {scope === "global" && (detail?.byCartilla || []).length > 0 ? (
         <div className="onda-card overflow-hidden">
           <div className="border-b border-[var(--onda-border)] px-4 py-3">
-            <h3 className="font-display font-semibold">Rendimiento por cartilla</h3>
+            <h3 className="font-display font-semibold">
+              Rendimiento por cartilla
+            </h3>
           </div>
           <table className="w-full text-left text-sm">
             <thead className="text-[var(--onda-muted)]">
@@ -469,13 +503,16 @@ export function PromoDetail({
             </thead>
             <tbody>
               {detail.byCartilla.map((c: any) => (
-                <tr key={c.cartillaId} className="border-t border-[var(--onda-border)]">
+                <tr
+                  key={c.cartillaId}
+                  className="border-t border-[var(--onda-border)]"
+                >
                   <td className="p-3 font-medium">{c.name}</td>
                   <td className="p-3 text-[var(--onda-muted)]">{c.status}</td>
                   <td className="p-3">{c.canjes}</td>
                   <td className="p-3">
                     {c.assignmentCount}
-                    {c.assignmentCap != null ? ` / ${c.assignmentCap}` : ''}
+                    {c.assignmentCap != null ? ` / ${c.assignmentCap}` : ""}
                   </td>
                 </tr>
               ))}
@@ -484,10 +521,10 @@ export function PromoDetail({
         </div>
       ) : null}
 
-      {scope !== 'global' ? (
+      {scope !== "global" ? (
         <p className="text-xs text-[var(--onda-muted)]">
-          KPIs y gráficos del rango, filtrados a esta cartilla. Recarga el detalle
-          desde el listado si acabas de cambiar el filtro en la URL.
+          KPIs y gráficos del rango, filtrados a esta cartilla. Recarga el
+          detalle desde el listado si acabas de cambiar el filtro en la URL.
         </p>
       ) : null}
 
@@ -514,10 +551,7 @@ export function PromoDetail({
             positive={(k?.canjesDelta ?? 0) >= 0}
           />
           <KpiCard label="Clientes únicos" value={k?.clientesUnicos ?? 0} />
-          <KpiCard
-            label="Restantes"
-            value={k?.remaining ?? '∞'}
-          />
+          <KpiCard label="Restantes" value={k?.remaining ?? "∞"} />
           <KpiCard
             label="Conv. elegibles"
             value={`${k?.conversionElegibles ?? 0}%`}
@@ -553,7 +587,7 @@ export function PromoDetail({
         </div>
         <div className="onda-card flex flex-col p-5">
           <h3 className="font-display font-semibold">
-            {hasHourly ? 'Horario de canjes' : 'Coste en ondas'}
+            {hasHourly ? "Horario de canjes" : "Coste en ondas"}
           </h3>
           <div className="mt-4 h-56">
             {hasHourly ? (
@@ -575,11 +609,11 @@ export function PromoDetail({
             ) : (
               <div className="flex h-full flex-col justify-center">
                 <p className="font-display text-4xl font-semibold">
-                  {k?.costeMedioOndas ?? '—'}
+                  {k?.costeMedioOndas ?? "—"}
                 </p>
                 <p className="mt-2 text-sm text-[var(--onda-muted)]">
-                  Ondas promedio por canje · {k?.clientesRepetidores ?? 0} clientes
-                  repitieron en el rango.
+                  Ondas promedio por canje · {k?.clientesRepetidores ?? 0}{" "}
+                  clientes repitieron en el rango.
                 </p>
               </div>
             )}
@@ -609,20 +643,26 @@ export function PromoDetail({
               </thead>
               <tbody>
                 {(view?.redeemers || []).map((r: any) => (
-                  <tr key={r.userId} className="border-t border-[var(--onda-border)]">
+                  <tr
+                    key={r.userId}
+                    className="border-t border-[var(--onda-border)]"
+                  >
                     <td className="p-3 font-medium">{r.name}</td>
                     <td className="p-3 text-[var(--onda-muted)]">
                       {displayPhone(r.phone)}
                     </td>
                     <td className="p-3">{r.redemptions}</td>
                     <td className="p-3 text-xs text-[var(--onda-muted)]">
-                      {new Date(r.lastRedeemAt).toLocaleDateString('es-CO')}
+                      {new Date(r.lastRedeemAt).toLocaleDateString("es-CO")}
                     </td>
                   </tr>
                 ))}
                 {!view?.redeemers?.length ? (
                   <tr>
-                    <td colSpan={4} className="p-6 text-center text-[var(--onda-muted)]">
+                    <td
+                      colSpan={4}
+                      className="p-6 text-center text-[var(--onda-muted)]"
+                    >
                       Nadie ha redimido esta promo en el rango.
                     </td>
                   </tr>
@@ -654,7 +694,7 @@ export function PromoDetail({
                   </p>
                 </div>
                 <time className="shrink-0 text-xs text-[var(--onda-muted)]">
-                  {new Date(h.createdAt).toLocaleString('es-CO')}
+                  {new Date(h.createdAt).toLocaleString("es-CO")}
                 </time>
               </li>
             ))}

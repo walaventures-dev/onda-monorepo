@@ -4,7 +4,9 @@ export type JobType =
   | 'brevo-sms'
   | 'wallet-notify'
   | 'wompi-renew'
-  | 'cartilla-ending-sms';
+  | 'cartilla-ending-sms'
+  | 'campaign-dispatch'
+  | 'campaign-pack-renew';
 
 export type WhatsappJobPayload = {
   to: string;
@@ -42,6 +44,14 @@ export type CartillaEndingSmsPayload = {
   endsAt: string;
 };
 
+export type CampaignDispatchPayload = {
+  campaignId: string;
+};
+
+export type CampaignPackRenewPayload = {
+  storeId: string;
+};
+
 export type JobPayloadMap = {
   'whatsapp-send': WhatsappJobPayload;
   'brevo-email': BrevoEmailJobPayload;
@@ -49,6 +59,8 @@ export type JobPayloadMap = {
   'wallet-notify': WalletNotifyJobPayload;
   'wompi-renew': WompiRenewJobPayload;
   'cartilla-ending-sms': CartillaEndingSmsPayload;
+  'campaign-dispatch': CampaignDispatchPayload;
+  'campaign-pack-renew': CampaignPackRenewPayload;
 };
 
 export type JobsEnqueueOptions = {

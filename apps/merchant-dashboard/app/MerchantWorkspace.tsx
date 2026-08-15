@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -30,9 +31,12 @@ import {
   type AnalyticsFiltersValue,
   OndaIcons,
   BadgePill,
-  TxActivityRow,
 } from "@onda/shared-ui";
-import { displayPhone, formatMoneyInput, parseMoneyInput } from "@onda/shared-utils";
+import {
+  displayPhone,
+  formatMoneyInput,
+  parseMoneyInput,
+} from "@onda/shared-utils";
 import {
   PLAN_ONDA_MONTHLY_LIMIT,
   PLAN_SMS_CAMPAIGNS_MONTHLY,
@@ -54,18 +58,13 @@ import { CreatePromo } from "./CreatePromo";
 import { CartillaEditor } from "./CartillaEditor";
 import { CartillaCalendar } from "./CartillaCalendar";
 import { CustomerDetail } from "./CustomerDetail";
-import {
-  CompareStores,
-  type CompareResponse,
-} from "./CompareStores";
-import { ActivityHeatmap } from "./ActivityHeatmap";
+import { CompareStores, type CompareResponse } from "./CompareStores";
 import { PendingRequestsPanel } from "./PendingRequestsPanel";
 import { ReferralsPanel } from "./ReferralsPanel";
+import { CampaignsHome } from "./CampaignsHome";
+import { CampaignWizard } from "./CampaignWizard";
 import { SetupChecklist } from "./SetupChecklist";
-import {
-  isSetupAllowedTab,
-  storeSetupStatus,
-} from "./setupStatus";
+import { isSetupAllowedTab, storeSetupStatus } from "./setupStatus";
 import { useMerchantAuth } from "../lib/MerchantAuth";
 
 type Tab =
@@ -73,8 +72,8 @@ type Tab =
   | "resumen"
   | "comparativa"
   | "clientes"
-  | "actividad"
   | "promos"
+  | "campanas"
   | "eventos"
   | "referidos"
   | "config";
@@ -104,8 +103,8 @@ const SECTIONS: Tab[] = [
   "resumen",
   ...(COMPARATIVA_ENABLED ? (["comparativa"] as const) : []),
   "clientes",
-  "actividad",
   "promos",
+  "campanas",
   ...(EVENTOS_ENABLED ? (["eventos"] as const) : []),
   "referidos",
   "config",
@@ -146,11 +145,14 @@ function PromoTag({
 
 type PromoPoolKey = "BIENVENIDA" | "RETENCION";
 
-const PROMO_POOL_OPTIONS: { id: PromoPoolKey; label: string; icon: ReactNode }[] =
-  [
-    { id: "BIENVENIDA", label: "Adquisición", icon: OndaIcons.sparkle },
-    { id: "RETENCION", label: "Retención", icon: OndaIcons.users },
-  ];
+const PROMO_POOL_OPTIONS: {
+  id: PromoPoolKey;
+  label: string;
+  icon: ReactNode;
+}[] = [
+  { id: "BIENVENIDA", label: "Adquisición", icon: OndaIcons.sparkle },
+  { id: "RETENCION", label: "Retención", icon: OndaIcons.users },
+];
 
 function PromoIconBtn({
   label,
@@ -330,7 +332,9 @@ function PromoCatalogCard({
             {insightTag}
           </div>
           {contextLine ? (
-            <p className="text-[11px] text-[var(--onda-muted)]">{contextLine}</p>
+            <p className="text-[11px] text-[var(--onda-muted)]">
+              {contextLine}
+            </p>
           ) : null}
           {statsList}
         </div>
@@ -613,7 +617,11 @@ declare global {
       publicKey: string;
       signature: { integrity: string };
       redirectUrl?: string;
-    }) => { open: (cb: (result: { transaction?: { status?: string } }) => void) => void };
+    }) => {
+      open: (
+        cb: (result: { transaction?: { status?: string } }) => void,
+      ) => void;
+    };
   }
 }
 
@@ -622,12 +630,12 @@ function loadWompiWidget(): Promise<void> {
   if (window.WidgetCheckout) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(
-      'script[src="https://checkout.wompi.co/widget.js"]'
+      'script[src="https://checkout.wompi.co/widget.js"]',
     );
     if (existing) {
       existing.addEventListener("load", () => resolve());
       existing.addEventListener("error", () =>
-        reject(new Error("No se pudo cargar Wompi"))
+        reject(new Error("No se pudo cargar Wompi")),
       );
       return;
     }
@@ -640,11 +648,23 @@ function loadWompiWidget(): Promise<void> {
   });
 }
 
+function formatCartillaRange(startsAt?: string | null, endsAt?: string | null) {
+  if (!startsAt || !endsAt) return "Sin fechas aún";
+  const fmt = (iso: string) => {
+    const [y, m, d] = String(iso).slice(0, 10).split("-").map(Number);
+    return new Date(y, m - 1, d)
+      .toLocaleDateString("es-CO", { day: "numeric", month: "short" })
+      .replace(".", "");
+  };
+  return `${fmt(startsAt)} – ${fmt(endsAt)}`;
+}
+
 function parseRoute(pathname: string): {
   tab: Tab;
   promoId: string | null;
   customerPassId: string | null;
   cartillaId: string | null;
+  campaignNew: boolean;
 } {
   const parts = pathname.split("/").filter(Boolean);
   const raw = parts[0] || "resumen";
@@ -653,7 +673,8 @@ function parseRoute(pathname: string): {
       tab: "promos",
       promoId: null,
       customerPassId: null,
-      cartillaId: parts[1] || null,
+      cartillaId: parts[1] && parts[1] !== "calendario" ? parts[1] : null,
+      campaignNew: false,
     };
   }
   const section = (raw === "pase" ? "config" : raw) as Tab;
@@ -662,21 +683,27 @@ function parseRoute(pathname: string): {
   let cartillaId: string | null = null;
   if (tab === "promos") {
     if (parts[1] === "cartilla") {
-      cartillaId = parts[2] || null;
+      cartillaId = parts[2] && parts[2] !== "calendario" ? parts[2] : null;
     } else if (parts[1]) {
       promoId = parts[1];
     }
   }
   const customerPassId = tab === "clientes" && parts[1] ? parts[1] : null;
-  return { tab, promoId, customerPassId, cartillaId };
+  const campaignNew = tab === "campanas" && parts[1] === "nueva";
+  return { tab, promoId, customerPassId, cartillaId, campaignNew };
 }
 
 export function MerchantWorkspace() {
   const pathname = usePathname();
   const router = useRouter();
   const { firebaseEnabled, logout } = useMerchantAuth();
-  const { tab, promoId: selectedPromoId, customerPassId: selectedCustomerPassId, cartillaId: selectedCartillaId } =
-    parseRoute(pathname);
+  const {
+    tab,
+    promoId: selectedPromoId,
+    customerPassId: selectedCustomerPassId,
+    cartillaId: selectedCartillaId,
+    campaignNew,
+  } = parseRoute(pathname);
 
   useEffect(() => {
     if (pathname === "/pase" || pathname.startsWith("/pase/")) {
@@ -688,10 +715,16 @@ export function MerchantWorkspace() {
       const rest = pathname.slice("/cartillas/".length);
       router.replace(`/promos/cartilla/${rest}`);
     }
+    if (pathname === "/promos/cartilla/calendario") {
+      router.replace("/promos");
+    }
     if (
       !EVENTOS_ENABLED &&
       (pathname === "/eventos" || pathname.startsWith("/eventos/"))
     ) {
+      router.replace("/resumen");
+    }
+    if (pathname === "/actividad" || pathname.startsWith("/actividad/")) {
       router.replace("/resumen");
     }
   }, [pathname, router]);
@@ -702,7 +735,6 @@ export function MerchantWorkspace() {
   const [events, setEvents] = useState<any[]>([]);
   const [eventId, setEventId] = useState("");
   const [overview, setOverview] = useState<any>(null);
-  const [txs, setTxs] = useState<any[]>([]);
   const [promos, setPromos] = useState<any[]>([]);
   const [memberships, setMemberships] = useState<any[]>([]);
   const [billing, setBilling] = useState<any>(null);
@@ -723,9 +755,6 @@ export function MerchantWorkspace() {
   const [customerDetail, setCustomerDetail] = useState<any>(null);
   const [customerDetailLoading, setCustomerDetailLoading] = useState(false);
   const [segment, setSegment] = useState<CustomerSegment>("todos");
-  const [txTypeFilter, setTxTypeFilter] = useState<
-    "ALL" | "ACCUMULATE" | "REDEEM"
-  >("ALL");
   const [compareStoreIds, setCompareStoreIds] = useState<string[]>([]);
   const [compare, setCompare] = useState<CompareResponse | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
@@ -745,16 +774,21 @@ export function MerchantWorkspace() {
   });
 
   const store = stores.find((s) => s.id === storeId);
+  const storeName =
+    (typeof store?.name === "string" && store.name.trim()) ||
+    (typeof stores[0]?.name === "string" && stores[0].name.trim()) ||
+    "";
   const setup = useMemo(() => storeSetupStatus(store), [store]);
 
   useEffect(() => {
+    document.title = storeName ? `${storeName} · Onda` : "Onda";
+  }, [storeName]);
+
+  useEffect(() => {
     setStoreCurrency(store?.currency || "COP");
-    setStoreOndaValue(
-      store?.ondaValue != null ? String(store.ondaValue) : "",
-    );
+    setStoreOndaValue(store?.ondaValue != null ? String(store.ondaValue) : "");
   }, [store?.id, store?.currency, store?.ondaValue]);
-  const showSetupNav =
-    storesReady && stores.length > 0 && !setup.complete;
+  const showSetupNav = storesReady && stores.length > 0 && !setup.complete;
   const kpis = overview?.kpis;
   const customers = overview?.customers || [];
 
@@ -769,11 +803,13 @@ export function MerchantWorkspace() {
         : [
             ["resumen", "Resumen", OndaIcons.chart, false],
             ...(COMPARATIVA_ENABLED && stores.length >= 2
-              ? ([["comparativa", "Comparativa", OndaIcons.target, false]] as const)
+              ? ([
+                  ["comparativa", "Comparativa", OndaIcons.target, false],
+                ] as const)
               : []),
             ["clientes", "Clientes", OndaIcons.users, false],
-            ["actividad", "Actividad", OndaIcons.activity, false],
             ["promos", "Promociones", OndaIcons.redeem, false],
+            ["campanas", "Campañas", OndaIcons.megaphone, false],
             ...(EVENTOS_ENABLED
               ? ([["eventos", "Eventos", OndaIcons.ticket, false]] as const)
               : []),
@@ -807,28 +843,6 @@ export function MerchantWorkspace() {
     );
     setOverview(data);
   }, [storeId, overviewQuery]);
-
-  const loadTxs = useCallback(async () => {
-    if (!storeId) return;
-    const params = new URLSearchParams({
-      storeId,
-      from: filters.from,
-      to: filters.to,
-    });
-    if (mode === "event" && eventId) params.set("eventId", eventId);
-    if (txTypeFilter !== "ALL") params.set("type", txTypeFilter);
-    if (filters.promoTypes.length)
-      params.set("promoTypes", filters.promoTypes.join(","));
-    setTxs((await api(`/transactions?${params}`)) as any[]);
-  }, [
-    storeId,
-    filters.from,
-    filters.to,
-    filters.promoTypes,
-    mode,
-    eventId,
-    txTypeFilter,
-  ]);
 
   const loadPromos = useCallback(async () => {
     if (!storeId) return;
@@ -915,14 +929,7 @@ export function MerchantWorkspace() {
       router.replace("/resumen");
     }
     setupWasComplete.current = setup.complete;
-  }, [
-    storesReady,
-    storeId,
-    stores.length,
-    setup.complete,
-    tab,
-    router,
-  ]);
+  }, [storesReady, storeId, stores.length, setup.complete, tab, router]);
 
   const loadCompare = useCallback(async () => {
     if (!compareStoreIds.length) return;
@@ -961,12 +968,11 @@ export function MerchantWorkspace() {
   useEffect(() => {
     if (!storeId) return;
     loadOverview();
-    loadTxs();
     loadPromos();
     loadCartillas();
     api<any[]>(`/memberships?storeId=${storeId}`).then(setMemberships);
     api(`/billing/store/${storeId}`).then(setBilling);
-  }, [storeId, mode, eventId, loadOverview, loadTxs, loadPromos, loadCartillas]);
+  }, [storeId, mode, eventId, loadOverview, loadPromos, loadCartillas]);
 
   useEffect(() => {
     if (!selectedPromoId || selectedPromoId === "nueva") {
@@ -1015,9 +1021,7 @@ export function MerchantWorkspace() {
       from: filters.from,
       to: filters.to,
     });
-    api(
-      `/analytics/store/${storeId}/customers/${selectedCustomerPassId}?${q}`,
-    )
+    api(`/analytics/store/${storeId}/customers/${selectedCustomerPassId}?${q}`)
       .then((data) => {
         if (!cancelled) setCustomerDetail(data);
       })
@@ -1054,9 +1058,7 @@ export function MerchantWorkspace() {
     const nextCount = (store?._count?.promotions ?? 0) + 1;
     setStores((prev) =>
       prev.map((s) =>
-        s.id === storeId
-          ? { ...s, _count: { promotions: nextCount } }
-          : s,
+        s.id === storeId ? { ...s, _count: { promotions: nextCount } } : s,
       ),
     );
     router.push("/promos");
@@ -1169,7 +1171,9 @@ export function MerchantWorkspace() {
 
     let line = pickPulse(pack.lines, pulseSeed, 4);
     if (lowPromo && (tone === "ok" || tone === "warn" || tone === "bad")) {
-      const hint = String(lowPromo.title || "se te acaban promos").toLowerCase();
+      const hint = String(
+        lowPromo.title || "se te acaban promos",
+      ).toLowerCase();
       line = pickPulse(PULSE_LOW_PROMO_LINES, pulseSeed, 5)(hint);
     }
 
@@ -1270,7 +1274,8 @@ export function MerchantWorkspace() {
           setBilling(await api(`/billing/store/${storeId}`));
           await alert({
             title: "Pago aprobado",
-            message: "La sede queda en plan PRO cuando Wompi confirme el webhook.",
+            message:
+              "La sede queda en plan PRO cuando Wompi confirme el webhook.",
             tone: "success",
           });
         }
@@ -1295,8 +1300,7 @@ export function MerchantWorkspace() {
     if (promo.locked) {
       await alert({
         title: "No se puede mover",
-        message:
-          "Esta promo ya fue redimida. Duplica y cambia una condición.",
+        message: "Esta promo ya fue redimida. Duplica y cambia una condición.",
         tone: "warning",
       });
       return;
@@ -1435,7 +1439,12 @@ export function MerchantWorkspace() {
     count?: number;
     icon: ReactNode;
   }[] = [
-    { id: "todos", label: "Todos", count: customers.length, icon: OndaIcons.all },
+    {
+      id: "todos",
+      label: "Todos",
+      count: customers.length,
+      icon: OndaIcons.all,
+    },
     {
       id: "nuevos",
       label: "Nuevos",
@@ -1460,7 +1469,12 @@ export function MerchantWorkspace() {
       count: overview?.segments?.enRiesgo,
       icon: OndaIcons.alert,
     },
-    { id: "vip", label: "VIP", count: overview?.segments?.vip, icon: OndaIcons.crown },
+    {
+      id: "vip",
+      label: "VIP",
+      count: overview?.segments?.vip,
+      icon: OndaIcons.crown,
+    },
     {
       id: "dormidos",
       label: "Dormidos",
@@ -1472,9 +1486,9 @@ export function MerchantWorkspace() {
   return (
     <>
       <AppShell
-        title={store?.name || "Merchant"}
+        title={storeName}
         nav={nav}
-        userName={store?.name || "M"}
+        userName={storeName || "O"}
         linkComponent={Link}
         onLogout={firebaseEnabled ? () => void logout() : undefined}
         toolbar={
@@ -1612,74 +1626,47 @@ export function MerchantWorkspace() {
 
         {stores.length > 0 &&
         ((setup.complete &&
-          ["resumen", "comparativa", "clientes", "actividad"].includes(tab)) ||
+          ["resumen", "comparativa", "clientes"].includes(tab)) ||
           (tab === "promos" && !selectedPromoId && !selectedCartillaId)) ? (
           <AnalyticsFiltersBar
             value={filters}
             onChange={setFilters}
             showPromoTypes={
-              selectedCustomerPassId || tab === "comparativa"
-                ? false
-                : tab !== "actividad" || txTypeFilter !== "ACCUMULATE"
+              !(selectedCustomerPassId || tab === "comparativa")
             }
             extraGroups={
-              selectedCustomerPassId || tab === "comparativa"
+              selectedCustomerPassId || tab === "comparativa" || tab !== "promos"
                 ? undefined
-                : tab === "actividad"
-                  ? [
-                      {
-                        id: "tx-type",
-                        label: "Movimiento",
-                        children: (
-                          <SegmentedControl
-                            aria-label="Tipo de movimiento"
-                            value={txTypeFilter}
-                            onChange={setTxTypeFilter}
-                            options={[
-                              { id: "ALL", label: "Todos", icon: OndaIcons.all },
-                              {
-                                id: "ACCUMULATE",
-                                label: "Acumular",
-                                icon: OndaIcons.accumulate,
-                              },
-                              {
-                                id: "REDEEM",
-                                label: "Canjear",
-                                icon: OndaIcons.redeem,
-                              },
-                            ]}
-                          />
-                        ),
-                      },
-                    ]
-                  : tab === "promos"
-                    ? [
-                        {
-                          id: "promo-status",
-                          label: "Estado",
-                          children: (
-                          <SegmentedControl
-                            aria-label="Estado de promoción"
-                            value={promoStatusFilter}
-                            onChange={setPromoStatusFilter}
-                            options={[
-                              {
-                                id: "active",
-                                label: "Activas",
-                                icon: OndaIcons.check,
-                              },
-                              {
-                                id: "inactive",
-                                label: "Inactivas",
-                                icon: OndaIcons.close,
-                              },
-                              { id: "all", label: "Todas", icon: OndaIcons.all },
-                            ]}
-                          />
-                          ),
-                        },
-                      ]
-                    : undefined
+                : [
+                    {
+                      id: "promo-status",
+                      label: "Estado",
+                      children: (
+                        <SegmentedControl
+                          aria-label="Estado de promoción"
+                          value={promoStatusFilter}
+                          onChange={setPromoStatusFilter}
+                          options={[
+                            {
+                              id: "active",
+                              label: "Activas",
+                              icon: OndaIcons.check,
+                            },
+                            {
+                              id: "inactive",
+                              label: "Inactivas",
+                              icon: OndaIcons.close,
+                            },
+                            {
+                              id: "all",
+                              label: "Todas",
+                              icon: OndaIcons.all,
+                            },
+                          ]}
+                        />
+                      ),
+                    },
+                  ]
             }
           />
         ) : null}
@@ -1793,11 +1780,7 @@ export function MerchantWorkspace() {
                           tickMargin={6}
                           interval="preserveStartEnd"
                         />
-                        <YAxis
-                          fontSize={11}
-                          allowDecimals={false}
-                          width={32}
-                        />
+                        <YAxis fontSize={11} allowDecimals={false} width={32} />
                         <Tooltip />
                         <Legend
                           wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
@@ -1834,47 +1817,44 @@ export function MerchantWorkspace() {
               />
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="onda-card p-5">
-                <h3 className="font-display font-semibold">
-                  Canjes por tipo de promo
-                </h3>
-                <div className="mt-4 h-56">
-                  {(overview?.redemptionsByType || []).length ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={overview.redemptionsByType}
-                          dataKey="count"
-                          nameKey="type"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={80}
-                          label={(e: any) => promoTypeLabel(e.type)}
-                        >
-                          {overview.redemptionsByType.map((row: any) => (
-                            <Cell
-                              key={row.type}
-                              fill={TYPE_COLORS[row.type] || "#94A3B8"}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(v: any, _n: any, p: any) => [
-                            v,
-                            promoTypeLabel(p?.payload?.type),
-                          ]}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <p className="text-sm text-[var(--onda-muted)]">
-                      Sin canjes tipados en el rango.
-                    </p>
-                  )}
-                </div>
+            <div className="onda-card p-5">
+              <h3 className="font-display font-semibold">
+                Canjes por tipo de promo
+              </h3>
+              <div className="mt-4 h-56">
+                {(overview?.redemptionsByType || []).length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={overview.redemptionsByType}
+                        dataKey="count"
+                        nameKey="type"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        label={(e: any) => promoTypeLabel(e.type)}
+                      >
+                        {overview.redemptionsByType.map((row: any) => (
+                          <Cell
+                            key={row.type}
+                            fill={TYPE_COLORS[row.type] || "#94A3B8"}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(v: any, _n: any, p: any) => [
+                          v,
+                          promoTypeLabel(p?.payload?.type),
+                        ]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-[var(--onda-muted)]">
+                    Sin canjes tipados en el rango.
+                  </p>
+                )}
               </div>
-              <ActivityHeatmap data={overview?.heatmap} />
             </div>
           </div>
         )}
@@ -2009,92 +1989,6 @@ export function MerchantWorkspace() {
           </div>
         )}
 
-        {tab === "actividad" && (
-          <div className="space-y-5">
-            <div className="onda-kpi-grid">
-              <KpiCard
-                label="Ondas acumuladas en la última hora"
-                value={overview?.ops?.ondasLastHour ?? 0}
-              />
-              <KpiCard
-                label="Acumulaciones / Canjes"
-                value={`${overview?.ops?.accumulateInRange ?? 0} / ${overview?.ops?.redeemInRange ?? 0}`}
-              />
-              <KpiCard
-                label="Desde última transacción"
-                value={
-                  overview?.ops?.minutesSinceLastTx == null
-                    ? "—"
-                    : overview.ops.minutesSinceLastTx >= 60
-                      ? `${Math.round(overview.ops.minutesSinceLastTx / 60)} h`
-                      : `${overview.ops.minutesSinceLastTx} min`
-                }
-                delta={
-                  overview?.ops?.minutesSinceLastTx != null &&
-                  overview.ops.minutesSinceLastTx > 90
-                    ? "Caja fría"
-                    : undefined
-                }
-                positive={
-                  !(
-                    overview?.ops?.minutesSinceLastTx != null &&
-                    overview.ops.minutesSinceLastTx > 90
-                  )
-                }
-              />
-            </div>
-
-            {overview?.ops?.minutesSinceLastTx != null &&
-            overview.ops.minutesSinceLastTx > 90 ? (
-              <InsightsPanel
-                items={[
-                  {
-                    tone: "warning",
-                    title: "Caja fría",
-                    message:
-                      "Lleva más de 90 minutos sin movimientos. Revisa QR/NFC o que el equipo esté acumulando.",
-                    stat: `${overview.ops.minutesSinceLastTx}m`,
-                    action: "Ir a acumular",
-                  },
-                ]}
-              />
-            ) : null}
-
-            <div className="grid gap-6 lg:grid-cols-1">
-              <div className="onda-card p-5">
-                <h3 className="font-display font-semibold">
-                  Historial de movimientos
-                </h3>
-                <ul className="onda-tx-list mt-3 max-h-80 overflow-auto">
-                  {txs.map((t: any) => (
-                    <TxActivityRow
-                      key={t.id}
-                      item={{
-                        id: t.id,
-                        type: t.type,
-                        points: t.points,
-                        person: t.pass?.user?.name,
-                        promotion: t.promotion
-                          ? {
-                              title: t.promotion.title,
-                              type: t.promotion.type,
-                            }
-                          : null,
-                        time: new Date(t.createdAt).toLocaleString("es-CO"),
-                      }}
-                    />
-                  ))}
-                  {!txs.length ? (
-                    <li className="py-4 text-center text-sm text-[var(--onda-muted)]">
-                      Sin movimientos con estos filtros.
-                    </li>
-                  ) : null}
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
-
         {tab === "promos" && selectedPromoId && selectedPromoId !== "nueva" ? (
           <PromoDetail
             detail={promoDetail}
@@ -2142,18 +2036,7 @@ export function MerchantWorkspace() {
           />
         ) : null}
 
-        {tab === "promos" && selectedCartillaId === "calendario" ? (
-          <CartillaCalendar
-            storeId={storeId}
-            onOpen={(id) => router.push(`/promos/cartilla/${id}`)}
-            onCreate={() => router.push("/promos/cartilla/nueva")}
-            onClose={() => router.push("/promos")}
-          />
-        ) : null}
-
-        {tab === "promos" &&
-        selectedCartillaId &&
-        selectedCartillaId !== "calendario" ? (
+        {tab === "promos" && selectedCartillaId ? (
           <CartillaEditor
             storeId={storeId}
             store={store}
@@ -2194,31 +2077,29 @@ export function MerchantWorkspace() {
               <KpiCard label="Canjes en rango" value={kpis?.redenciones ?? 0} />
             </div>
 
+            <CartillaCalendar
+              storeId={storeId}
+              embedded
+              onOpen={(id) => router.push(`/promos/cartilla/${id}`)}
+            />
+
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="font-display text-xl font-semibold">Cartillas</h2>
+                <h2 className="font-display text-xl font-semibold">
+                  Cartillas
+                </h2>
                 <p className="text-sm text-[var(--onda-muted)]">
-                  Arma el año de promos. Al activar una ocasional se reinicia el
-                  ciclo.
+                  La cartilla base está vigente salvo que actives una ocasional.
+                  Solo una a la vez; al activar se reinicia el ciclo.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--onda-border)] px-4 py-2 text-sm font-medium"
-                  onClick={() => router.push("/promos/cartilla/calendario")}
-                >
-                  {OndaIcons.calendar}
-                  Calendario
-                </button>
-                <GradientButton
-                  type="button"
-                  onClick={() => router.push("/promos/cartilla/nueva")}
-                >
-                  {OndaIcons.plus}
-                  Nueva cartilla
-                </GradientButton>
-              </div>
+              <GradientButton
+                type="button"
+                onClick={() => router.push("/promos/cartilla/nueva")}
+              >
+                {OndaIcons.plus}
+                Nueva cartilla
+              </GradientButton>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {(cartillasData?.cartillas || []).map((c: any) => (
@@ -2239,7 +2120,7 @@ export function MerchantWorkspace() {
                     <h3 className="font-display font-semibold">{c.name}</h3>
                     <span className="text-xs text-[var(--onda-muted)]">
                       {c.isDefault
-                        ? "Permanente"
+                        ? "Base"
                         : cartillasData?.activeId === c.id
                           ? "Vigente"
                           : c.status}
@@ -2248,15 +2129,41 @@ export function MerchantWorkspace() {
                   </div>
                   <p className="mt-2 text-sm text-[var(--onda-muted)]">
                     {c.isDefault
-                      ? "Fallback cuando no hay una ocasional activa"
-                      : c.startsAt && c.endsAt
-                        ? `${new Date(c.startsAt).toLocaleDateString("es-CO")} – ${new Date(c.endsAt).toLocaleDateString("es-CO")}`
-                        : "Sin fechas aún"}
+                      ? "Vigente cuando no hay una ocasional activa"
+                      : formatCartillaRange(c.startsAt, c.endsAt)}
                   </p>
-                  <p className="mt-1 text-xs text-[var(--onda-muted)]">
-                    {c.maxStamps ?? 12} ondas · {(c.items || []).length}{" "}
-                    promos
-                  </p>
+                  <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                    <div>
+                      <dt className="text-[11px] text-[var(--onda-muted)]">
+                        Ondas
+                      </dt>
+                      <dd className="font-medium">{c.maxStamps ?? 12}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] text-[var(--onda-muted)]">
+                        Promos
+                      </dt>
+                      <dd className="font-medium">
+                        {c.promoCount ?? (c.items || []).length}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] text-[var(--onda-muted)]">
+                        Acumulaciones
+                      </dt>
+                      <dd className="font-medium">
+                        {(c.accumulations ?? 0).toLocaleString("es-CO")}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] text-[var(--onda-muted)]">
+                        Redenciones
+                      </dt>
+                      <dd className="font-medium">
+                        {(c.redemptions ?? 0).toLocaleString("es-CO")}
+                      </dd>
+                    </div>
+                  </dl>
                 </article>
               ))}
             </div>
@@ -2411,6 +2318,21 @@ export function MerchantWorkspace() {
           <ReferralsPanel storeId={storeId} />
         ) : null}
 
+        {tab === "campanas" && campaignNew && storeId ? (
+          <Suspense fallback={<p className="text-sm text-[var(--onda-muted)]">Cargando…</p>}>
+            <CampaignWizard
+              storeId={storeId}
+              store={store || {}}
+              onClose={() => router.push("/campanas")}
+              onLaunched={() => undefined}
+            />
+          </Suspense>
+        ) : null}
+
+        {tab === "campanas" && !campaignNew && storeId ? (
+          <CampaignsHome storeId={storeId} confirm={confirm} />
+        ) : null}
+
         {tab === "config" && (
           <div className="space-y-6">
             <div className="grid gap-6 lg:grid-cols-2">
@@ -2420,10 +2342,10 @@ export function MerchantWorkspace() {
                 <p>Plan: {billing?.planType}</p>
                 <div className="rounded-xl bg-[var(--onda-bg)] px-3 py-2.5">
                   <p className="text-sm font-medium text-[var(--onda-ink)]">
-                    Meses gratis:{' '}
+                    Meses gratis:{" "}
                     {billing?.freeMonthsBalance ??
                       store?.freeMonthsBalance ??
-                      '—'}
+                      "—"}
                   </p>
                   <p className="mt-1 text-xs text-[var(--onda-muted)]">
                     Detalle visual en Referidos (bienvenida + meses por cada
@@ -2436,8 +2358,12 @@ export function MerchantWorkspace() {
                 </p>
                 <p>
                   Campañas SMS este mes: {billing?.smsCampaignsUsed ?? 0}/
-                  {billing?.smsCampaignsLimit ?? PLAN_SMS_CAMPAIGNS_MONTHLY} (
-                  {PLAN_SMS_CAMPAIGNS_MONTHLY} gratis)
+                  {billing?.smsCampaignsLimit ?? PLAN_SMS_CAMPAIGNS_MONTHLY}{' '}
+                  gratis
+                  {billing?.campaignCredits != null
+                    ? ` · créditos ${billing.campaignCredits}`
+                    : ''}
+                  {billing?.packSubscribed ? ' · paquete suscrito' : ''}
                 </p>
                 {billing?.planType === "BASIC" ? (
                   <GradientButton type="button" onClick={upgrade}>
@@ -2501,7 +2427,10 @@ export function MerchantWorkspace() {
                   />
                 </label>
               </div>
-              <GradientButton type="submit" disabled={savingStoreEconomics || !storeId}>
+              <GradientButton
+                type="submit"
+                disabled={savingStoreEconomics || !storeId}
+              >
                 {OndaIcons.save}
                 {savingStoreEconomics ? "Guardando…" : "Guardar"}
               </GradientButton>

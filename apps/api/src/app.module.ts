@@ -37,6 +37,7 @@ import { JobsController } from './jobs.controller';
 import { BrevoService } from './brevo.service';
 import { WompiService } from './wompi.service';
 import { CartillaService } from './cartilla.service';
+import { CampaignsService } from './campaigns.service';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { CartillaService } from './cartilla.service';
     BrevoService,
     WompiService,
     CartillaService,
+    CampaignsService,
   ],
 })
 export class AppModule {}

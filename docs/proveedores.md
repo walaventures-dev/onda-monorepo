@@ -169,7 +169,7 @@ BREVO_SMS_SENDER="Onda"
 Usos:
 
 - **Email** al crear un lead (`POST /api/leads`) y al terminar el alta de un comercio (`ownerEmail`).
-- **SMS** al crear una campaña `channel: SMS` (`POST /api/campaigns`) hacia los teléfonos de esa sede. Respeta la cuota mensual (`PLAN_SMS_CAMPAIGNS_MONTHLY`).
+- **SMS** al crear una campaña (`POST /api/campaigns`) hacia los teléfonos de esa sede. Incluye `CAMPAIGN_FREE_MONTHLY` (default 1) gratis al mes; extras se cobran con Wompi.
 
 Sin `BREVO_API_KEY`, solo hay logs `[Brevo stub]`.
 

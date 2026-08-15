@@ -1,6 +1,9 @@
 import {
   PLAN_ONDA_MONTHLY_LIMIT,
   PLAN_SMS_CAMPAIGNS_MONTHLY,
+  CAMPAIGN_PRICE_COP,
+  CAMPAIGN_PACK_SIZE,
+  CAMPAIGN_PACK_DISCOUNT,
 } from '@onda/shared-types';
 
 export type PlanId = 'BASIC' | 'PRO';
@@ -41,7 +44,7 @@ export const PLAN_META: Record<
     features: [
       'Tarjeta en Apple y Google Wallet',
       `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
-      `${PLAN_SMS_CAMPAIGNS_MONTHLY} campañas SMS gratis al mes`,
+      `${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis al mes`,
       'Recompensas que tú defines',
       'Tu propia base de clientes',
       'Avisos push desde el Wallet',
@@ -53,7 +56,7 @@ export const PLAN_META: Record<
     features: [
       'Todo lo de Onda',
       `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
-      `${PLAN_SMS_CAMPAIGNS_MONTHLY} campañas SMS gratis al mes`,
+      `${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis al mes`,
       'Campañas para llenar el local',
       'Pide reseñas en Google al canjear',
       'Aviso cuando el cliente está cerca',
@@ -61,6 +64,33 @@ export const PLAN_META: Record<
     ],
   },
 };
+
+export function campaignPackPriceCop(
+  unitCop = CAMPAIGN_PRICE_COP,
+  packSize = CAMPAIGN_PACK_SIZE,
+  discount = CAMPAIGN_PACK_DISCOUNT
+) {
+  return Math.round(unitCop * packSize * (1 - discount));
+}
+
+export function campaignCatalogPricing(opts?: {
+  freeMonthly?: number;
+  unitCop?: number;
+  packSize?: number;
+  packDiscount?: number;
+}) {
+  const freeMonthly = opts?.freeMonthly ?? PLAN_SMS_CAMPAIGNS_MONTHLY;
+  const unitCop = opts?.unitCop ?? CAMPAIGN_PRICE_COP;
+  const packSize = opts?.packSize ?? CAMPAIGN_PACK_SIZE;
+  const packDiscount = opts?.packDiscount ?? CAMPAIGN_PACK_DISCOUNT;
+  return {
+    freeMonthly,
+    unitCop,
+    packSize,
+    packDiscount,
+    packCop: campaignPackPriceCop(unitCop, packSize, packDiscount),
+  };
+}
 
 export function formatCop(amount: number) {
   return `$${Math.round(amount).toLocaleString('es-CO')}`;

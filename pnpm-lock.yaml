@@ -221,7 +221,11 @@ importers:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
 
-  libs/shared/utils: {}
+  libs/shared/utils:
+    dependencies:
+      '@onda/shared-types':
+        specifier: workspace:*
+        version: link:../types
 
   libs/wallets: {}
 

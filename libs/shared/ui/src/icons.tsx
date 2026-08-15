@@ -37,7 +37,6 @@ import { XIcon as X } from '@phosphor-icons/react/dist/csr/X';
 import { MapPinIcon as MapPin } from '@phosphor-icons/react/dist/csr/MapPin';
 import { TrendUpIcon as TrendUp } from '@phosphor-icons/react/dist/csr/TrendUp';
 import { ChartBarIcon as ChartBar } from '@phosphor-icons/react/dist/csr/ChartBar';
-import { WaveformIcon as Waveform } from '@phosphor-icons/react/dist/csr/Waveform';
 import { GearIcon as Gear } from '@phosphor-icons/react/dist/csr/Gear';
 import { IdentificationCardIcon as IdentificationCard } from '@phosphor-icons/react/dist/csr/IdentificationCard';
 import { SidebarSimpleIcon as SidebarSimple } from '@phosphor-icons/react/dist/csr/SidebarSimple';
@@ -48,6 +47,7 @@ import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/Cre
 import { UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
 import { ShareNetworkIcon as ShareNetwork } from '@phosphor-icons/react/dist/csr/ShareNetwork';
 import { SignOutIcon as SignOut } from '@phosphor-icons/react/dist/csr/SignOut';
+import { MegaphoneIcon as Megaphone } from '@phosphor-icons/react/dist/csr/Megaphone';
 
 const SIZE = 16;
 const CLASS = 'h-3 w-3 shrink-0';
@@ -90,7 +90,6 @@ export const OndaIcons = {
   near: <MapPin size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   upgrade: <TrendUp size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   chart: <ChartBar size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
-  activity: <Waveform size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   gear: <Gear size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   pass: <IdentificationCard size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   panelLeft: <SidebarSimple size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
@@ -101,6 +100,7 @@ export const OndaIcons = {
   profile: <UserCircle size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   share: <ShareNetwork size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   logout: <SignOut size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
+  megaphone: <Megaphone size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
 };
 
 export function OndaMark({ className = 'h-3 w-3 shrink-0' }: { className?: string }) {

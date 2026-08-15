@@ -185,6 +185,24 @@ export function derivePassPalette(backgroundColor: string): {
 }
 
 export {
+  OBJECTIVE_KINDS,
+  voiceFor,
+  objectiveLabel,
+  defaultPromo,
+  promoForType,
+  promoHeadline,
+  buildCampaignMessages,
+  renderCampaignTemplate,
+  CAMPAIGN_CHANNELS,
+  type ObjectiveKind,
+  type VerticalVoice,
+  type CampaignPromo,
+  type CampaignPromoType,
+  type CampaignMessage,
+  type CampaignChannelLabel,
+} from './campaign-copy';
+
+export {
   type PlanId,
   type BillingPeriod,
   type TimelineMonthKind,
@@ -194,6 +212,8 @@ export {
   BILLING_MONTHS,
   PLAN_META,
   formatCop,
+  campaignPackPriceCop,
+  campaignCatalogPricing,
   formatMoneyInput,
   parseMoneyInput,
   parsePlanId,

@@ -21,10 +21,10 @@ import { JobsService } from './jobs.service';
 import { WhatsappService } from './whatsapp.service';
 import {
   PLAN_ONDA_MONTHLY_LIMIT,
-  PLAN_SMS_CAMPAIGNS_MONTHLY,
   monthlyOndasUsed,
   monthlySmsCampaignsUsed,
 } from './plan-quota';
+import { campaignPricing } from './campaign-pricing';
 
 const COMPARE_MAX_STORES = 20;
 
@@ -270,43 +270,6 @@ export class AnalyticsController {
     }
     const series = [...seriesMap.values()];
 
-    // Hourly for last day of range (or today slice)
-    const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: h, ondas: 0, canjes: 0 }));
-    const lastDayStart = new Date(to);
-    lastDayStart.setHours(0, 0, 0, 0);
-    for (const tx of txs) {
-      if (tx.createdAt < lastDayStart) continue;
-      const h = tx.createdAt.getHours();
-      if (tx.type === 'ACCUMULATE') hourly[h].ondas += tx.points;
-      else hourly[h].canjes += 1;
-    }
-
-    // Heatmap: weekday (Mon=0) × hour across the full range
-    const heatmapCells = Array.from({ length: 7 * 24 }, (_, i) => ({
-      dow: Math.floor(i / 24),
-      hour: i % 24,
-      ondas: 0,
-      canjes: 0,
-      freq: 0,
-    }));
-    for (const tx of txs) {
-      const jsDay = tx.createdAt.getDay();
-      const dow = jsDay === 0 ? 6 : jsDay - 1;
-      const hour = tx.createdAt.getHours();
-      const cell = heatmapCells[dow * 24 + hour];
-      if (tx.type === 'ACCUMULATE') {
-        cell.ondas += 1; // acumulaciones (movimientos)
-        cell.freq += 1;
-      } else {
-        cell.canjes += 1; // redenciones
-        cell.freq += 1;
-      }
-    }
-    const heatmap = {
-      days: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
-      cells: heatmapCells,
-    };
-
     // Redeem by promo type
     const byType: Record<string, number> = {};
     for (const tx of txs) {
@@ -411,21 +374,6 @@ export class AnalyticsController {
 
     const ondasDelta = pctDelta(ondasVal, prevOndasVal);
     const redeemDelta = pctDelta(redenciones, prevRedenciones);
-
-    // Ops: last tx + promo stats (needed for stock insights)
-    const lastTx = await this.prisma.transaction.findFirst({
-      where: { storeId },
-      orderBy: { createdAt: 'desc' },
-    });
-    const hourAgo = new Date(Date.now() - 3600000);
-    const ondasLastHour = await this.prisma.transaction.aggregate({
-      where: {
-        storeId,
-        type: 'ACCUMULATE',
-        createdAt: { gte: hourAgo },
-      },
-      _sum: { points: true },
-    });
 
     const promoStats = await Promise.all(
       promos.map(async (p) => {
@@ -627,21 +575,11 @@ export class AnalyticsController {
         promosActivas: activePromos.length,
       },
       series,
-      hourly,
-      heatmap,
       redemptionsByType,
       segments,
       customers,
       insights: insights.slice(0, 8),
       eventMeta,
-      ops: {
-        ondasLastHour: ondasLastHour._sum.points ?? 0,
-        minutesSinceLastTx: lastTx
-          ? Math.round((Date.now() - lastTx.createdAt.getTime()) / 60000)
-          : null,
-        accumulateInRange: accumulateCount,
-        redeemInRange: redenciones,
-      },
       promoStats,
       recent: txs
         .slice()
@@ -1778,6 +1716,7 @@ export class BillingController {
   @Get('store/:storeId')
   async summary(@Param('storeId') storeId: string) {
     const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
+    const pricing = campaignPricing();
     const [ondasUsed, smsCampaignsUsed] = await Promise.all([
       monthlyOndasUsed(this.prisma, storeId),
       monthlySmsCampaignsUsed(this.prisma, storeId),
@@ -1788,7 +1727,11 @@ export class BillingController {
       ondasUsed,
       ondasLimit: PLAN_ONDA_MONTHLY_LIMIT,
       smsCampaignsUsed,
-      smsCampaignsLimit: PLAN_SMS_CAMPAIGNS_MONTHLY,
+      smsCampaignsLimit: pricing.freeMonthly,
+      campaignCredits: store.campaignCredits,
+      packSubscribed: store.campaignPackSubscribed,
+      hasPaymentMethod: Boolean(store.wompiPaymentSourceId) || !this.wompi.isConfigured,
+      campaignPricing: pricing,
       planPriceCop: store.planType === 'PRO' ? 69_900 : 49_900,
       freeMonthsBalance: store.freeMonthsBalance,
       wompiPublicKey: process.env.WOMPI_PUBLIC_KEY || null,

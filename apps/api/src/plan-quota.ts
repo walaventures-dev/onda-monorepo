@@ -1,11 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
-import {
-  PLAN_ONDA_MONTHLY_LIMIT,
-  PLAN_SMS_CAMPAIGNS_MONTHLY,
-} from '@onda/shared-types';
+import { PLAN_ONDA_MONTHLY_LIMIT } from '@onda/shared-types';
+import { campaignPricing } from './campaign-pricing';
 
-export { PLAN_ONDA_MONTHLY_LIMIT, PLAN_SMS_CAMPAIGNS_MONTHLY };
+export { PLAN_ONDA_MONTHLY_LIMIT };
+export { PLAN_SMS_CAMPAIGNS_MONTHLY } from '@onda/shared-types';
 
 const BILLING_TZ = 'America/Bogota';
 
@@ -70,12 +69,52 @@ export async function monthlySmsCampaignsUsed(
   storeId: string,
   now = new Date()
 ): Promise<number> {
+  const monthStart = startOfCurrentMonth(now);
   return db.campaign.count({
     where: {
       storeId,
-      channel: 'SMS',
-      createdAt: { gte: startOfCurrentMonth(now) },
+      sendSms: true,
+      billingKind: 'FREE',
+      status: { in: ['SCHEDULED', 'SENT'] },
+      OR: [
+        { scheduledAt: { gte: monthStart } },
+        { scheduledAt: null, createdAt: { gte: monthStart } },
+      ],
     },
+  });
+}
+
+export async function consumeCampaignSlot(
+  db: QuotaDb,
+  storeId: string,
+  now = new Date()
+): Promise<'FREE' | 'CREDIT'> {
+  const pricing = campaignPricing();
+  const used = await monthlySmsCampaignsUsed(db, storeId, now);
+  if (used < pricing.freeMonthly) return 'FREE';
+
+  const store = await db.store.findUniqueOrThrow({
+    where: { id: storeId },
+    select: {
+      campaignCredits: true,
+      wompiPaymentSourceId: true,
+      campaignPackSubscribed: true,
+    },
+  });
+  if (store.campaignCredits > 0) {
+    await db.store.update({
+      where: { id: storeId },
+      data: { campaignCredits: { decrement: 1 } },
+    });
+    return 'CREDIT';
+  }
+
+  throw new BadRequestException({
+    code: 'CAMPAIGN_QUOTA',
+    message: `Ya usaste tu${pricing.freeMonthly === 1 ? '' : 's'} ${pricing.freeMonthly} campaña${pricing.freeMonthly === 1 ? '' : 's'} gratis de este mes. Compra créditos extra o el paquete de ${pricing.packSize}.`,
+    hasPaymentMethod: Boolean(store.wompiPaymentSourceId),
+    packSubscribed: store.campaignPackSubscribed,
+    pricing,
   });
 }
 
@@ -84,10 +123,5 @@ export async function assertCanLaunchSmsCampaign(
   storeId: string,
   now = new Date()
 ): Promise<void> {
-  const used = await monthlySmsCampaignsUsed(db, storeId, now);
-  if (used >= PLAN_SMS_CAMPAIGNS_MONTHLY) {
-    throw new BadRequestException(
-      `Este mes ya usaste las ${PLAN_SMS_CAMPAIGNS_MONTHLY} campañas SMS incluidas en tu suscripción.`
-    );
-  }
+  await consumeCampaignSlot(db, storeId, now);
 }

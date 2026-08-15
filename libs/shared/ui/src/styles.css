@@ -291,11 +291,26 @@ button.onda-gradient:focus-visible:not(:disabled) {
 
 .onda-sidebar-header {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: flex-start;
   gap: 0.35rem;
   margin-bottom: 1.5rem;
   min-height: 2.25rem;
+  min-width: 0;
+}
+
+.onda-sidebar-store {
+  margin: 0;
+  padding: 0 0.5rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "Sora", "Manrope", system-ui, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--onda-ink);
 }
 
 .onda-sidebar-footer {
@@ -342,6 +357,7 @@ button.onda-gradient:focus-visible:not(:disabled) {
 
 .onda-sidebar.is-collapsed .onda-sidebar-header {
   justify-content: center;
+  align-items: center;
   margin-bottom: 1.25rem;
 }
 

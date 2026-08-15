@@ -5,42 +5,50 @@ import {
   Logger,
   NotFoundException,
   forwardRef,
-} from '@nestjs/common';
+} from "@nestjs/common";
 import {
   CartillaStatus,
   Prisma,
   PromotionPool,
   type PassDesign,
   type Promotion,
-} from '@prisma/client';
-import { PrismaService } from './prisma.service';
-import { JobsService } from './jobs.service';
-import { WalletService } from './wallet.service';
-import { BrevoService } from './brevo.service';
+} from "@prisma/client";
+import { PrismaService } from "./prisma.service";
+import { JobsService } from "./jobs.service";
+import { WalletService } from "./wallet.service";
+import { BrevoService } from "./brevo.service";
 
 export const PROMO_ASSIGNMENT_TOLERANCE = 0.15;
 export const CARTILLA_CYCLES = [4, 6, 8, 10, 12] as const;
 export type CartillaCycle = (typeof CARTILLA_CYCLES)[number];
 
 export function snapCartillaCycle(n: number): CartillaCycle {
-  if ((CARTILLA_CYCLES as readonly number[]).includes(n)) return n as CartillaCycle;
+  if ((CARTILLA_CYCLES as readonly number[]).includes(n))
+    return n as CartillaCycle;
   return CARTILLA_CYCLES.reduce((best, x) =>
-    Math.abs(x - n) < Math.abs(best - n) ? x : best
+    Math.abs(x - n) < Math.abs(best - n) ? x : best,
   );
 }
 
 function assertCycle(n: number): CartillaCycle {
   if (!(CARTILLA_CYCLES as readonly number[]).includes(n)) {
-    throw new BadRequestException('Elige 4, 6, 8, 10 o 12 ondas');
+    throw new BadRequestException("Elige 4, 6, 8, 10 o 12 ondas");
   }
   return n as CartillaCycle;
 }
 
 const MS_5_DAYS = 5 * 24 * 60 * 60 * 1000;
 
+function rangesOverlap(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
+  return aStart <= bEnd && bStart <= aEnd;
+}
+
 const CARTILLA_INCLUDE = {
   passDesign: true,
-  items: { include: { promotion: true }, orderBy: { pointsRequired: 'asc' as const } },
+  items: {
+    include: { promotion: true },
+    orderBy: { pointsRequired: "asc" as const },
+  },
 } satisfies Prisma.CartillaInclude;
 
 export type CartillaWithItems = Prisma.CartillaGetPayload<{
@@ -62,7 +70,7 @@ export class CartillaService {
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(forwardRef(() => JobsService)) private jobs: JobsService,
     @Inject(WalletService) private wallet: WalletService,
-    @Inject(BrevoService) private brevo: BrevoService
+    @Inject(BrevoService) private brevo: BrevoService,
   ) {}
 
   async ensureDefaultCartilla(storeId: string, db: Db = this.prisma) {
@@ -83,9 +91,9 @@ export class CartillaService {
     const cartilla = await db.cartilla.create({
       data: {
         storeId,
-        name: 'Cartilla permanente',
+        name: "Cartilla base",
         isDefault: true,
-        status: 'ACTIVE',
+        status: "ACTIVE",
         maxStamps: snapCartillaCycle(store.maxStamps || 12),
       },
     });
@@ -96,7 +104,7 @@ export class CartillaService {
     for (const p of store.promotions) {
       if (!p.isActive || p.eventId) continue;
       if (!p.pointsRequired || p.pointsRequired < 1) continue;
-      const pool = p.pool || 'RETENCION';
+      const pool = p.pool || "RETENCION";
       const key = `${p.pointsRequired}:${pool}`;
       if (!bySlot.has(key)) bySlot.set(key, p);
     }
@@ -106,7 +114,7 @@ export class CartillaService {
           cartillaId: cartilla.id,
           promotionId: p.id,
           pointsRequired: p.pointsRequired,
-          pool: p.pool || 'RETENCION',
+          pool: p.pool || "RETENCION",
         },
       });
     }
@@ -121,7 +129,7 @@ export class CartillaService {
     storeId: string,
     cartillaId: string,
     db: Db,
-    existing?: PassDesign | null
+    existing?: PassDesign | null,
   ) {
     const design =
       existing ||
@@ -142,11 +150,11 @@ export class CartillaService {
         storeId,
         cartillaId,
         title: store.name,
-        subtitle: 'Programa de lealtad Onda',
-        description: 'Gana ondas en cada visita y canjea recompensas',
-        backgroundColor: '#6E5AE6',
-        foregroundColor: '#FFFFFF',
-        labelColor: '#E5F6FC',
+        subtitle: "Programa de lealtad Onda",
+        description: "Gana ondas en cada visita y canjea recompensas",
+        backgroundColor: "#6E5AE6",
+        foregroundColor: "#FFFFFF",
+        labelColor: "#E5F6FC",
       },
     });
   }
@@ -154,17 +162,72 @@ export class CartillaService {
   async resolveActiveCartilla(storeId: string): Promise<CartillaWithItems> {
     const def = await this.ensureDefaultCartilla(storeId);
     const now = new Date();
-    const occasional = await this.prisma.cartilla.findFirst({
-      where: { storeId, isDefault: false, status: 'ACTIVE' },
+    const occasionals = await this.prisma.cartilla.findMany({
+      where: { storeId, isDefault: false, status: "ACTIVE" },
       include: CARTILLA_INCLUDE,
+      orderBy: { startsAt: "desc" },
     });
-    if (!occasional) return def;
-    if (occasional.endsAt && occasional.endsAt < now) {
-      await this.endCartilla(occasional.id);
-      return this.ensureDefaultCartilla(storeId);
+
+    const live: CartillaWithItems[] = [];
+    let endedExpired = false;
+    for (const cartilla of occasionals) {
+      if (cartilla.endsAt && cartilla.endsAt < now) {
+        await this.endCartilla(cartilla.id, { skipReset: true });
+        endedExpired = true;
+        continue;
+      }
+      if (cartilla.startsAt && cartilla.startsAt > now) continue;
+      live.push(cartilla);
     }
-    if (occasional.startsAt && occasional.startsAt > now) return def;
-    return occasional;
+
+    for (const extra of live.slice(1)) {
+      await this.endCartilla(extra.id, { skipReset: true });
+    }
+
+    if (live[0]) {
+      if (endedExpired || live.length > 1) {
+        await this.prisma.store.update({
+          where: { id: storeId },
+          data: { maxStamps: live[0].maxStamps },
+        });
+        await this.resetStorePasses(storeId, live[0].id);
+      }
+      return live[0];
+    }
+
+    if (endedExpired) {
+      await this.prisma.store.update({
+        where: { id: storeId },
+        data: { maxStamps: def.maxStamps },
+      });
+      await this.resetStorePasses(storeId, def.id);
+    }
+    return def;
+  }
+
+  private async assertNoOccasionalOverlap(
+    storeId: string,
+    startsAt: Date | null,
+    endsAt: Date | null,
+    excludeId?: string,
+  ) {
+    if (!startsAt || !endsAt) return;
+    const others = await this.prisma.cartilla.findMany({
+      where: {
+        storeId,
+        isDefault: false,
+        status: { not: "ENDED" },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+    });
+    for (const other of others) {
+      if (!other.startsAt || !other.endsAt) continue;
+      if (rangesOverlap(startsAt, endsAt, other.startsAt, other.endsAt)) {
+        throw new BadRequestException(
+          `El rango se cruza con «${other.name}». Solo puede haber una cartilla ocasional a la vez.`,
+        );
+      }
+    }
   }
 
   async passCount(cartillaId: string) {
@@ -175,7 +238,7 @@ export class CartillaService {
     const n = await this.passCount(cartillaId);
     if (n > 0) {
       throw new BadRequestException(
-        'Esta cartilla ya tiene clientes. No se puede modificar.'
+        "Esta cartilla ya tiene clientes. No se puede modificar.",
       );
     }
   }
@@ -190,7 +253,7 @@ export class CartillaService {
       where: { id },
       include: CARTILLA_INCLUDE,
     });
-    if (!cartilla) throw new NotFoundException('Cartilla no encontrada');
+    if (!cartilla) throw new NotFoundException("Cartilla no encontrada");
     return this.withLock(cartilla);
   }
 
@@ -200,22 +263,55 @@ export class CartillaService {
       this.prisma.cartilla.findMany({
         where: { storeId },
         include: CARTILLA_INCLUDE,
-        orderBy: [{ isDefault: 'desc' }, { startsAt: 'asc' }, { createdAt: 'desc' }],
+        orderBy: [
+          { isDefault: "desc" },
+          { startsAt: "asc" },
+          { createdAt: "desc" },
+        ],
       }),
       this.resolveActiveCartilla(storeId),
     ]);
     const counts = await this.prisma.pass.groupBy({
-      by: ['cartillaId'],
+      by: ["cartillaId"],
       where: { storeId, cartillaId: { not: null } },
       _count: { _all: true },
     });
-    const byId = new Map(
-      counts.map((c) => [c.cartillaId, c._count._all])
-    );
+    const byId = new Map(counts.map((c) => [c.cartillaId, c._count._all]));
+    const txRows = await this.prisma.transaction.groupBy({
+      by: ["cartillaId", "type"],
+      where: {
+        storeId,
+        cartillaId: { not: null },
+        type: { in: ["ACCUMULATE", "REDEEM"] },
+      },
+      _count: { _all: true },
+    });
+    const txById = new Map<
+      string,
+      { accumulations: number; redemptions: number }
+    >();
+    for (const row of txRows) {
+      if (!row.cartillaId) continue;
+      const cur = txById.get(row.cartillaId) || {
+        accumulations: 0,
+        redemptions: 0,
+      };
+      if (row.type === "ACCUMULATE") cur.accumulations = row._count._all;
+      if (row.type === "REDEEM") cur.redemptions = row._count._all;
+      txById.set(row.cartillaId, cur);
+    }
     return {
       cartillas: items.map((c) => {
         const passCount = byId.get(c.id) || 0;
-        return { ...c, passCount, locked: passCount > 0 };
+        const tx = txById.get(c.id) || { accumulations: 0, redemptions: 0 };
+        return {
+          ...c,
+          passCount,
+          locked: passCount > 0,
+          promoCount: c.items.length,
+          accumulations: tx.accumulations,
+          redemptions: tx.redemptions,
+        };
       }),
       activeId: active.id,
     };
@@ -238,7 +334,7 @@ export class CartillaService {
         ],
       },
       include: CARTILLA_INCLUDE,
-      orderBy: { startsAt: 'asc' },
+      orderBy: { startsAt: "asc" },
     });
     const active = await this.resolveActiveCartilla(storeId);
     return { year, cartillas, activeId: active.id };
@@ -258,7 +354,7 @@ export class CartillaService {
         where: { storeId: body.storeId, isDefault: true },
       });
       if (exists) {
-        throw new BadRequestException('Esta tienda ya tiene cartilla por defecto');
+        throw new BadRequestException("Esta tienda ya tiene cartilla base");
       }
     }
     const store = await this.prisma.store.findUniqueOrThrow({
@@ -273,20 +369,25 @@ export class CartillaService {
     const startsAt = body.startsAt ? new Date(body.startsAt) : null;
     const endsAt = body.endsAt ? new Date(body.endsAt) : null;
     if (!body.isDefault && startsAt && endsAt && endsAt <= startsAt) {
-      throw new BadRequestException('La fecha de fin debe ser posterior al inicio');
+      throw new BadRequestException(
+        "La fecha de fin debe ser posterior al inicio",
+      );
+    }
+    if (!body.isDefault) {
+      await this.assertNoOccasionalOverlap(body.storeId, startsAt, endsAt);
     }
 
     const maxStamps = assertCycle(
-      body.maxStamps ?? snapCartillaCycle(store.maxStamps || 12)
+      body.maxStamps ?? snapCartillaCycle(store.maxStamps || 12),
     );
 
     const cloned = def.passDesign;
     const cartilla = await this.prisma.cartilla.create({
       data: {
         storeId: body.storeId,
-        name: body.name?.trim() || 'Cartilla',
+        name: body.name?.trim() || "Cartilla",
         isDefault: Boolean(body.isDefault),
-        status: body.isDefault ? 'ACTIVE' : 'DRAFT',
+        status: body.isDefault ? "ACTIVE" : "DRAFT",
         startsAt,
         endsAt,
         maxStamps,
@@ -295,8 +396,8 @@ export class CartillaService {
             title: cloned?.title || store.name,
             subtitle: cloned?.subtitle,
             description: cloned?.description,
-            backgroundColor: cloned?.backgroundColor || '#6E5AE6',
-            foregroundColor: cloned?.foregroundColor || '#FFFFFF',
+            backgroundColor: cloned?.backgroundColor || "#6E5AE6",
+            foregroundColor: cloned?.foregroundColor || "#FFFFFF",
             labelColor: cloned?.labelColor,
             logoUrl: cloned?.logoUrl,
             stripImageUrl: cloned?.stripImageUrl,
@@ -319,12 +420,12 @@ export class CartillaService {
       endsAt?: string | null;
       maxStamps?: number;
       items?: Array<{ promotionId: string; pointsRequired: number }>;
-    }
+    },
   ) {
     const cartilla = await this.get(id);
     if (cartilla.locked) {
       throw new BadRequestException(
-        'Esta cartilla ya tiene clientes. No se puede modificar.'
+        "Esta cartilla ya tiene clientes. No se puede modificar.",
       );
     }
     const startsAt =
@@ -340,10 +441,20 @@ export class CartillaService {
           : null
         : cartilla.endsAt;
     if (!cartilla.isDefault && startsAt && endsAt && endsAt <= startsAt) {
-      throw new BadRequestException('La fecha de fin debe ser posterior al inicio');
+      throw new BadRequestException(
+        "La fecha de fin debe ser posterior al inicio",
+      );
     }
     if (cartilla.isDefault && (body.startsAt || body.endsAt)) {
-      throw new BadRequestException('La cartilla por defecto no usa fechas');
+      throw new BadRequestException("La cartilla base no usa fechas");
+    }
+    if (!cartilla.isDefault) {
+      await this.assertNoOccasionalOverlap(
+        cartilla.storeId,
+        startsAt,
+        endsAt,
+        id,
+      );
     }
 
     const maxStamps =
@@ -352,7 +463,7 @@ export class CartillaService {
     await this.prisma.cartilla.update({
       where: { id },
       data: {
-        ...('name' in body && body.name ? { name: body.name.trim() } : {}),
+        ...("name" in body && body.name ? { name: body.name.trim() } : {}),
         ...(body.startsAt !== undefined ? { startsAt } : {}),
         ...(body.endsAt !== undefined ? { endsAt, smsRemindedAt: null } : {}),
         ...(body.maxStamps != null ? { maxStamps } : {}),
@@ -371,29 +482,39 @@ export class CartillaService {
   async activate(id: string) {
     const cartilla = await this.get(id);
     if (cartilla.isDefault) {
-      throw new BadRequestException('La cartilla por defecto ya está activa como fallback');
+      throw new BadRequestException(
+        "La cartilla base ya está vigente cuando no hay una ocasional activa",
+      );
     }
     if (!cartilla.endsAt) {
-      throw new BadRequestException('Indica una fecha de fin antes de activar');
+      throw new BadRequestException("Indica una fecha de fin antes de activar");
     }
     const others = await this.prisma.cartilla.findMany({
       where: {
         storeId: cartilla.storeId,
         isDefault: false,
-        status: 'ACTIVE',
+        status: "ACTIVE",
         id: { not: id },
       },
     });
     for (const other of others) {
       await this.endCartilla(other.id, { skipReset: true });
     }
+    const startsAt =
+      cartilla.startsAt && cartilla.startsAt < new Date()
+        ? cartilla.startsAt
+        : new Date();
+    await this.assertNoOccasionalOverlap(
+      cartilla.storeId,
+      startsAt,
+      cartilla.endsAt,
+      id,
+    );
     await this.prisma.cartilla.update({
       where: { id },
       data: {
-        status: 'ACTIVE',
-        startsAt: cartilla.startsAt && cartilla.startsAt < new Date()
-          ? cartilla.startsAt
-          : new Date(),
+        status: "ACTIVE",
+        startsAt,
       },
     });
     await this.prisma.store.update({
@@ -407,13 +528,13 @@ export class CartillaService {
 
   async endCartilla(id: string, opts?: { skipReset?: boolean }) {
     const cartilla = await this.prisma.cartilla.findUnique({ where: { id } });
-    if (!cartilla) throw new NotFoundException('Cartilla no encontrada');
+    if (!cartilla) throw new NotFoundException("Cartilla no encontrada");
     if (cartilla.isDefault) {
-      throw new BadRequestException('No se puede terminar la cartilla por defecto');
+      throw new BadRequestException("No se puede terminar la cartilla base");
     }
     await this.prisma.cartilla.update({
       where: { id },
-      data: { status: 'ENDED' },
+      data: { status: "ENDED" },
     });
     if (!opts?.skipReset) {
       const def = await this.ensureDefaultCartilla(cartilla.storeId);
@@ -440,7 +561,8 @@ export class CartillaService {
       await this.assignPassPromos(pass.id);
       if (pass.walletRef) {
         await this.wallet.updatePoints(pass.walletRef, 0);
-        const message = 'Tu cartilla de Onda se actualizó. El ciclo de ondas empieza de nuevo.';
+        const message =
+          "Tu cartilla de Onda se actualizó. El ciclo de ondas empieza de nuevo.";
         await this.wallet.notify(pass.walletRef, message);
       }
     }
@@ -461,13 +583,13 @@ export class CartillaService {
     }
 
     const accumulateCount = await this.prisma.transaction.count({
-      where: { passId, storeId: pass.storeId, type: 'ACCUMULATE' },
+      where: { passId, storeId: pass.storeId, type: "ACCUMULATE" },
     });
     const pool: PromotionPool =
-      accumulateCount > 0 ? 'RETENCION' : 'BIENVENIDA';
+      accumulateCount > 0 ? "RETENCION" : "BIENVENIDA";
 
     const items = active.items.filter(
-      (i) => i.pool === pool && i.pointsRequired <= active.maxStamps
+      (i) => i.pool === pool && i.pointsRequired <= active.maxStamps,
     );
     const assigned: { pointsRequired: number; promotionId: string }[] = [];
 
@@ -475,7 +597,7 @@ export class CartillaService {
       const promo = item.promotion;
       if (!promo.isActive) continue;
       const redemptions = await this.prisma.transaction.count({
-        where: { promotionId: promo.id, type: 'REDEEM' },
+        where: { promotionId: promo.id, type: "REDEEM" },
       });
       if (promo.maxRedemptions != null && redemptions >= promo.maxRedemptions) {
         continue;
@@ -503,21 +625,26 @@ export class CartillaService {
         },
         update: { promotionId: promo.id },
       });
-      assigned.push({ pointsRequired: item.pointsRequired, promotionId: promo.id });
+      assigned.push({
+        pointsRequired: item.pointsRequired,
+        promotionId: promo.id,
+      });
     }
     return assigned;
   }
 
   async assertCanRedeem(passId: string, promotionId: string) {
-    const pass = await this.prisma.pass.findUniqueOrThrow({ where: { id: passId } });
+    const pass = await this.prisma.pass.findUniqueOrThrow({
+      where: { id: passId },
+    });
     const promo = await this.prisma.promotion.findUniqueOrThrow({
       where: { id: promotionId },
     });
     if (!pass.storeId || promo.storeId !== pass.storeId) {
-      throw new BadRequestException('Promoción no pertenece a este negocio');
+      throw new BadRequestException("Promoción no pertenece a este negocio");
     }
     if (!promo.isActive) {
-      throw new BadRequestException('Promoción inactiva');
+      throw new BadRequestException("Promoción inactiva");
     }
     const assignment = await this.prisma.passPromoAssignment.findFirst({
       where: {
@@ -527,18 +654,20 @@ export class CartillaService {
       },
     });
     if (!assignment) {
-      throw new BadRequestException('Esta promo no está en tu cartilla');
+      throw new BadRequestException("Esta promo no está en tu cartilla");
     }
     if (promo.maxRedemptions != null) {
       const used = await this.prisma.transaction.count({
-        where: { promotionId: promo.id, type: 'REDEEM' },
+        where: { promotionId: promo.id, type: "REDEEM" },
       });
       if (used >= promo.maxRedemptions) {
-        throw new BadRequestException('Se agotaron las redenciones de esta promo');
+        throw new BadRequestException(
+          "Se agotaron las redenciones de esta promo",
+        );
       }
     }
     if (pass.points < assignment.pointsRequired) {
-      throw new BadRequestException('Aún no alcanzas este premio');
+      throw new BadRequestException("Aún no alcanzas este premio");
     }
     return { pass, promo, assignment };
   }
@@ -550,7 +679,7 @@ export class CartillaService {
     });
     if (!links.length) return true;
     const counts = await this.prisma.pass.groupBy({
-      by: ['cartillaId'],
+      by: ["cartillaId"],
       where: { cartillaId: { in: links.map((l) => l.cartillaId) } },
       _count: { _all: true },
     });
@@ -572,7 +701,7 @@ export class CartillaService {
       const p = item.promotion;
       if (p.maxRedemptions == null) continue;
       const redemptions = await this.prisma.transaction.count({
-        where: { promotionId: p.id, type: 'REDEEM' },
+        where: { promotionId: p.id, type: "REDEEM" },
       });
       const remaining = Math.max(0, p.maxRedemptions - redemptions);
       const cap = assignmentCap(p.maxRedemptions);
@@ -603,13 +732,13 @@ export class CartillaService {
     if (!cartilla?.endsAt || cartilla.isDefault) return;
     const delayMs = cartilla.endsAt.getTime() - MS_5_DAYS - Date.now();
     await this.jobs.enqueue(
-      'cartilla-ending-sms',
+      "cartilla-ending-sms",
       {
         cartillaId: cartilla.id,
         storeId: cartilla.storeId,
         endsAt: cartilla.endsAt.toISOString(),
       },
-      { delayMs: Math.max(0, delayMs) }
+      { delayMs: Math.max(0, delayMs) },
     );
   }
 
@@ -622,7 +751,7 @@ export class CartillaService {
       where: { id: payload.cartillaId },
       include: { store: true },
     });
-    if (!cartilla || cartilla.status === 'ENDED') return;
+    if (!cartilla || cartilla.status === "ENDED") return;
     if (!cartilla.endsAt) return;
     if (cartilla.endsAt.toISOString() !== payload.endsAt) {
       this.logger.log(`SMS cartilla ${cartilla.id} omitido: endsAt cambió`);
@@ -630,21 +759,23 @@ export class CartillaService {
     }
     if (cartilla.smsRemindedAt) return;
 
-    const endsLabel = cartilla.endsAt.toLocaleDateString('es-CO', {
-      day: 'numeric',
-      month: 'long',
+    const endsLabel = cartilla.endsAt.toLocaleDateString("es-CO", {
+      day: "numeric",
+      month: "long",
     });
     const message =
       `${cartilla.store.name}: tienes hasta el ${endsLabel} para acumular y redimir en tu cartilla.`.slice(
         0,
-        160
+        160,
       );
 
     const passes = await this.prisma.pass.findMany({
       where: { storeId: cartilla.storeId, cartillaId: cartilla.id },
       include: { user: true },
     });
-    const phones = [...new Set(passes.map((p) => p.user.phone).filter(Boolean))];
+    const phones = [
+      ...new Set(passes.map((p) => p.user.phone).filter(Boolean)),
+    ];
     for (const to of phones) {
       await this.brevo.sendSms({ to, message });
     }
@@ -658,7 +789,7 @@ export class CartillaService {
   private async maybeSyncStoreCycle(
     storeId: string,
     cartillaId: string,
-    maxStamps: number
+    maxStamps: number,
   ) {
     const active = await this.resolveActiveCartilla(storeId);
     if (active.id !== cartillaId) return;
@@ -677,17 +808,19 @@ export class CartillaService {
   private async replacePromos(
     cartillaId: string,
     items: Array<{ promotionId: string; pointsRequired: number }>,
-    maxStamps: number
+    maxStamps: number,
   ) {
     await this.prisma.cartillaPromo.deleteMany({ where: { cartillaId } });
     if (!items.length) return;
 
-    const uniqueIds = [...new Set(items.map((i) => i.promotionId).filter(Boolean))];
+    const uniqueIds = [
+      ...new Set(items.map((i) => i.promotionId).filter(Boolean)),
+    ];
     const promos = await this.prisma.promotion.findMany({
       where: { id: { in: uniqueIds } },
     });
     if (promos.length !== uniqueIds.length) {
-      throw new BadRequestException('Alguna promoción no existe');
+      throw new BadRequestException("Alguna promoción no existe");
     }
     const byId = new Map(promos.map((p) => [p.id, p]));
     const used = new Set<string>();
@@ -698,21 +831,21 @@ export class CartillaService {
       if (!promo) continue;
       if (seenPromo.has(promo.id)) {
         throw new BadRequestException(
-          `La promo «${promo.title}» ya está en esta cartilla`
+          `La promo «${promo.title}» ya está en esta cartilla`,
         );
       }
       seenPromo.add(promo.id);
       const n = Number(item.pointsRequired);
       if (!Number.isInteger(n) || n < 1 || n > maxStamps) {
         throw new BadRequestException(
-          `Elige una onda entre 1 y ${maxStamps} para «${promo.title}»`
+          `Elige una onda entre 1 y ${maxStamps} para «${promo.title}»`,
         );
       }
-      const pool = promo.pool || 'RETENCION';
+      const pool = promo.pool || "RETENCION";
       const key = `${n}:${pool}`;
       if (used.has(key)) {
         throw new BadRequestException(
-          `Ya hay una promo de ${pool === 'BIENVENIDA' ? 'Adquisición' : 'Retención'} en la onda ${n}`
+          `Ya hay una promo de ${pool === "BIENVENIDA" ? "Adquisición" : "Retención"} en la onda ${n}`,
         );
       }
       used.add(key);
@@ -727,4 +860,3 @@ export class CartillaService {
     }
   }
 }
-

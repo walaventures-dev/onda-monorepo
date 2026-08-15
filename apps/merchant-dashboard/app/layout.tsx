@@ -3,7 +3,7 @@ import "./globals.css";
 import { DashboardShell } from "./DashboardShell";
 
 export const metadata: Metadata = {
-  title: "Onda Merchant",
+  title: "Onda",
   description: "Panel del negocio",
 };
 

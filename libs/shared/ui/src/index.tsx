@@ -56,6 +56,16 @@ export type {
 } from './AnalyticsFilters';
 export { OndaIcons, BadgePill, badgeIcon } from './icons';
 export {
+  IPhonePreview,
+  LockScreen,
+  WalletScreen,
+  WalletPassCard,
+} from './IPhonePreview';
+export type {
+  LockScreenNotification,
+  PreviewChannel,
+} from './IPhonePreview';
+export {
   OndaLogo,
   OndaWordmark,
   OndaHandMark,
@@ -521,6 +531,9 @@ export function AppShell({
             className={collapsed ? 'justify-center' : 'px-2'}
             compact={collapsed}
           />
+          {!collapsed && title ? (
+            <p className="onda-sidebar-store">{title}</p>
+          ) : null}
         </div>
         <nav className="onda-sidebar-nav" aria-label="Principal">
           {mainNav.map(renderLink)}

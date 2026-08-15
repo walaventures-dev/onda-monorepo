@@ -291,7 +291,10 @@ export function CreatePromo({
                 className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
                 value={formatMoneyInput(form.value)}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, value: parseMoneyInput(e.target.value) }))
+                  setForm((f) => ({
+                    ...f,
+                    value: parseMoneyInput(e.target.value),
+                  }))
                 }
                 placeholder="Ej. 8.000"
               />
@@ -351,7 +354,10 @@ export function CreatePromo({
                   className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
                   value={formatMoneyInput(form.value)}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, value: parseMoneyInput(e.target.value) }))
+                    setForm((f) => ({
+                      ...f,
+                      value: parseMoneyInput(e.target.value),
+                    }))
                   }
                   placeholder="Ej. 8.000"
                 />

@@ -25,11 +25,11 @@ const FAQS = [
   },
   {
     q: '¿Cuál es la diferencia entre Onda y Onda Pro?',
-    a: `Ambos planes incluyen hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes y ${PLAN_SMS_CAMPAIGNS_MONTHLY} campañas SMS gratis. Onda te da el pase en Wallet, recompensas a tu medida y avisos push. Onda Pro suma campañas para traer clientes de vuelta, avisos de proximidad, reseñas en Google y analítica.`,
+    a: `Ambos planes incluyen hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes y ${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis. Campañas extra se pagan aparte. Onda te da el pase en Wallet, recompensas a tu medida y avisos push. Onda Pro suma campañas para traer clientes de vuelta, avisos de proximidad, reseñas en Google y analítica.`,
   },
   {
     q: '¿Qué cubre la suscripción cada mes?',
-    a: `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas acumuladas por tus clientes y ${PLAN_SMS_CAMPAIGNS_MONTHLY} campañas SMS. Si llegas al tope, la acumulación se pausa hasta el siguiente mes. El push de Wallet no cuenta contra ese cupo de SMS.`,
+    a: `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas acumuladas por tus clientes y ${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis. Si llegas al tope de ondas, la acumulación se pausa hasta el siguiente mes. El push de Wallet no cuenta contra ese cupo.`,
   },
   {
     q: '¿El primer mes es gratis de verdad?',

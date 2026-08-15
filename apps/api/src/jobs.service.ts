@@ -16,6 +16,8 @@ import type {
   BrevoEmailJobPayload,
   BrevoSmsJobPayload,
   CartillaEndingSmsPayload,
+  CampaignDispatchPayload,
+  CampaignPackRenewPayload,
   JobPayloadMap,
   JobType,
   JobsEnqueueOptions,
@@ -24,6 +26,7 @@ import type {
   WompiRenewJobPayload,
 } from './jobs.types';
 import { CartillaService } from './cartilla.service';
+import { CampaignsService } from './campaigns.service';
 
 const QUEUE_NAME = 'onda-jobs';
 const MS_30_DAYS = 30 * 24 * 60 * 60 * 1000;
@@ -40,7 +43,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     @Inject(BrevoService) private brevo: BrevoService,
     @Inject(WalletService) private wallet: WalletService,
     @Inject(WompiService) private wompi: WompiService,
-    @Inject(forwardRef(() => CartillaService)) private cartillas: CartillaService
+    @Inject(forwardRef(() => CartillaService)) private cartillas: CartillaService,
+    @Inject(forwardRef(() => CampaignsService)) private campaigns: CampaignsService
   ) {}
 
   get usesCloudTasks(): boolean {
@@ -140,6 +144,14 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       case 'cartilla-ending-sms':
         await this.cartillas.sendEndingSms(payload as CartillaEndingSmsPayload);
         return;
+      case 'campaign-dispatch':
+        await this.campaigns.dispatch(payload as CampaignDispatchPayload);
+        return;
+      case 'campaign-pack-renew':
+        await this.campaigns.renewPackSubscription(
+          (payload as CampaignPackRenewPayload).storeId
+        );
+        return;
       default:
         this.logger.warn(`Job desconocido: ${type}`);
     }
@@ -174,7 +186,13 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       this.logger.log(`[Wompi renew] sin payment source store=${payload.storeId}`);
       return;
     }
-    await this.wompi.chargePaymentSource(store.wompiPaymentSourceId, store.id);
+    await this.wompi.chargePaymentSource({
+      paymentSourceId: store.wompiPaymentSourceId,
+      storeId: store.id,
+      amountInCents: this.wompi.proAmountInCents,
+      reference: `onda-renew-${store.id}-${Date.now()}`,
+      customerEmail: store.ownerEmail || undefined,
+    });
     await this.scheduleWompiRenew(store.id);
   }
 

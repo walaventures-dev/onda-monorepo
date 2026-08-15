@@ -64,6 +64,37 @@ enum CampaignChannel {
   WALLET
 }
 
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENT
+  CANCELLED
+  FAILED
+}
+
+enum CampaignOrigin {
+  MANUAL
+  RECOMMENDED
+}
+
+enum CampaignObjective {
+  REACTIVATE
+  SLOW_HOURS
+  NEW_REWARD
+  REVIEWS
+}
+
+enum CampaignBillingKind {
+  FREE
+  CREDIT
+}
+
+enum CampaignPurchaseSku {
+  SINGLE
+  PACK
+  PACK_SUB
+}
+
 enum PendingRequestType {
   ACCUMULATE
   CLAIM
@@ -190,20 +221,49 @@ model Store {
   passDesign        PassDesign?
   pendingRequests   PendingRequest[]
   campaigns         Campaign[]
+  campaignPurchases CampaignPurchase[]
+  campaignCredits   Int                    @default(0)
+  campaignPackSubscribed Boolean           @default(false)
   createdAt         DateTime               @default(now())
 
   @@index([ownerEmail])
 }
 
 model Campaign {
-  id        String          @id @default(uuid())
-  storeId   String
-  store     Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  channel   CampaignChannel
-  title     String
-  createdAt DateTime        @default(now())
+  id             String             @id @default(uuid())
+  storeId        String
+  store          Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  channel        CampaignChannel
+  title          String
+  status         CampaignStatus     @default(SCHEDULED)
+  origin         CampaignOrigin     @default(MANUAL)
+  objective      CampaignObjective?
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  smsBody        String?
+  walletBody     String?
+  sendSms        Boolean            @default(true)
+  sendWallet     Boolean            @default(true)
+  audienceFilter Json?
+  promoSnapshot  Json?
+  billingKind    CampaignBillingKind @default(FREE)
+  createdAt      DateTime           @default(now())
 
   @@index([storeId, channel, createdAt])
+  @@index([storeId, status, scheduledAt])
+}
+
+model CampaignPurchase {
+  id              String               @id @default(uuid())
+  storeId         String
+  store           Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  sku             CampaignPurchaseSku
+  credits         Int
+  amountCop       Int
+  wompiReference  String?              @unique
+  createdAt       DateTime             @default(now())
+
+  @@index([storeId, createdAt])
 }
 
 model Event {

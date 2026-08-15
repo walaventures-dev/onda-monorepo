@@ -62,7 +62,7 @@ export function CartillaEditor({
   onPromoCreated?: (promo: any) => void | Promise<void>;
 }) {
   const { confirm, alert, dialogs } = useOndaDialogs();
-  const [name, setName] = useState(embedded ? "Cartilla permanente" : "Cartilla");
+  const [name, setName] = useState(embedded ? "Cartilla base" : "Cartilla");
   const [creatingPromo, setCreatingPromo] = useState(false);
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
@@ -245,7 +245,8 @@ export function CartillaEditor({
     e.preventDefault();
     if (locked) {
       toast.danger("Cartilla bloqueada", {
-        description: "Ya hay clientes con esta cartilla. No se puede modificar.",
+        description:
+          "Ya hay clientes con esta cartilla. No se puede modificar.",
       });
       return;
     }
@@ -275,12 +276,21 @@ export function CartillaEditor({
   }
 
   async function activate() {
+    const ok = await confirm({
+      title: "¿Activar esta cartilla?",
+      message:
+        "Quedará como la única vigente. Si hay otra ocasional activa, se termina y los clientes vuelven a la base cuando esta acabe.",
+      confirmLabel: "Activar",
+      tone: "accent",
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       const saved = await saveMeta();
       await api(`/cartillas/${saved.id}/activate`, { method: "POST" });
       toast.success("Cartilla activada", {
-        description: "El ciclo de ondas se reinició para tus clientes.",
+        description:
+          "Quedó como la única vigente. El ciclo de ondas se reinició para tus clientes.",
       });
       onClose();
     } catch (err: any) {
@@ -294,7 +304,7 @@ export function CartillaEditor({
     setBusy(true);
     try {
       await api(`/cartillas/${cartillaId}/end`, { method: "POST" });
-      toast.success("Volviste a la cartilla permanente");
+      toast.success("Volviste a la cartilla base");
       onClose();
     } catch (err: any) {
       toast.danger("No se pudo terminar", { description: err.message });
@@ -357,220 +367,229 @@ export function CartillaEditor({
 
         <form onSubmit={onSave} className="onda-card space-y-4 p-5">
           <fieldset disabled={locked} className="space-y-4">
-          <input
-            required
-            className="w-full rounded-xl border border-[var(--onda-border)] px-3 py-2.5 text-sm"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Nombre de la cartilla"
-          />
-          {!isDefault ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <OndaDatePicker
-                label="Inicio"
-                value={startsAt}
-                onChange={setStartsAt}
-              />
-              <OndaDatePicker
-                label="Fin"
-                value={endsAt}
-                onChange={setEndsAt}
-              />
-            </div>
-          ) : (
-            <p className="text-xs text-[var(--onda-muted)]">
-              Cartilla permanente: sin fechas. Es el fallback cuando no hay una
-              ocasional activa.
-            </p>
-          )}
-
-          <div>
-            <p className="mb-2 text-sm font-medium">Ondas de la cartilla</p>
-            <SegmentedControl
-              aria-label="Cantidad de ondas"
-              value={String(maxStamps)}
-              onChange={(id) => setMaxStamps(Number(id))}
-              options={CYCLES.map((n) => ({ id: n, label: n }))}
+            <input
+              required
+              className="w-full rounded-xl border border-[var(--onda-border)] px-3 py-2.5 text-sm"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Nombre de la cartilla"
             />
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-medium">Promos en esta cartilla</p>
-              {locked ? null : (
-                <div className="flex flex-wrap gap-2">
-                  {promos.length === 0 ? (
-                    <GradientButton type="button" onClick={openCreatePromo}>
-                      {OndaIcons.plus}
-                      Crear promo
-                    </GradientButton>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm font-medium"
-                        onClick={openCreatePromo}
-                      >
-                        {OndaIcons.plus}
-                        Crear promo
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm font-medium"
-                        onClick={() => setPicking(true)}
-                      >
-                        Agregar promo
-                      </button>
-                    </>
-                  )}
+            {!isDefault ? (
+              <div className="space-y-2">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <OndaDatePicker
+                    label="Inicio"
+                    value={startsAt}
+                    onChange={setStartsAt}
+                  />
+                  <OndaDatePicker
+                    label="Fin"
+                    value={endsAt}
+                    onChange={setEndsAt}
+                  />
                 </div>
-              )}
-            </div>
-
-            {selected.length === 0 ? (
-              <p className="text-sm text-[var(--onda-muted)]">
-                Aún no hay promos. Créala acá o agrégala y elige en qué onda se
-                reclama.
-              </p>
+                <p className="text-xs text-[var(--onda-muted)]">
+                  En esas fechas reemplaza a la cartilla base. No puede
+                  cruzarse con otra ocasional.
+                </p>
+              </div>
             ) : (
-              <ul className="space-y-2">
-                {selected.map((p: any) => (
-                  <li
-                    key={p.id}
-                    className="flex items-center gap-3 rounded-xl border border-[var(--onda-border)] px-3 py-2.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
-                        Onda {p.pointsRequired} · {p.title}
-                      </p>
-                      <p className="text-xs text-[var(--onda-muted)]">
-                        {poolLabel(p.pool)} ·{" "}
-                        {formatPromoBenefit({ ...p, pointsRequired: 0 })}
-                      </p>
-                    </div>
-                    {locked ? null : (
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-full p-1.5 text-[var(--onda-muted)] hover:text-[var(--onda-danger)]"
-                      aria-label={`Quitar ${p.title}`}
-                      onClick={() => removePromo(p.id)}
-                    >
-                      {OndaIcons.close}
-                    </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
+              <p className="text-xs text-[var(--onda-muted)]">
+                Plantilla base: sin fechas. Está vigente salvo que haya una
+                ocasional activa. No pueden coincidir dos campañas.
+              </p>
             )}
 
-            {warnings.length > 0 ? (
-              <p className="text-xs text-amber-800">
-                En la onda {warnings.join(", ")} conviene que Adquisición sea más
-                atractiva que Retención.
-              </p>
-            ) : null}
-          </div>
+            <div>
+              <p className="mb-2 text-sm font-medium">Ondas de la cartilla</p>
+              <SegmentedControl
+                aria-label="Cantidad de ondas"
+                value={String(maxStamps)}
+                onChange={(id) => setMaxStamps(Number(id))}
+                options={CYCLES.map((n) => ({ id: n, label: n }))}
+              />
+            </div>
 
-          {picking && !locked ? (
-            <div className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-bg)] p-4">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium">Elige una promo</p>
-                <button
-                  type="button"
-                  className="text-xs font-medium text-[var(--onda-muted)] hover:text-[var(--onda-ink)]"
-                  onClick={() => {
-                    setPicking(false);
-                    setPendingPromo(null);
-                  }}
-                >
-                  Cerrar
-                </button>
-              </div>
-              {pendingPromo ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-[var(--onda-muted)]">
-                    ¿En qué onda se reclama «{pendingPromo.title}»?
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {ondaOptions.map((opt) => (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        className="rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-sm font-medium hover:border-[var(--onda-violet)]"
-                        onClick={() => addPromo(pendingPromo, Number(opt.id))}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    className="text-xs font-medium text-[var(--onda-muted)]"
-                    onClick={() => setPendingPromo(null)}
-                  >
-                    Elegir otra promo
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <SegmentedControl
-                    aria-label="Filtrar bolsa"
-                    value={pickPool}
-                    onChange={setPickPool}
-                    options={[
-                      { id: "ALL", label: "Ambas" },
-                      { id: "BIENVENIDA", label: "Adquisición" },
-                      { id: "RETENCION", label: "Retención" },
-                    ]}
-                  />
-                  <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto">
-                    {pickList.length === 0 ? (
-                      <li className="space-y-3">
-                        <p className="text-sm text-[var(--onda-muted)]">
-                          No hay promos activas en la bolsa. Crea una primero.
-                        </p>
-                        <GradientButton type="button" onClick={openCreatePromo}>
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium">Promos en esta cartilla</p>
+                {locked ? null : (
+                  <div className="flex flex-wrap gap-2">
+                    {promos.length === 0 ? (
+                      <GradientButton type="button" onClick={openCreatePromo}>
+                        {OndaIcons.plus}
+                        Crear promo
+                      </GradientButton>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm font-medium"
+                          onClick={openCreatePromo}
+                        >
                           {OndaIcons.plus}
                           Crear promo
-                        </GradientButton>
-                      </li>
-                    ) : (
-                      pickList.map((p) => {
-                        const already = slots.some(
-                          (s) => s.promotionId === p.id,
-                        );
-                        return (
-                          <li key={p.id}>
-                            <button
-                              type="button"
-                              className="flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-2.5 text-left hover:border-[var(--onda-violet)]"
-                              onClick={() => setPendingPromo(p)}
-                            >
-                              <span className="min-w-0">
-                                <span className="block truncate text-sm font-medium">
-                                  {p.title}
-                                </span>
-                                <span className="block text-xs text-[var(--onda-muted)]">
-                                  {poolLabel(p.pool)} ·{" "}
-                                  {formatPromoBenefit({
-                                    ...p,
-                                    pointsRequired: 0,
-                                  })}
-                                </span>
-                              </span>
-                              <span className="shrink-0 text-xs font-medium text-[var(--onda-violet)]">
-                                {already ? "Cambiar onda" : "Seleccionar"}
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm font-medium"
+                          onClick={() => setPicking(true)}
+                        >
+                          Agregar promo
+                        </button>
+                      </>
                     )}
-                  </ul>
-                </>
+                  </div>
+                )}
+              </div>
+
+              {selected.length === 0 ? (
+                <p className="text-sm text-[var(--onda-muted)]">
+                  Aún no hay promos. Créala acá o agrégala y elige en qué onda
+                  se reclama.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {selected.map((p: any) => (
+                    <li
+                      key={p.id}
+                      className="flex items-center gap-3 rounded-xl border border-[var(--onda-border)] px-3 py-2.5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          Onda {p.pointsRequired} · {p.title}
+                        </p>
+                        <p className="text-xs text-[var(--onda-muted)]">
+                          {poolLabel(p.pool)} ·{" "}
+                          {formatPromoBenefit({ ...p, pointsRequired: 0 })}
+                        </p>
+                      </div>
+                      {locked ? null : (
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-full p-1.5 text-[var(--onda-muted)] hover:text-[var(--onda-danger)]"
+                          aria-label={`Quitar ${p.title}`}
+                          onClick={() => removePromo(p.id)}
+                        >
+                          {OndaIcons.close}
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
+
+              {warnings.length > 0 ? (
+                <p className="text-xs text-amber-800">
+                  En la onda {warnings.join(", ")} conviene que Adquisición sea
+                  más atractiva que Retención.
+                </p>
+              ) : null}
             </div>
-          ) : null}
+
+            {picking && !locked ? (
+              <div className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-bg)] p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium">Elige una promo</p>
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-[var(--onda-muted)] hover:text-[var(--onda-ink)]"
+                    onClick={() => {
+                      setPicking(false);
+                      setPendingPromo(null);
+                    }}
+                  >
+                    Cerrar
+                  </button>
+                </div>
+                {pendingPromo ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-[var(--onda-muted)]">
+                      ¿En qué onda se reclama «{pendingPromo.title}»?
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ondaOptions.map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          className="rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-sm font-medium hover:border-[var(--onda-violet)]"
+                          onClick={() => addPromo(pendingPromo, Number(opt.id))}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-[var(--onda-muted)]"
+                      onClick={() => setPendingPromo(null)}
+                    >
+                      Elegir otra promo
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <SegmentedControl
+                      aria-label="Filtrar bolsa"
+                      value={pickPool}
+                      onChange={setPickPool}
+                      options={[
+                        { id: "ALL", label: "Ambas" },
+                        { id: "BIENVENIDA", label: "Adquisición" },
+                        { id: "RETENCION", label: "Retención" },
+                      ]}
+                    />
+                    <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto">
+                      {pickList.length === 0 ? (
+                        <li className="space-y-3">
+                          <p className="text-sm text-[var(--onda-muted)]">
+                            No hay promos activas en la bolsa. Crea una primero.
+                          </p>
+                          <GradientButton
+                            type="button"
+                            onClick={openCreatePromo}
+                          >
+                            {OndaIcons.plus}
+                            Crear promo
+                          </GradientButton>
+                        </li>
+                      ) : (
+                        pickList.map((p) => {
+                          const already = slots.some(
+                            (s) => s.promotionId === p.id,
+                          );
+                          return (
+                            <li key={p.id}>
+                              <button
+                                type="button"
+                                className="flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-2.5 text-left hover:border-[var(--onda-violet)]"
+                                onClick={() => setPendingPromo(p)}
+                              >
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm font-medium">
+                                    {p.title}
+                                  </span>
+                                  <span className="block text-xs text-[var(--onda-muted)]">
+                                    {poolLabel(p.pool)} ·{" "}
+                                    {formatPromoBenefit({
+                                      ...p,
+                                      pointsRequired: 0,
+                                    })}
+                                  </span>
+                                </span>
+                                <span className="shrink-0 text-xs font-medium text-[var(--onda-violet)]">
+                                  {already ? "Cambiar onda" : "Seleccionar"}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })
+                      )}
+                    </ul>
+                  </>
+                )}
+              </div>
+            ) : null}
           </fieldset>
 
           <div className="flex flex-wrap gap-2">
@@ -597,7 +616,7 @@ export function CartillaEditor({
                 onClick={() => void endIt()}
                 disabled={busy}
               >
-                Terminar y volver a permanente
+                Terminar y volver a la cartilla base
               </button>
             ) : null}
           </div>

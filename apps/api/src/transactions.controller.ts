@@ -1,10 +1,4 @@
-import { Inject, BadRequestException,
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Query, } from '@nestjs/common';
+import { Inject, Body, Controller, Post } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { WhatsappService } from './whatsapp.service';
@@ -19,47 +13,6 @@ export class TransactionsController {
     @Inject(WhatsappService) private whatsapp: WhatsappService,
     @Inject(CartillaService) private cartillas: CartillaService
   ) {}
-
-  @Get()
-  list(
-    @Query('storeId') storeId: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('type') type?: string,
-    @Query('eventId') eventId?: string,
-    @Query('promoTypes') promoTypes?: string
-  ) {
-    const types = type ? type.split(',').filter(Boolean) : undefined;
-    const pTypes = promoTypes
-      ? (promoTypes.split(',').filter(Boolean) as import('@prisma/client').PromotionType[])
-      : undefined;
-    const fromDate = from ? new Date(from) : undefined;
-    const toDate = to ? new Date(to) : undefined;
-    if (toDate) toDate.setHours(23, 59, 59, 999);
-
-    return this.prisma.transaction.findMany({
-      where: {
-        storeId,
-        ...(fromDate || toDate
-          ? {
-              createdAt: {
-                ...(fromDate ? { gte: fromDate } : {}),
-                ...(toDate ? { lte: toDate } : {}),
-              },
-            }
-          : {}),
-        ...(types?.length ? { type: { in: types as any } } : {}),
-        ...(eventId ? { pass: { eventId } } : {}),
-        ...(pTypes?.length ? { promotion: { type: { in: pTypes } } } : {}),
-      },
-      include: {
-        pass: { include: { user: true } },
-        promotion: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 200,
-    });
-  }
 
   @Post('accumulate')
   async accumulate(
@@ -144,10 +97,5 @@ export class TransactionsController {
       await this.wallet.updatePoints(pass.walletRef, pass.points);
     }
     return { transaction: tx, pass, promotion: promo };
-  }
-
-  @Get('store/:storeId')
-  byStore(@Param('storeId') storeId: string) {
-    return this.list(storeId);
   }
 }

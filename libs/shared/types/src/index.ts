@@ -464,5 +464,14 @@ export interface KpiSummary {
 /** Ondas incluidas por mes en cualquier suscripción (BASIC o PRO). */
 export const PLAN_ONDA_MONTHLY_LIMIT = 300;
 
-/** Campañas SMS incluidas gratis por mes en cualquier suscripción. */
-export const PLAN_SMS_CAMPAIGNS_MONTHLY = 4;
+/** Campañas SMS/Wallet incluidas gratis por mes (override API: CAMPAIGN_FREE_MONTHLY). */
+export const PLAN_SMS_CAMPAIGNS_MONTHLY = 1;
+
+/** Precio de una campaña extra a demanda (COP). */
+export const CAMPAIGN_PRICE_COP = 29_900;
+
+/** Tamaño del paquete (aprox. una por semana). */
+export const CAMPAIGN_PACK_SIZE = 3;
+
+/** Descuento del paquete de 3 (15%). */
+export const CAMPAIGN_PACK_DISCOUNT = 0.15;

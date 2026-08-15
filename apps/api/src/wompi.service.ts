@@ -92,13 +92,20 @@ export class WompiService {
     };
   }
 
-  async chargePaymentSource(paymentSourceId: string, storeId: string) {
+  async chargePaymentSource(input: {
+    paymentSourceId: string;
+    storeId: string;
+    amountInCents: number;
+    reference: string;
+    customerEmail?: string;
+  }) {
     const privateKey = process.env.WOMPI_PRIVATE_KEY;
     if (!privateKey) {
-      this.logger.log(`[Wompi stub] renew store=${storeId} source=${paymentSourceId}`);
+      this.logger.log(
+        `[Wompi stub] charge store=${input.storeId} source=${input.paymentSourceId} ref=${input.reference} cents=${input.amountInCents}`
+      );
       return { ok: true as const, stub: true as const };
     }
-    const reference = `onda-renew-${storeId}-${Date.now()}`;
     const res = await fetch(`${this.apiUrl}/transactions`, {
       method: 'POST',
       headers: {
@@ -106,17 +113,18 @@ export class WompiService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        amount_in_cents: this.proAmountInCents,
+        amount_in_cents: input.amountInCents,
         currency: 'COP',
-        customer_email: 'billing@onda.lat',
-        payment_source_id: Number(paymentSourceId) || paymentSourceId,
-        reference,
+        customer_email: input.customerEmail || 'billing@onda.lat',
+        payment_source_id:
+          Number(input.paymentSourceId) || input.paymentSourceId,
+        reference: input.reference,
         payment_method: { installments: 1 },
       }),
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`Wompi renew ${res.status}: ${text}`);
+      throw new Error(`Wompi charge ${res.status}: ${text}`);
     }
     return res.json() as Promise<unknown>;
   }
