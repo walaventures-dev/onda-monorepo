@@ -356,7 +356,7 @@ function PromoCatalogCard({
       }}
       className={`onda-card cursor-pointer overflow-hidden transition hover:shadow-[0_1px_2px_rgba(26,27,46,0.08)] ${highlightCls} ${inactiveCls}`}
     >
-      <div className="relative h-[4.5rem] bg-[var(--onda-bg)] sm:h-20 lg:h-24">
+      <div className="relative aspect-[16/10] bg-[var(--onda-bg)]">
         {promo.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -373,25 +373,50 @@ function PromoCatalogCard({
           <div className="absolute left-1.5 top-1.5">{insightTag}</div>
         ) : null}
       </div>
-      <div className="space-y-2 p-2.5">
-        <div className="flex items-start gap-1">
+      <div className="px-2 py-1.5">
+        <div className="flex items-center gap-1">
           {showTypeTag ? (
             <span
-              className="mt-0.5 shrink-0 text-[var(--onda-violet)]"
+              className="shrink-0 text-[var(--onda-violet)]"
               aria-hidden
             >
               {promoTypeIcon(promo.type)}
             </span>
           ) : null}
-          <h3 className="min-h-[2.25rem] flex-1 font-display text-xs font-semibold leading-snug line-clamp-2">
+          <h3 className="min-w-0 flex-1 truncate font-display text-xs font-semibold leading-tight">
             {promo.title}
           </h3>
+          {actions}
         </div>
         {contextLine ? (
-          <p className="text-[11px] text-[var(--onda-muted)]">{contextLine}</p>
+          <p className="mt-0.5 text-[10px] leading-none text-[var(--onda-muted)]">
+            {contextLine}
+          </p>
         ) : null}
-        {statsList}
-        <div className="flex justify-end">{actions}</div>
+        <dl className="mt-1.5 flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-1">
+            <span className="shrink-0 text-[var(--onda-violet)]" aria-hidden>
+              {OndaIcons.redeem}
+            </span>
+            <dt className="text-[10px] font-medium text-[var(--onda-muted)]">
+              Canjes
+            </dt>
+            <dd className="tabular-nums text-xs font-semibold text-[var(--onda-ink)]">
+              {canjes}
+            </dd>
+          </div>
+          <div className="flex min-w-0 items-center gap-1">
+            <span className="shrink-0 text-[var(--onda-sky)]" aria-hidden>
+              {OndaIcons.users}
+            </span>
+            <dt className="text-[10px] font-medium text-[var(--onda-muted)]">
+              Elegibles
+            </dt>
+            <dd className="tabular-nums text-xs font-semibold text-[var(--onda-ink)]">
+              {elegibles}
+            </dd>
+          </div>
+        </dl>
       </div>
     </article>
   );
@@ -1631,11 +1656,11 @@ export function MerchantWorkspace() {
           <AnalyticsFiltersBar
             value={filters}
             onChange={setFilters}
-            showPromoTypes={
-              !(selectedCustomerPassId || tab === "comparativa")
-            }
+            showPromoTypes={!(selectedCustomerPassId || tab === "comparativa")}
             extraGroups={
-              selectedCustomerPassId || tab === "comparativa" || tab !== "promos"
+              selectedCustomerPassId ||
+              tab === "comparativa" ||
+              tab !== "promos"
                 ? undefined
                 : [
                     {
@@ -2264,7 +2289,7 @@ export function MerchantWorkspace() {
             <div
               className={
                 promoView === "grid"
-                  ? "grid justify-start gap-2 grid-cols-2 sm:[grid-template-columns:repeat(auto-fill,10.5rem)] lg:[grid-template-columns:repeat(auto-fill,11.25rem)]"
+                  ? "grid justify-start gap-2 grid-cols-2 sm:[grid-template-columns:repeat(auto-fill,10.5rem)] lg:[grid-template-columns:repeat(auto-fill,15.25rem)]"
                   : "flex flex-col gap-1.5"
               }
             >
@@ -2319,7 +2344,11 @@ export function MerchantWorkspace() {
         ) : null}
 
         {tab === "campanas" && campaignNew && storeId ? (
-          <Suspense fallback={<p className="text-sm text-[var(--onda-muted)]">Cargando…</p>}>
+          <Suspense
+            fallback={
+              <p className="text-sm text-[var(--onda-muted)]">Cargando…</p>
+            }
+          >
             <CampaignWizard
               storeId={storeId}
               store={store || {}}
@@ -2358,12 +2387,12 @@ export function MerchantWorkspace() {
                 </p>
                 <p>
                   Campañas SMS este mes: {billing?.smsCampaignsUsed ?? 0}/
-                  {billing?.smsCampaignsLimit ?? PLAN_SMS_CAMPAIGNS_MONTHLY}{' '}
+                  {billing?.smsCampaignsLimit ?? PLAN_SMS_CAMPAIGNS_MONTHLY}{" "}
                   gratis
                   {billing?.campaignCredits != null
                     ? ` · créditos ${billing.campaignCredits}`
-                    : ''}
-                  {billing?.packSubscribed ? ' · paquete suscrito' : ''}
+                    : ""}
+                  {billing?.packSubscribed ? " · paquete suscrito" : ""}
                 </p>
                 {billing?.planType === "BASIC" ? (
                   <GradientButton type="button" onClick={upgrade}>

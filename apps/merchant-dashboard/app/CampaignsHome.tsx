@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   GradientButton,
   api,
@@ -74,8 +74,12 @@ export function CampaignsHome({
   }) => Promise<boolean>;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
-  const [buying, setBuying] = useState<string | null>(null);
+  const [buying, setBuying] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [sku, setSku] = useState<'single' | 'pack' | 'subscribe'>('pack');
+  const [pendingPath, setPendingPath] = useState('/campanas/nueva');
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [quota, setQuota] = useState<Omit<CampaignsList, 'campaigns'> | null>(null);
@@ -133,39 +137,41 @@ export function CampaignsHome({
     }
   }
 
-  async function buy(sku: 'single' | 'pack' | 'subscribe') {
+  const canLaunch =
+    (quota?.freeRemaining ?? 0) > 0 || (quota?.campaignCredits ?? 0) > 0;
+
+  function goCreate(path = '/campanas/nueva') {
+    if (!quota) return;
+    if (canLaunch) {
+      router.push(path);
+      return;
+    }
+    setPendingPath(path);
+    setPaywallOpen(true);
+  }
+
+  async function buySelected() {
     if (!quota) return;
     if (!quota.hasPaymentMethod) {
       toast('Completa facturación y tarjeta en Configuración (Wompi) para comprar extras.');
+      setPaywallOpen(false);
       router.push('/config');
       return;
     }
-    const p = quota.pricing;
-    const label =
-      sku === 'single'
-        ? `1 campaña extra por ${formatCop(p.unitCop)}`
-        : sku === 'pack'
-          ? `paquete de ${p.packSize} (${Math.round(p.packDiscount * 100)}% off) por ${formatCop(p.packCop)}`
-          : `suscripción mensual del paquete (${p.packSize} campañas, ${formatCop(p.packCop)}/mes)`;
-    const ok = await confirm({
-      title: 'Confirmar compra',
-      message: `Se cobrará ${label} con la tarjeta registrada en Wompi.`,
-      confirmLabel: 'Pagar',
-      tone: 'accent',
-    });
-    if (!ok) return;
-    setBuying(sku);
+    setBuying(true);
     try {
       const list = await api<CampaignsList>('/campaigns/purchase', {
         method: 'POST',
         body: JSON.stringify({ storeId, sku }),
       });
       applyList(list);
-      toast('Compra aplicada. Ya puedes lanzar.');
+      setPaywallOpen(false);
+      toast('Compra lista. Arma tu campaña.');
+      router.push(pendingPath);
     } catch (e: any) {
       toast(e?.message || 'No se pudo cobrar');
     } finally {
-      setBuying(null);
+      setBuying(false);
     }
   }
 
@@ -190,8 +196,20 @@ export function CampaignsHome({
   }
 
   const p = quota?.pricing;
-  const canLaunch =
-    (quota?.freeRemaining ?? 0) > 0 || (quota?.campaignCredits ?? 0) > 0;
+
+  useEffect(() => {
+    if (searchParams.get('comprar') === '1' && quota && !canLaunch) {
+      setPaywallOpen(true);
+    }
+  }, [searchParams, quota, canLaunch]);
+
+  const payLabel = p
+    ? sku === 'single'
+      ? `Pagar ${formatCop(p.unitCop)}`
+      : sku === 'pack'
+        ? `Pagar ${formatCop(p.packCop)}`
+        : `Suscribirme · ${formatCop(p.packCop)}/mes`
+    : 'Pagar';
 
   return (
     <div className="space-y-6">
@@ -203,12 +221,22 @@ export function CampaignsHome({
             {quota
               ? ` Gratis este mes: ${quota.smsCampaignsUsed}/${quota.smsCampaignsLimit} · Créditos: ${quota.campaignCredits}.`
               : null}
+            {quota?.packSubscribed ? ' Suscripción activa.' : ''}
+            {quota?.packSubscribed ? (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  className="font-medium text-[var(--onda-ink)] underline decoration-[var(--onda-border)] underline-offset-2 hover:decoration-[var(--onda-ink)]"
+                  onClick={() => void cancelSub()}
+                >
+                  Dejar de renovar
+                </button>
+              </>
+            ) : null}
           </p>
         </div>
-        <GradientButton
-          type="button"
-          onClick={() => router.push('/campanas/nueva')}
-        >
+        <GradientButton type="button" onClick={() => goCreate()}>
           {OndaIcons.plus} Nueva campaña
         </GradientButton>
       </header>
@@ -217,102 +245,6 @@ export function CampaignsHome({
         <p className="text-sm text-[var(--onda-muted)]">Cargando campañas…</p>
       ) : (
         <>
-          {p ? (
-            <section className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] p-5">
-              <h3 className="font-display text-lg font-semibold">
-                Campañas extra
-              </h3>
-              <p className="mt-1 text-sm text-[var(--onda-muted)]">
-                {quota?.hasPaymentMethod
-                  ? 'Se cobra con la tarjeta y facturación de Wompi que ya configuraste.'
-                  : 'Para pagar extras completa facturación y tarjeta en Configuración (mismo flujo del onboarding / Wompi).'}
-              </p>
-              {quota?.packSubscribed ? (
-                <p className="mt-2 text-sm text-[var(--onda-success)]">
-                  Suscripción activa: {p.packSize} campañas al mes (una por
-                  semana aprox.).{' '}
-                  <button
-                    type="button"
-                    className="font-medium underline"
-                    onClick={() => void cancelSub()}
-                  >
-                    Cancelar renovación
-                  </button>
-                </p>
-              ) : null}
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <article className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-bg)] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--onda-muted)]">
-                    A demanda
-                  </p>
-                  <p className="mt-1 font-display text-xl font-semibold">
-                    {formatCop(p.unitCop)}
-                  </p>
-                  <p className="text-sm text-[var(--onda-muted)]">1 campaña</p>
-                  <GradientButton
-                    type="button"
-                    className="mt-3 w-full"
-                    disabled={Boolean(buying)}
-                    onClick={() => void buy('single')}
-                  >
-                    {buying === 'single' ? 'Cobrando…' : 'Comprar 1'}
-                  </GradientButton>
-                </article>
-                <article className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-bg)] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--onda-muted)]">
-                    Paquete
-                  </p>
-                  <p className="mt-1 font-display text-xl font-semibold">
-                    {formatCop(p.packCop)}
-                  </p>
-                  <p className="text-sm text-[var(--onda-muted)]">
-                    {p.packSize} campañas · {Math.round(p.packDiscount * 100)}% off
-                  </p>
-                  <GradientButton
-                    type="button"
-                    className="mt-3 w-full"
-                    disabled={Boolean(buying)}
-                    onClick={() => void buy('pack')}
-                  >
-                    {buying === 'pack' ? 'Cobrando…' : 'Comprar paquete'}
-                  </GradientButton>
-                </article>
-                <article className="rounded-2xl border border-[var(--onda-primary-200)] bg-[var(--onda-primary-50)] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--onda-primary-700)]">
-                    Suscripción
-                  </p>
-                  <p className="mt-1 font-display text-xl font-semibold">
-                    {formatCop(p.packCop)}
-                    <span className="text-sm font-medium text-[var(--onda-muted)]">
-                      /mes
-                    </span>
-                  </p>
-                  <p className="text-sm text-[var(--onda-muted)]">
-                    {p.packSize} al mes · ritmo semanal
-                  </p>
-                  <GradientButton
-                    type="button"
-                    className="mt-3 w-full"
-                    disabled={Boolean(buying) || quota?.packSubscribed}
-                    onClick={() => void buy('subscribe')}
-                  >
-                    {quota?.packSubscribed
-                      ? 'Activa'
-                      : buying === 'subscribe'
-                        ? 'Cobrando…'
-                        : 'Suscribirme'}
-                  </GradientButton>
-                </article>
-              </div>
-              {!canLaunch ? (
-                <p className="mt-3 text-sm text-[var(--onda-danger)]">
-                  Ya usaste la campaña gratis de este mes. Compra créditos para
-                  lanzar otra.
-                </p>
-              ) : null}
-            </section>
-          ) : null}
-
           <section className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
               Recomendadas para confirmar
@@ -329,7 +261,7 @@ export function CampaignsHome({
                     key={r.id}
                     type="button"
                     onClick={() =>
-                      router.push(
+                      goCreate(
                         `/campanas/nueva?objective=${encodeURIComponent(r.objective)}&rec=${encodeURIComponent(r.id)}`
                       )
                     }
@@ -397,6 +329,123 @@ export function CampaignsHome({
           </section>
         </>
       )}
+
+      {paywallOpen && p ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
+          role="presentation"
+        >
+          <button
+            type="button"
+            aria-label="Cerrar"
+            className="absolute inset-0 bg-[rgba(26,27,46,0.45)] backdrop-blur-[4px]"
+            onClick={() => setPaywallOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="campaign-paywall-title"
+            className="relative z-10 w-full max-w-[40rem] overflow-hidden rounded-[1.25rem] border border-[var(--onda-border)] bg-[var(--onda-card)] p-5 shadow-[0_24px_60px_rgba(26,27,46,0.2)] sm:p-6"
+          >
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--onda-primary-50)] text-[var(--onda-primary-700)] [&>svg]:h-5 [&>svg]:w-5">
+                {OndaIcons.megaphone}
+              </span>
+              <div className="min-w-0">
+                <h3
+                  id="campaign-paywall-title"
+                  className="font-display text-xl font-semibold text-[var(--onda-ink)]"
+                >
+                  Sigue llegando a tus clientes
+                </h3>
+                <p className="mt-1 text-sm leading-relaxed text-[var(--onda-muted)]">
+                  Ya usaste la campaña SMS gratis de este mes. Elige un extra y
+                  cobramos con la tarjeta de Wompi que ya tienes en Configuración.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-2.5 sm:grid-cols-3">
+              {(
+                [
+                  {
+                    id: 'single' as const,
+                    kicker: 'Una',
+                    title: formatCop(p.unitCop),
+                    hint: '1 campaña extra',
+                  },
+                  {
+                    id: 'pack' as const,
+                    kicker: 'Paquete',
+                    title: formatCop(p.packCop),
+                    hint: `${p.packSize} campañas · ${Math.round(p.packDiscount * 100)}% off`,
+                    badge: 'Recomendado',
+                  },
+                  {
+                    id: 'subscribe' as const,
+                    kicker: 'Mensual',
+                    title: `${formatCop(p.packCop)}/mes`,
+                    hint: `${p.packSize} al mes · ritmo semanal`,
+                    disabled: quota?.packSubscribed,
+                  },
+                ] as const
+              ).map((opt) => {
+                const selected = sku === opt.id;
+                const disabled = 'disabled' in opt && opt.disabled;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setSku(opt.id)}
+                    className={`rounded-2xl border p-4 text-left transition ${
+                      disabled
+                        ? 'cursor-not-allowed border-[var(--onda-border)] bg-[var(--onda-bg)] opacity-55'
+                        : selected
+                          ? 'border-[var(--onda-bridge)] bg-[var(--onda-primary-50)] shadow-[0_8px_24px_rgba(26,27,46,0.06)]'
+                          : 'border-[var(--onda-border)] bg-[var(--onda-bg)] hover:border-[var(--onda-bridge)]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--onda-muted)]">
+                        {opt.kicker}
+                      </p>
+                      {'badge' in opt && opt.badge ? (
+                        <span className="rounded-full bg-[var(--onda-violet)] px-2 py-0.5 text-[10px] font-semibold text-white">
+                          {opt.badge}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1.5 font-display text-lg font-semibold text-[var(--onda-ink)]">
+                      {opt.title}
+                    </p>
+                    <p className="mt-0.5 text-xs leading-snug text-[var(--onda-muted)]">
+                      {disabled ? 'Ya está activa' : opt.hint}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-full px-4 py-2.5 text-sm font-semibold text-[var(--onda-muted)] hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
+                onClick={() => setPaywallOpen(false)}
+              >
+                Ahora no
+              </button>
+              <GradientButton
+                type="button"
+                disabled={buying || (sku === 'subscribe' && quota?.packSubscribed)}
+                onClick={() => void buySelected()}
+              >
+                {buying ? 'Cobrando…' : payLabel}
+              </GradientButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

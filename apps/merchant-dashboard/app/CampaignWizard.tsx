@@ -260,7 +260,7 @@ export function CampaignWizard({
         String(msg).includes('crédito') ||
         String(msg).includes('Wompi')
       ) {
-        router.push('/campanas');
+        router.push('/campanas?comprar=1');
       }
     } finally {
       setSaving(false);
