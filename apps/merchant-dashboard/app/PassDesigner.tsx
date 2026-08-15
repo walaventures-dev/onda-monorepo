@@ -20,6 +20,7 @@ export function PassDesigner({
   requireLogo = false,
   saveLabel = "Guardar preview",
   lockCycle = false,
+  readOnly = false,
 }: {
   design: any;
   onChange: (next: any) => void;
@@ -30,12 +31,19 @@ export function PassDesigner({
   requireLogo?: boolean;
   saveLabel?: string;
   lockCycle?: boolean;
+  readOnly?: boolean;
 }) {
   return (
     <div className="onda-pass-designer-layout">
       <form
-        onSubmit={onSubmit}
-        className="onda-card onda-pass-designer p-6"
+        onSubmit={(e) => {
+          if (readOnly) {
+            e.preventDefault();
+            return;
+          }
+          onSubmit(e);
+        }}
+        className={`onda-card onda-pass-designer p-6${readOnly ? " pointer-events-none opacity-70" : ""}`}
       >
         <div className="onda-pass-designer-brand">
           <ImageUploadField
@@ -122,12 +130,14 @@ export function PassDesigner({
           </label>
           ) : null}
 
+          {readOnly ? null : (
           <div className="flex justify-end pt-1">
             <GradientButton type="submit">
               {OndaIcons.save}
               {saveLabel}
             </GradientButton>
           </div>
+          )}
         </div>
       </form>
 

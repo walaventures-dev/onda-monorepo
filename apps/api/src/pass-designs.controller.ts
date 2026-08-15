@@ -27,7 +27,7 @@ export class PassDesignsController {
   }
 
   @Put('cartilla/:cartillaId')
-  updateCartilla(
+  async updateCartilla(
     @Param('cartillaId') cartillaId: string,
     @Body()
     body: {
@@ -41,6 +41,7 @@ export class PassDesignsController {
       description?: string;
     }
   ) {
+    await this.cartillas.assertCanEdit(cartillaId);
     return this.prisma.passDesign.upsert({
       where: { cartillaId },
       create: {
@@ -74,6 +75,7 @@ export class PassDesignsController {
     }
   ) {
     const def = await this.cartillas.ensureDefaultCartilla(storeId);
+    await this.cartillas.assertCanEdit(def.id);
     return this.prisma.passDesign.upsert({
       where: { storeId },
       create: {

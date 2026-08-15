@@ -167,13 +167,31 @@ export class CartillaService {
     return occasional;
   }
 
+  async passCount(cartillaId: string) {
+    return this.prisma.pass.count({ where: { cartillaId } });
+  }
+
+  async assertCanEdit(cartillaId: string) {
+    const n = await this.passCount(cartillaId);
+    if (n > 0) {
+      throw new BadRequestException(
+        'Esta cartilla ya tiene clientes. No se puede modificar.'
+      );
+    }
+  }
+
+  private async withLock<T extends { id: string }>(cartilla: T) {
+    const passCount = await this.passCount(cartilla.id);
+    return { ...cartilla, passCount, locked: passCount > 0 };
+  }
+
   async get(id: string) {
     const cartilla = await this.prisma.cartilla.findUnique({
       where: { id },
       include: CARTILLA_INCLUDE,
     });
     if (!cartilla) throw new NotFoundException('Cartilla no encontrada');
-    return cartilla;
+    return this.withLock(cartilla);
   }
 
   async list(storeId: string) {
@@ -186,7 +204,21 @@ export class CartillaService {
       }),
       this.resolveActiveCartilla(storeId),
     ]);
-    return { cartillas: items, activeId: active.id };
+    const counts = await this.prisma.pass.groupBy({
+      by: ['cartillaId'],
+      where: { storeId, cartillaId: { not: null } },
+      _count: { _all: true },
+    });
+    const byId = new Map(
+      counts.map((c) => [c.cartillaId, c._count._all])
+    );
+    return {
+      cartillas: items.map((c) => {
+        const passCount = byId.get(c.id) || 0;
+        return { ...c, passCount, locked: passCount > 0 };
+      }),
+      activeId: active.id,
+    };
   }
 
   async calendar(storeId: string, year: number) {
@@ -290,6 +322,11 @@ export class CartillaService {
     }
   ) {
     const cartilla = await this.get(id);
+    if (cartilla.locked) {
+      throw new BadRequestException(
+        'Esta cartilla ya tiene clientes. No se puede modificar.'
+      );
+    }
     const startsAt =
       body.startsAt !== undefined
         ? body.startsAt

@@ -2243,6 +2243,7 @@ export function MerchantWorkspace() {
                         : cartillasData?.activeId === c.id
                           ? "Vigente"
                           : c.status}
+                      {c.locked ? " · Bloqueada" : ""}
                     </span>
                   </div>
                   <p className="mt-2 text-sm text-[var(--onda-muted)]">
