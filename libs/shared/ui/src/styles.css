@@ -972,8 +972,11 @@ button.onda-gradient:focus-visible:not(:disabled) {
 }
 
 .onda-field .onda-select {
+  display: flex;
   width: 100%;
   max-width: none;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .onda-field .onda-select-trigger {

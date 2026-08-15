@@ -4,7 +4,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "pnpm exec nx run-many -t serve -p api,landing,pwa-client,merchant-dashboard,organizer-dashboard --parallel=5",
-    "dev:api": "pnpm exec tsx watch --tsconfig apps/api/tsconfig.json apps/api/src/main.ts",
+    "predev": "bash scripts/ensure-dev-infra.sh",
+    "dev:api": "bash scripts/ensure-dev-infra.sh && pnpm exec tsx watch --tsconfig apps/api/tsconfig.json apps/api/src/main.ts",
     "dev:landing": "pnpm exec next dev apps/landing -p 4200",
     "dev:pwa": "pnpm exec next dev apps/pwa-client -p 4201",
     "dev:merchant": "pnpm exec next dev apps/merchant-dashboard -p 4202",

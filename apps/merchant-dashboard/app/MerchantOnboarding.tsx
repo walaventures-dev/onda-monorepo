@@ -44,7 +44,7 @@ import {
   readStoredOwnerName,
 } from './onboardingQuery';
 
-type SetupStep = 'local' | 'link' | 'plan';
+type SetupStep = 'local' | 'plan';
 
 const CATEGORY_OPTIONS = (
   Object.keys(STORE_CATEGORY_LABELS) as StoreCategory[]
@@ -56,8 +56,7 @@ const STEPS: Array<{
   hint: string;
   icon: ReactNode;
 }> = [
-  { id: 'local', label: 'Local', hint: 'Nombre y ubicación', icon: OndaIcons.near },
-  { id: 'link', label: 'Enlace', hint: 'Slug y referido', icon: OndaIcons.globe },
+  { id: 'local', label: 'Local', hint: 'Datos y enlace', icon: OndaIcons.near },
   { id: 'plan', label: 'Plan', hint: 'Suscripción', icon: OndaIcons.crown },
 ];
 
@@ -264,22 +263,16 @@ function MerchantBusinessSetup() {
     router.push('/completar');
   }
 
-  function goNextFromLink(e: FormEvent) {
-    e.preventDefault();
-    setError('');
-    const slugValue = normalizeStoreSlug(slug);
-    if (!slugValue) {
-      setError('El slug es inválido');
-      return;
-    }
-    setStep('plan');
-  }
-
   function goNextFromLocal(e: FormEvent) {
     e.preventDefault();
     setError('');
     if (!name.trim()) {
       setError('Indica el nombre del negocio');
+      return;
+    }
+    const slugValue = normalizeStoreSlug(slug);
+    if (!slugValue) {
+      setError('El slug es inválido');
       return;
     }
     if (needsOwnerName && !ownerName.trim()) {
@@ -290,7 +283,7 @@ function MerchantBusinessSetup() {
       setError('Indica el email del encargado');
       return;
     }
-    setStep('link');
+    setStep('plan');
   }
 
   async function submitBusiness(e: FormEvent) {
@@ -340,17 +333,12 @@ function MerchantBusinessSetup() {
     step === 'local'
       ? {
           title: 'Tu negocio',
-          sub: 'Ya estás dentro. Datos del local; el pase y las recompensas los configuras después en el panel.',
+          sub: 'Ya estás dentro. Datos del local y tu enlace público; el pase y las recompensas los configuras después en el panel.',
         }
-      : step === 'link'
-        ? {
-            title: 'Tu enlace público',
-            sub: 'Así te encuentran en Onda. El código de referido es opcional.',
-          }
-        : {
-            title: 'Elige tu plan',
-            sub: 'Último paso. El primer mes es gratis y no necesitas tarjeta.',
-          };
+      : {
+          title: 'Elige tu plan',
+          sub: 'Último paso. El primer mes es gratis y no necesitas tarjeta.',
+        };
 
   return (
     <div className="relative h-dvh max-h-dvh overflow-hidden bg-[var(--onda-bg)]">
@@ -453,7 +441,7 @@ function MerchantBusinessSetup() {
                 Salir
               </button>
               <span className="rounded-full bg-[var(--onda-card)] px-3 py-1 text-xs font-medium text-[var(--onda-muted)] ring-1 ring-[var(--onda-border)]">
-                Paso {stepIndex + 1}/3
+                Paso {stepIndex + 1}/{STEPS.length}
               </span>
             </div>
           </div>
@@ -481,7 +469,7 @@ function MerchantBusinessSetup() {
               </p>
             </header>
 
-            {referrerName && step === 'link' ? (
+            {referrerName && step === 'local' ? (
               <div className="mb-4 flex shrink-0 items-start gap-3 rounded-2xl bg-[var(--onda-sky-soft)] px-4 py-3 text-sm text-[var(--onda-ink)]">
                 <span className="mt-0.5 text-[var(--onda-sky)]">
                   {OndaIcons.users}
@@ -523,6 +511,24 @@ function MerchantBusinessSetup() {
                           className="onda-input"
                         />
                       </Field>
+                      <Field
+                        label="Slug público"
+                        hint="Tu enlace público en Onda (ej. /r/cafe-del-rio). Solo letras, números y guiones."
+                      >
+                        <div className="onda-input-group">
+                          <span className="onda-input-group__prefix">/r/</span>
+                          <input
+                            required
+                            value={slug}
+                            onChange={(e) => {
+                              setSlugTouched(true);
+                              setSlug(normalizeStoreSlug(e.target.value));
+                            }}
+                            placeholder="cafe-del-rio"
+                            className="onda-input"
+                          />
+                        </div>
+                      </Field>
                       <PlacesAddressField
                         value={address}
                         onChange={(next) => {
@@ -532,7 +538,7 @@ function MerchantBusinessSetup() {
                           setLng(next.lng);
                         }}
                       />
-                      <div className="grid gap-4 sm:grid-cols-3">
+                      <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-3">
                         <Field label="Tipo de negocio">
                           <OndaSelect
                             aria-label="Tipo de negocio"
@@ -583,54 +589,6 @@ function MerchantBusinessSetup() {
                           />
                         </Field>
                       ) : null}
-                      {error ? (
-                        <p className="text-sm text-[var(--onda-danger)]">{error}</p>
-                      ) : null}
-                    </div>
-                  </FormShell>
-                </form>
-              ) : null}
-
-              {step === 'link' ? (
-                <form
-                  onSubmit={goNextFromLink}
-                  className="flex h-full min-h-0 flex-col"
-                >
-                  <FormShell
-                    footer={
-                      <div className="flex flex-wrap items-center gap-3">
-                        <GradientButton type="submit" className="min-w-[10rem]">
-                          Continuar
-                        </GradientButton>
-                        <button
-                          type="button"
-                          className="rounded-full px-4 py-2.5 text-sm font-medium text-[var(--onda-muted)] transition hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
-                          onClick={() => setStep('local')}
-                        >
-                          Volver
-                        </button>
-                      </div>
-                    }
-                  >
-                    <div className="space-y-4 pb-2">
-                      <Field
-                        label="Slug público"
-                        hint="Tu enlace público en Onda (ej. /r/cafe-del-rio). Solo letras, números y guiones."
-                      >
-                        <div className="onda-input-group">
-                          <span className="onda-input-group__prefix">/r/</span>
-                          <input
-                            required
-                            value={slug}
-                            onChange={(e) => {
-                              setSlugTouched(true);
-                              setSlug(normalizeStoreSlug(e.target.value));
-                            }}
-                            placeholder="cafe-del-rio"
-                            className="onda-input"
-                          />
-                        </div>
-                      </Field>
                       <Field
                         label="Código de referido"
                         hint="Opcional. Si alguien te invitó, pégalo aquí."
@@ -682,7 +640,7 @@ function MerchantBusinessSetup() {
                           type="button"
                           className="rounded-full px-4 py-2.5 text-sm font-medium text-[var(--onda-muted)] transition hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
                           disabled={busy}
-                          onClick={() => setStep('link')}
+                          onClick={() => setStep('local')}
                         >
                           Volver
                         </button>
