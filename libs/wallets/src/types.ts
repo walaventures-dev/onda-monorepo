@@ -50,6 +50,7 @@ export type PassSpec = {
   /** Pro: HTTPS o data URI PNG. */
   logoURL?: string;
   thumbnailURL?: string;
+  /** Pro: banner 1080×360; en loyalty es la cartilla de ondas. Cambia el pase a storeCard. */
   stripURL?: string;
   iconURL?: string;
 };
@@ -79,6 +80,21 @@ export type RevokePassResponse = {
   lastUpdated?: number;
 };
 
+/** Respuesta de `GET /api/passes/{serial}`. */
+export type WalletPassDevice = {
+  deviceLibraryIdentifier?: string;
+  pushToken?: string;
+  [key: string]: unknown;
+};
+
+export type GetPassResponse = {
+  serial: string;
+  createdAt?: string;
+  lastUpdated?: number;
+  devices: WalletPassDevice[];
+  googleSaveUrl?: string;
+};
+
 export type UsageResponse = {
   count: number;
   limit: number;
@@ -106,8 +122,8 @@ export type IssuedPassLinks = {
   /** Compat PWA: URL para abrir en Android. */
   googleUrl: string;
   /**
-   * Compat PWA: en iPhone preferimos la página hosted (`shareUrl`),
-   * que muestra "Add to Apple Wallet".
+   * Compat PWA: descarga directa del `.pkpass`
+   * (`/p/{serial}/apple.pkpass`).
    */
   appleUrl: string;
   /** Base64 del `.pkpass` (útil si se sirve desde nuestro API). */

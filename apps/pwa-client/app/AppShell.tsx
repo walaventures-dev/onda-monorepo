@@ -22,7 +22,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <Tabs
       selectedKey={selectedKey}
-      onSelectionChange={(key) => router.push(key === 'perfil' ? '/perfil' : '/')}
+      onSelectionChange={(key) => {
+        if (key === 'perfil') {
+          if (pathname !== '/perfil') router.push('/perfil');
+          return;
+        }
+        if (pathname === '/' || pathname.startsWith('/r/')) return;
+        router.push('/');
+      }}
     >
       <Tabs.List className="onda-pwa-tabbar" aria-label="Navegación principal" hidden={!showTabs}>
         <Tabs.Tab

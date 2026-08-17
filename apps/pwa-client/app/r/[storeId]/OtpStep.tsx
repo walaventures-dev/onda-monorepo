@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { InputOTP, PhoneInput, api } from '@onda/shared-ui';
 import { toE164Colombia, isCompletePhoneMask } from '@onda/shared-utils';
+import { replaceLoginHistory } from '../../../lib/session';
 
 type VerifyResult = {
   token: string;
@@ -41,6 +42,7 @@ export function OtpStep({ onVerified }: { onVerified: (result: VerifyResult) => 
       setCode('');
       setResendIn(RESEND_SECONDS);
       setStage('code');
+      replaceLoginHistory();
     } catch (err: any) {
       setError(err.message || 'No se pudo enviar el código');
     } finally {

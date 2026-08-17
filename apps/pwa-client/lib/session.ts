@@ -23,6 +23,17 @@ export function saveSession(session: CustomerSession) {
   window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
 }
 
+/** Replaces the current history entry so Back won't restore the login view. */
+export function replaceLoginHistory() {
+  if (typeof window === 'undefined') return;
+  const prev = window.history.state;
+  const state =
+    prev !== null && typeof prev === 'object' && !Array.isArray(prev)
+      ? { ...prev, ondaAuthed: true }
+      : { ondaAuthed: true };
+  window.history.replaceState(state, '', window.location.href);
+}
+
 export function clearSession() {
   localStorage.removeItem(KEY);
   window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));

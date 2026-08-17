@@ -4,6 +4,7 @@ import React from 'react';
 import { Button } from '@heroui/react';
 import { OndaIcons } from './icons';
 import { ONDA_BRAND, OndaLogo } from './brand';
+import { PunchCardGrid } from './PunchCardGrid';
 import { TxActivityRow, type TxActivityItem } from './TxActivity';
 
 export { Button, Card, Chip, Avatar, Badge, Spinner, Form, TextField, Input, TextArea, InputOTP, Table, ColorPicker, Tabs, toast, ToastProvider } from '@heroui/react';
@@ -55,6 +56,7 @@ export type {
   PromoTypeKey,
 } from './AnalyticsFilters';
 export { OndaIcons, BadgePill, badgeIcon } from './icons';
+export { PunchCardGrid } from './PunchCardGrid';
 export {
   IPhonePreview,
   LockScreen,
@@ -179,6 +181,14 @@ function isLightHexColor(hex: string): boolean {
   return 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b > 180;
 }
 
+function useWalletKind(): 'apple' | 'google' {
+  const [kind, setKind] = React.useState<'apple' | 'google'>('google');
+  React.useEffect(() => {
+    if (/iPhone|iPad|iPod|Mac/.test(navigator.userAgent)) setKind('apple');
+  }, []);
+  return kind;
+}
+
 export function PassPreview({
   backgroundColor = '#6E5AE6',
   foregroundColor = '#FFFFFF',
@@ -192,9 +202,8 @@ export function PassPreview({
   milestoneStamps = [],
   memberName,
   compact = false,
-  onAddToWallet,
-  walletBusy = false,
-  walletLabel = 'Añadir a billetera digital',
+  inWallet,
+  walletUrl,
 }: {
   backgroundColor?: string;
   foregroundColor?: string;
@@ -209,13 +218,14 @@ export function PassPreview({
   /** Nombre del miembro (como en Wallet) */
   memberName?: string | null;
   compact?: boolean;
-  /** Si se provee, muestra el botón de wallet dentro de la tarjeta */
-  onAddToWallet?: () => void;
-  walletBusy?: boolean;
-  walletLabel?: string;
+  /** Si se define, muestra si el pase ya está en Apple/Google Wallet */
+  inWallet?: boolean;
+  /** URL nativa de Apple/Google Wallet */
+  walletUrl?: string;
 }) {
   const displayName = memberName?.trim() || 'Tu nombre';
   const hasName = Boolean(memberName?.trim());
+  const walletKind = useWalletKind();
   const lightForeground = isLightHexColor(foregroundColor);
   const stampInk = lightForeground
     ? 'rgba(255,255,255,'
@@ -231,46 +241,6 @@ export function PassPreview({
       : ondasRemaining === 1
         ? 'Te falta 1 onda'
         : `Te faltan ${ondasRemaining} ondas`;
-
-  const stampRowCounts =
-    maxStamps <= 5 ? [maxStamps] : [Math.ceil(maxStamps / 2), Math.floor(maxStamps / 2)];
-  const stampRows: number[][] = [];
-  let stampCursor = 0;
-  for (const count of stampRowCounts) {
-    stampRows.push(Array.from({ length: count }, (_, i) => stampCursor + i + 1));
-    stampCursor += count;
-  }
-
-  const renderStamp = (stampNumber: number) => {
-    const filled = stampNumber <= points;
-    const hasMilestone = milestoneStamps.includes(stampNumber);
-    return (
-      <span
-        key={stampNumber}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-        style={
-          filled
-            ? { backgroundColor: `${stampInk}0.16)` }
-            : {
-                backgroundColor: `${stampInk}0.05)`,
-                boxShadow: `inset 0 0 0 1.5px ${stampInk}0.28)`,
-              }
-        }
-        title={hasMilestone ? `Premio en el sello ${stampNumber}` : undefined}
-        aria-label={filled ? `Onda ${stampNumber} acumulada` : `Ubicación ${stampNumber} vacía`}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={ONDA_BRAND.hand}
-          alt=""
-          aria-hidden
-          draggable={false}
-          className={`h-5 w-5 object-contain brightness-0 ${lightForeground ? 'invert' : ''}`}
-          style={{ opacity: filled ? 1 : 0.22 }}
-        />
-      </span>
-    );
-  };
 
   return (
     <div
@@ -306,18 +276,14 @@ export function PassPreview({
         </div>
       </div>
 
-      <div
-        className={`flex flex-col gap-1.5 px-4 ${compact ? 'pb-3' : 'pb-4'}`}
-        aria-label="Progreso de sellos"
-      >
-        {stampRows.map((row, rowIndex) => (
-          <div
-            key={rowIndex}
-            className={`flex gap-1.5 ${row.length > 1 ? 'justify-between' : 'justify-center'}`}
-          >
-            {row.map((stampNumber) => renderStamp(stampNumber))}
-          </div>
-        ))}
+      <div className={`px-4 ${compact ? 'pb-3' : 'pb-4'}`}>
+        <PunchCardGrid
+          points={points}
+          maxStamps={maxStamps}
+          milestoneStamps={milestoneStamps}
+          foregroundColor={foregroundColor}
+          size={compact ? 'sm' : 'md'}
+        />
       </div>
 
       <div
@@ -333,25 +299,47 @@ export function PassPreview({
         >
           {displayName}
         </p>
-        {onAddToWallet ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onPress={onAddToWallet}
-            isDisabled={walletBusy}
-            className="shrink-0 gap-1.5 text-xs"
-            style={
-              {
-                '--button-bg': 'transparent',
-                '--button-bg-hover': 'rgba(255,255,255,0.18)',
-                '--button-fg': foregroundColor,
-                borderColor: foregroundColor,
-              } as React.CSSProperties
-            }
+        {inWallet === true ? (
+          <span
+            className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.06em]"
+            style={{ backgroundColor: `${stampInk}0.16)` }}
+          >
+            {OndaIcons.check}
+            Activo
+          </span>
+        ) : walletUrl ? (
+          <a
+            href={walletUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={
+                walletKind === 'apple'
+                  ? ONDA_BRAND.addToAppleWallet
+                  : ONDA_BRAND.addToGoogleWallet
+              }
+              alt={
+                walletKind === 'apple' ? 'Add to Apple Wallet' : 'Add to Google Wallet'
+              }
+              className="h-10 w-auto"
+              draggable={false}
+            />
+          </a>
+        ) : inWallet === false ? (
+          <span
+            className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.06em]"
+            style={{
+              backgroundColor: `${stampInk}0.08)`,
+              boxShadow: `inset 0 0 0 1px ${stampInk}0.28)`,
+            }}
           >
             {OndaIcons.wallet}
-            {walletBusy ? 'Abriendo…' : walletLabel}
-          </Button>
+            Sin agregar
+          </span>
         ) : null}
       </div>
 
@@ -531,9 +519,6 @@ export function AppShell({
             className={collapsed ? 'justify-center' : 'px-2'}
             compact={collapsed}
           />
-          {!collapsed && title ? (
-            <p className="onda-sidebar-store">{title}</p>
-          ) : null}
         </div>
         <nav className="onda-sidebar-nav" aria-label="Principal">
           {mainNav.map(renderLink)}

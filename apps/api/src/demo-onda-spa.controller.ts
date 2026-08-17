@@ -193,34 +193,41 @@ export class DemoOndaSpaController {
     let googleUrl: string | null = null;
     let stub = false;
 
-    try {
-      const issued = await this.wallet.issuePass({
-        serialNumber: pass.serialNumber,
-        points: pass.points,
-        holderName: user.name,
-        organizationName: store.name,
-        maxStamps: store.maxStamps,
-        kind: 'store',
-        design: {
-          title: design.title,
-          subtitle: design.subtitle,
-          description: design.description || '',
-          backgroundColor: design.backgroundColor,
-          foregroundColor: design.foregroundColor,
-          labelColor: design.labelColor,
-          logoUrl: design.logoUrl,
-          stripImageUrl: design.stripImageUrl ?? null,
-        },
-      });
-      appleUrl = issued.appleUrl;
-      googleUrl = issued.googleUrl;
-      stub = issued.walletRef.startsWith('stub-');
-      await this.prisma.pass.update({
-        where: { id: pass.id },
-        data: { walletRef: issued.walletRef },
-      });
-    } catch (err) {
-      console.error('Demo Onda Spa issue failed', err);
+    if (pass.walletRef) {
+      const links = this.wallet.linksFor(pass.walletRef);
+      appleUrl = links.appleUrl;
+      googleUrl = links.googleUrl;
+      stub = pass.walletRef.startsWith('stub-');
+    } else {
+      try {
+        const issued = await this.wallet.issuePass({
+          serialNumber: pass.serialNumber,
+          points: pass.points,
+          holderName: user.name,
+          organizationName: store.name,
+          maxStamps: store.maxStamps,
+          kind: 'store',
+          design: {
+            title: design.title,
+            subtitle: design.subtitle,
+            description: design.description || '',
+            backgroundColor: design.backgroundColor,
+            foregroundColor: design.foregroundColor,
+            labelColor: design.labelColor,
+            logoUrl: design.logoUrl,
+            stripImageUrl: design.stripImageUrl ?? null,
+          },
+        });
+        appleUrl = issued.appleUrl;
+        googleUrl = issued.googleUrl;
+        stub = issued.walletRef.startsWith('stub-');
+        await this.prisma.pass.update({
+          where: { id: pass.id },
+          data: { walletRef: issued.walletRef },
+        });
+      } catch (err) {
+        console.error('Demo Onda Spa issue failed', err);
+      }
     }
 
     const state = await this.passState(pass.id);

@@ -103,7 +103,7 @@ export class UsersController {
             points: welcomePoints,
             holderName: user.name,
             organizationName: store.name,
-            maxStamps: store.maxStamps,
+            maxStamps: active.maxStamps ?? store.maxStamps,
             kind: 'store',
             design,
           });

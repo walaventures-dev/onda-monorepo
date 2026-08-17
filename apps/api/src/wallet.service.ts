@@ -3,9 +3,11 @@ import {
   WalletPassService,
   buildLoyaltyPassSpec,
   isStubWalletRef,
+  storeLockScreenLocations,
   type IssuedPassLinks,
   type LoyaltyPassContext,
   type PassDesignInput,
+  type PassLocation,
 } from '@onda/wallets';
 import { PrismaService } from './prisma.service';
 
@@ -17,6 +19,7 @@ export type IssuePassInput = {
   organizationName?: string;
   maxStamps?: number;
   kind?: 'store' | 'event';
+  locations?: PassLocation[];
 };
 
 const FALLBACK_DESIGN: PassDesignInput = {
@@ -37,8 +40,38 @@ export class WalletService {
 
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
+  linksFor(walletRef: string): IssuedPassLinks {
+    return this.passes.linksFor(walletRef);
+  }
+
+  /**
+   * True solo si WalletWallet reporta al menos un dispositivo
+   * que ya instaló el pase (`devices.length > 0`).
+   */
+  async isActive(walletRef: string | null | undefined): Promise<boolean> {
+    if (isStubWalletRef(walletRef)) return false;
+    try {
+      const status = await this.passes.getStatus(walletRef as string);
+      return this.passes.isInstalled(status);
+    } catch (err) {
+      this.logger.warn(
+        `Wallet status failed for ${walletRef}: ${
+          err instanceof Error ? err.message : err
+        }`
+      );
+      return false;
+    }
+  }
+
   async issuePass(input: IssuePassInput): Promise<IssuedPassLinks> {
     const ctx = this.toLoyaltyContext(input);
+    if (!ctx.locations?.length) {
+      ctx.locations = await this.lookupStoreLocations(
+        input.serialNumber,
+        input.points,
+        input.maxStamps
+      );
+    }
     this.logger.log(
       `Wallet issue loyalty barcode=${ctx.barcodeSerial} stub=${this.passes.isStub}`
     );
@@ -96,7 +129,7 @@ export class WalletService {
     }
 
     try {
-      const current = buildLoyaltyPassSpec(ctx, {
+      const current = await buildLoyaltyPassSpec(ctx, {
         proFeatures: this.passes.raw.proFeatures,
       });
       const result = await this.passes.notify(walletRef, current, message);
@@ -134,7 +167,24 @@ export class WalletService {
       design: input.design,
       maxStamps: input.maxStamps,
       kind: input.kind,
+      locations: input.locations,
     };
+  }
+
+  private async lookupStoreLocations(
+    serialNumber: string,
+    points: number,
+    maxStamps?: number
+  ): Promise<PassLocation[]> {
+    const pass = await this.prisma.pass.findFirst({
+      where: { serialNumber },
+      select: {
+        store: { select: { name: true, lat: true, lng: true, maxStamps: true } },
+        cartilla: { select: { maxStamps: true } },
+      },
+    });
+    const max = maxStamps ?? pass?.cartilla?.maxStamps ?? pass?.store?.maxStamps ?? 12;
+    return storeLockScreenLocations(pass?.store, points, max);
   }
 
   private async loadLoyaltyContextByWalletRef(
@@ -174,8 +224,13 @@ export class WalletService {
         logoUrl: design.logoUrl,
         stripImageUrl: design.stripImageUrl ?? null,
       },
-      maxStamps: pass.store?.maxStamps,
+      maxStamps: pass.cartilla?.maxStamps ?? pass.store?.maxStamps,
       kind: pass.eventId ? 'event' : 'store',
+      locations: storeLockScreenLocations(
+        pass.store,
+        pointsOverride ?? pass.points,
+        pass.cartilla?.maxStamps ?? pass.store?.maxStamps ?? 12
+      ),
     };
   }
 }

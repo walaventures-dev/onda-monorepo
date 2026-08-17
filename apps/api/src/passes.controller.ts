@@ -103,11 +103,16 @@ export class PassesController {
       null;
 
     const withClaimed = await this.withClaimedThisCycle(pass);
+    const walletLinks = pass.walletRef ? this.wallet.linksFor(pass.walletRef) : null;
     return {
       ...withClaimed,
       promotions,
       assignments: pass.promoAssignments,
       passDesign: design,
+      walletActive: await this.wallet.isActive(pass.walletRef),
+      appleUrl: walletLinks?.appleUrl ?? null,
+      googleUrl: walletLinks?.googleUrl ?? null,
+      maxStamps: pass.cartilla?.maxStamps ?? pass.store?.maxStamps ?? 12,
       cartilla: pass.cartilla
         ? {
             id: pass.cartilla.id,
@@ -115,6 +120,7 @@ export class PassesController {
             isDefault: pass.cartilla.isDefault,
             endsAt: pass.cartilla.endsAt,
             status: pass.cartilla.status,
+            maxStamps: pass.cartilla.maxStamps,
             passDesign: pass.cartilla.passDesign,
           }
         : null,
@@ -138,6 +144,9 @@ export class PassesController {
   @Post(':id/issue')
   async issue(@Param('id') id: string) {
     const hydrated = await this.hydratePass(id);
+    if (hydrated.walletRef) {
+      return this.wallet.linksFor(hydrated.walletRef);
+    }
     const design = hydrated.passDesign || {
       title: 'Onda',
       subtitle: 'Loyalty',
@@ -154,7 +163,7 @@ export class PassesController {
       holderName: hydrated.user.name,
       organizationName:
         hydrated.store?.name ?? hydrated.event?.name ?? design.title,
-      maxStamps: hydrated.store?.maxStamps,
+      maxStamps: hydrated.cartilla?.maxStamps ?? hydrated.store?.maxStamps,
       kind: hydrated.eventId ? 'event' : 'store',
       design,
     });

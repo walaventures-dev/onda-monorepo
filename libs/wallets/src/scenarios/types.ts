@@ -7,7 +7,7 @@ import type { PassSpec, PassScenarioId } from '../types';
  */
 export interface PassScenarioBuilder<TContext> {
   readonly id: PassScenarioId;
-  build(ctx: TContext): PassSpec;
+  build(ctx: TContext): PassSpec | Promise<PassSpec>;
 }
 
 export type PassDesignInput = {
@@ -29,8 +29,10 @@ export type BaseLoyaltyContext = {
   /** Nombre del comercio / evento (notification title). */
   organizationName?: string;
   design: PassDesignInput;
-  /** Si hay tope de sellos, se muestra en back/secondary. */
+  /** Si hay tope de sellos, se muestra en header y en el strip de cartilla. */
   maxStamps?: number;
   pointsLabel?: string;
   pointsChangeMessage?: string;
+  /** Geocerca del comercio: Apple muestra el pase en lock screen al acercarse. */
+  locations?: PassSpec['locations'];
 };

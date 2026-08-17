@@ -7,6 +7,8 @@ export const ONDA_BRAND = {
   hand: '/brand/onda-hand.png',
   script: '/brand/onda-script.png',
   kitBienvenida: '/brand/onda-kit-bienvenida.png',
+  addToAppleWallet: '/brand/add-to-apple-wallet.png',
+  addToGoogleWallet: '/brand/add-to-google-wallet.png',
 } as const;
 
 export type OndaBrandVariant = 'default' | 'onDark' | 'onPrimary';

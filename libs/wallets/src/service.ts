@@ -10,6 +10,7 @@ import {
 } from './scenarios';
 import type {
   CreatePassResponse,
+  GetPassResponse,
   IssuedPassLinks,
   PassScenarioId,
   PassSpec,
@@ -20,14 +21,17 @@ import type {
 } from './types';
 import type { ScenarioContextMap } from './scenarios';
 
-function toIssuedLinks(created: CreatePassResponse): IssuedPassLinks {
+function toIssuedLinks(
+  created: CreatePassResponse,
+  client: WalletWalletClient
+): IssuedPassLinks {
   return {
     walletRef: created.serialNumber,
     serialNumber: created.serialNumber,
     shareUrl: created.shareUrl,
     googleSaveUrl: created.googleSaveUrl,
-    googleUrl: created.googleSaveUrl,
-    appleUrl: created.shareUrl,
+    googleUrl: client.googleRedirectUrl(created.serialNumber),
+    appleUrl: client.applePkpassUrl(created.serialNumber),
     applePass: created.applePass || undefined,
   };
 }
@@ -69,11 +73,31 @@ export class WalletPassService {
   async issue<K extends PassScenarioId>(
     input: IssueScenarioInput<K>
   ): Promise<IssuedPassLinks> {
-    const spec = buildPassSpec(input.scenario, input.context, {
+    const spec = await buildPassSpec(input.scenario, input.context, {
       proFeatures: this.client.proFeatures,
     });
     const created = await this.client.createPass(spec);
-    return toIssuedLinks(created);
+    return toIssuedLinks(created, this.client);
+  }
+
+  /** URLs canónicas de un pass ya emitido (sin crear otro). */
+  linksFor(walletRef: string): IssuedPassLinks {
+    return {
+      walletRef,
+      serialNumber: walletRef,
+      shareUrl: `${this.client.baseUrl}/p/${encodeURIComponent(walletRef)}`,
+      googleSaveUrl: this.client.googleRedirectUrl(walletRef),
+      googleUrl: this.client.googleRedirectUrl(walletRef),
+      appleUrl: this.client.applePkpassUrl(walletRef),
+    };
+  }
+
+  async getStatus(walletRef: string): Promise<GetPassResponse> {
+    return this.client.getPass(walletRef);
+  }
+
+  isInstalled(status: Pick<GetPassResponse, 'devices'>): boolean {
+    return Array.isArray(status.devices) && status.devices.length > 0;
   }
 
   async issueLoyalty(ctx: LoyaltyPassContext): Promise<IssuedPassLinks> {
@@ -111,7 +135,7 @@ export class WalletPassService {
     walletRef: string,
     input: IssueScenarioInput<K>
   ): Promise<UpdatePassResponse | { ok: true; stub: true }> {
-    const spec = buildPassSpec(input.scenario, input.context, {
+    const spec = await buildPassSpec(input.scenario, input.context, {
       proFeatures: this.client.proFeatures,
     });
     return this.updateWithSpec(walletRef, spec);

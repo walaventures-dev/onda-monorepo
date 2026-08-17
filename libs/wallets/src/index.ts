@@ -20,6 +20,12 @@ export {
 export { WalletWalletClient, getWalletClient, resetWalletClient } from './client';
 export { nearestColorPreset, normalizeHexColor } from './colors';
 export {
+  clampRelevantText,
+  nearbyRelevantText,
+  toPassLocation,
+  storeLockScreenLocations,
+} from './locations';
+export {
   NOTIFICATION_ANCHOR_LABEL,
   NOTIFICATION_SEED_VALUE,
   NOTIFICATION_CHANGE_MESSAGE,
@@ -62,7 +68,7 @@ export type { IssueScenarioInput } from './service';
 // ---------------------------------------------------------------------------
 
 import { getWalletPassService } from './service';
-import type { IssuedPassLinks } from './types';
+import type { IssuedPassLinks, PassLocation } from './types';
 import type { LoyaltyPassContext, PassDesignInput } from './scenarios';
 
 /** @deprecated Preferir `LoyaltyPassContext` + `WalletPassService.issueLoyalty`. */
@@ -74,6 +80,7 @@ export type IssuePassInput = {
   organizationName?: string;
   maxStamps?: number;
   kind?: 'store' | 'event';
+  locations?: PassLocation[];
 };
 
 /** @deprecated Preferir `IssuedPassLinks`. */
@@ -88,6 +95,7 @@ function toLoyaltyContext(input: IssuePassInput): LoyaltyPassContext {
     design: input.design,
     maxStamps: input.maxStamps,
     kind: input.kind,
+    locations: input.locations,
   };
 }
 

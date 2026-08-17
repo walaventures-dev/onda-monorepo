@@ -1,15 +1,20 @@
 // apps/pwa-client/app/r/[storeId]/StoreEntryClient.tsx
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, Button, Chip, OndaIcons, promoTypeIcon } from "@onda/shared-ui";
 import {
   loadSession,
   saveSession,
+  replaceLoginHistory,
   type CustomerSession,
 } from "../../../lib/session";
+import {
+  issueWalletPass,
+  walletInstallUrl,
+} from "../../../lib/wallet";
 import { PassSwipe, type PassSwipeCard } from "./PassSwipe";
 import { OtpStep } from "./OtpStep";
 import {
@@ -18,11 +23,6 @@ import {
 } from "./PendingRequestWait";
 
 type Step = "loading" | "otp" | "name" | "home" | "pendingWait";
-
-function isAppleDevice() {
-  if (typeof navigator === "undefined") return false;
-  return /iPhone|iPad|iPod|Mac/.test(navigator.userAgent);
-}
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -42,12 +42,16 @@ export default function StoreEntryPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [walletLinks, setWalletLinks] = useState<{
-    appleUrl?: string;
-    googleUrl?: string;
-  } | null>(null);
   const [pendingRequest, setPendingRequest] =
     useState<PendingRequestDto | null>(null);
+
+  const stepRef = useRef(step);
+  const storeIdRef = useRef(store?.id as string | undefined);
+  const storeKeyRef = useRef(storeKey);
+  const preparingWalletRef = useRef<string | null>(null);
+  stepRef.current = step;
+  storeIdRef.current = store?.id;
+  storeKeyRef.current = storeKey;
 
   async function loadOrClaim(sess: CustomerSession, resolvedStoreId: string) {
     try {
@@ -70,8 +74,12 @@ export default function StoreEntryPage() {
       setError(err.message || "No se pudo cargar tu tarjeta");
     } finally {
       setStep("home");
+      replaceLoginHistory();
     }
   }
+
+  const loadOrClaimRef = useRef(loadOrClaim);
+  loadOrClaimRef.current = loadOrClaim;
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +111,99 @@ export default function StoreEntryPage() {
     };
   }, [storeKey]);
 
+  useEffect(() => {
+    const passId = pass?.id;
+    if (!passId || step !== "home") return;
+
+    async function refreshWalletStatus() {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const fresh = await api<any>(`/passes/${passId}`);
+        setPass((prev: any) =>
+          prev
+            ? {
+                ...fresh,
+                appleUrl: fresh.appleUrl || prev.appleUrl,
+                googleUrl: fresh.googleUrl || prev.googleUrl,
+              }
+            : fresh,
+        );
+      } catch {
+        /* ignore */
+      }
+    }
+
+    document.addEventListener("visibilitychange", refreshWalletStatus);
+    window.addEventListener("focus", refreshWalletStatus);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshWalletStatus);
+      window.removeEventListener("focus", refreshWalletStatus);
+    };
+  }, [pass?.id, step]);
+
+  useEffect(() => {
+    if (step !== "home" || !pass?.id) return;
+    if (pass.appleUrl || pass.googleUrl) return;
+    if (preparingWalletRef.current === pass.id) return;
+    preparingWalletRef.current = pass.id;
+    let cancelled = false;
+    void issueWalletPass(pass.id)
+      .then((links) => {
+        if (cancelled) return;
+        setPass((prev: any) => (prev ? { ...prev, ...links } : prev));
+      })
+      .catch((err: any) => {
+        preparingWalletRef.current = null;
+        if (!cancelled) {
+          setError(err.message || "No se pudo preparar Wallet");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step, pass?.id, pass?.appleUrl, pass?.googleUrl]);
+
+  useEffect(() => {
+    function pathIsThisStore() {
+      const path = window.location.pathname;
+      const key = storeKeyRef.current;
+      const id = storeIdRef.current;
+      return path === `/r/${key}` || (Boolean(id) && path === `/r/${id}`);
+    }
+
+    function resumeIfAuthed() {
+      const existing = loadSession();
+      if (!existing || !pathIsThisStore()) return;
+
+      replaceLoginHistory();
+
+      const current = stepRef.current;
+      if (current !== "otp" && current !== "name") return;
+
+      setSession(existing);
+      if (!existing.user.name.trim()) {
+        setStep("name");
+        return;
+      }
+      if (storeIdRef.current) {
+        void loadOrClaimRef.current(existing, storeIdRef.current);
+      } else {
+        setStep("home");
+      }
+    }
+
+    function onPageShow(event: PageTransitionEvent) {
+      if (event.persisted) resumeIfAuthed();
+    }
+
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("popstate", resumeIfAuthed);
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("popstate", resumeIfAuthed);
+    };
+  }, []);
+
   async function onOtpVerified(result: {
     token: string;
     user: CustomerSession["user"];
@@ -110,6 +211,7 @@ export default function StoreEntryPage() {
   }) {
     const sess: CustomerSession = { token: result.token, user: result.user };
     saveSession(sess);
+    replaceLoginHistory();
     setSession(sess);
     if (result.isNewUser) {
       setStep("name");
@@ -135,31 +237,12 @@ export default function StoreEntryPage() {
       );
       const sess: CustomerSession = { token: session.token, user: updated };
       saveSession(sess);
+      replaceLoginHistory();
       setSession(sess);
       if (!store?.id) return;
       await loadOrClaim(sess, store.id);
     } catch (err: any) {
       setError(err.message || "No se pudo guardar tu nombre");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function openWallet() {
-    if (!pass?.id) return;
-    setBusy(true);
-    try {
-      const links = await api<{ appleUrl?: string; googleUrl?: string }>(
-        `/passes/${pass.id}/issue`,
-        { method: "POST" },
-      );
-      setWalletLinks(links);
-      const target = isAppleDevice() ? links.appleUrl : links.googleUrl;
-      if (target && typeof window !== "undefined") {
-        window.open(target, "_blank", "noopener,noreferrer");
-      }
-    } catch (err: any) {
-      setError(err.message || "No se pudo abrir Wallet");
     } finally {
       setBusy(false);
     }
@@ -223,11 +306,11 @@ export default function StoreEntryPage() {
 
   const storeDesign = pass?.passDesign || pass?.cartilla?.passDesign || store?.passDesign;
   const storeName = store?.name || "tu visita";
-  const walletLabel = "Agregar a billetera digital";
   const logoUrl = storeDesign?.logoUrl as string | undefined;
   const storeInitial = (storeName.trim().charAt(0) || "O").toUpperCase();
   const userName = session?.user.name?.trim();
   const userInitial = (userName?.charAt(0) || "O").toUpperCase();
+  const installUrl = walletInstallUrl(pass);
 
   const swipeCards: PassSwipeCard[] = useMemo(() => {
     if (!storeDesign && !store) return [];
@@ -245,11 +328,13 @@ export default function StoreEntryPage() {
           logoUrl: storeDesign?.logoUrl,
         },
         points: pass?.points ?? 0,
-        maxStamps: store?.maxStamps ?? 12,
+        maxStamps: pass?.maxStamps ?? pass?.cartilla?.maxStamps ?? store?.maxStamps ?? 12,
         milestoneStamps,
+        inWallet: Boolean(pass?.walletActive),
+        walletUrl: installUrl,
       },
     ];
-  }, [storeDesign, store, storeName, pass, milestoneStamps]);
+  }, [storeDesign, store, storeName, pass, milestoneStamps, installUrl]);
 
   if (step === "loading") {
     return (
@@ -307,7 +392,9 @@ export default function StoreEntryPage() {
       )}
 
       <div className="onda-pwa-body onda-pwa-fade">
-        {step === "otp" && <OtpStep onVerified={onOtpVerified} />}
+        {step === "otp" && !session && !loadSession() && (
+          <OtpStep onVerified={onOtpVerified} />
+        )}
 
         {step === "name" && (
           <div className="flex flex-1 flex-col">
@@ -357,9 +444,6 @@ export default function StoreEntryPage() {
               cards={swipeCards}
               memberName={session?.user.name}
               compact={false}
-              onAddToWallet={openWallet}
-              walletBusy={busy}
-              walletLabel={walletLabel}
             />
             {pass?.cartilla?.endsAt ? (
               <p className="mt-3 text-center text-sm text-[var(--onda-muted)]">
@@ -493,22 +577,6 @@ export default function StoreEntryPage() {
               >
                 Acumular una onda
               </button>
-              {walletLinks ? (
-                <p className="onda-pwa-legal">
-                  Si no se abrió,{" "}
-                  <a
-                    href={
-                      isAppleDevice()
-                        ? walletLinks.appleUrl
-                        : walletLinks.googleUrl
-                    }
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    toca aquí
-                  </a>
-                </p>
-              ) : null}
             </div>
           </div>
         )}

@@ -1,10 +1,20 @@
-import { Inject, Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Inject, Injectable, Logger, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from './prisma.service';
 import { WhatsappService } from './whatsapp.service';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
+/** Código fijo en local: no se envía WhatsApp y la PWA lo muestra como `devCode`. */
+const LOCAL_OTP_CODE = '123456';
+
+function isLocalOtpMock(): boolean {
+  const flag = process.env.OTP_MOCK?.trim().toLowerCase();
+  if (flag === '0' || flag === 'false') return false;
+  if (flag === '1' || flag === 'true') return true;
+  // Local: no mandar WhatsApp aunque KAPSO_API_KEY esté en .env (Kapso 404).
+  return process.env.NODE_ENV !== 'production';
+}
 
 function randomCode(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -16,18 +26,22 @@ function randomToken(): string {
 
 @Injectable()
 export class CustomerAuthService {
+  private readonly logger = new Logger(CustomerAuthService.name);
+
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(WhatsappService) private whatsapp: WhatsappService
   ) {}
 
   async requestOtp(phone: string) {
-    const code = randomCode();
+    const mock = isLocalOtpMock();
+    const code = mock ? LOCAL_OTP_CODE : randomCode();
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
     await this.prisma.otpCode.create({ data: { phone, code, expiresAt } });
 
-    const devMode = process.env.NODE_ENV !== 'production' && !process.env.KAPSO_API_KEY;
-    if (!devMode) {
+    if (mock) {
+      this.logger.log(`[OTP mock] ${phone} → ${code}`);
+    } else {
       await this.whatsapp.enqueue({
         to: phone,
         template: 'onda_otp_login',
@@ -35,7 +49,7 @@ export class CustomerAuthService {
       });
     }
 
-    return { expiresAt, devCode: devMode ? code : undefined };
+    return { expiresAt, devCode: mock ? code : undefined };
   }
 
   async verifyOtp(phone: string, code: string) {

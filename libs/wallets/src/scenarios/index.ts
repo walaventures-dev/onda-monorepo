@@ -49,11 +49,11 @@ export function getScenarioBuilder<K extends PassScenarioId>(
 }
 
 /** Punto único para construir un PassSpec por escenario. */
-export function buildPassSpec<K extends PassScenarioId>(
+export async function buildPassSpec<K extends PassScenarioId>(
   scenario: K,
   ctx: ScenarioContextMap[K],
   opts?: { proFeatures?: boolean }
-): PassSpec {
+): Promise<PassSpec> {
   switch (scenario) {
     case 'loyalty':
       return buildLoyaltyPassSpec(ctx as LoyaltyPassContext, opts);

@@ -1,13 +1,32 @@
 import { resolveWalletConfig } from './config';
-import { WalletApiError } from './errors';
+import { WalletApiError, isWalletApiError } from './errors';
 import type {
   CreatePassResponse,
+  GetPassResponse,
   PassSpec,
   RevokePassResponse,
   UpdatePassResponse,
   UsageResponse,
   WalletClientConfig,
 } from './types';
+
+function omitProVisuals(spec: PassSpec): PassSpec {
+  const next = { ...spec };
+  delete next.color;
+  delete next.logoURL;
+  delete next.thumbnailURL;
+  delete next.stripURL;
+  delete next.iconURL;
+  return next;
+}
+
+function hasProVisuals(spec: PassSpec) {
+  return Boolean(spec.color || spec.logoURL || spec.thumbnailURL || spec.stripURL || spec.iconURL);
+}
+
+function isProPlanError(err: unknown) {
+  return isWalletApiError(err) && err.code === 'VALIDATION' && /pro plan/i.test(err.message);
+}
 
 type ResolvedConfig = ReturnType<typeof resolveWalletConfig>;
 
@@ -69,7 +88,22 @@ export class WalletWalletClient {
         shareUrl: `${this.config.baseUrl}/p/${serial}`,
       };
     }
-    return this.request<CreatePassResponse>('POST', '/api/passes', spec);
+    return this.requestPassWrite<CreatePassResponse>('POST', '/api/passes', spec);
+  }
+
+  async getPass(serialNumber: string): Promise<GetPassResponse> {
+    if (this.config.stub) {
+      return {
+        serial: serialNumber,
+        createdAt: new Date().toISOString(),
+        lastUpdated: Date.now(),
+        devices: [],
+      };
+    }
+    return this.request<GetPassResponse>(
+      'GET',
+      `/api/passes/${encodeURIComponent(serialNumber)}`
+    );
   }
 
   async updatePass(serialNumber: string, spec: PassSpec): Promise<UpdatePassResponse> {
@@ -81,7 +115,7 @@ export class WalletWalletClient {
         unchanged: false,
       };
     }
-    return this.request<UpdatePassResponse>(
+    return this.requestPassWrite<UpdatePassResponse>(
       'PUT',
       `/api/passes/${encodeURIComponent(serialNumber)}`,
       spec
@@ -106,6 +140,27 @@ export class WalletWalletClient {
   /** Redirect público a Google Save URL. */
   googleRedirectUrl(serialNumber: string): string {
     return `${this.config.baseUrl}/api/passes/${encodeURIComponent(serialNumber)}/google`;
+  }
+
+  /** Descarga directa del `.pkpass` para Apple Wallet. */
+  applePkpassUrl(serialNumber: string): string {
+    return `${this.config.baseUrl}/p/${encodeURIComponent(serialNumber)}/apple.pkpass`;
+  }
+
+  /** POST/PUT: si el plan no admite color/strip/logo, reintenta el spec sin esos campos. */
+  private async requestPassWrite<T>(
+    method: 'POST' | 'PUT',
+    path: string,
+    spec: PassSpec
+  ): Promise<T> {
+    try {
+      return await this.request<T>(method, path, spec);
+    } catch (err) {
+      if (isProPlanError(err) && hasProVisuals(spec)) {
+        return this.request<T>(method, path, omitProVisuals(spec));
+      }
+      throw err;
+    }
   }
 
   private async request<T>(
