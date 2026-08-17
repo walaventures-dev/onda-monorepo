@@ -5,93 +5,144 @@ import { useParams } from 'next/navigation';
 import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser';
 import {
   api,
-  getApiUrl,
-  OndaIcons,
+  OndaHandMark,
   setApiAuthTokenGetter,
 } from '@onda/shared-ui';
-
-type PendingItem = {
-  id: string;
-  type: 'ACCUMULATE' | 'CLAIM';
-  code: string;
-  pass?: { user?: { name?: string } };
-  promotion?: { title?: string } | null;
-  createdAt: string;
-};
-
-type SsePayload = {
-  kind?: 'created' | 'resolved';
-  id?: string;
-  ids?: string[];
-  type?: 'ACCUMULATE' | 'CLAIM';
-  code?: string;
-  customerName?: string;
-  promotionTitle?: string;
-  createdAt?: string;
-};
+import { formatMoneyInput, parseMoneyInput } from '@onda/shared-utils';
 
 type Flash = { tone: 'ok' | 'err'; title: string; detail?: string };
 
-function parseSerial(raw: string) {
-  return raw.trim();
-}
+type Burst =
+  | { phase: 'working' }
+  | { phase: 'ok'; name?: string; points?: number }
+  | { phase: 'claim'; name?: string; title?: string }
+  | { phase: 'err'; title: string; detail?: string };
 
-function PendingList({
-  items,
-  busyId,
-  onResolve,
+function CajaBurst({
+  burst,
+  onDismiss,
 }: {
-  items: PendingItem[];
-  busyId: string | null;
-  onResolve: (id: string, action: 'confirm' | 'reject') => void;
+  burst: Burst;
+  onDismiss: () => void;
 }) {
-  if (!items.length) {
-    return (
-      <p className="m-auto px-2 text-center text-sm text-[var(--onda-muted)]">
-        Sin pendientes. Escanea el QR del cliente para acumular.
-      </p>
-    );
-  }
+  const title =
+    burst.phase === 'working'
+      ? 'Un momento…'
+      : burst.phase === 'ok'
+        ? '+1 onda'
+        : burst.phase === 'claim'
+          ? '¡Premio!'
+          : burst.title;
+  const detail =
+    burst.phase === 'working'
+      ? 'Validando el pase'
+      : burst.phase === 'ok'
+        ? burst.points != null
+          ? `${burst.name || 'Cliente'} · ${burst.points} ondas`
+          : burst.name || 'Listo'
+        : burst.phase === 'claim'
+          ? [burst.title, burst.name].filter(Boolean).join(' · ') || 'Entregado'
+          : burst.detail;
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-      {items.map((item) => (
-        <div
-          key={item.id}
-          className="space-y-2 rounded-xl border border-[var(--onda-border)] p-3"
-        >
-          <p className="text-sm font-semibold">
-            {item.type === 'ACCUMULATE'
-              ? 'Acumular onda'
-              : `Reclamar: ${item.promotion?.title || 'premio'}`}
-          </p>
-          <p className="text-xs text-[var(--onda-muted)]">
-            {item.pass?.user?.name || 'Cliente'}
-          </p>
-          <p className="font-display text-center text-3xl font-bold tracking-[0.2em] text-[var(--onda-primary-500)]">
-            {item.code}
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="flex-1 rounded-full bg-[var(--onda-success)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-              disabled={busyId === item.id}
-              onClick={() => onResolve(item.id, 'confirm')}
-            >
-              Confirmar
-            </button>
-            <button
-              type="button"
-              className="flex-1 rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
-              disabled={busyId === item.id}
-              onClick={() => onResolve(item.id, 'reject')}
-            >
-              Rechazar
-            </button>
-          </div>
-        </div>
-      ))}
+    <div
+      className={`onda-caja-burst is-${burst.phase}`}
+      role="status"
+      aria-live="assertive"
+      onClick={burst.phase === 'working' ? undefined : onDismiss}
+    >
+      <div className="onda-caja-burst-stage" aria-hidden>
+        {burst.phase === 'ok' || burst.phase === 'claim' ? (
+          <>
+            <span className="onda-caja-burst-ripple" />
+            <span className="onda-caja-burst-ripple" />
+            {burst.phase === 'claim' ? (
+              <>
+                <span className="onda-caja-burst-ripple" />
+                <span className="onda-caja-burst-confetti" aria-hidden>
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              </>
+            ) : null}
+          </>
+        ) : null}
+        <OndaHandMark
+          variant={
+            burst.phase === 'err' || burst.phase === 'claim'
+              ? 'onPrimary'
+              : 'default'
+          }
+          className="onda-caja-burst-hand"
+        />
+      </div>
+      <div className="onda-caja-burst-copy">
+        <h2 className="font-display">{title}</h2>
+        {detail ? <p>{detail}</p> : null}
+      </div>
     </div>
   );
+}
+
+function CajaAmountSheet({
+  amount,
+  currency,
+  onAmount,
+  onCancel,
+  onConfirm,
+}: {
+  amount: string;
+  currency: string;
+  onAmount: (value: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const ready = Boolean(parseMoneyInput(amount));
+  return (
+    <div className="onda-caja-amount" role="dialog" aria-labelledby="onda-caja-amount-title">
+      <form
+        className="onda-caja-amount-card"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (ready) onConfirm();
+        }}
+      >
+        <p className="onda-caja-amount-kicker">Acumular onda</p>
+        <h2 id="onda-caja-amount-title" className="font-display">
+          Valor de la cuenta
+        </h2>
+        <label className="onda-caja-amount-field">
+          <span className="onda-caja-amount-prefix">$</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9.]*"
+            autoComplete="off"
+            enterKeyHint="done"
+            autoFocus
+            value={formatMoneyInput(amount)}
+            onChange={(e) => onAmount(parseMoneyInput(e.target.value))}
+            aria-label="Valor de la cuenta"
+          />
+          <span className="onda-caja-amount-currency">{currency}</span>
+        </label>
+        <button type="submit" className="onda-caja-amount-submit" disabled={!ready}>
+          Acumular
+        </button>
+        <button type="button" className="onda-caja-amount-cancel" onClick={onCancel}>
+          Cancelar
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function parseSerial(raw: string) {
+  return raw.trim();
 }
 
 export function CajaClient() {
@@ -101,14 +152,17 @@ export function CajaClient() {
   const controlsRef = useRef<IScannerControls | null>(null);
   const scanningRef = useRef(false);
 
-  const [view, setView] = useState<'scan' | 'pending'>('scan');
   const [storeName, setStoreName] = useState('');
   const [storeId, setStoreId] = useState('');
+  const [currency, setCurrency] = useState('COP');
   const [error, setError] = useState('');
-  const [items, setItems] = useState<PendingItem[]>([]);
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [flash, setFlash] = useState<Flash | null>(null);
+  const [burst, setBurst] = useState<Burst | null>(null);
   const [camReady, setCamReady] = useState(false);
+  const [draft, setDraft] = useState<{ serial: string; amount: string } | null>(
+    null
+  );
+  const burstTimerRef = useRef<number>(0);
 
   useEffect(() => {
     if (!token) return;
@@ -118,17 +172,23 @@ export function CajaClient() {
       /* ignore */
     }
     setApiAuthTokenGetter(async () => token);
-    return () => setApiAuthTokenGetter(null);
+    return () => {
+      setApiAuthTokenGetter(null);
+      window.clearTimeout(burstTimerRef.current);
+    };
   }, [token]);
 
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    api<{ storeId: string; storeName: string }>(`/caja/session?token=${token}`)
+    api<{ storeId: string; storeName: string; currency?: string }>(
+      `/caja/session?token=${token}`
+    )
       .then((session) => {
         if (cancelled) return;
         setStoreId(session.storeId);
         setStoreName(session.storeName);
+        if (session.currency) setCurrency(session.currency);
       })
       .catch((err) => {
         if (!cancelled) {
@@ -141,56 +201,7 @@ export function CajaClient() {
   }, [token]);
 
   useEffect(() => {
-    if (!storeId || !token) return;
-    let cancelled = false;
-    let source: EventSource | null = null;
-
-    api<PendingItem[]>(`/pending-requests/pending?storeId=${storeId}`)
-      .then((list) => {
-        if (!cancelled) setItems(list);
-      })
-      .catch(() => {
-        /* SSE cubre el resto */
-      });
-
-    const qs = new URLSearchParams({ storeId, token });
-    source = new EventSource(
-      `${getApiUrl()}/api/pending-requests/stream?${qs.toString()}`
-    );
-    source.onmessage = (event) => {
-      const payload = JSON.parse(event.data) as SsePayload;
-      if (payload.kind === 'resolved' || payload.ids?.length) {
-        const ids = new Set(payload.ids || (payload.id ? [payload.id] : []));
-        setItems((prev) => prev.filter((i) => !ids.has(i.id)));
-        return;
-      }
-      if (!payload.id || !payload.code || !payload.type) return;
-      setItems((prev) => {
-        if (prev.some((i) => i.id === payload.id)) return prev;
-        return [
-          ...prev,
-          {
-            id: payload.id!,
-            type: payload.type!,
-            code: payload.code!,
-            pass: { user: { name: payload.customerName } },
-            promotion: payload.promotionTitle
-              ? { title: payload.promotionTitle }
-              : null,
-            createdAt: payload.createdAt || new Date().toISOString(),
-          },
-        ];
-      });
-    };
-
-    return () => {
-      cancelled = true;
-      source?.close();
-    };
-  }, [storeId, token]);
-
-  useEffect(() => {
-    if (!storeId || view !== 'scan') return;
+    if (!storeId) return;
     const video = videoRef.current;
     if (!video) return;
     let cancelled = false;
@@ -200,7 +211,7 @@ export function CajaClient() {
       try {
         const controls = await reader.decodeFromConstraints(
           { video: { facingMode: 'environment' } },
-          video,
+          video ?? undefined,
           (result) => {
             if (!result || scanningRef.current) return;
             const serial = parseSerial(result.getText());
@@ -232,56 +243,96 @@ export function CajaClient() {
       controlsRef.current = null;
       setCamReady(false);
     };
-    // handleScan is stable enough via refs; restart only when entering scan view
+    // handleScan is stable enough via refs
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, view]);
+  }, [storeId]);
 
-  async function handleScan(serial: string) {
+  function clearBurst() {
+    window.clearTimeout(burstTimerRef.current);
+    setBurst(null);
+    scanningRef.current = false;
+  }
+
+  function cancelDraft() {
+    setDraft(null);
+    scanningRef.current = false;
+  }
+
+  function showBurst(next: Burst, ms: number) {
+    setBurst(next);
+    window.clearTimeout(burstTimerRef.current);
+    burstTimerRef.current = window.setTimeout(() => {
+      setBurst(null);
+      scanningRef.current = false;
+    }, ms);
+  }
+
+  function handleScan(serial: string) {
     if (scanningRef.current) return;
     scanningRef.current = true;
+    void resolveScan(serial);
+  }
+
+  async function resolveScan(serial: string, precio?: number) {
+    setBurst({ phase: 'working' });
     try {
       const result = await api<{
-        pass: { user?: { name?: string }; points: number };
+        kind?: 'redeem' | 'accumulate' | 'accumulated';
+        pass?: { user?: { name?: string }; points: number };
+        promotion?: { title?: string };
         message?: string;
       }>('/caja/scan', {
         method: 'POST',
-        body: JSON.stringify({ serialNumber: serial }),
+        body: JSON.stringify({
+          serialNumber: serial,
+          ...(precio != null ? { precio } : {}),
+        }),
       });
-      setFlash({
-        tone: 'ok',
-        title: 'Onda acumulada',
-        detail:
-          result.message ||
-          `${result.pass.user?.name || 'Cliente'} · ${result.pass.points} ondas`,
-      });
+      if (result.kind === 'redeem') {
+        showBurst(
+          {
+            phase: 'claim',
+            name: result.pass?.user?.name,
+            title: result.promotion?.title,
+          },
+          3200
+        );
+        return;
+      }
+      if (result.kind === 'accumulate') {
+        setBurst(null);
+        setDraft({ serial, amount: '' });
+        return;
+      }
+      showBurst(
+        {
+          phase: 'ok',
+          name: result.pass?.user?.name,
+          points: result.pass?.points,
+        },
+        2400
+      );
     } catch (err) {
-      setFlash({
-        tone: 'err',
-        title: 'No se pudo acumular',
-        detail: err instanceof Error ? err.message : 'Intenta de nuevo',
-      });
-    } finally {
-      window.setTimeout(() => {
-        scanningRef.current = false;
-        setFlash(null);
-      }, 2200);
+      showBurst(
+        {
+          phase: 'err',
+          title: precio != null ? 'No se pudo acumular' : 'No se pudo validar',
+          detail: err instanceof Error ? err.message : 'Intenta de nuevo',
+        },
+        2200
+      );
     }
   }
 
-  async function resolve(id: string, action: 'confirm' | 'reject') {
-    setBusyId(id);
-    try {
-      await api(`/pending-requests/${id}/${action}`, { method: 'POST' });
-      setItems((prev) => prev.filter((i) => i.id !== id));
-    } catch (err) {
-      setFlash({
-        tone: 'err',
-        title: 'No se pudo resolver',
-        detail: err instanceof Error ? err.message : undefined,
-      });
-    } finally {
-      setBusyId(null);
-    }
+  async function confirmDraft() {
+    if (!draft) return;
+    const precio = Number(parseMoneyInput(draft.amount));
+    const serial = draft.serial;
+    setDraft(null);
+    await resolveScan(
+      serial,
+      Number.isFinite(precio) && precio > 0 ? precio : undefined
+    );
   }
 
   if (error) {
@@ -302,7 +353,7 @@ export function CajaClient() {
   }
 
   return (
-    <div className={`onda-caja-shell is-${view}`}>
+    <div className="onda-caja-shell is-scan-only">
       <header className="onda-caja-top">
         <div>
           <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
@@ -310,9 +361,6 @@ export function CajaClient() {
           </p>
           <h1 className="font-display text-lg font-bold">{storeName}</h1>
         </div>
-        <p className="text-xs text-[var(--onda-muted)]">
-          {items.length} pendiente{items.length === 1 ? '' : 's'}
-        </p>
       </header>
       <div className="onda-caja-body">
         <section className="onda-caja-scan" aria-label="Escanear QR">
@@ -343,34 +391,17 @@ export function CajaClient() {
             </div>
           ) : null}
         </section>
-        <aside className="onda-caja-queue" aria-label="Pendientes">
-          <div>
-            <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
-              Cola
-            </p>
-            <h2 className="font-display text-base font-bold">Pendientes</h2>
-          </div>
-          <PendingList items={items} busyId={busyId} onResolve={resolve} />
-        </aside>
       </div>
-      <nav className="onda-caja-tabs" aria-label="Caja">
-        <button
-          type="button"
-          className={`onda-caja-tab${view === 'scan' ? ' is-active' : ''}`}
-          onClick={() => setView('scan')}
-        >
-          {OndaIcons.camera}
-          Escanear
-        </button>
-        <button
-          type="button"
-          className={`onda-caja-tab${view === 'pending' ? ' is-active' : ''}`}
-          onClick={() => setView('pending')}
-        >
-          {OndaIcons.qr}
-          Pendientes
-        </button>
-      </nav>
+      {draft ? (
+        <CajaAmountSheet
+          amount={draft.amount}
+          currency={currency}
+          onAmount={(amount) => setDraft((prev) => (prev ? { ...prev, amount } : prev))}
+          onCancel={cancelDraft}
+          onConfirm={() => void confirmDraft()}
+        />
+      ) : null}
+      {burst ? <CajaBurst burst={burst} onDismiss={clearBurst} /> : null}
     </div>
   );
 }

@@ -20,6 +20,8 @@ export type PassSwipeCard = {
   milestoneStamps: number[];
   inWallet?: boolean;
   walletUrl?: string;
+  deadlineLabel?: string | null;
+  progressLabel?: string | null;
 };
 
 export function PassSwipe({
@@ -75,6 +77,8 @@ export function PassSwipe({
           memberName={memberName}
           inWallet={only.inWallet}
           walletUrl={only.walletUrl}
+          deadlineLabel={only.deadlineLabel}
+          progressLabel={only.progressLabel}
         />
       </div>
     );
@@ -95,6 +99,8 @@ export function PassSwipe({
               memberName={memberName}
               inWallet={card.inWallet}
               walletUrl={card.walletUrl}
+              deadlineLabel={card.deadlineLabel}
+              progressLabel={card.progressLabel}
             />
           </div>
         ))}

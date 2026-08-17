@@ -1,4 +1,5 @@
 import type { PassLocation } from './types';
+import { loyaltyProgressCopy, type LoyaltyRewardHint } from '@onda/shared-utils';
 
 /** Recorta el texto de lock-screen al límite de WalletWallet (128). */
 export function clampRelevantText(text: string): string {
@@ -10,16 +11,13 @@ export function clampRelevantText(text: string): string {
 export function nearbyRelevantText(
   storeName: string,
   points: number,
-  maxStamps: number
+  maxStamps: number,
+  reward?: LoyaltyRewardHint | null
 ): string {
   const name = storeName.trim() || 'tu comercio';
-  const remaining = Math.max(0, maxStamps - points);
-  const suffix =
-    remaining <= 0
-      ? '¡Canjea tu premio!'
-      : remaining === 1
-        ? 'Te falta 1 onda'
-        : `Te faltan ${remaining} ondas`;
+  const suffix = loyaltyProgressCopy(points, maxStamps, reward, {
+    clipTitle: 36,
+  }).value;
   return clampRelevantText(`Estás cerca de ${name}. ${suffix}`);
 }
 
@@ -41,12 +39,13 @@ export function toPassLocation(
 export function storeLockScreenLocations(
   store: { name?: string | null; lat?: number | null; lng?: number | null } | null | undefined,
   points: number,
-  maxStamps: number
+  maxStamps: number,
+  reward?: LoyaltyRewardHint | null
 ): PassLocation[] {
   const loc = toPassLocation(
     store?.lat,
     store?.lng,
-    nearbyRelevantText(store?.name || 'tu comercio', points, maxStamps)
+    nearbyRelevantText(store?.name || 'tu comercio', points, maxStamps, reward)
   );
   return loc ? [loc] : [];
 }

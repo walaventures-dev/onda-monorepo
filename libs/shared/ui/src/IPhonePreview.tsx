@@ -168,6 +168,7 @@ export function WalletPassCard({
   points = 0,
   maxStamps = 10,
   memberName,
+  progressLabel,
 }: {
   backgroundColor?: string;
   foregroundColor?: string;
@@ -177,14 +178,16 @@ export function WalletPassCard({
   points?: number;
   maxStamps?: number;
   memberName?: string | null;
+  progressLabel?: string | null;
 }) {
   const remaining = Math.max(0, maxStamps - points);
   const remainingText =
-    remaining === 0
+    progressLabel?.trim() ||
+    (remaining === 0
       ? '¡Listo para canjear!'
       : remaining === 1
         ? 'Te falta 1 onda'
-        : `Te faltan ${remaining}`;
+        : `Te faltan ${remaining}`);
 
   return (
     <div
@@ -213,7 +216,9 @@ export function WalletPassCard({
         <p className="text-[13px] font-bold leading-none">
           {points}/{maxStamps}
         </p>
-        <p className="mt-0.5 text-[9px] opacity-80">{remainingText}</p>
+        <p className="mt-0.5 max-w-full truncate text-[9px] opacity-80">
+          {remainingText}
+        </p>
       </div>
 
       <div className="px-2.5 py-2.5">

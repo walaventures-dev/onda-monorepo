@@ -44,16 +44,12 @@ export class PassesController {
     const raw = await this.prisma.pass.findUniqueOrThrow({
       where: { id },
     });
+    let activeId = raw.cartillaId;
     if (raw.storeId) {
-      const active = await this.cartillas.resolveActiveCartilla(raw.storeId);
-      if (raw.cartillaId !== active.id) {
-        await this.prisma.pass.update({
-          where: { id },
-          data: { cartillaId: active.id },
-        });
-      }
+      const synced = await this.cartillas.syncPassCartilla(id);
+      activeId = synced.active?.id ?? raw.cartillaId;
       const hasAssignments = await this.prisma.passPromoAssignment.count({
-        where: { passId: id, cartillaId: active.id },
+        where: { passId: id, cartillaId: activeId || undefined },
       });
       if (!hasAssignments) {
         await this.cartillas.assignPassPromos(id);
@@ -67,7 +63,10 @@ export class PassesController {
         store: { include: { passDesign: true, promotions: true } },
         event: { include: { passDesign: true, promotions: true } },
         cartilla: { include: { passDesign: true } },
-        promoAssignments: { include: { promotion: true } },
+        promoAssignments: {
+          where: activeId ? { cartillaId: activeId } : undefined,
+          include: { promotion: true },
+        },
         transactions: { orderBy: { createdAt: 'desc' }, take: 20 },
       },
     });
@@ -118,6 +117,7 @@ export class PassesController {
             id: pass.cartilla.id,
             name: pass.cartilla.name,
             isDefault: pass.cartilla.isDefault,
+            startsAt: pass.cartilla.startsAt,
             endsAt: pass.cartilla.endsAt,
             status: pass.cartilla.status,
             maxStamps: pass.cartilla.maxStamps,
@@ -144,9 +144,6 @@ export class PassesController {
   @Post(':id/issue')
   async issue(@Param('id') id: string) {
     const hydrated = await this.hydratePass(id);
-    if (hydrated.walletRef) {
-      return this.wallet.linksFor(hydrated.walletRef);
-    }
     const design = hydrated.passDesign || {
       title: 'Onda',
       subtitle: 'Loyalty',
@@ -157,6 +154,10 @@ export class PassesController {
       logoUrl: null,
       stripImageUrl: null,
     };
+    if (hydrated.walletRef) {
+      await this.wallet.updatePoints(hydrated.walletRef, hydrated.points);
+      return this.wallet.linksFor(hydrated.walletRef);
+    }
     const issued = await this.wallet.issuePass({
       serialNumber: hydrated.serialNumber,
       points: hydrated.points,
@@ -164,6 +165,7 @@ export class PassesController {
       organizationName:
         hydrated.store?.name ?? hydrated.event?.name ?? design.title,
       maxStamps: hydrated.cartilla?.maxStamps ?? hydrated.store?.maxStamps,
+      validUntil: hydrated.cartilla?.endsAt ?? null,
       kind: hydrated.eventId ? 'event' : 'store',
       design,
     });

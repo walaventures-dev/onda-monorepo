@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, Button, Chip, OndaIcons, promoTypeIcon } from "@onda/shared-ui";
+import { cartillaDeadlineLabel, formatCartillaDay, loyaltyProgressCopy, pickLoyaltyReward } from "@onda/shared-utils";
 import {
   loadSession,
   saveSession,
@@ -143,7 +144,6 @@ export default function StoreEntryPage() {
 
   useEffect(() => {
     if (step !== "home" || !pass?.id) return;
-    if (pass.appleUrl || pass.googleUrl) return;
     if (preparingWalletRef.current === pass.id) return;
     preparingWalletRef.current = pass.id;
     let cancelled = false;
@@ -161,7 +161,7 @@ export default function StoreEntryPage() {
     return () => {
       cancelled = true;
     };
-  }, [step, pass?.id, pass?.appleUrl, pass?.googleUrl]);
+  }, [step, pass?.id]);
 
   useEffect(() => {
     function pathIsThisStore() {
@@ -283,8 +283,8 @@ export default function StoreEntryPage() {
 
   const promotions = useMemo(() => {
     if (pass?.promotions?.length) return pass.promotions;
-    return (store?.promotions || []).filter((p: any) => p.isActive);
-  }, [pass, store]);
+    return [];
+  }, [pass]);
   const milestoneStamps = useMemo(
     () => promotions.map((p: any) => p.pointsRequired as number),
     [promotions],
@@ -306,11 +306,33 @@ export default function StoreEntryPage() {
 
   const storeDesign = pass?.passDesign || pass?.cartilla?.passDesign || store?.passDesign;
   const storeName = store?.name || "tu visita";
+  const deadlineLabel = cartillaDeadlineLabel(
+    pass?.cartilla?.endsAt,
+    pass?.cartilla?.isDefault,
+  );
   const logoUrl = storeDesign?.logoUrl as string | undefined;
   const storeInitial = (storeName.trim().charAt(0) || "O").toUpperCase();
   const userName = session?.user.name?.trim();
   const userInitial = (userName?.charAt(0) || "O").toUpperCase();
   const installUrl = walletInstallUrl(pass);
+  const progressLabel = useMemo(() => {
+    if (!pass) return null;
+    const claimed = pass.claimedPromotionIdsThisCycle || [];
+    const reward = pickLoyaltyReward({
+      points: pass.points ?? 0,
+      claimedPromotionIds: claimed,
+      rewards: promotions.map((p: any) => ({
+        title: p.title,
+        pointsRequired: p.pointsRequired,
+        id: p.id,
+      })),
+    });
+    return loyaltyProgressCopy(
+      pass.points ?? 0,
+      pass.maxStamps ?? pass.cartilla?.maxStamps ?? store?.maxStamps ?? 12,
+      reward,
+    ).value;
+  }, [pass, promotions, store?.maxStamps]);
 
   const swipeCards: PassSwipeCard[] = useMemo(() => {
     if (!storeDesign && !store) return [];
@@ -332,9 +354,11 @@ export default function StoreEntryPage() {
         milestoneStamps,
         inWallet: Boolean(pass?.walletActive),
         walletUrl: installUrl,
+        deadlineLabel,
+        progressLabel,
       },
     ];
-  }, [storeDesign, store, storeName, pass, milestoneStamps, installUrl]);
+  }, [storeDesign, store, storeName, pass, milestoneStamps, installUrl, deadlineLabel, progressLabel]);
 
   if (step === "loading") {
     return (
@@ -447,12 +471,8 @@ export default function StoreEntryPage() {
             />
             {pass?.cartilla?.endsAt ? (
               <p className="mt-3 text-center text-sm text-[var(--onda-muted)]">
-                Tienes hasta el{" "}
-                {new Date(pass.cartilla.endsAt).toLocaleDateString("es-CO", {
-                  day: "numeric",
-                  month: "long",
-                })}{" "}
-                para acumular y redimir.
+                Tienes hasta el {formatCartillaDay(pass.cartilla.endsAt)} para
+                acumular y redimir.
               </p>
             ) : pass?.cartilla?.isDefault ? (
               <p className="mt-3 text-center text-sm text-[var(--onda-muted)]">

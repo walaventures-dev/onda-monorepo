@@ -7,12 +7,17 @@ import {
   forwardRef,
 } from "@nestjs/common";
 import {
-  CartillaStatus,
   Prisma,
   PromotionPool,
   type PassDesign,
   type Promotion,
 } from "@prisma/client";
+import {
+  cartillaCoversToday,
+  formatCartillaDay,
+  parseCartillaDay,
+  todayBogotaKey,
+} from "@onda/shared-utils";
 import { PrismaService } from "./prisma.service";
 import { JobsService } from "./jobs.service";
 import { WalletService } from "./wallet.service";
@@ -41,6 +46,11 @@ const MS_5_DAYS = 5 * 24 * 60 * 60 * 1000;
 
 function rangesOverlap(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
   return aStart <= bEnd && bStart <= aEnd;
+}
+
+function parseOptionalDay(raw?: string | null): Date | null {
+  if (!raw) return null;
+  return parseCartillaDay(raw);
 }
 
 const CARTILLA_INCLUDE = {
@@ -163,21 +173,30 @@ export class CartillaService {
     const def = await this.ensureDefaultCartilla(storeId);
     const now = new Date();
     const occasionals = await this.prisma.cartilla.findMany({
-      where: { storeId, isDefault: false, status: "ACTIVE" },
+      where: { storeId, isDefault: false, status: { not: "ENDED" } },
       include: CARTILLA_INCLUDE,
       orderBy: { startsAt: "desc" },
     });
 
     const live: CartillaWithItems[] = [];
-    let endedExpired = false;
+    let endedApplied = false;
     for (const cartilla of occasionals) {
-      if (cartilla.endsAt && cartilla.endsAt < now) {
-        await this.endCartilla(cartilla.id, { skipReset: true });
-        endedExpired = true;
+      const hasWindow = Boolean(cartilla.startsAt && cartilla.endsAt);
+      if (hasWindow) {
+        const stillOpen = cartillaCoversToday(null, cartilla.endsAt, now);
+        if (!stillOpen) {
+          const wasActive = cartilla.status === "ACTIVE";
+          await this.endCartilla(cartilla.id, { skipReset: true });
+          if (wasActive) endedApplied = true;
+          continue;
+        }
+        if (!cartillaCoversToday(cartilla.startsAt, cartilla.endsAt, now)) {
+          continue;
+        }
+        live.push(cartilla);
         continue;
       }
-      if (cartilla.startsAt && cartilla.startsAt > now) continue;
-      live.push(cartilla);
+      if (cartilla.status === "ACTIVE") live.push(cartilla);
     }
 
     for (const extra of live.slice(1)) {
@@ -185,17 +204,28 @@ export class CartillaService {
     }
 
     if (live[0]) {
-      if (endedExpired || live.length > 1) {
+      const next = live[0];
+      const becameLive = next.status !== "ACTIVE";
+      if (becameLive) {
+        await this.prisma.cartilla.update({
+          where: { id: next.id },
+          data: { status: "ACTIVE" },
+        });
+      }
+      if (becameLive || endedApplied || live.length > 1) {
         await this.prisma.store.update({
           where: { id: storeId },
-          data: { maxStamps: live[0].maxStamps },
+          data: { maxStamps: next.maxStamps },
         });
-        await this.resetStorePasses(storeId, live[0].id);
+        await this.resetStorePasses(storeId, next.id);
       }
-      return live[0];
+      return this.prisma.cartilla.findUniqueOrThrow({
+        where: { id: next.id },
+        include: CARTILLA_INCLUDE,
+      });
     }
 
-    if (endedExpired) {
+    if (endedApplied) {
       await this.prisma.store.update({
         where: { id: storeId },
         data: { maxStamps: def.maxStamps },
@@ -203,6 +233,42 @@ export class CartillaService {
       await this.resetStorePasses(storeId, def.id);
     }
     return def;
+  }
+
+  async syncPassCartilla(passId: string) {
+    const pass = await this.prisma.pass.findUniqueOrThrow({
+      where: { id: passId },
+    });
+    if (!pass.storeId) {
+      return { switched: false, active: null as CartillaWithItems | null };
+    }
+    const active = await this.resolveActiveCartilla(pass.storeId);
+    const current = await this.prisma.pass.findUniqueOrThrow({
+      where: { id: passId },
+    });
+    if (current.cartillaId === active.id) {
+      return { switched: false, active };
+    }
+    await this.prisma.pass.update({
+      where: { id: passId },
+      data: {
+        cartillaId: active.id,
+        points: 0,
+        cycleStartedAt: new Date(),
+      },
+    });
+    await this.assignPassPromos(passId);
+    if (current.walletRef) {
+      const until = active.endsAt
+        ? ` Tienes hasta el ${formatCartillaDay(active.endsAt)} para acumular y redimir.`
+        : " El ciclo de ondas empieza de nuevo.";
+      await this.wallet.updatePoints(
+        current.walletRef,
+        0,
+        `Tu cartilla de Onda se actualizó.${until}`,
+      );
+    }
+    return { switched: true, active };
   }
 
   private async assertNoOccasionalOverlap(
@@ -254,7 +320,12 @@ export class CartillaService {
       include: CARTILLA_INCLUDE,
     });
     if (!cartilla) throw new NotFoundException("Cartilla no encontrada");
-    return this.withLock(cartilla);
+    await this.resolveActiveCartilla(cartilla.storeId);
+    const fresh = await this.prisma.cartilla.findUniqueOrThrow({
+      where: { id },
+      include: CARTILLA_INCLUDE,
+    });
+    return this.withLock(fresh);
   }
 
   async list(storeId: string) {
@@ -366,8 +437,8 @@ export class CartillaService {
       include: { passDesign: true },
     });
 
-    const startsAt = body.startsAt ? new Date(body.startsAt) : null;
-    const endsAt = body.endsAt ? new Date(body.endsAt) : null;
+    const startsAt = parseOptionalDay(body.startsAt);
+    const endsAt = parseOptionalDay(body.endsAt);
     if (!body.isDefault && startsAt && endsAt && endsAt <= startsAt) {
       throw new BadRequestException(
         "La fecha de fin debe ser posterior al inicio",
@@ -430,15 +501,11 @@ export class CartillaService {
     }
     const startsAt =
       body.startsAt !== undefined
-        ? body.startsAt
-          ? new Date(body.startsAt)
-          : null
+        ? parseOptionalDay(body.startsAt)
         : cartilla.startsAt;
     const endsAt =
       body.endsAt !== undefined
-        ? body.endsAt
-          ? new Date(body.endsAt)
-          : null
+        ? parseOptionalDay(body.endsAt)
         : cartilla.endsAt;
     if (!cartilla.isDefault && startsAt && endsAt && endsAt <= startsAt) {
       throw new BadRequestException(
@@ -486,6 +553,9 @@ export class CartillaService {
         "La cartilla base ya está vigente cuando no hay una ocasional activa",
       );
     }
+    if (cartilla.status === "ACTIVE") {
+      return cartilla;
+    }
     if (!cartilla.endsAt) {
       throw new BadRequestException("Indica una fecha de fin antes de activar");
     }
@@ -501,9 +571,9 @@ export class CartillaService {
       await this.endCartilla(other.id, { skipReset: true });
     }
     const startsAt =
-      cartilla.startsAt && cartilla.startsAt < new Date()
+      cartilla.startsAt && cartillaCoversToday(cartilla.startsAt, null)
         ? cartilla.startsAt
-        : new Date();
+        : parseCartillaDay(todayBogotaKey());
     await this.assertNoOccasionalOverlap(
       cartilla.storeId,
       startsAt,
@@ -548,6 +618,12 @@ export class CartillaService {
   }
 
   async resetStorePasses(storeId: string, cartillaId: string) {
+    const next = await this.prisma.cartilla.findUnique({
+      where: { id: cartillaId },
+    });
+    const message = next?.endsAt
+      ? `Tu cartilla de Onda se actualizó. Tienes hasta el ${formatCartillaDay(next.endsAt)} para acumular y redimir.`
+      : "Tu cartilla de Onda se actualizó. El ciclo de ondas empieza de nuevo.";
     const passes = await this.prisma.pass.findMany({ where: { storeId } });
     for (const pass of passes) {
       await this.prisma.pass.update({
@@ -560,10 +636,7 @@ export class CartillaService {
       });
       await this.assignPassPromos(pass.id);
       if (pass.walletRef) {
-        await this.wallet.updatePoints(pass.walletRef, 0);
-        const message =
-          "Tu cartilla de Onda se actualizó. El ciclo de ondas empieza de nuevo.";
-        await this.wallet.notify(pass.walletRef, message);
+        await this.wallet.updatePoints(pass.walletRef, 0, message);
       }
     }
   }
@@ -645,6 +718,14 @@ export class CartillaService {
     }
     if (!promo.isActive) {
       throw new BadRequestException("Promoción inactiva");
+    }
+    if (pass.storeId) {
+      const active = await this.resolveActiveCartilla(pass.storeId);
+      if (pass.cartillaId !== active.id) {
+        throw new BadRequestException(
+          "Tu cartilla se actualizó. Recarga para ver la vigente.",
+        );
+      }
     }
     const assignment = await this.prisma.passPromoAssignment.findFirst({
       where: {
@@ -759,10 +840,7 @@ export class CartillaService {
     }
     if (cartilla.smsRemindedAt) return;
 
-    const endsLabel = cartilla.endsAt.toLocaleDateString("es-CO", {
-      day: "numeric",
-      month: "long",
-    });
+    const endsLabel = formatCartillaDay(cartilla.endsAt);
     const message =
       `${cartilla.store.name}: tienes hasta el ${endsLabel} para acumular y redimir en tu cartilla.`.slice(
         0,

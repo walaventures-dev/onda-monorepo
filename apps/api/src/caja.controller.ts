@@ -1,6 +1,8 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Headers,
   Inject,
@@ -12,6 +14,8 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from './prisma.service';
 import { StoreAccessService } from './store-access.service';
 import { AccumulateService } from './accumulate.service';
+import { RedeemService } from './redeem.service';
+import { parseCajaQr } from '@onda/shared-utils';
 
 function cajaPublicUrl(token: string) {
   const base = (
@@ -29,7 +33,8 @@ export class CajaController {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(StoreAccessService) private access: StoreAccessService,
-    @Inject(AccumulateService) private accumulate: AccumulateService
+    @Inject(AccumulateService) private accumulate: AccumulateService,
+    @Inject(RedeemService) private redeem: RedeemService
   ) {}
 
   @Get('session')
@@ -43,6 +48,7 @@ export class CajaController {
     return {
       storeId: link.store.id,
       storeName: link.store.name,
+      currency: link.store.currency || 'COP',
     };
   }
 
@@ -76,14 +82,46 @@ export class CajaController {
   async scan(
     @Headers('authorization') authHeader: string | undefined,
     @Query('token') queryToken: string | undefined,
-    @Body() body: { serialNumber: string }
+    @Body() body: { serialNumber?: string; payload?: string; precio?: number }
   ) {
     const token = queryToken || this.access.bearerToken(authHeader);
     if (!token) throw new UnauthorizedException('Falta el enlace de caja');
     const link = await this.access.resolveCajaToken(token);
-    return this.accumulate.accumulate({
-      storeId: link.storeId,
-      serialNumber: body.serialNumber,
+    const raw = (body.payload || body.serialNumber || '').trim();
+    if (!raw) throw new BadRequestException('Falta el código del pase');
+
+    const scanned = parseCajaQr(raw);
+    if (scanned.kind === 'claim') {
+      return this.redeem.redeem({
+        storeId: link.storeId,
+        pendingRequestId: scanned.pendingRequestId,
+      });
+    }
+
+    const pass = await this.prisma.pass.findUnique({
+      where: { serialNumber: scanned.serialNumber },
+      include: { user: { select: { name: true } } },
     });
+    if (!pass) throw new BadRequestException('Pase no encontrado');
+    if (pass.storeId !== link.storeId) {
+      throw new ForbiddenException('Este pase no es de esta sede');
+    }
+
+    if (body.precio == null) {
+      return {
+        kind: 'accumulate' as const,
+        pass: {
+          user: { name: pass.user?.name },
+          points: pass.points,
+        },
+      };
+    }
+
+    const result = await this.accumulate.accumulate({
+      storeId: link.storeId,
+      serialNumber: scanned.serialNumber,
+      precio: body.precio,
+    });
+    return { kind: 'accumulated' as const, ...result };
   }
 }

@@ -33,6 +33,8 @@ export type BaseLoyaltyContext = {
   maxStamps?: number;
   pointsLabel?: string;
   pointsChangeMessage?: string;
+  /** Fecha límite para acumular y redimir (ISO o Date). */
+  validUntil?: Date | string | null;
   /** Geocerca del comercio: Apple muestra el pase en lock screen al acercarse. */
   locations?: PassSpec['locations'];
 };

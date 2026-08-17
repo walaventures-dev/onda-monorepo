@@ -336,6 +336,8 @@ model Transaction {
   storeId     String
   type        TransactionType
   points      Int             @default(1)
+  precio      Int?
+  accumulateId String?
   promotionId String?
   cartillaId  String?
   createdAt   DateTime        @default(now())
@@ -343,10 +345,13 @@ model Transaction {
   store       Store           @relation(fields: [storeId], references: [id])
   promotion   Promotion?      @relation(fields: [promotionId], references: [id])
   cartilla    Cartilla?       @relation(fields: [cartillaId], references: [id])
+  sourceAccumulate Transaction?  @relation("RedeemFromAccumulate", fields: [accumulateId], references: [id], onDelete: SetNull)
+  linkedRedeems    Transaction[] @relation("RedeemFromAccumulate")
 
   @@index([storeId, createdAt])
   @@index([promotionId])
   @@index([cartillaId])
+  @@index([accumulateId])
 }
 
 model Feedback {

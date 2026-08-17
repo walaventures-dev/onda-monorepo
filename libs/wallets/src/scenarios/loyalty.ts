@@ -1,3 +1,4 @@
+import { loyaltyProgressCopy, type LoyaltyRewardHint } from '@onda/shared-utils';
 import { nearestColorPreset, normalizeHexColor } from '../colors';
 import { ensureNotificationAnchor } from '../notifications';
 import { buildPunchCardStripDataUri } from '../punch-card-strip';
@@ -6,16 +7,21 @@ import type { BaseLoyaltyContext, PassScenarioBuilder } from './types';
 
 export type LoyaltyPassContext = BaseLoyaltyContext & {
   kind?: 'store' | 'event';
+  reward?: LoyaltyRewardHint | null;
 };
 
 const DEFAULT_POINTS_LABEL = 'ONDAS';
 const DEFAULT_POINTS_CHANGE = 'Ahora tienes %@ ondas';
 
-function remainingCopy(points: number, maxStamps: number) {
-  const remaining = Math.max(0, maxStamps - points);
-  if (remaining === 0) return '¡Listo para canjear!';
-  if (remaining === 1) return 'Te falta 1 onda';
-  return `Te faltan ${remaining} ondas`;
+function validUntilDay(input: Date | string): string {
+  return String(typeof input === 'string' ? input : input.toISOString()).slice(0, 10);
+}
+
+function formatValidUntil(input: Date | string, month: 'long' | 'short'): string {
+  const [y, m, d] = validUntilDay(input).split('-').map(Number);
+  return new Date(y, m - 1, d)
+    .toLocaleDateString('es-CO', { day: 'numeric', month })
+    .replace('.', '');
 }
 
 async function applyVisuals(spec: PassSpec, ctx: LoyaltyPassContext): Promise<PassSpec> {
@@ -63,8 +69,12 @@ export async function buildLoyaltyPassSpec(
   const maxStamps = Math.max(1, Math.min(12, Math.round(ctx.maxStamps || 12)));
   const points = Math.max(0, Math.floor(ctx.points));
   const progress = `${Math.min(points, maxStamps)} / ${maxStamps}`;
-  const remaining = remainingCopy(points, maxStamps);
+  const hint = loyaltyProgressCopy(points, maxStamps, ctx.reward, {
+    clipTitle: 36,
+  });
   const subtitle = ctx.design.subtitle?.trim();
+  const until = ctx.validUntil ? formatValidUntil(ctx.validUntil, 'long') : null;
+  const untilShort = ctx.validUntil ? formatValidUntil(ctx.validUntil, 'short') : null;
 
   const backFields = [
     { label: 'Titular', value: ctx.holderName },
@@ -74,6 +84,14 @@ export async function buildLoyaltyPassSpec(
       ? [{ label: 'Info', value: ctx.design.description.trim() }]
       : []),
     { label: 'Cartilla', value: `${points} / ${maxStamps}` },
+    ...(until
+      ? [
+          {
+            label: 'Fecha límite',
+            value: `Tienes hasta el ${until} para acumular y redimir.`,
+          },
+        ]
+      : []),
   ];
 
   const base: PassSpec = {
@@ -92,10 +110,12 @@ export async function buildLoyaltyPassSpec(
     ],
     secondaryFields: [
       {
-        label: points >= maxStamps ? 'PREMIO' : 'SIGUIENTE',
-        value: remaining,
+        label: hint.fieldLabel,
+        value: hint.value,
       },
-      { label: 'TITULAR', value: ctx.holderName },
+      untilShort
+        ? { label: 'HASTA', value: untilShort }
+        : { label: 'TITULAR', value: ctx.holderName },
     ],
     backFields,
     ...(ctx.locations?.length ? { locations: ctx.locations.slice(0, 10) } : {}),

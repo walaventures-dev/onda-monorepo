@@ -121,6 +121,56 @@ export function formatDateEs(date: Date | string): string {
   });
 }
 
+const ONDA_TZ = 'America/Bogota';
+
+/** Día de calendario que eligió el comercio (YYYY-MM-DD), sin correrlo por zona horaria. */
+export function cartillaDayKey(input: Date | string): string {
+  return String(typeof input === 'string' ? input : input.toISOString()).slice(
+    0,
+    10,
+  );
+}
+
+export function todayBogotaKey(now = new Date()): string {
+  return now.toLocaleDateString('en-CA', { timeZone: ONDA_TZ });
+}
+
+/** Noon UTC del día elegido: misma fecha en Colombia y en el ISO. */
+export function parseCartillaDay(raw: string): Date {
+  const [y, m, d] = cartillaDayKey(raw).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0, 0));
+}
+
+export function cartillaCoversToday(
+  startsAt: Date | string | null | undefined,
+  endsAt: Date | string | null | undefined,
+  now = new Date(),
+): boolean {
+  const today = todayBogotaKey(now);
+  if (startsAt && cartillaDayKey(startsAt) > today) return false;
+  if (endsAt && cartillaDayKey(endsAt) < today) return false;
+  return true;
+}
+
+export function formatCartillaDay(
+  input: Date | string,
+  month: 'long' | 'short' = 'long',
+): string {
+  const [y, m, d] = cartillaDayKey(input).split('-').map(Number);
+  return new Date(y, m - 1, d)
+    .toLocaleDateString('es-CO', { day: 'numeric', month })
+    .replace('.', '');
+}
+
+export function cartillaDeadlineLabel(
+  endsAt: Date | string | null | undefined,
+  isDefault?: boolean,
+): string | null {
+  if (endsAt) return `Hasta el ${formatCartillaDay(endsAt)}`;
+  if (isDefault) return 'Hasta nuevo aviso';
+  return null;
+}
+
 export function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
@@ -201,6 +251,14 @@ export {
   type CampaignMessage,
   type CampaignChannelLabel,
 } from './campaign-copy';
+
+export {
+  type LoyaltyRewardHint,
+  pickLoyaltyReward,
+  loyaltyProgressCopy,
+} from './loyalty-copy';
+
+export { ONDA_CLAIM_QR_PREFIX, claimQrPayload, parseCajaQr } from './caja-qr';
 
 export {
   type PlanId,

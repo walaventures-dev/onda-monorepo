@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, PassPreview } from '@onda/shared-ui';
+import { cartillaDeadlineLabel, loyaltyProgressCopy, pickLoyaltyReward } from '@onda/shared-utils';
 import { loadSession, type CustomerSession } from '../lib/session';
 import { issueWalletPass, walletInstallUrl } from '../lib/wallet';
 
@@ -31,32 +32,25 @@ function passTitle(pass: any) {
 }
 
 function rewardProgress(pass: any) {
-  const claimed = new Set(pass.claimedPromotionIdsThisCycle || []);
-  const promos = [...(pass.promotions || [])]
-    .filter((p: any) => p && !claimed.has(p.id))
-    .sort((a: any, b: any) => a.pointsRequired - b.pointsRequired);
+  const claimed = pass.claimedPromotionIdsThisCycle || [];
   const points = pass.points ?? 0;
-  const ready = promos.find((p: any) => p.pointsRequired <= points);
-  if (ready) {
-    return {
-      rank: 0,
-      ready: true,
-      label: `¡Listo! Reclama ${ready.title}`,
-    };
-  }
-  const next = promos.find((p: any) => p.pointsRequired > points);
-  if (next) {
-    const remaining = next.pointsRequired - points;
-    return {
-      rank: remaining,
-      ready: false,
-      label:
-        remaining === 1
-          ? `Te falta 1 onda para ${next.title}`
-          : `Te faltan ${remaining} ondas para ${next.title}`,
-    };
-  }
-  return { rank: 999, ready: false, label: null as string | null };
+  const maxStamps =
+    pass.maxStamps ?? pass.cartilla?.maxStamps ?? pass.store?.maxStamps ?? 12;
+  const reward = pickLoyaltyReward({
+    points,
+    claimedPromotionIds: claimed,
+    rewards: (pass.promotions || []).map((p: any) => ({
+      title: p.title,
+      pointsRequired: p.pointsRequired,
+      id: p.id,
+    })),
+  });
+  const copy = loyaltyProgressCopy(points, maxStamps, reward);
+  return {
+    rank: reward?.ready ? 0 : reward ? reward.pointsRequired - points : 999,
+    ready: Boolean(reward?.ready),
+    label: copy.value,
+  };
 }
 
 export function MisTarjetasClient() {
@@ -215,6 +209,11 @@ export function MisTarjetasClient() {
                     memberName={session?.user.name ?? ''}
                     inWallet={inWallet}
                     walletUrl={inWallet ? undefined : walletInstallUrl(pass)}
+                    deadlineLabel={cartillaDeadlineLabel(
+                      pass.cartilla?.endsAt,
+                      pass.cartilla?.isDefault,
+                    )}
+                    progressLabel={progress.label}
                   />
                   {progress.label ? (
                     <p

@@ -31,6 +31,7 @@ import { PendingRequestsSseService } from './pending-requests-sse.service';
 import { PendingRequestsController } from './pending-requests.controller';
 import { CajaController } from './caja.controller';
 import { AccumulateService } from './accumulate.service';
+import { RedeemService } from './redeem.service';
 import { StoreAccessService } from './store-access.service';
 import { DemoOndaSpaController } from './demo-onda-spa.controller';
 import { CampaignsController } from './campaigns.controller';
@@ -85,6 +86,7 @@ import { CampaignsService } from './campaigns.service';
     CustomerAuthService,
     PendingRequestsSseService,
     AccumulateService,
+    RedeemService,
     StoreAccessService,
     FirebaseAuthService,
     JobsService,

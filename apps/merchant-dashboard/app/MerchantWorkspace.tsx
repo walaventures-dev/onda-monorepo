@@ -2115,8 +2115,8 @@ export function MerchantWorkspace() {
                   Cartillas
                 </h2>
                 <p className="text-sm text-[var(--onda-muted)]">
-                  La cartilla base está vigente salvo que actives una ocasional.
-                  Solo una a la vez; al activar se reinicia el ciclo.
+                  La cartilla base está vigente salvo que una ocasional cubra
+                  hoy. Solo una a la vez; al cambiar se reinicia el ciclo.
                 </p>
               </div>
               <GradientButton
@@ -2155,7 +2155,7 @@ export function MerchantWorkspace() {
                   </div>
                   <p className="mt-2 text-sm text-[var(--onda-muted)]">
                     {c.isDefault
-                      ? "Vigente cuando no hay una ocasional activa"
+                      ? "Vigente cuando ninguna ocasional cubre hoy"
                       : formatCartillaRange(c.startsAt, c.endsAt)}
                   </p>
                   <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">

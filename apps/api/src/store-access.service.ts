@@ -35,7 +35,7 @@ export class StoreAccessService {
   async resolveCajaToken(token: string) {
     const link = await this.prisma.cajaLink.findUnique({
       where: { token },
-      include: { store: { select: { id: true, name: true } } },
+      include: { store: { select: { id: true, name: true, currency: true } } },
     });
     if (!link || link.revokedAt) {
       throw new UnauthorizedException('Enlace de caja inválido o revocado');

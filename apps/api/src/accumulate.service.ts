@@ -18,7 +18,18 @@ export type AccumulateInput = {
   passId?: string;
   serialNumber?: string;
   pendingRequestId?: string;
+  precio?: number;
 };
+
+export function parsePrecio(raw: unknown): number | undefined {
+  if (raw == null || raw === '') return undefined;
+  const n =
+    typeof raw === 'number'
+      ? raw
+      : Number(String(raw).replace(/[^\d.-]/g, ''));
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.round(n);
+}
 
 type NextReward = {
   title: string;
@@ -102,6 +113,7 @@ export class AccumulateService {
   ) {}
 
   async accumulate(input: AccumulateInput) {
+    const precio = parsePrecio(input.precio);
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: input.storeId },
     });
@@ -205,6 +217,7 @@ export class AccumulateService {
             type: 'ACCUMULATE',
             points: delta,
             cartillaId: current.cartillaId,
+            ...(precio != null ? { precio } : {}),
           },
         });
         return {
@@ -219,7 +232,10 @@ export class AccumulateService {
       include: {
         user: true,
         cartilla: true,
-        promoAssignments: { include: { promotion: true } },
+        promoAssignments: {
+          where: { cartillaId: updatedPass.cartillaId || undefined },
+          include: { promotion: true },
+        },
         transactions: {
           where: {
             type: 'REDEEM',

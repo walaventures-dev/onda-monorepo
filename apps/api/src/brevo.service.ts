@@ -55,30 +55,38 @@ export class BrevoService {
   }
 
   async sendSms(input: BrevoSmsInput) {
-    const apiKey = process.env.BREVO_API_KEY;
+    const apiKey = process.env.BREVO_API_KEY?.trim();
     if (!apiKey) {
       this.logger.log(`[Brevo stub] sms to=${input.to} msg=${input.message}`);
       return { ok: true as const, stub: true as const };
     }
 
-    const res = await fetch('https://api.brevo.com/v3/transactionalSMS/sms', {
-      method: 'POST',
-      headers: {
-        'api-key': apiKey,
-        'Content-Type': 'application/json',
-        accept: 'application/json',
-      },
-      body: JSON.stringify({
-        sender: process.env.BREVO_SMS_SENDER || 'Onda',
-        recipient: input.to.replace(/\s/g, ''),
-        content: input.message.slice(0, 160),
-        type: 'transactional',
-      }),
-    });
-    if (!res.ok) {
-      throw new Error(`Brevo SMS ${res.status}: ${await res.text()}`);
+    try {
+      const res = await fetch('https://api.brevo.com/v3/transactionalSMS/sms', {
+        method: 'POST',
+        headers: {
+          'api-key': apiKey,
+          'Content-Type': 'application/json',
+          accept: 'application/json',
+        },
+        body: JSON.stringify({
+          sender: process.env.BREVO_SMS_SENDER || 'Onda',
+          recipient: input.to.replace(/\s/g, ''),
+          content: input.message.slice(0, 160),
+          type: 'transactional',
+        }),
+      });
+      if (!res.ok) {
+        this.logger.warn(`Brevo SMS ${res.status}: ${await res.text()}`);
+        return { ok: false as const };
+      }
+      return { ok: true as const };
+    } catch (err) {
+      this.logger.warn(
+        `Brevo SMS falló (${input.to}): ${err instanceof Error ? err.message : err}`
+      );
+      return { ok: false as const };
     }
-    return { ok: true as const };
   }
 
   leadAckEmail(name: string, email: string) {

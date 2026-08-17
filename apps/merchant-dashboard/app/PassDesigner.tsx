@@ -21,6 +21,7 @@ export function PassDesigner({
   saveLabel = "Guardar preview",
   lockCycle = false,
   readOnly = false,
+  deadlineLabel,
 }: {
   design: any;
   onChange: (next: any) => void;
@@ -32,6 +33,7 @@ export function PassDesigner({
   saveLabel?: string;
   lockCycle?: boolean;
   readOnly?: boolean;
+  deadlineLabel?: string | null;
 }) {
   return (
     <div className="onda-pass-designer-layout">
@@ -149,6 +151,7 @@ export function PassDesigner({
           maxStamps={maxStamps}
           milestoneStamps={milestoneStamps}
           memberName="Cliente demo"
+          deadlineLabel={deadlineLabel}
         />
       </div>
     </div>

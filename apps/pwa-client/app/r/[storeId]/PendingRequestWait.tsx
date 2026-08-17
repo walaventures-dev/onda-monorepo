@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { api } from '@onda/shared-ui';
+import { claimQrPayload } from '@onda/shared-utils';
 import type { CustomerSession } from '../../../lib/session';
 
 export type PendingRequestDto = {
@@ -15,6 +16,7 @@ export type PendingRequestDto = {
   type?: 'ACCUMULATE' | 'CLAIM';
   promotionTitle?: string;
   serialNumber?: string;
+  qrPayload?: string;
 };
 
 export function PendingRequestWait({
@@ -42,11 +44,13 @@ export function PendingRequestWait({
   );
   const [qrUrl, setQrUrl] = useState('');
 
-  const barcode = request.serialNumber || serialNumber || '';
   const isClaim = request.type === 'CLAIM';
+  const barcode = isClaim
+    ? request.qrPayload || claimQrPayload(request.id)
+    : request.qrPayload || request.serialNumber || serialNumber || '';
 
   useEffect(() => {
-    if (!barcode || isClaim) {
+    if (!barcode) {
       setQrUrl('');
       return;
     }
@@ -65,7 +69,7 @@ export function PendingRequestWait({
     return () => {
       cancelled = true;
     };
-  }, [barcode, isClaim]);
+  }, [barcode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,9 +154,7 @@ export function PendingRequestWait({
         </h2>
         <p className="text-sm mt-4" style={{ color: subtextColor }}>
           {isClaim
-            ? request.promotionTitle
-              ? `${request.promotionTitle} — la persona en caja lo confirmará.`
-              : 'La persona en caja lo confirmará.'
+            ? `${request.promotionTitle ? `${request.promotionTitle}. ` : ''}Dile el código a caja o muestra el QR.`
             : 'Dile el código a caja o muestra el QR.'}
         </p>
       </div>
@@ -164,10 +166,10 @@ export function PendingRequestWait({
             <span key={i}>{digit}</span>
           ))}
         </p>
-        {!isClaim && qrUrl ? (
+        {qrUrl ? (
           <img
             src={qrUrl}
-            alt="Código QR de tu pase"
+            alt={isClaim ? 'Código QR para reclamar tu premio' : 'Código QR de tu pase'}
             width={180}
             height={180}
             className="h-[11.25rem] w-[11.25rem] rounded-xl"

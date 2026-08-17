@@ -11,6 +11,7 @@ import {
   type PassLocation,
 } from '@onda/wallets';
 import { PrismaService } from './prisma.service';
+import { pickLoyaltyReward, type LoyaltyRewardHint } from '@onda/shared-utils';
 
 export type IssuePassInput = {
   serialNumber: string;
@@ -19,6 +20,7 @@ export type IssuePassInput = {
   holderName: string;
   organizationName?: string;
   maxStamps?: number;
+  validUntil?: Date | string | null;
   kind?: 'store' | 'event';
   locations?: PassLocation[];
 };
@@ -66,11 +68,13 @@ export class WalletService {
 
   async issuePass(input: IssuePassInput): Promise<IssuedPassLinks> {
     const ctx = this.toLoyaltyContext(input);
+    ctx.reward = await this.loadRewardBySerial(input.serialNumber, input.points);
     if (!ctx.locations?.length) {
       ctx.locations = await this.lookupStoreLocations(
         input.serialNumber,
         input.points,
-        input.maxStamps
+        input.maxStamps,
+        ctx.reward
       );
     }
     this.logger.log(
@@ -183,15 +187,68 @@ export class WalletService {
       organizationName: input.organizationName,
       design: input.design,
       maxStamps: input.maxStamps,
+      validUntil: input.validUntil ?? null,
       kind: input.kind,
       locations: input.locations,
     };
   }
 
+  private rewardFromPass(
+    pass: {
+      cycleStartedAt: Date;
+      promoAssignments: Array<{
+        pointsRequired: number;
+        promotionId: string;
+        promotion: { title: string; isActive: boolean };
+      }>;
+      transactions: Array<{
+        type: string;
+        promotionId: string | null;
+        createdAt: Date;
+      }>;
+    },
+    points: number
+  ): LoyaltyRewardHint | null {
+    const claimed = pass.transactions
+      .filter(
+        (t) =>
+          t.type === 'REDEEM' &&
+          t.promotionId &&
+          t.createdAt.getTime() >= pass.cycleStartedAt.getTime()
+      )
+      .map((t) => t.promotionId as string);
+    return pickLoyaltyReward({
+      points,
+      claimedPromotionIds: claimed,
+      rewards: pass.promoAssignments.map((a) => ({
+        title: a.promotion.title,
+        pointsRequired: a.pointsRequired,
+        promotionId: a.promotionId,
+        isActive: a.promotion.isActive,
+      })),
+    });
+  }
+
+  private async loadRewardBySerial(
+    serialNumber: string,
+    points: number
+  ): Promise<LoyaltyRewardHint | null> {
+    const pass = await this.prisma.pass.findFirst({
+      where: { serialNumber },
+      include: {
+        promoAssignments: { include: { promotion: true } },
+        transactions: { where: { type: 'REDEEM' } },
+      },
+    });
+    if (!pass) return null;
+    return this.rewardFromPass(pass, points);
+  }
+
   private async lookupStoreLocations(
     serialNumber: string,
     points: number,
-    maxStamps?: number
+    maxStamps?: number,
+    reward?: LoyaltyRewardHint | null
   ): Promise<PassLocation[]> {
     const pass = await this.prisma.pass.findFirst({
       where: { serialNumber },
@@ -201,7 +258,7 @@ export class WalletService {
       },
     });
     const max = maxStamps ?? pass?.cartilla?.maxStamps ?? pass?.store?.maxStamps ?? 12;
-    return storeLockScreenLocations(pass?.store, points, max);
+    return storeLockScreenLocations(pass?.store, points, max, reward);
   }
 
   private async loadLoyaltyContextByWalletRef(
@@ -215,6 +272,8 @@ export class WalletService {
         store: { include: { passDesign: true } },
         event: { include: { passDesign: true } },
         cartilla: { include: { passDesign: true } },
+        promoAssignments: { include: { promotion: true } },
+        transactions: { where: { type: 'REDEEM' } },
       },
     });
 
@@ -226,9 +285,19 @@ export class WalletService {
       pass.event?.passDesign ||
       FALLBACK_DESIGN;
 
+    const points = pointsOverride ?? pass.points;
+    const assignments = pass.cartillaId
+      ? pass.promoAssignments.filter((a) => a.cartillaId === pass.cartillaId)
+      : pass.promoAssignments;
+    const reward = this.rewardFromPass(
+      { ...pass, promoAssignments: assignments },
+      points
+    );
+    const maxStamps = pass.cartilla?.maxStamps ?? pass.store?.maxStamps;
+
     return {
       barcodeSerial: pass.serialNumber,
-      points: pointsOverride ?? pass.points,
+      points,
       holderName: pass.user.name,
       organizationName: pass.store?.name ?? pass.event?.name ?? design.title,
       design: {
@@ -241,12 +310,15 @@ export class WalletService {
         logoUrl: design.logoUrl,
         stripImageUrl: design.stripImageUrl ?? null,
       },
-      maxStamps: pass.cartilla?.maxStamps ?? pass.store?.maxStamps,
+      maxStamps,
+      validUntil: pass.cartilla?.endsAt ?? null,
       kind: pass.eventId ? 'event' : 'store',
+      reward,
       locations: storeLockScreenLocations(
         pass.store,
-        pointsOverride ?? pass.points,
-        pass.cartilla?.maxStamps ?? pass.store?.maxStamps ?? 12
+        points,
+        maxStamps ?? 12,
+        reward
       ),
     };
   }

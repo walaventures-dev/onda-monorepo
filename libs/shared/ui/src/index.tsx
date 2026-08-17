@@ -204,6 +204,8 @@ export function PassPreview({
   compact = false,
   inWallet,
   walletUrl,
+  deadlineLabel,
+  progressLabel,
 }: {
   backgroundColor?: string;
   foregroundColor?: string;
@@ -222,6 +224,10 @@ export function PassPreview({
   inWallet?: boolean;
   /** URL nativa de Apple/Google Wallet */
   walletUrl?: string;
+  /** Fecha límite para acumular y redimir, o “Hasta nuevo aviso”. */
+  deadlineLabel?: string | null;
+  /** Copy de progreso / premio listo. Si falta, se calcula con el tope de ondas. */
+  progressLabel?: string | null;
 }) {
   const displayName = memberName?.trim() || 'Tu nombre';
   const hasName = Boolean(memberName?.trim());
@@ -236,11 +242,12 @@ export function PassPreview({
 
   const ondasRemaining = Math.max(0, maxStamps - points);
   const ondasRemainingText =
-    ondasRemaining === 0
+    progressLabel?.trim() ||
+    (ondasRemaining === 0
       ? '¡Ya puedes reclamar tu premio!'
       : ondasRemaining === 1
         ? 'Te falta 1 onda'
-        : `Te faltan ${ondasRemaining} ondas`;
+        : `Te faltan ${ondasRemaining} ondas`);
 
   return (
     <div
@@ -272,7 +279,9 @@ export function PassPreview({
           <p className="font-display text-lg font-bold leading-tight">
             {points} de {maxStamps} ondas
           </p>
-          <p className="mt-0.5 text-xs opacity-90">{ondasRemainingText}</p>
+          <p className="mt-0.5 max-w-[11rem] truncate text-xs opacity-90">
+            {ondasRemainingText}
+          </p>
         </div>
       </div>
 
@@ -284,6 +293,16 @@ export function PassPreview({
           foregroundColor={foregroundColor}
           size={compact ? 'sm' : 'md'}
         />
+        {deadlineLabel ? (
+          <p
+            className={`mt-2 text-center font-semibold tracking-[0.04em] ${
+              compact ? 'text-[10px]' : 'text-xs'
+            }`}
+            style={{ color: labelColor || foregroundColor }}
+          >
+            {deadlineLabel}
+          </p>
+        ) : null}
       </div>
 
       <div

@@ -1,5 +1,5 @@
 import { Injectable, MessageEvent } from '@nestjs/common';
-import { Subject } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 
 @Injectable()
 export class PendingRequestsSseService {
@@ -14,8 +14,17 @@ export class PendingRequestsSseService {
     return subject;
   }
 
-  stream(storeId: string) {
-    return this.bus(storeId).asObservable();
+  stream(storeId: string): Observable<MessageEvent> {
+    return new Observable((subscriber) => {
+      const busSub = this.bus(storeId).subscribe(subscriber);
+      const ping = setInterval(() => {
+        subscriber.next({ data: { kind: 'ping' } } as MessageEvent);
+      }, 25000);
+      return () => {
+        clearInterval(ping);
+        busSub.unsubscribe();
+      };
+    });
   }
 
   emit(storeId: string, data: unknown) {

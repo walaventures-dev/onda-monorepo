@@ -1209,10 +1209,6 @@ button.onda-gradient:focus-visible:not(:disabled) {
   color: #fff !important;
 }
 
-.onda-merchant-caja-layout .onda-shell-main {
-  padding-right: 18rem;
-}
-
 .onda-caja-dock {
   position: fixed;
   top: 0;
@@ -1227,12 +1223,49 @@ button.onda-gradient:focus-visible:not(:disabled) {
   border-left: 1px solid var(--onda-border);
   background: var(--onda-card);
   padding: 1rem 0.85rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 16px 40px rgba(26, 27, 46, 0.12);
+  transform: translateX(100%);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.22s ease, visibility 0.22s ease;
+}
+
+.onda-caja-dock.is-open {
+  transform: none;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.onda-caja-dock-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .onda-caja-dock-title {
   font-family: "Sora", "Manrope", system-ui, sans-serif;
   font-size: 0.95rem;
   font-weight: 700;
+}
+
+.onda-caja-dock-close {
+  display: inline-flex;
+  height: 1.85rem;
+  width: 1.85rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--onda-muted);
+  cursor: pointer;
+}
+
+.onda-caja-dock-close:hover {
+  background: var(--onda-bg);
+  color: var(--onda-ink);
 }
 
 .onda-caja-dock-list {
@@ -1251,17 +1284,55 @@ button.onda-gradient:focus-visible:not(:disabled) {
   color: var(--onda-muted);
 }
 
-@media (max-width: 767px) {
-  .onda-merchant-caja-layout .onda-shell-main {
-    padding-right: 0;
-  }
+.onda-caja-dock-toggle {
+  position: fixed;
+  top: 4.85rem;
+  right: 0.75rem;
+  z-index: 36;
+  display: inline-flex;
+  height: 2.5rem;
+  min-width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--onda-border);
+  border-radius: 999px;
+  background: var(--onda-card);
+  color: var(--onda-ink);
+  box-shadow: 0 8px 24px rgba(26, 27, 46, 0.08);
+  cursor: pointer;
+}
 
+.onda-caja-dock-toggle:hover {
+  background: var(--onda-bg);
+}
+
+.onda-caja-dock-toggle.is-open {
+  right: 18.75rem;
+}
+
+.onda-caja-dock-badge {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.28rem;
+  border-radius: 999px;
+  background: var(--onda-sky);
+  color: var(--onda-ink);
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1.15rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
   .onda-caja-dock {
     width: min(20rem, 100%);
-    box-shadow: 0 10px 30px rgba(26, 27, 46, 0.12);
   }
 
-  .onda-caja-dock.is-empty {
+  .onda-caja-dock-toggle.is-open {
     display: none;
   }
 }

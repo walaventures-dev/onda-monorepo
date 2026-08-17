@@ -11,6 +11,7 @@ import {
   toast,
   useOndaDialogs,
 } from "@onda/shared-ui";
+import { cartillaDeadlineLabel } from "@onda/shared-utils";
 import { PassDesigner } from "./PassDesigner";
 import { CreatePromo } from "./CreatePromo";
 
@@ -389,14 +390,15 @@ export function CartillaEditor({
                   />
                 </div>
                 <p className="text-xs text-[var(--onda-muted)]">
-                  En esas fechas reemplaza a la cartilla base. No puede
-                  cruzarse con otra ocasional.
+                  En esas fechas reemplaza a la cartilla base. Hasta el día de
+                  fin se puede acumular y redimir. No puede cruzarse con otra
+                  ocasional.
                 </p>
               </div>
             ) : (
               <p className="text-xs text-[var(--onda-muted)]">
-                Plantilla base: sin fechas. Está vigente salvo que haya una
-                ocasional activa. No pueden coincidir dos campañas.
+                Plantilla base: sin fecha límite. Está vigente salvo que una
+                ocasional cubra el día de hoy.
               </p>
             )}
 
@@ -631,6 +633,10 @@ export function CartillaEditor({
           lockCycle
           readOnly={locked}
           requireLogo={embedded}
+          deadlineLabel={cartillaDeadlineLabel(
+            isDefault ? null : endsAt || null,
+            isDefault,
+          )}
           saveLabel="Guardar diseño"
           onSubmit={(e) => {
             e.preventDefault();
