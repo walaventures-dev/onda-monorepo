@@ -9,6 +9,10 @@ export function setApiAuthTokenGetter(
   authTokenGetter = getter;
 }
 
+export async function getApiAuthToken(): Promise<string | null> {
+  return authTokenGetter ? authTokenGetter() : null;
+}
+
 /**
  * En el navegador siempre pega al mismo origen que sirvió la PWA; next.config.js
  * reescribe /api/* hacia el backend en :3333 del lado del servidor. Esto evita

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { api } from '@onda/shared-ui';
 import type { CustomerSession } from '../../../lib/session';
 
@@ -13,6 +14,7 @@ export type PendingRequestDto = {
   devCode?: string;
   type?: 'ACCUMULATE' | 'CLAIM';
   promotionTitle?: string;
+  serialNumber?: string;
 };
 
 export function PendingRequestWait({
@@ -20,6 +22,7 @@ export function PendingRequestWait({
   passId,
   session,
   storeName,
+  serialNumber,
   onResolved,
   onCancel,
 }: {
@@ -27,16 +30,42 @@ export function PendingRequestWait({
   passId: string;
   session: CustomerSession;
   storeName: string;
+  serialNumber?: string;
   onResolved: (status: 'CONFIRMED' | 'REJECTED' | 'EXPIRED') => void;
   onCancel?: () => void;
 }) {
   const [secondsLeft, setSecondsLeft] = useState(() =>
     Math.max(0, Math.round((new Date(request.expiresAt).getTime() - Date.now()) / 1000))
   );
-  // Duración total capturada una sola vez al montar, solo para dibujar el anillo de progreso.
   const [totalSeconds] = useState(() =>
     Math.max(1, Math.round((new Date(request.expiresAt).getTime() - Date.now()) / 1000))
   );
+  const [qrUrl, setQrUrl] = useState('');
+
+  const barcode = request.serialNumber || serialNumber || '';
+  const isClaim = request.type === 'CLAIM';
+
+  useEffect(() => {
+    if (!barcode || isClaim) {
+      setQrUrl('');
+      return;
+    }
+    let cancelled = false;
+    QRCode.toDataURL(barcode, {
+      margin: 1,
+      width: 220,
+      color: { dark: '#1A1B2E', light: '#FFFFFF' },
+    })
+      .then((url) => {
+        if (!cancelled) setQrUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setQrUrl('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [barcode, isClaim]);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,8 +73,6 @@ export function PendingRequestWait({
     const poll = setInterval(async () => {
       if (cancelled) return;
       try {
-        // /mine devuelve la solicitud más reciente sin filtrar por status, así el
-        // front puede distinguir CONFIRMED de REJECTED una vez deja de estar PENDING.
         const current = await api<PendingRequestDto | null>(
           `/pending-requests/mine?passId=${passId}`,
           { headers: { Authorization: `Bearer ${session.token}` } }
@@ -82,7 +109,6 @@ export function PendingRequestWait({
   const ringRadius = 34;
   const ringCircumference = 2 * Math.PI * ringRadius;
   const ringOffset = ringCircumference * (1 - secondsLeft / totalSeconds);
-  const isClaim = request.type === 'CLAIM';
   const eyebrowColor = isClaim ? 'rgba(26,27,46,0.65)' : 'rgba(255,255,255,0.85)';
   const subtextColor = isClaim ? 'var(--onda-muted)' : 'rgba(255,255,255,0.7)';
 
@@ -100,7 +126,7 @@ export function PendingRequestWait({
         </div>
       </div>
 
-      <div className="mt-16">
+      <div className="mt-10">
         <p className="onda-pwa-label" style={{ color: eyebrowColor }}>
           Muéstrale esto a caja
         </p>
@@ -127,18 +153,27 @@ export function PendingRequestWait({
             ? request.promotionTitle
               ? `${request.promotionTitle} — la persona en caja lo confirmará.`
               : 'La persona en caja lo confirmará.'
-            : 'La persona en caja confirmará tu compra.'}
+            : 'Dile el código a caja o muestra el QR.'}
         </p>
       </div>
 
-      <div className="onda-card mt-7 flex flex-col items-center gap-6 px-5 py-8 text-center">
+      <div className="onda-card mt-7 flex flex-col items-center gap-5 px-5 py-7 text-center">
         <p className="onda-pwa-label">Código de confirmación</p>
         <p className="font-display flex gap-3 text-4xl font-bold tracking-[0.05em] text-[var(--onda-violet)] sm:gap-4 sm:text-5xl">
           {code.split('').map((digit, i) => (
             <span key={i}>{digit}</span>
           ))}
         </p>
-        <div className="relative flex h-28 w-28 items-center justify-center">
+        {!isClaim && qrUrl ? (
+          <img
+            src={qrUrl}
+            alt="Código QR de tu pase"
+            width={180}
+            height={180}
+            className="h-[11.25rem] w-[11.25rem] rounded-xl"
+          />
+        ) : null}
+        <div className="relative flex h-24 w-24 items-center justify-center">
           <svg className="absolute inset-0 -rotate-90" viewBox="0 0 80 80">
             <circle
               cx="40"

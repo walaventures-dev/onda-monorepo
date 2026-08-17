@@ -20,18 +20,41 @@ import { CustomerAuthService } from './customer-auth.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
 import { assertCanAccumulate } from './plan-quota';
 import { CartillaService } from './cartilla.service';
+import { AccumulateService } from './accumulate.service';
+import { StoreAccessService } from './store-access.service';
 
 const CODE_TTL_MS = 60 * 1000;
-
-function randomCode(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
 
 function bearerToken(header?: string): string {
   if (!header?.startsWith('Bearer ')) {
     throw new ForbiddenException('Falta token de sesión');
   }
   return header.slice('Bearer '.length);
+}
+
+async function uniqueTwoDigitCode(
+  prisma: PrismaService,
+  storeId: string
+): Promise<string> {
+  const taken = new Set(
+    (
+      await prisma.pendingRequest.findMany({
+        where: {
+          storeId,
+          status: 'PENDING',
+          expiresAt: { gt: new Date() },
+        },
+        select: { code: true },
+      })
+    ).map((row) => row.code)
+  );
+  for (let i = 0; i < 80; i++) {
+    const code = String(Math.floor(Math.random() * 100)).padStart(2, '0');
+    if (!taken.has(code)) return code;
+  }
+  throw new BadRequestException(
+    'Demasiadas solicitudes pendientes, espera un momento'
+  );
 }
 
 @Controller('pending-requests')
@@ -42,22 +65,34 @@ export class PendingRequestsController {
     @Inject(WalletService) private wallet: WalletService,
     @Inject(CustomerAuthService) private auth: CustomerAuthService,
     @Inject(PendingRequestsSseService) private sse: PendingRequestsSseService,
-    @Inject(CartillaService) private cartillas: CartillaService
+    @Inject(CartillaService) private cartillas: CartillaService,
+    @Inject(AccumulateService) private accumulate: AccumulateService,
+    @Inject(StoreAccessService) private access: StoreAccessService
   ) {}
 
   @Sse('stream')
   async stream(
-    @Query('storeId') storeId: string
+    @Headers('authorization') authHeader: string | undefined,
+    @Query('storeId') storeId: string,
+    @Query('token') token?: string
   ): Promise<Observable<MessageEvent>> {
-    await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
+    await this.access.requireStore(storeId, authHeader, token);
     return this.sse.stream(storeId);
   }
 
   @Get('pending')
-  async listPending(@Query('storeId') storeId: string) {
-    await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
+  async listPending(
+    @Headers('authorization') authHeader: string | undefined,
+    @Query('storeId') storeId: string,
+    @Query('token') token?: string
+  ) {
+    await this.access.requireStore(storeId, authHeader, token);
     return this.prisma.pendingRequest.findMany({
-      where: { storeId, status: 'PENDING' },
+      where: {
+        storeId,
+        status: 'PENDING',
+        expiresAt: { gt: new Date() },
+      },
       include: { pass: { include: { user: true } }, promotion: true },
       orderBy: { createdAt: 'asc' },
     });
@@ -69,32 +104,43 @@ export class PendingRequestsController {
     @Query('passId') passId: string
   ) {
     const user = await this.auth.requireSession(bearerToken(authHeader));
-    const pass = await this.prisma.pass.findUniqueOrThrow({ where: { id: passId } });
-    if (pass.userId !== user.id) throw new ForbiddenException('Este pase no es tuyo');
+    const pass = await this.prisma.pass.findUniqueOrThrow({
+      where: { id: passId },
+    });
+    if (pass.userId !== user.id) {
+      throw new ForbiddenException('Este pase no es tuyo');
+    }
 
     // Sin filtro de status: el front necesita ver el cambio PENDING -> CONFIRMED/REJECTED
     // de la misma fila para saber cómo se resolvió, no solo que ya no está pendiente.
-    return this.prisma.pendingRequest.findFirst({
+    const row = await this.prisma.pendingRequest.findFirst({
       where: { passId },
       include: { promotion: true },
       orderBy: { createdAt: 'desc' },
     });
+    if (!row) return null;
+    return { ...row, serialNumber: pass.serialNumber };
   }
 
   @Post()
   async create(
     @Headers('authorization') authHeader: string,
-    @Body() body: { passId: string; type: 'ACCUMULATE' | 'CLAIM'; promotionId?: string }
+    @Body()
+    body: { passId: string; type: 'ACCUMULATE' | 'CLAIM'; promotionId?: string }
   ) {
     const user = await this.auth.requireSession(bearerToken(authHeader));
     const pass = await this.prisma.pass.findUniqueOrThrow({
       where: { id: body.passId },
       include: { user: true },
     });
-    if (pass.userId !== user.id) throw new ForbiddenException('Este pase no es tuyo');
+    if (pass.userId !== user.id) {
+      throw new ForbiddenException('Este pase no es tuyo');
+    }
     if (!pass.storeId) throw new BadRequestException('Pase sin negocio asociado');
     const storeId = pass.storeId;
-    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: storeId },
+    });
 
     if (body.type === 'ACCUMULATE') {
       await assertCanAccumulate(this.prisma, storeId, 1);
@@ -108,7 +154,9 @@ export class PendingRequestsController {
         },
       });
       if (assignment) {
-        throw new BadRequestException('Ya alcanzaste el máximo de sellos de este ciclo, reclama tu premio primero');
+        throw new BadRequestException(
+          'Ya alcanzaste el máximo de sellos de este ciclo, reclama tu premio primero'
+        );
       }
     }
 
@@ -125,7 +173,11 @@ export class PendingRequestsController {
     if (existing) {
       if (existing.expiresAt > new Date()) {
         const { promotion: existingPromotion, ...existingRest } = existing;
-        return { ...existingRest, promotionTitle: existingPromotion?.title };
+        return {
+          ...existingRest,
+          promotionTitle: existingPromotion?.title,
+          serialNumber: pass.serialNumber,
+        };
       }
       await this.prisma.pendingRequest.update({
         where: { id: existing.id },
@@ -142,8 +194,13 @@ export class PendingRequestsController {
       maxRedemptions: number | null;
     } | null = null;
     if (body.type === 'CLAIM') {
-      if (!body.promotionId) throw new BadRequestException('Falta la promoción a reclamar');
-      const checked = await this.cartillas.assertCanRedeem(pass.id, body.promotionId);
+      if (!body.promotionId) {
+        throw new BadRequestException('Falta la promoción a reclamar');
+      }
+      const checked = await this.cartillas.assertCanRedeem(
+        pass.id,
+        body.promotionId
+      );
       promotion = checked.promo;
       const alreadyClaimed = await this.prisma.transaction.findFirst({
         where: {
@@ -158,7 +215,7 @@ export class PendingRequestsController {
       }
     }
 
-    const code = randomCode();
+    const code = await uniqueTwoDigitCode(this.prisma, storeId);
     const expiresAt = new Date(Date.now() + CODE_TTL_MS);
     const created = await this.prisma.pendingRequest.create({
       data: {
@@ -171,7 +228,8 @@ export class PendingRequestsController {
       },
     });
 
-    const devMode = process.env.NODE_ENV !== 'production' && !process.env.KAPSO_API_KEY;
+    const devMode =
+      process.env.NODE_ENV !== 'production' && !process.env.KAPSO_API_KEY;
     if (!devMode) {
       await this.whatsapp.enqueue({
         to: pass.user.phone,
@@ -182,6 +240,7 @@ export class PendingRequestsController {
     }
 
     this.sse.emit(storeId, {
+      kind: 'created',
       id: created.id,
       type: created.type,
       code: created.code,
@@ -191,14 +250,25 @@ export class PendingRequestsController {
       expiresAt: created.expiresAt,
     });
 
-    const response = { ...created, promotionTitle: promotion?.title };
+    const response = {
+      ...created,
+      promotionTitle: promotion?.title,
+      serialNumber: pass.serialNumber,
+    };
     return devMode ? { ...response, devCode: code } : response;
   }
 
   @Post(':id/confirm')
-  async confirm(@Param('id') id: string) {
-    const pending = await this.prisma.pendingRequest.findUniqueOrThrow({ where: { id } });
-    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: pending.storeId } });
+  async confirm(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader: string | undefined,
+    @Query('token') token?: string
+  ) {
+    const pending = await this.prisma.pendingRequest.findUniqueOrThrow({
+      where: { id },
+    });
+    await this.access.requireStore(pending.storeId, authHeader, token);
+
     if (pending.status !== 'PENDING') {
       throw new BadRequestException('Esta solicitud ya no está pendiente');
     }
@@ -207,88 +277,76 @@ export class PendingRequestsController {
         where: { id },
         data: { status: 'REJECTED', resolvedAt: new Date() },
       });
-      throw new BadRequestException('Código expirado, el cliente debe pedir uno nuevo');
+      throw new BadRequestException(
+        'Código expirado, el cliente debe pedir uno nuevo'
+      );
     }
 
     if (pending.type === 'ACCUMULATE') {
-      await this.prisma.$transaction(async (tx) => {
-        const allowed = await assertCanAccumulate(tx, pending.storeId, 1);
-        const claimed = await tx.pendingRequest.updateMany({
-          where: { id, status: 'PENDING' },
-          data: { status: 'CONFIRMED', resolvedAt: new Date() },
-        });
-        if (claimed.count === 0) {
-          throw new BadRequestException('Esta solicitud ya no está pendiente');
-        }
-        const current = await tx.pass.findUniqueOrThrow({ where: { id: pending.passId } });
-        const delta = Math.max(0, Math.min(allowed, store.maxStamps - current.points));
-        await tx.pass.update({
-          where: { id: pending.passId },
-          data: { points: { increment: delta } },
-        });
-        await tx.transaction.create({
-          data: {
-            passId: pending.passId,
-            storeId: pending.storeId,
-            type: 'ACCUMULATE',
-            points: delta,
-            cartillaId: current.cartillaId,
-          },
-        });
+      await this.accumulate.accumulate({
+        storeId: pending.storeId,
+        passId: pending.passId,
+        pendingRequestId: pending.id,
       });
-    } else {
-      if (!pending.promotionId) {
-        throw new BadRequestException('Solicitud de reclamo sin promoción asociada');
-      }
-      const promotion = await this.prisma.promotion.findUniqueOrThrow({
-        where: { id: pending.promotionId },
-      });
-      const { assignment } = await this.cartillas.assertCanRedeem(
-        pending.passId,
-        promotion.id
-      );
-      const need = assignment.pointsRequired;
-      const isFinalReward = need === store.maxStamps;
-
-      await this.prisma.$transaction(async (tx) => {
-        const claimed = await tx.pendingRequest.updateMany({
-          where: { id, status: 'PENDING' },
-          data: { status: 'CONFIRMED', resolvedAt: new Date() },
-        });
-        if (claimed.count === 0) {
-          throw new BadRequestException('Esta solicitud ya no está pendiente');
-        }
-        const currentPass = await tx.pass.findUniqueOrThrow({ where: { id: pending.passId } });
-        if (currentPass.points < need) {
-          throw new BadRequestException('Aún no alcanzas este premio');
-        }
-        const alreadyClaimed = await tx.transaction.findFirst({
-          where: {
-            passId: pending.passId,
-            promotionId: promotion.id,
-            type: 'REDEEM',
-            createdAt: { gte: currentPass.cycleStartedAt },
-          },
-        });
-        if (alreadyClaimed) {
-          throw new BadRequestException('Ya reclamaste este premio en este ciclo');
-        }
-        await tx.transaction.create({
-          data: {
-            passId: pending.passId,
-            storeId: pending.storeId,
-            type: 'REDEEM',
-            points: need,
-            promotionId: promotion.id,
-            cartillaId: currentPass.cartillaId,
-          },
-        });
-        await tx.pass.update({
-          where: { id: pending.passId },
-          data: isFinalReward ? { points: 0, cycleStartedAt: new Date() } : {},
-        });
-      });
+      return { ok: true as const };
     }
+
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: pending.storeId },
+    });
+    if (!pending.promotionId) {
+      throw new BadRequestException('Solicitud de reclamo sin promoción asociada');
+    }
+    const promotion = await this.prisma.promotion.findUniqueOrThrow({
+      where: { id: pending.promotionId },
+    });
+    const { assignment } = await this.cartillas.assertCanRedeem(
+      pending.passId,
+      promotion.id
+    );
+    const need = assignment.pointsRequired;
+    const isFinalReward = need === store.maxStamps;
+
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.pendingRequest.updateMany({
+        where: { id, status: 'PENDING' },
+        data: { status: 'CONFIRMED', resolvedAt: new Date() },
+      });
+      if (claimed.count === 0) {
+        throw new BadRequestException('Esta solicitud ya no está pendiente');
+      }
+      const currentPass = await tx.pass.findUniqueOrThrow({
+        where: { id: pending.passId },
+      });
+      if (currentPass.points < need) {
+        throw new BadRequestException('Aún no alcanzas este premio');
+      }
+      const alreadyClaimed = await tx.transaction.findFirst({
+        where: {
+          passId: pending.passId,
+          promotionId: promotion.id,
+          type: 'REDEEM',
+          createdAt: { gte: currentPass.cycleStartedAt },
+        },
+      });
+      if (alreadyClaimed) {
+        throw new BadRequestException('Ya reclamaste este premio en este ciclo');
+      }
+      await tx.transaction.create({
+        data: {
+          passId: pending.passId,
+          storeId: pending.storeId,
+          type: 'REDEEM',
+          points: need,
+          promotionId: promotion.id,
+          cartillaId: currentPass.cartillaId,
+        },
+      });
+      await tx.pass.update({
+        where: { id: pending.passId },
+        data: isFinalReward ? { points: 0, cycleStartedAt: new Date() } : {},
+      });
+    });
 
     const updatedPass = await this.prisma.pass.findUniqueOrThrow({
       where: { id: pending.passId },
@@ -297,29 +355,20 @@ export class PendingRequestsController {
     if (updatedPass.walletRef) {
       await this.wallet.updatePoints(updatedPass.walletRef, updatedPass.points);
     }
-    if (pending.type === 'ACCUMULATE') {
-      await this.whatsapp.enqueue({
-        to: updatedPass.user.phone,
-        template: 'onda_puntos',
-        variables: {
-          name: updatedPass.user.name,
-          points: String(updatedPass.points),
-          store: store.name,
-        },
-        storeId: pending.storeId,
-      });
-      await this.prisma.store.update({
-        where: { id: store.id },
-        data: { whatsappUsed: { increment: 1 } },
-      });
-    }
-
+    this.sse.emit(pending.storeId, { kind: 'resolved', ids: [pending.id] });
     return { ok: true as const };
   }
 
   @Post(':id/reject')
-  async reject(@Param('id') id: string) {
-    const pending = await this.prisma.pendingRequest.findUniqueOrThrow({ where: { id } });
+  async reject(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader: string | undefined,
+    @Query('token') token?: string
+  ) {
+    const pending = await this.prisma.pendingRequest.findUniqueOrThrow({
+      where: { id },
+    });
+    await this.access.requireStore(pending.storeId, authHeader, token);
     if (pending.status !== 'PENDING') {
       throw new BadRequestException('Esta solicitud ya no está pendiente');
     }
@@ -330,6 +379,7 @@ export class PendingRequestsController {
     if (updateResult.count === 0) {
       throw new BadRequestException('Esta solicitud ya no está pendiente');
     }
+    this.sse.emit(pending.storeId, { kind: 'resolved', ids: [pending.id] });
     return { ok: true as const };
   }
 }

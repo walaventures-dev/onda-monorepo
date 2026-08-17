@@ -48,6 +48,8 @@ import { UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/csr/Use
 import { ShareNetworkIcon as ShareNetwork } from '@phosphor-icons/react/dist/csr/ShareNetwork';
 import { SignOutIcon as SignOut } from '@phosphor-icons/react/dist/csr/SignOut';
 import { MegaphoneIcon as Megaphone } from '@phosphor-icons/react/dist/csr/Megaphone';
+import { CameraIcon as Camera } from '@phosphor-icons/react/dist/csr/Camera';
+import { QrCodeIcon as QrCode } from '@phosphor-icons/react/dist/csr/QrCode';
 
 const SIZE = 16;
 const CLASS = 'h-3 w-3 shrink-0';
@@ -101,6 +103,8 @@ export const OndaIcons = {
   share: <ShareNetwork size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   logout: <SignOut size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   megaphone: <Megaphone size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
+  camera: <Camera size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
+  qr: <QrCode size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
 };
 
 export function OndaMark({ className = 'h-3 w-3 shrink-0' }: { className?: string }) {

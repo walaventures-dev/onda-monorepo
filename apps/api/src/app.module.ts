@@ -29,6 +29,9 @@ import { WhatsappService } from './whatsapp.service';
 import { CustomerAuthService } from './customer-auth.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
 import { PendingRequestsController } from './pending-requests.controller';
+import { CajaController } from './caja.controller';
+import { AccumulateService } from './accumulate.service';
+import { StoreAccessService } from './store-access.service';
 import { DemoOndaSpaController } from './demo-onda-spa.controller';
 import { CampaignsController } from './campaigns.controller';
 import { FirebaseAuthService } from './firebase-auth.service';
@@ -69,6 +72,7 @@ import { CampaignsService } from './campaigns.service';
     WebhooksController,
     UploadsController,
     PendingRequestsController,
+    CajaController,
     ReferralsController,
     DemoOndaSpaController,
     CampaignsController,
@@ -80,6 +84,8 @@ import { CampaignsService } from './campaigns.service';
     WhatsappService,
     CustomerAuthService,
     PendingRequestsSseService,
+    AccumulateService,
+    StoreAccessService,
     FirebaseAuthService,
     JobsService,
     BrevoService,

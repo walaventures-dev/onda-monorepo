@@ -1,0 +1,23 @@
+{
+  "name": "pwa-caja",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/pwa-caja",
+  "projectType": "application",
+  "tags": ["scope:merchant", "type:app"],
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "PORT=4204 pnpm exec next dev apps/pwa-caja -p 4204",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec next build apps/pwa-caja",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

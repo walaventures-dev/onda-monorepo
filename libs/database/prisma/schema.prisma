@@ -220,6 +220,7 @@ model Store {
   eventMemberships  StoreEventMembership[]
   passDesign        PassDesign?
   pendingRequests   PendingRequest[]
+  cajaLinks         CajaLink[]
   campaigns         Campaign[]
   campaignPurchases CampaignPurchase[]
   campaignCredits   Int                    @default(0)
@@ -499,6 +500,18 @@ model OtpCode {
   consumedAt DateTime?
 
   @@index([phone])
+}
+
+model CajaLink {
+  id         String    @id @default(uuid())
+  token      String    @unique
+  storeId    String
+  store      Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+
+  @@index([storeId, revokedAt])
 }
 
 model PendingRequest {

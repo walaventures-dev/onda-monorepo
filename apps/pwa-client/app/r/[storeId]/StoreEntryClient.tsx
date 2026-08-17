@@ -587,6 +587,7 @@ export default function StoreEntryPage() {
             passId={pass.id}
             session={session}
             storeName={storeName}
+            serialNumber={pass.serialNumber}
             onResolved={onPendingResolved}
             onCancel={() => setStep("home")}
           />

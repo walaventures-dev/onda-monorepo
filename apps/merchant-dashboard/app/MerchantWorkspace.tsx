@@ -59,7 +59,7 @@ import { CartillaEditor } from "./CartillaEditor";
 import { CartillaCalendar } from "./CartillaCalendar";
 import { CustomerDetail } from "./CustomerDetail";
 import { CompareStores, type CompareResponse } from "./CompareStores";
-import { PendingRequestsPanel } from "./PendingRequestsPanel";
+import { PendingRequestsPanel, CajaOpenButton } from "./PendingRequestsPanel";
 import { ReferralsPanel } from "./ReferralsPanel";
 import { CampaignsHome } from "./CampaignsHome";
 import { CampaignWizard } from "./CampaignWizard";
@@ -1509,7 +1509,7 @@ export function MerchantWorkspace() {
   ];
 
   return (
-    <>
+    <div className="onda-merchant-caja-layout">
       <AppShell
         title={storeName}
         nav={nav}
@@ -1543,6 +1543,7 @@ export function MerchantWorkspace() {
                 Compartir
               </button>
             ) : null}
+            <CajaOpenButton storeId={storeId} />
             {REGISTER_STORE_ENABLED ? (
               <Link
                 href="/onboarding"
@@ -2469,6 +2470,6 @@ export function MerchantWorkspace() {
       </AppShell>
       <PendingRequestsPanel storeId={storeId} />
       {dialogs}
-    </>
+    </div>
   );
 }

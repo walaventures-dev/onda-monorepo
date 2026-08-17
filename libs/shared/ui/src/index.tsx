@@ -8,7 +8,7 @@ import { PunchCardGrid } from './PunchCardGrid';
 import { TxActivityRow, type TxActivityItem } from './TxActivity';
 
 export { Button, Card, Chip, Avatar, Badge, Spinner, Form, TextField, Input, TextArea, InputOTP, Table, ColorPicker, Tabs, toast, ToastProvider } from '@heroui/react';
-export { api, API_URL, getApiUrl, setApiAuthTokenGetter } from './api';
+export { api, API_URL, getApiUrl, setApiAuthTokenGetter, getApiAuthToken } from './api';
 export { HeatmapPoints } from './HeatmapPoints';
 export { PhoneInput } from './PhoneInput';
 export type { PhoneInputProps } from './PhoneInput';

@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "allowJs": true,
+    "noEmit": true,
+    "incremental": true,
+    "isolatedModules": true,
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@onda/shared-types": ["../../libs/shared/types/src/index.ts"],
+      "@onda/shared-ui": ["../../libs/shared/ui/src/index.tsx"],
+      "@onda/shared-utils": ["../../libs/shared/utils/src/index.ts"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts"],
+  "exclude": ["node_modules"]
+}

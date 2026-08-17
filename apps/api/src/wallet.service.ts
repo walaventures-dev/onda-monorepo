@@ -4,6 +4,7 @@ import {
   buildLoyaltyPassSpec,
   isStubWalletRef,
   storeLockScreenLocations,
+  withNotificationMessage,
   type IssuedPassLinks,
   type LoyaltyPassContext,
   type PassDesignInput,
@@ -88,11 +89,21 @@ export class WalletService {
 
   /**
    * Actualiza ondas en el pass instalado.
-   * Reconstruye el PassSpec completo desde DB (WalletWallet exige PUT con body entero).
+   * Un solo PUT: WalletWallet exige el body entero. Si hay `notifyMessage`,
+   * el mismo PUT dispara el banner (anchor de notificaciones) — no hace falta
+   * un notify() aparte.
    */
-  async updatePoints(walletRef: string, points: number) {
+  async updatePoints(
+    walletRef: string,
+    points: number,
+    notifyMessage?: string
+  ) {
     if (isStubWalletRef(walletRef)) {
-      this.logger.log(`Wallet stub update ${walletRef} -> ${points}`);
+      this.logger.log(
+        `Wallet stub update ${walletRef} -> ${points}${
+          notifyMessage ? ` notify=${notifyMessage}` : ''
+        }`
+      );
       return { ok: true as const, stub: true as const };
     }
 
@@ -105,7 +116,13 @@ export class WalletService {
     }
 
     try {
-      const result = await this.passes.updateLoyalty(walletRef, ctx);
+      const spec = await buildLoyaltyPassSpec(ctx, {
+        proFeatures: this.passes.raw.proFeatures,
+      });
+      const body = notifyMessage
+        ? withNotificationMessage(spec, notifyMessage)
+        : spec;
+      const result = await this.passes.updateWithSpec(walletRef, body);
       return { ok: true as const, result };
     } catch (err) {
       // Best-effort: no tumbar la transacción de puntos por un fallo de push.

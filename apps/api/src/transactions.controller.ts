@@ -1,65 +1,31 @@
-import { Inject, Body, Controller, Post } from '@nestjs/common';
+import { Inject, Body, Controller, Headers, Post } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
-import { WhatsappService } from './whatsapp.service';
-import { assertCanAccumulate } from './plan-quota';
 import { CartillaService } from './cartilla.service';
+import { AccumulateService } from './accumulate.service';
+import { StoreAccessService } from './store-access.service';
 
 @Controller('transactions')
 export class TransactionsController {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(WalletService) private wallet: WalletService,
-    @Inject(WhatsappService) private whatsapp: WhatsappService,
-    @Inject(CartillaService) private cartillas: CartillaService
+    @Inject(CartillaService) private cartillas: CartillaService,
+    @Inject(AccumulateService) private accumulate: AccumulateService,
+    @Inject(StoreAccessService) private access: StoreAccessService
   ) {}
 
   @Post('accumulate')
   async accumulate(
-    @Body() body: { passId: string; storeId: string; points?: number }
+    @Headers('authorization') authHeader: string | undefined,
+    @Body() body: { passId: string; storeId: string }
   ) {
-    const store = await this.prisma.store.findUniqueOrThrow({
-      where: { id: body.storeId },
+    await this.access.requireStore(body.storeId, authHeader);
+    const result = await this.accumulate.accumulate({
+      storeId: body.storeId,
+      passId: body.passId,
     });
-    const requestedPoints = body.points ?? 1;
-    const { pass, tx } = await this.prisma.$transaction(async (trx) => {
-      const allowed = await assertCanAccumulate(trx, store.id, requestedPoints);
-      const current = await trx.pass.findUniqueOrThrow({ where: { id: body.passId } });
-      const delta = Math.max(0, Math.min(allowed, store.maxStamps - current.points));
-      const updated = await trx.pass.update({
-        where: { id: body.passId },
-        data: { points: { increment: delta } },
-        include: { user: true },
-      });
-      const created = await trx.transaction.create({
-        data: {
-          passId: updated.id,
-          storeId: store.id,
-          type: 'ACCUMULATE',
-          points: delta,
-          cartillaId: current.cartillaId,
-        },
-      });
-      return { pass: updated, tx: created };
-    });
-    if (pass.walletRef) {
-      await this.wallet.updatePoints(pass.walletRef, pass.points);
-    }
-    await this.whatsapp.enqueue({
-      to: pass.user.phone,
-      template: 'onda_puntos',
-      variables: {
-        name: pass.user.name,
-        points: String(pass.points),
-        store: store.name,
-      },
-      storeId: store.id,
-    });
-    await this.prisma.store.update({
-      where: { id: store.id },
-      data: { whatsappUsed: { increment: 1 } },
-    });
-    return { transaction: tx, pass };
+    return { pass: result.pass, points: result.points, next: result.next };
   }
 
   @Post('redeem')
@@ -74,10 +40,8 @@ export class TransactionsController {
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: body.storeId },
     });
-    const { pass: currentPass, promo, assignment } = await this.cartillas.assertCanRedeem(
-      body.passId,
-      body.promotionId
-    );
+    const { pass: currentPass, promo, assignment } =
+      await this.cartillas.assertCanRedeem(body.passId, body.promotionId);
     const pass = await this.prisma.pass.update({
       where: { id: body.passId },
       data: { points: { decrement: assignment.pointsRequired } },
