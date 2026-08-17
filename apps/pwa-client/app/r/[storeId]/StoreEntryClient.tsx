@@ -557,15 +557,19 @@ export default function StoreEntryPage() {
                         </div>
                       </div>
                       {isAvailable ? (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          excludeFromTabOrder
-                          isDisabled={busy}
+                        <div
                           className="ml-auto shrink-0"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          Reclamar
-                        </Button>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            isDisabled={busy}
+                            onPress={() => startPendingRequest("CLAIM", p.id)}
+                          >
+                            Reclamar
+                          </Button>
+                        </div>
                       ) : null}
                       {isLocked ? (
                         <div className="ml-auto shrink-0 rounded-xl bg-white px-3 py-2 text-center shadow-sm">

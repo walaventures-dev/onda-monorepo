@@ -259,7 +259,15 @@ export class AccumulateService {
     );
 
     if (full.walletRef) {
-      await this.wallet.updatePoints(full.walletRef, full.points, message);
+      try {
+        await this.wallet.updatePoints(full.walletRef, full.points, message);
+      } catch (err) {
+        this.logger.warn(
+          `Wallet acumulación falló para ${full.id}: ${
+            err instanceof Error ? err.message : err
+          }`
+        );
+      }
     }
     try {
       await this.brevo.sendSms({ to: full.user.phone, message });

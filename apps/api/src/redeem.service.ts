@@ -163,10 +163,12 @@ export class RedeemService {
           ...(lastAccumulate ? { accumulateId: lastAccumulate.id } : {}),
         },
       });
-      await tx.pass.update({
-        where: { id: resolvedPassId },
-        data: isFinalReward ? { points: 0, cycleStartedAt: new Date() } : {},
-      });
+      if (isFinalReward) {
+        await tx.pass.update({
+          where: { id: resolvedPassId },
+          data: { points: 0, cycleStartedAt: new Date() },
+        });
+      }
       return { confirmedIds: pendings.map((p) => p.id) };
     });
 
@@ -181,7 +183,15 @@ export class RedeemService {
       );
 
     if (full.walletRef) {
-      await this.wallet.updatePoints(full.walletRef, full.points, message);
+      try {
+        await this.wallet.updatePoints(full.walletRef, full.points, message);
+      } catch (err) {
+        this.logger.warn(
+          `Wallet reclamo falló para ${full.id}: ${
+            err instanceof Error ? err.message : err
+          }`
+        );
+      }
     }
     try {
       await this.brevo.sendSms({ to: full.user.phone, message });
