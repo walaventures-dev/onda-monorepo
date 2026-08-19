@@ -182,7 +182,9 @@ export function PendingRequestsPanel({ storeId }: { storeId: string }) {
         body:
           action === 'confirm'
             ? JSON.stringify({
-                ...(Number.isFinite(precio) && precio > 0 ? { precio } : {}),
+                ...(Number.isFinite(precio) && precio > 0
+                  ? { paymentAmount: precio }
+                  : {}),
               })
             : undefined,
       });

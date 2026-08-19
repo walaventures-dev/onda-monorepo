@@ -14,13 +14,13 @@ export class TransactionsController {
   @Post('accumulate')
   async accumulate(
     @Headers('authorization') authHeader: string | undefined,
-    @Body() body: { passId: string; storeId: string; precio?: number }
+    @Body() body: { passId: string; storeId: string; paymentAmount?: number }
   ) {
     await this.access.requireStore(body.storeId, authHeader);
     const result = await this.accumulateSvc.accumulate({
       storeId: body.storeId,
       passId: body.passId,
-      precio: body.precio,
+      paymentAmount: body.paymentAmount,
     });
     return { pass: result.pass, points: result.points, next: result.next };
   }

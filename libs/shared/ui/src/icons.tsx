@@ -33,6 +33,7 @@ import { PlusCircleIcon as PlusCircle } from '@phosphor-icons/react/dist/csr/Plu
 import { GiftIcon as Gift } from '@phosphor-icons/react/dist/csr/Gift';
 import { FloppyDiskIcon as FloppyDisk } from '@phosphor-icons/react/dist/csr/FloppyDisk';
 import { EyeIcon as Eye } from '@phosphor-icons/react/dist/csr/Eye';
+import { EyeSlashIcon as EyeSlash } from '@phosphor-icons/react/dist/csr/EyeSlash';
 import { XIcon as X } from '@phosphor-icons/react/dist/csr/X';
 import { MapPinIcon as MapPin } from '@phosphor-icons/react/dist/csr/MapPin';
 import { TrendUpIcon as TrendUp } from '@phosphor-icons/react/dist/csr/TrendUp';
@@ -42,6 +43,8 @@ import { IdentificationCardIcon as IdentificationCard } from '@phosphor-icons/re
 import { SidebarSimpleIcon as SidebarSimple } from '@phosphor-icons/react/dist/csr/SidebarSimple';
 import { CaretLeftIcon as CaretLeft } from '@phosphor-icons/react/dist/csr/CaretLeft';
 import { CaretRightIcon as CaretRight } from '@phosphor-icons/react/dist/csr/CaretRight';
+import { CaretDownIcon as CaretDown } from '@phosphor-icons/react/dist/csr/CaretDown';
+import { FunnelSimpleIcon as FunnelSimple } from '@phosphor-icons/react/dist/csr/FunnelSimple';
 import { SnowflakeIcon as Snowflake } from '@phosphor-icons/react/dist/csr/Snowflake';
 import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/CreditCard';
 import { UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
@@ -88,6 +91,7 @@ export const OndaIcons = {
   redeem: <Gift size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   save: <FloppyDisk size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   eye: <Eye size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
+  eyeOff: <EyeSlash size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   close: <X size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   near: <MapPin size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   upgrade: <TrendUp size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
@@ -97,6 +101,8 @@ export const OndaIcons = {
   panelLeft: <SidebarSimple size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   chevronLeft: <CaretLeft size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   chevronRight: <CaretRight size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
+  chevronDown: <CaretDown size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
+  filter: <FunnelSimple size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   snowflake: <Snowflake size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   wallet: <CreditCard size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   profile: <UserCircle size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,

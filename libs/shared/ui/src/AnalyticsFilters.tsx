@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { OndaSelect } from './OndaSelect';
 import { OndaDatePicker } from './OndaDatePicker';
 import { OndaIcons } from './icons';
+import { Collapsible } from './Collapsible';
 
 export type PromoTypeKey =
   | 'PERCENT_OFF'
@@ -113,6 +114,16 @@ export function formatPromoBenefit(p: {
       : '';
   return `${name}${pts}`;
 }
+
+/** Etiquetas largas para el resumen colapsado (las de DATE_PRESETS son abreviadas) */
+const PRESET_SUMMARY_LABEL: Record<DatePreset, string> = {
+  today: 'Hoy',
+  '7d': 'Últimos 7 días',
+  '14d': 'Últimos 14 días',
+  '30d': 'Últimos 30 días',
+  month: 'Este mes',
+  custom: 'Personalizado',
+};
 
 function formatRangeLabel(from: string, to: string) {
   const fmt = (s: string) => {
@@ -227,20 +238,56 @@ export type AnalyticsFilterExtraGroup = {
   id: string;
   label: string;
   children: React.ReactNode;
+  /** Valor legible que se muestra en el resumen cuando la barra está colapsada */
+  summary?: React.ReactNode;
+  /** Marca el resumen como filtro aplicado (no el valor por defecto) */
+  summaryActive?: boolean;
 };
+
+/** Píldora de solo lectura para el resumen colapsado */
+function SummaryPill({
+  icon,
+  active,
+  children,
+}: {
+  icon?: React.ReactNode;
+  active?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+        active
+          ? 'bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]'
+          : 'border border-[var(--onda-border)] text-[var(--onda-muted)]'
+      }`}
+    >
+      {icon}
+      {children}
+    </span>
+  );
+}
 
 export function AnalyticsFiltersBar({
   value,
   onChange,
   showPromoTypes = true,
   extraGroups,
+  defaultCollapsed = true,
+  headerActions,
 }: {
   value: AnalyticsFiltersValue;
   onChange: (next: AnalyticsFiltersValue) => void;
   showPromoTypes?: boolean;
   /** Dimensiones extra (Estado, Movimiento…) — columnas al lado de tipo promo */
   extraGroups?: AnalyticsFilterExtraGroup[];
+  defaultCollapsed?: boolean;
+  /** Controles que viven en la cabecera y siguen visibles con la barra colapsada */
+  headerActions?: React.ReactNode;
 }) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const panelId = useId();
+
   function setPreset(preset: DatePreset) {
     if (preset === 'custom') {
       onChange({ ...value, preset });
@@ -260,126 +307,219 @@ export function AnalyticsFiltersBar({
 
   const hasTypeFilter = value.promoTypes.length > 0;
   const showDimensions = showPromoTypes || (extraGroups && extraGroups.length > 0);
+  const summaryExtras = (extraGroups || []).filter((g) => g.summary != null);
+  const presetIcon = DATE_PRESETS.find((p) => p.id === value.preset)?.icon;
 
   return (
     <div className="sticky top-0 z-10 mb-5 overflow-x-auto rounded-xl border border-[var(--onda-border)] bg-[var(--onda-card)] shadow-[0_1px_2px_rgba(26,27,46,0.04)]">
-      {/* Periodo — primario */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-        <FilterGroup label="Periodo" className="min-w-0 flex-1 basis-full sm:basis-auto sm:flex-none">
-          <SegmentedControl
-            aria-label="Rango de fechas"
-            options={DATE_PRESETS.map((p) => ({
-              id: p.id,
-              label: p.label,
-              icon: p.icon,
-            }))}
-            value={value.preset}
-            onChange={setPreset}
-          />
-        </FilterGroup>
+      {/* Cabecera: toggle + resumen visual cuando está colapsada */}
+      <div className="flex items-center gap-2 px-4 py-2.5">
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          aria-expanded={!collapsed}
+          aria-controls={panelId}
+          className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
+        >
+          <span className="shrink-0 text-[var(--onda-muted)]">{OndaIcons.filter}</span>
 
-        <div className="hidden h-8 w-px bg-[var(--onda-border)] sm:block" aria-hidden />
-
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-[11px] font-medium text-[var(--onda-muted)]">Rango</span>
-          {value.preset === 'custom' ? (
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-              <OndaDatePicker
-                compact
-                aria-label="Desde"
-                value={value.from}
-                onChange={(from) => onChange({ ...value, from })}
-              />
-              <span className="text-xs text-[var(--onda-muted)]">→</span>
-              <OndaDatePicker
-                compact
-                aria-label="Hasta"
-                value={value.to}
-                onChange={(to) => onChange({ ...value, to })}
-              />
-            </div>
-          ) : (
-            <p className="text-sm font-medium text-[var(--onda-ink)]">
-              {formatRangeLabel(value.from, value.to)}
-              <span className="ml-2 text-xs font-normal text-[var(--onda-muted)]">
-                vs periodo anterior
+          {collapsed ? (
+            <span className="onda-fade-in flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+              <SummaryPill icon={presetIcon} active>
+                {PRESET_SUMMARY_LABEL[value.preset]}
+              </SummaryPill>
+              <span className="text-xs font-medium text-[var(--onda-ink)] tabular-nums">
+                {formatRangeLabel(value.from, value.to)}
               </span>
-            </p>
+
+              {showPromoTypes ? (
+                <>
+                  <span
+                    className="hidden h-3.5 w-px bg-[var(--onda-border)] sm:block"
+                    aria-hidden
+                  />
+                  {hasTypeFilter ? (
+                    value.promoTypes.map((t) => (
+                      <SummaryPill
+                        key={t}
+                        active
+                        icon={PROMO_TYPE_OPTIONS.find((o) => o.id === t)?.icon}
+                      >
+                        {promoTypeLabel(t)}
+                      </SummaryPill>
+                    ))
+                  ) : (
+                    <SummaryPill icon={OndaIcons.all}>Todos los tipos</SummaryPill>
+                  )}
+                </>
+              ) : null}
+
+              {summaryExtras.map((g) => (
+                <React.Fragment key={g.id}>
+                  <span
+                    className="hidden h-3.5 w-px bg-[var(--onda-border)] sm:block"
+                    aria-hidden
+                  />
+                  <SummaryPill active={g.summaryActive}>
+                    <span className="text-[var(--onda-muted)]">{g.label}:</span>
+                    {g.summary}
+                  </SummaryPill>
+                </React.Fragment>
+              ))}
+            </span>
+          ) : (
+            <span className="onda-fade-in flex-1 text-sm font-medium text-[var(--onda-ink)]">
+              Filtros
+            </span>
           )}
-        </div>
+
+          <span className="ml-auto flex shrink-0 items-center gap-1 pl-2 text-[11px] font-medium text-[var(--onda-muted)] transition group-hover:text-[var(--onda-ink)]">
+            {collapsed ? 'Editar' : 'Ocultar'}
+            <span
+              className={`inline-flex transition-transform duration-300 ease-out motion-reduce:transition-none ${
+                collapsed ? '' : 'rotate-180'
+              }`}
+              aria-hidden
+            >
+              {OndaIcons.chevronDown}
+            </span>
+          </span>
+        </button>
+
+        {headerActions ? (
+          <>
+            <span className="h-5 w-px shrink-0 bg-[var(--onda-border)]" aria-hidden />
+            <div className="flex shrink-0 items-center gap-1.5">{headerActions}</div>
+          </>
+        ) : null}
       </div>
 
-      {/* Dimensiones — secundarias */}
-      {showDimensions ? (
-        <div className="flex flex-wrap items-start gap-x-6 gap-y-3 border-t border-[var(--onda-border)] bg-[var(--onda-bg)]/50 px-4 py-3">
-          {showPromoTypes ? (
-            <FilterGroup label="Tipo de promo">
-              <FilterChip
-                selected={!hasTypeFilter}
-                muted={hasTypeFilter}
-                icon={OndaIcons.all}
-                onClick={() => onChange({ ...value, promoTypes: [] })}
-              >
-                Todos
-              </FilterChip>
-              {PROMO_TYPE_OPTIONS.map((t) => (
-                <FilterChip
-                  key={t.id}
-                  selected={value.promoTypes.includes(t.id)}
-                  icon={t.icon}
-                  onClick={() => toggleType(t.id)}
-                >
-                  {t.label}
-                </FilterChip>
-              ))}
+      <Collapsible open={!collapsed} id={panelId}>
+        <>
+          {/* Periodo — primario */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--onda-border)] px-4 py-3">
+            <FilterGroup
+              label="Periodo"
+              className="min-w-0 flex-1 basis-full sm:basis-auto sm:flex-none"
+            >
+              <SegmentedControl
+                aria-label="Rango de fechas"
+                options={DATE_PRESETS.map((p) => ({
+                  id: p.id,
+                  label: p.label,
+                  icon: p.icon,
+                }))}
+                value={value.preset}
+                onChange={setPreset}
+              />
             </FilterGroup>
+
+            <div className="hidden h-8 w-px bg-[var(--onda-border)] sm:block" aria-hidden />
+
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-[11px] font-medium text-[var(--onda-muted)]">
+                Rango
+              </span>
+              {value.preset === 'custom' ? (
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <OndaDatePicker
+                    compact
+                    aria-label="Desde"
+                    value={value.from}
+                    onChange={(from) => onChange({ ...value, from })}
+                  />
+                  <span className="text-xs text-[var(--onda-muted)]">→</span>
+                  <OndaDatePicker
+                    compact
+                    aria-label="Hasta"
+                    value={value.to}
+                    onChange={(to) => onChange({ ...value, to })}
+                  />
+                </div>
+              ) : (
+                <p className="text-sm font-medium text-[var(--onda-ink)]">
+                  {formatRangeLabel(value.from, value.to)}
+                  <span className="ml-2 text-xs font-normal text-[var(--onda-muted)]">
+                    vs periodo anterior
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Dimensiones — secundarias */}
+          {showDimensions ? (
+            <div className="flex flex-wrap items-start gap-x-6 gap-y-3 border-t border-[var(--onda-border)] bg-[var(--onda-bg)]/50 px-4 py-3">
+              {showPromoTypes ? (
+                <FilterGroup label="Tipo de promo">
+                  <FilterChip
+                    selected={!hasTypeFilter}
+                    muted={hasTypeFilter}
+                    icon={OndaIcons.all}
+                    onClick={() => onChange({ ...value, promoTypes: [] })}
+                  >
+                    Todos
+                  </FilterChip>
+                  {PROMO_TYPE_OPTIONS.map((t) => (
+                    <FilterChip
+                      key={t.id}
+                      selected={value.promoTypes.includes(t.id)}
+                      icon={t.icon}
+                      onClick={() => toggleType(t.id)}
+                    >
+                      {t.label}
+                    </FilterChip>
+                  ))}
+                </FilterGroup>
+              ) : null}
+
+              {extraGroups?.map((g, i) => (
+                <React.Fragment key={g.id}>
+                  {(showPromoTypes || i > 0) && (
+                    <div
+                      className="hidden h-10 w-px self-center bg-[var(--onda-border)] md:block"
+                      aria-hidden
+                    />
+                  )}
+                  <FilterGroup label={g.label}>{g.children}</FilterGroup>
+                </React.Fragment>
+              ))}
+            </div>
           ) : null}
 
-          {extraGroups?.map((g, i) => (
-            <React.Fragment key={g.id}>
-              {(showPromoTypes || i > 0) && (
-                <div
-                  className="hidden h-10 w-px self-center bg-[var(--onda-border)] md:block"
-                  aria-hidden
-                />
-              )}
-              <FilterGroup label={g.label}>{g.children}</FilterGroup>
-            </React.Fragment>
-          ))}
-        </div>
-      ) : null}
-
-      {/* Chips activos removibles */}
-      {hasTypeFilter ? (
-        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--onda-border)] px-4 py-2">
-          <span className="text-[11px] text-[var(--onda-muted)]">Activos</span>
-          {value.promoTypes.map((t) => {
-            const opt = PROMO_TYPE_OPTIONS.find((o) => o.id === t);
-            return (
+          {/* Chips activos removibles */}
+          {hasTypeFilter ? (
+            <div className="flex flex-wrap items-center gap-2 border-t border-[var(--onda-border)] px-4 py-2">
+              <span className="text-[11px] text-[var(--onda-muted)]">Activos</span>
+              {value.promoTypes.map((t) => {
+                const opt = PROMO_TYPE_OPTIONS.find((o) => o.id === t);
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-[var(--onda-violet-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--onda-violet)] hover:bg-[var(--onda-violet)]/15"
+                    onClick={() => toggleType(t)}
+                    aria-label={`Quitar filtro ${promoTypeLabel(t)}`}
+                  >
+                    {opt?.icon}
+                    {promoTypeLabel(t)}
+                    <span aria-hidden className="text-[10px] opacity-70">
+                      ×
+                    </span>
+                  </button>
+                );
+              })}
               <button
-                key={t}
                 type="button"
-                className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-[var(--onda-violet-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--onda-violet)] hover:bg-[var(--onda-violet)]/15"
-                onClick={() => toggleType(t)}
-                aria-label={`Quitar filtro ${promoTypeLabel(t)}`}
+                className="ml-auto cursor-pointer text-[11px] font-medium text-[var(--onda-muted)] hover:text-[var(--onda-ink)]"
+                onClick={() => onChange({ ...value, promoTypes: [] })}
               >
-                {opt?.icon}
-                {promoTypeLabel(t)}
-                <span aria-hidden className="text-[10px] opacity-70">
-                  ×
-                </span>
+                Limpiar
               </button>
-            );
-          })}
-          <button
-            type="button"
-            className="ml-auto cursor-pointer text-[11px] font-medium text-[var(--onda-muted)] hover:text-[var(--onda-ink)]"
-            onClick={() => onChange({ ...value, promoTypes: [] })}
-          >
-            Limpiar
-          </button>
-        </div>
-      ) : null}
+            </div>
+          ) : null}
+        </>
+      </Collapsible>
     </div>
   );
 }

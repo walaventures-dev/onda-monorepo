@@ -20,6 +20,7 @@ import {
   OndaSelect,
   useOndaDialogs,
   AnalyticsFiltersBar,
+  Collapsible,
   InsightsPanel,
   FilterChip,
   SegmentedControl,
@@ -768,6 +769,7 @@ export function MerchantWorkspace() {
     null,
   );
   const [promoView, setPromoView] = useState<"grid" | "list">("grid");
+  const [showPulse, setShowPulse] = useState(true);
   const [promoStatusFilter, setPromoStatusFilter] = useState<
     "all" | "active" | "inactive"
   >("active");
@@ -1658,6 +1660,17 @@ export function MerchantWorkspace() {
             value={filters}
             onChange={setFilters}
             showPromoTypes={!(selectedCustomerPassId || tab === "comparativa")}
+            headerActions={
+              tab === "resumen" ? (
+                <FilterChip
+                  selected={showPulse}
+                  icon={showPulse ? OndaIcons.eye : OndaIcons.eyeOff}
+                  onClick={() => setShowPulse((v) => !v)}
+                >
+                  Mensaje
+                </FilterChip>
+              ) : undefined
+            }
             extraGroups={
               selectedCustomerPassId ||
               tab === "comparativa" ||
@@ -1667,6 +1680,13 @@ export function MerchantWorkspace() {
                     {
                       id: "promo-status",
                       label: "Estado",
+                      summary:
+                        promoStatusFilter === "active"
+                          ? "Activas"
+                          : promoStatusFilter === "inactive"
+                            ? "Inactivas"
+                            : "Todas",
+                      summaryActive: promoStatusFilter !== "active",
                       children: (
                         <SegmentedControl
                           aria-label="Estado de promoción"
@@ -1699,26 +1719,30 @@ export function MerchantWorkspace() {
 
         {tab === "resumen" && (
           <div className="space-y-6">
-            <div
-              className={`rounded-2xl border px-5 py-4 ${
-                pulse.tone === "good"
-                  ? "border-[var(--onda-success)]/30 bg-[var(--onda-success)]/10"
-                  : pulse.tone === "ok"
-                    ? "border-[var(--onda-sky)]/30 bg-[var(--onda-sky-soft)]"
-                    : pulse.tone === "warn"
-                      ? "border-amber-400/40 bg-amber-50"
-                      : pulse.tone === "bad"
-                        ? "border-[var(--onda-danger)]/30 bg-[var(--onda-danger)]/8"
-                        : "border-[var(--onda-border)] bg-[var(--onda-card)]"
-              }`}
-            >
-              <p className="mt-1 font-display text-xl font-semibold text-[var(--onda-ink)]">
-                {pulse.title}
-              </p>
-              <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-[var(--onda-muted)]">
-                {pulse.line}
-              </p>
-            </div>
+            {/* space-y-6 pone el margen inferior en este hijo; al ocultarlo se
+                anula para que la separación la dé solo el mb-5 de los filtros */}
+            <Collapsible open={showPulse} className={showPulse ? "" : "mb-0"}>
+              <div
+                className={`rounded-2xl border px-5 py-4 ${
+                  pulse.tone === "good"
+                    ? "border-[var(--onda-success)]/30 bg-[var(--onda-success)]/10"
+                    : pulse.tone === "ok"
+                      ? "border-[var(--onda-sky)]/30 bg-[var(--onda-sky-soft)]"
+                      : pulse.tone === "warn"
+                        ? "border-amber-400/40 bg-amber-50"
+                        : pulse.tone === "bad"
+                          ? "border-[var(--onda-danger)]/30 bg-[var(--onda-danger)]/8"
+                          : "border-[var(--onda-border)] bg-[var(--onda-card)]"
+                }`}
+              >
+                <p className="mt-1 font-display text-xl font-semibold text-[var(--onda-ink)]">
+                  {pulse.title}
+                </p>
+                <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-[var(--onda-muted)]">
+                  {pulse.line}
+                </p>
+              </div>
+            </Collapsible>
 
             {!emptyRange ? (
               <div

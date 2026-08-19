@@ -31,6 +31,7 @@ export type {
 export { OndaColorPicker } from './OndaColorPicker';
 export type { OndaColorPickerProps } from './OndaColorPicker';
 export { useOndaDialogs } from './OndaDialogs';
+export { Collapsible } from './Collapsible';
 export {
   AnalyticsFiltersBar,
   InsightCard,

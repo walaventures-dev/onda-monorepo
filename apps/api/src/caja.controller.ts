@@ -82,7 +82,7 @@ export class CajaController {
   async scan(
     @Headers('authorization') authHeader: string | undefined,
     @Query('token') queryToken: string | undefined,
-    @Body() body: { serialNumber?: string; payload?: string; precio?: number }
+    @Body() body: { serialNumber?: string; payload?: string; paymentAmount?: number }
   ) {
     const token = queryToken || this.access.bearerToken(authHeader);
     if (!token) throw new UnauthorizedException('Falta el enlace de caja');
@@ -107,7 +107,7 @@ export class CajaController {
       throw new ForbiddenException('Este pase no es de esta sede');
     }
 
-    if (body.precio == null) {
+    if (body.paymentAmount == null) {
       return {
         kind: 'accumulate' as const,
         pass: {
@@ -120,7 +120,7 @@ export class CajaController {
     const result = await this.accumulate.accumulate({
       storeId: link.storeId,
       serialNumber: scanned.serialNumber,
-      precio: body.precio,
+      paymentAmount: body.paymentAmount,
     });
     return { kind: 'accumulated' as const, ...result };
   }

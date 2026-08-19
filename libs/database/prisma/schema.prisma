@@ -336,7 +336,7 @@ model Transaction {
   storeId     String
   type        TransactionType
   points      Int             @default(1)
-  precio      Int?
+  paymentAmount Int?
   accumulateId String?
   promotionId String?
   cartillaId  String?

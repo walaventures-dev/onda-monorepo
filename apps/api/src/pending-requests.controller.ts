@@ -296,7 +296,7 @@ export class PendingRequestsController {
     @Param('id') id: string,
     @Headers('authorization') authHeader: string | undefined,
     @Query('token') token?: string,
-    @Body() body?: { precio?: number }
+    @Body() body?: { paymentAmount?: number }
   ) {
     const pending = await this.prisma.pendingRequest.findUniqueOrThrow({
       where: { id },
@@ -321,7 +321,7 @@ export class PendingRequestsController {
         storeId: pending.storeId,
         passId: pending.passId,
         pendingRequestId: pending.id,
-        precio: body?.precio,
+        paymentAmount: body?.paymentAmount,
       });
       return { ok: true as const };
     }

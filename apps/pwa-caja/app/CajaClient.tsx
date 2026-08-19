@@ -285,7 +285,7 @@ export function CajaClient() {
         method: 'POST',
         body: JSON.stringify({
           serialNumber: serial,
-          ...(precio != null ? { precio } : {}),
+          ...(precio != null ? { paymentAmount: precio } : {}),
         }),
       });
       if (result.kind === 'redeem') {
