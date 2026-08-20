@@ -1,0 +1,40 @@
+# Dependencies & caches
+node_modules
+**/node_modules
+.pnpm-store
+.nx/cache
+.nx/workspace-data
+.nx/polygraph
+.nx/self-healing
+.nx/migrate-runs
+
+# Build outputs
+dist
+**/dist
+**/.next
+**/out
+coverage
+
+# Git / IDE / local
+.git
+.github
+.cursor
+.claude
+.vscode
+.idea
+**/.DS_Store
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+service-account*.json
+**/gcp-service-account.json
+
+# Docs / uploads
+docs
+uploads
+**/*.md
+!**/README.md
