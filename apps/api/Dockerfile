@@ -23,4 +23,4 @@ COPY --from=builder /workspace /workspace
 
 EXPOSE 8080
 
-CMD ["pnpm", "exec", "tsx", "apps/api/src/main.ts"]
+CMD ["pnpm", "exec", "tsx", "--tsconfig", "apps/api/tsconfig.json", "apps/api/src/main.ts"]
