@@ -21,6 +21,7 @@ env:
   AR_REPO: onda
   API_SERVICE: onda-api
   CLOUD_TASKS_QUEUE: onda-jobs
+  GCS_BUCKET: join-onda-uploads
 
 jobs:
   migrate:
@@ -125,6 +126,7 @@ jobs:
               "GCP_PROJECT": os.environ.get("GCP_PROJECT_ID", "join-onda"),
               "GCP_LOCATION": os.environ.get("GCP_REGION", "us-central1"),
               "CLOUD_TASKS_QUEUE": os.environ.get("CLOUD_TASKS_QUEUE", "onda-jobs"),
+              "GCS_BUCKET": os.environ.get("GCS_BUCKET", "join-onda-uploads"),
           }
           if api_url:
               env_map["JOBS_WORKER_URL"] = api_url
@@ -189,8 +191,6 @@ jobs:
             service: onda-pwa
           - app: merchant-dashboard
             service: onda-merchant
-          - app: organizer-dashboard
-            service: onda-organizer
           - app: pwa-caja
             service: onda-caja
     steps:
