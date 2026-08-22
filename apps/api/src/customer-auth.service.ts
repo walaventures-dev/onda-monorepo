@@ -5,15 +5,14 @@ import { WhatsappService } from './whatsapp.service';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
-/** Código fijo en local: no se envía WhatsApp y la PWA lo muestra como `devCode`. */
-const LOCAL_OTP_CODE = '123456';
+/** Código fijo mientras Kapso no esté listo: no se envía WhatsApp y la PWA lo muestra como `devCode`. */
+const MOCK_OTP_CODE = '123456';
 
-function isLocalOtpMock(): boolean {
+function isOtpMock(): boolean {
   const flag = process.env.OTP_MOCK?.trim().toLowerCase();
   if (flag === '0' || flag === 'false') return false;
-  if (flag === '1' || flag === 'true') return true;
-  // Local: no mandar WhatsApp aunque KAPSO_API_KEY esté en .env (Kapso 404).
-  return process.env.NODE_ENV !== 'production';
+  // Por ahora mock en prod y en dev. OTP_MOCK=false para enviar por WhatsApp.
+  return true;
 }
 
 function randomCode(): string {
@@ -34,8 +33,8 @@ export class CustomerAuthService {
   ) {}
 
   async requestOtp(phone: string) {
-    const mock = isLocalOtpMock();
-    const code = mock ? LOCAL_OTP_CODE : randomCode();
+    const mock = isOtpMock();
+    const code = mock ? MOCK_OTP_CODE : randomCode();
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
     await this.prisma.otpCode.create({ data: { phone, code, expiresAt } });
 
