@@ -23,7 +23,7 @@ export function getApiUrl(): string {
   return '';
 }
 
-export async function api<T = unknown>(
+export async function api<T = any>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {

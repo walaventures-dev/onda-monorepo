@@ -1,0 +1,283 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: join-onda
+  GCP_REGION: us-central1
+  AR_REPO: onda
+  API_SERVICE: onda-api
+  CLOUD_TASKS_QUEUE: onda-jobs
+  GCS_BUCKET: join-onda-uploads
+
+jobs:
+  migrate:
+    name: Prisma migrate (prod)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: pnpm exec prisma migrate deploy --schema=libs/database/prisma/schema.prisma
+
+  deploy-api:
+    name: Deploy API
+    needs: migrate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker (Artifact Registry)
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Image tags
+        id: meta
+        run: |
+          REGISTRY="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}"
+          echo "image=${REGISTRY}/api" >> "$GITHUB_OUTPUT"
+          echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image }}:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build Cloud Run env file
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          KAPSO_API_KEY: ${{ secrets.KAPSO_API_KEY }}
+          KAPSO_WEBHOOK_SECRET: ${{ secrets.KAPSO_WEBHOOK_SECRET }}
+          KAPSO_PHONE_NUMBER_ID: ${{ secrets.KAPSO_PHONE_NUMBER_ID }}
+          WALLET_API_KEY: ${{ secrets.WALLET_API_KEY }}
+          WALLET_API_BASE_URL: ${{ secrets.WALLET_API_BASE_URL }}
+          WALLET_PLAN: ${{ secrets.WALLET_PLAN }}
+          WOMPI_PUBLIC_KEY: ${{ secrets.WOMPI_PUBLIC_KEY }}
+          WOMPI_PRIVATE_KEY: ${{ secrets.WOMPI_PRIVATE_KEY }}
+          WOMPI_INTEGRITY_SECRET: ${{ secrets.WOMPI_INTEGRITY_SECRET }}
+          WOMPI_EVENTS_SECRET: ${{ secrets.WOMPI_EVENTS_SECRET }}
+          WOMPI_API_URL: ${{ secrets.WOMPI_API_URL }}
+          CAMPAIGN_FREE_MONTHLY: ${{ secrets.CAMPAIGN_FREE_MONTHLY }}
+          CAMPAIGN_PRICE_COP: ${{ secrets.CAMPAIGN_PRICE_COP }}
+          CAMPAIGN_PACK_SIZE: ${{ secrets.CAMPAIGN_PACK_SIZE }}
+          CAMPAIGN_PACK_DISCOUNT: ${{ secrets.CAMPAIGN_PACK_DISCOUNT }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          BREVO_SENDER_EMAIL: ${{ secrets.BREVO_SENDER_EMAIL }}
+          BREVO_SENDER_NAME: ${{ secrets.BREVO_SENDER_NAME }}
+          BREVO_SMS_SENDER: ${{ secrets.BREVO_SMS_SENDER }}
+          JOBS_SECRET: ${{ secrets.JOBS_SECRET }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.API_URL }}
+          NEXT_PUBLIC_MERCHANT_URL: ${{ secrets.MERCHANT_URL }}
+          NEXT_PUBLIC_LANDING_URL: ${{ secrets.LANDING_URL }}
+          NEXT_PUBLIC_PWA_URL: ${{ secrets.PWA_URL }}
+          NEXT_PUBLIC_CAJA_URL: ${{ secrets.CAJA_URL }}
+        run: |
+          python3 <<'PY'
+          import json, os
+
+          api_url = os.environ.get("API_URL", "").rstrip("/")
+          env_map = {
+              "NODE_ENV": "production",
+              "GCP_PROJECT": os.environ.get("GCP_PROJECT_ID", "join-onda"),
+              "GCP_LOCATION": os.environ.get("GCP_REGION", "us-central1"),
+              "CLOUD_TASKS_QUEUE": os.environ.get("CLOUD_TASKS_QUEUE", "onda-jobs"),
+              "GCS_BUCKET": os.environ.get("GCS_BUCKET", "join-onda-uploads"),
+          }
+          if api_url:
+              env_map["JOBS_WORKER_URL"] = api_url
+              env_map["NEXT_PUBLIC_API_URL"] = api_url
+
+          passthrough = [
+              "DATABASE_URL",
+              "JWT_SECRET",
+              "FIREBASE_PROJECT_ID", "FIREBASE_CLIENT_EMAIL", "FIREBASE_PRIVATE_KEY",
+              "KAPSO_API_KEY", "KAPSO_WEBHOOK_SECRET", "KAPSO_PHONE_NUMBER_ID",
+              "WALLET_API_KEY", "WALLET_API_BASE_URL", "WALLET_PLAN",
+              "WOMPI_PUBLIC_KEY", "WOMPI_PRIVATE_KEY", "WOMPI_INTEGRITY_SECRET",
+              "WOMPI_EVENTS_SECRET", "WOMPI_API_URL",
+              "CAMPAIGN_FREE_MONTHLY", "CAMPAIGN_PRICE_COP",
+              "CAMPAIGN_PACK_SIZE", "CAMPAIGN_PACK_DISCOUNT",
+              "BREVO_API_KEY", "BREVO_SENDER_EMAIL", "BREVO_SENDER_NAME", "BREVO_SMS_SENDER",
+              "JOBS_SECRET",
+              "NEXT_PUBLIC_MERCHANT_URL", "NEXT_PUBLIC_LANDING_URL",
+              "NEXT_PUBLIC_PWA_URL", "NEXT_PUBLIC_CAJA_URL",
+          ]
+          for key in passthrough:
+              value = os.environ.get(key, "")
+              if value != "":
+                  env_map[key] = value
+
+          lines = [f"{key}: {json.dumps(value)}" for key, value in env_map.items()]
+          with open("api-env.yaml", "w", encoding="utf-8") as fh:
+              fh.write("\n".join(lines) + "\n")
+          print(f"Wrote api-env.yaml with {len(lines)} entries")
+          PY
+
+      - name: Deploy Cloud Run (API)
+        run: |
+          gcloud run deploy "${{ env.API_SERVICE }}" \
+            --project="${{ env.GCP_PROJECT_ID }}" \
+            --region="${{ env.GCP_REGION }}" \
+            --platform=managed \
+            --image="${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}" \
+            --allow-unauthenticated \
+            --port=8080 \
+            --memory=512Mi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=3 \
+            --cpu-boost \
+            --env-vars-file=api-env.yaml
+
+      - name: API URL
+        run: gcloud run services describe "${{ env.API_SERVICE }}" --project="${{ env.GCP_PROJECT_ID }}" --region="${{ env.GCP_REGION }}" --format='value(status.url)'
+
+  deploy-frontends:
+    name: Deploy ${{ matrix.app }}
+    needs: deploy-api
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: landing
+            service: onda-landing
+          - app: pwa-client
+            service: onda-pwa
+          - app: merchant-dashboard
+            service: onda-merchant
+          - app: pwa-caja
+            service: onda-caja
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Require public URLs
+        env:
+          API_URL: ${{ secrets.API_URL }}
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "Falta el secret API_URL. Tras el primer deploy del API, pégalo (y LANDING_URL, PWA_URL, MERCHANT_URL, CAJA_URL) y vuelve a disparar el workflow."
+            exit 1
+          fi
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker (Artifact Registry)
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Image tags
+        id: meta
+        run: |
+          REGISTRY="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}"
+          echo "image=${REGISTRY}/${{ matrix.app }}" >> "$GITHUB_OUTPUT"
+          echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image }}:latest
+          build-args: |
+            API_URL=${{ secrets.API_URL }}
+            NEXT_PUBLIC_API_URL=${{ secrets.API_URL }}
+            NEXT_PUBLIC_LANDING_URL=${{ secrets.LANDING_URL }}
+            NEXT_PUBLIC_PWA_URL=${{ secrets.PWA_URL }}
+            NEXT_PUBLIC_MERCHANT_URL=${{ secrets.MERCHANT_URL }}
+            NEXT_PUBLIC_CAJA_URL=${{ secrets.CAJA_URL }}
+            NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+            NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+            NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+            NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+            NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      - name: Build Cloud Run env file
+        env:
+          API_URL: ${{ secrets.API_URL }}
+        run: |
+          python3 <<'PY'
+          import json, os
+          api_url = os.environ.get("API_URL", "").rstrip("/")
+          env_map = {
+              "NODE_ENV": "production",
+              "HOSTNAME": "0.0.0.0",
+          }
+          if api_url:
+              env_map["API_URL"] = api_url
+          lines = [f"{key}: {json.dumps(value)}" for key, value in env_map.items()]
+          with open("web-env.yaml", "w", encoding="utf-8") as fh:
+              fh.write("\n".join(lines) + "\n")
+          PY
+
+      - name: Deploy Cloud Run
+        run: |
+          gcloud run deploy "${{ matrix.service }}" \
+            --project="${{ env.GCP_PROJECT_ID }}" \
+            --region="${{ env.GCP_REGION }}" \
+            --platform=managed \
+            --image="${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}" \
+            --allow-unauthenticated \
+            --port=8080 \
+            --memory=512Mi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=3 \
+            --cpu-boost \
+            --env-vars-file=web-env.yaml

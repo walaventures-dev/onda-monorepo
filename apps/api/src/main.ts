@@ -28,7 +28,7 @@ async function bootstrap() {
   app.enableCors({ origin: true, credentials: true });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.setGlobalPrefix('api');
-  const port = Number(process.env.API_PORT || 3333);
+  const port = Number(process.env.PORT || process.env.API_PORT || 3333);
   await app.listen(port);
   console.log(`Onda API listening on http://localhost:${port}/api`);
 }
