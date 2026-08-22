@@ -808,7 +808,9 @@ export function MerchantWorkspace() {
   const setup = useMemo(() => storeSetupStatus(store), [store]);
 
   useEffect(() => {
-    document.title = storeName ? `${storeName} · Onda` : "Onda";
+    document.title = storeName
+      ? `Onda - ${storeName}`
+      : "Onda - Panel del negocio";
   }, [storeName]);
 
   useEffect(() => {

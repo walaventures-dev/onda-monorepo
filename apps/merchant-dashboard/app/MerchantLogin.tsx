@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { GradientButton, OndaLogo, OndaScriptMark } from "@onda/shared-ui";
 import { useMerchantAuth, mapFirebaseAuthError } from "../lib/MerchantAuth";
@@ -12,6 +12,10 @@ export function MerchantLogin() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    document.title = "Onda - Iniciar sesión";
+  }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();

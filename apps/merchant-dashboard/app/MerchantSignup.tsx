@@ -27,6 +27,10 @@ export function MerchantSignup() {
   const planFromUrl = parsePlanId(searchParams.get('plan'));
 
   useEffect(() => {
+    document.title = 'Onda - Crear cuenta';
+  }, []);
+
+  useEffect(() => {
     persistOnboardingQuery(searchParams);
   }, [searchParams]);
 

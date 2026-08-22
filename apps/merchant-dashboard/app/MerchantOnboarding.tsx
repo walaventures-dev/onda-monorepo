@@ -173,6 +173,11 @@ function MerchantBusinessSetup() {
   );
 
   useEffect(() => {
+    const negocio = name.trim();
+    document.title = negocio ? `Onda - ${negocio}` : 'Onda - Crear negocio';
+  }, [name]);
+
+  useEffect(() => {
     persistOnboardingQuery(searchParams);
     if (!parsePlanId(searchParams.get('plan'))) {
       setPlanType(readStoredPlan());
