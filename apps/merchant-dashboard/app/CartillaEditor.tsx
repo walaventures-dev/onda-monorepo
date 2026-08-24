@@ -15,10 +15,10 @@ import { cartillaDeadlineLabel } from "@onda/shared-utils";
 import { PassDesigner } from "./PassDesigner";
 import { CreatePromo } from "./CreatePromo";
 
-const CYCLES = ["4", "6", "8", "10", "12"] as const;
+const CYCLES = ["2", "4", "6", "8", "10", "12"] as const;
 
 function snapCycle(n: number) {
-  const allowed = [4, 6, 8, 10, 12];
+  const allowed = [2, 4, 6, 8, 10, 12];
   if (allowed.includes(n)) return n;
   return allowed.reduce((best, x) =>
     Math.abs(x - n) < Math.abs(best - n) ? x : best,

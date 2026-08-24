@@ -5,6 +5,8 @@ import { normalizeHexColor } from './colors';
 /** WalletWallet recomienda 1080×360 para `stripURL` (store card). */
 const STRIP_W = 1080;
 const STRIP_H = 360;
+/** Altura del banner opcional encima de los sellos (~38% del strip). */
+const BANNER_H = 138;
 
 type Rgb = { r: number; g: number; b: number };
 
@@ -59,21 +61,25 @@ function resolveHandPng(): Buffer | null {
   return null;
 }
 
-function layoutSlots(maxStamps: number, points: number): { n: number; slots: Slot[] } {
+function layoutSlots(
+  maxStamps: number,
+  points: number,
+  area: { top: number; height: number }
+): { n: number; slots: Slot[] } {
   const n = Math.max(1, Math.min(12, Math.round(maxStamps) || 12));
   const filledCount = Math.max(0, Math.min(n, Math.floor(points)));
   const cols = punchCardColumns(n);
   const rows = Math.ceil(n / cols);
   const gap = 18;
   const innerW = STRIP_W * 0.88;
-  const innerH = STRIP_H * 0.72;
+  const innerH = area.height * 0.86;
   const cellW = (innerW - gap * (cols - 1)) / cols;
   const cellH = (innerH - gap * (rows - 1)) / rows;
   const cell = Math.min(cellW, cellH);
   const gridW = cols * cell + gap * (cols - 1);
   const gridH = rows * cell + gap * (rows - 1);
   const originX = (STRIP_W - gridW) / 2;
-  const originY = (STRIP_H - gridH) / 2;
+  const originY = area.top + (area.height - gridH) / 2;
   const r = cell * 0.42;
 
   const slots = Array.from({ length: n }, (_, i) => {
@@ -135,8 +141,30 @@ async function tintedHand(size: number, fg: Rgb, opacity: number): Promise<Buffe
     .toBuffer();
 }
 
+function isUsableImageUrl(url: string | null | undefined): url is string {
+  return Boolean(
+    url && (url.startsWith('https://') || url.startsWith('data:image/'))
+  );
+}
+
+async function loadBannerBuffer(url: string): Promise<Buffer | null> {
+  try {
+    if (url.startsWith('data:image/')) {
+      const comma = url.indexOf(',');
+      if (comma < 0) return null;
+      return Buffer.from(url.slice(comma + 1), 'base64');
+    }
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
 /**
  * PNG data URI de la cartilla (manos llenas/vacías) para `stripURL` de WalletWallet.
+ * Si hay `bannerUrl`, se coloca un banner horizontal arriba de los sellos.
  * Devuelve null si no se puede rasterizar (p.ej. sin `sharp`).
  */
 export async function buildPunchCardStripDataUri(input: {
@@ -144,16 +172,26 @@ export async function buildPunchCardStripDataUri(input: {
   maxStamps: number;
   backgroundColor?: string | null;
   foregroundColor?: string | null;
+  /** Banner horizontal opcional (HTTPS o data URI) encima de los sellos. */
+  bannerUrl?: string | null;
 }): Promise<string | null> {
   const backgroundHex = normalizeHexColor(input.backgroundColor) ?? '#052DDE';
   const fg = parseRgb(input.foregroundColor || '#FFFFFF');
-  const { n, slots } = layoutSlots(input.maxStamps, input.points);
-  const cacheKey = `${n}|${Math.max(0, Math.min(n, Math.floor(input.points)))}|${backgroundHex}|${fg.r},${fg.g},${fg.b}`;
+  const bannerUrl = isUsableImageUrl(input.bannerUrl) ? input.bannerUrl : null;
+  const filled = Math.max(0, Math.min(Math.round(input.maxStamps || 12), Math.floor(input.points)));
+  const cacheKey = `${Math.round(input.maxStamps || 12)}|${filled}|${backgroundHex}|${fg.r},${fg.g},${fg.b}|${bannerUrl || ''}`;
   const cached = stripCache.get(cacheKey);
   if (cached) return cached;
 
   try {
     const sharp = (await import('sharp')).default;
+    const bannerBuffer = bannerUrl ? await loadBannerBuffer(bannerUrl) : null;
+    const hasBanner = Boolean(bannerBuffer);
+    const stampArea = hasBanner
+      ? { top: BANNER_H, height: STRIP_H - BANNER_H }
+      : { top: 0, height: STRIP_H };
+
+    const { slots } = layoutSlots(input.maxStamps, input.points, stampArea);
     const base = await sharp(Buffer.from(circlesSvg(backgroundHex, fg, slots)))
       .png({ compressionLevel: 9 })
       .toBuffer();
@@ -164,14 +202,25 @@ export async function buildPunchCardStripDataUri(input: {
       tintedHand(handSize, fg, 0.22),
     ]);
 
-    const composites =
-      filledHand && emptyHand
-        ? slots.map((slot) => ({
-            input: slot.filled ? filledHand : emptyHand,
-            left: Math.round(slot.cx - handSize / 2),
-            top: Math.round(slot.cy - handSize / 2),
-          }))
-        : [];
+    const composites: Array<{ input: Buffer; left: number; top: number }> = [];
+
+    if (bannerBuffer) {
+      const bannerPng = await sharp(bannerBuffer)
+        .resize(STRIP_W, BANNER_H, { fit: 'cover', position: 'centre' })
+        .png()
+        .toBuffer();
+      composites.push({ input: bannerPng, left: 0, top: 0 });
+    }
+
+    if (filledHand && emptyHand) {
+      for (const slot of slots) {
+        composites.push({
+          input: slot.filled ? filledHand : emptyHand,
+          left: Math.round(slot.cx - handSize / 2),
+          top: Math.round(slot.cy - handSize / 2),
+        });
+      }
+    }
 
     const png = await sharp(base).composite(composites).png({ compressionLevel: 9 }).toBuffer();
     const dataUri = `data:image/png;base64,${png.toString('base64')}`;

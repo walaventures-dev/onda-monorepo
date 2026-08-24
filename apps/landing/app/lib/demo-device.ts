@@ -32,6 +32,7 @@ export type DemoSpaDesign = {
   foregroundColor: string;
   labelColor: string;
   logoUrl?: string | null;
+  stripImageUrl?: string | null;
 };
 
 export type DemoSpaState = {

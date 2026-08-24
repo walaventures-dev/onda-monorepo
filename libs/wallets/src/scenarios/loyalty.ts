@@ -2,6 +2,7 @@ import { loyaltyProgressCopy, type LoyaltyRewardHint } from '@onda/shared-utils'
 import { nearestColorPreset, normalizeHexColor } from '../colors';
 import { ensureNotificationAnchor } from '../notifications';
 import { buildPunchCardStripDataUri } from '../punch-card-strip';
+import { roundLogoDataUri } from '../round-logo';
 import type { PassSpec } from '../types';
 import type { BaseLoyaltyContext, PassScenarioBuilder } from './types';
 
@@ -39,10 +40,12 @@ async function applyVisuals(spec: PassSpec, ctx: LoyaltyPassContext): Promise<Pa
     maxStamps: ctx.maxStamps ?? 12,
     backgroundColor: design.backgroundColor,
     foregroundColor: design.foregroundColor,
+    bannerUrl: design.stripImageUrl,
   });
 
   if (design.logoUrl?.startsWith('https://') || design.logoUrl?.startsWith('data:image/')) {
-    next.logoURL = design.logoUrl;
+    const rounded = await roundLogoDataUri(design.logoUrl);
+    next.logoURL = rounded || design.logoUrl;
   }
   if (strip) {
     next.stripURL = strip;
@@ -50,6 +53,7 @@ async function applyVisuals(spec: PassSpec, ctx: LoyaltyPassContext): Promise<Pa
     design.stripImageUrl?.startsWith('https://') ||
     design.stripImageUrl?.startsWith('data:image/')
   ) {
+    // Fallback: solo banner si no se pudo rasterizar la grilla de sellos.
     next.stripURL = design.stripImageUrl;
   }
 
@@ -58,7 +62,7 @@ async function applyVisuals(spec: PassSpec, ctx: LoyaltyPassContext): Promise<Pa
 
 /**
  * Cartilla de fidelización (punch card) por comercio o evento.
- * El strip es la grilla de ondas; el header muestra el progreso al apilar el pase.
+ * El strip es banner (opcional) + grilla de ondas; el header muestra el progreso al apilar.
  */
 export async function buildLoyaltyPassSpec(
   ctx: LoyaltyPassContext,

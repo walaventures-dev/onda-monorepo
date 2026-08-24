@@ -14,6 +14,7 @@ export type PassSwipeCard = {
     subtitle?: string | null;
     description?: string | null;
     logoUrl?: string | null;
+    stripImageUrl?: string | null;
   };
   points: number;
   maxStamps: number;

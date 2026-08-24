@@ -1082,6 +1082,15 @@ button.onda-gradient:focus-visible:not(:disabled) {
   margin-bottom: 0.4rem !important;
 }
 
+.onda-pass-designer-banner {
+  margin-top: 1rem;
+  max-width: 28rem;
+}
+
+.onda-pass-designer-banner .mb-2 {
+  margin-bottom: 0.4rem !important;
+}
+
 .onda-pass-designer-preview {
   width: 100%;
 }

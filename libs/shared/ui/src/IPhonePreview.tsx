@@ -174,6 +174,7 @@ export function WalletPassCard({
   title = 'Onda Spa',
   subtitle,
   logoUrl,
+  stripImageUrl,
   points = 0,
   maxStamps = 10,
   memberName,
@@ -184,6 +185,8 @@ export function WalletPassCard({
   title?: string;
   subtitle?: string | null;
   logoUrl?: string | null;
+  /** Banner horizontal opcional encima de los sellos. */
+  stripImageUrl?: string | null;
   points?: number;
   maxStamps?: number;
   memberName?: string | null;
@@ -229,6 +232,15 @@ export function WalletPassCard({
           {remainingText}
         </p>
       </div>
+
+      {stripImageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={stripImageUrl}
+          alt=""
+          className="mt-1.5 aspect-[3/1] w-full max-h-14 object-cover"
+        />
+      ) : null}
 
       <div className="px-2.5 py-2.5">
         <PunchCardGrid

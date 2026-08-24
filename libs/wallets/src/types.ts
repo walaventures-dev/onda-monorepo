@@ -50,7 +50,7 @@ export type PassSpec = {
   /** Pro: HTTPS o data URI PNG. */
   logoURL?: string;
   thumbnailURL?: string;
-  /** Pro: banner 1080×360; en loyalty es la cartilla de ondas. Cambia el pase a storeCard. */
+  /** Pro: banner 1080×360; en loyalty es banner opcional + cartilla de ondas. Cambia el pase a storeCard. */
   stripURL?: string;
   iconURL?: string;
 };

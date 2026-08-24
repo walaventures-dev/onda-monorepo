@@ -24,7 +24,7 @@ import { WalletService } from "./wallet.service";
 import { BrevoService } from "./brevo.service";
 
 export const PROMO_ASSIGNMENT_TOLERANCE = 0.15;
-export const CARTILLA_CYCLES = [4, 6, 8, 10, 12] as const;
+export const CARTILLA_CYCLES = [2, 4, 6, 8, 10, 12] as const;
 export type CartillaCycle = (typeof CARTILLA_CYCLES)[number];
 
 export function snapCartillaCycle(n: number): CartillaCycle {
@@ -37,7 +37,7 @@ export function snapCartillaCycle(n: number): CartillaCycle {
 
 function assertCycle(n: number): CartillaCycle {
   if (!(CARTILLA_CYCLES as readonly number[]).includes(n)) {
-    throw new BadRequestException("Elige 4, 6, 8, 10 o 12 ondas");
+    throw new BadRequestException("Elige 2, 4, 6, 8, 10 o 12 ondas");
   }
   return n as CartillaCycle;
 }

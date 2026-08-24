@@ -200,6 +200,7 @@ export function PassPreview({
   subtitle = 'Tu pase de lealtad',
   description = 'Acumula ondas en cada visita',
   logoUrl,
+  stripImageUrl,
   points = 0,
   maxStamps = 12,
   milestoneStamps = [],
@@ -217,6 +218,8 @@ export function PassPreview({
   subtitle?: string | null;
   description?: string | null;
   logoUrl?: string | null;
+  /** Banner horizontal opcional encima de los sellos. */
+  stripImageUrl?: string | null;
   points?: number;
   maxStamps?: number;
   milestoneStamps?: number[];
@@ -288,7 +291,20 @@ export function PassPreview({
         </div>
       </div>
 
-      <div className={`px-4 ${compact ? 'pb-3' : 'pb-4'}`}>
+      {stripImageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={stripImageUrl}
+          alt=""
+          className={`w-full object-cover ${compact ? 'aspect-[3/1] max-h-20' : 'aspect-[3/1] max-h-28'}`}
+        />
+      ) : null}
+
+      <div
+        className={`px-4 ${compact ? 'pb-3' : 'pb-4'}${
+          stripImageUrl ? (compact ? ' pt-3' : ' pt-4') : ''
+        }`}
+      >
         <PunchCardGrid
           points={points}
           maxStamps={maxStamps}

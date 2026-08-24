@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AppShell, KpiCard, GradientButton, PassPreview, HeatmapPoints, OndaSelect, OndaColorPicker, useOndaDialogs, api, OndaIcons } from '@onda/shared-ui';
+import { AppShell, KpiCard, GradientButton, PassPreview, HeatmapPoints, OndaSelect, OndaColorPicker, ImageUploadField, useOndaDialogs, api, OndaIcons } from '@onda/shared-ui';
 import { displayPhone, derivePassPalette } from '@onda/shared-utils';
 import {
   BarChart,
@@ -311,7 +311,16 @@ export default function OrganizerPage() {
             <h3 className="font-display text-lg font-semibold">Diseño del pase</h3>
 
             <div className="onda-pass-designer-brand">
-              <div className="onda-pass-designer-brand-color onda-pass-designer-brand-color--solo">
+              <ImageUploadField
+                label="Logo"
+                hint="JPG, PNG o WEBP · esquinas redondeadas"
+                aspectClass="aspect-square"
+                className="onda-pass-designer-logo"
+                variant="logo"
+                value={design.logoUrl || ''}
+                onChange={(logoUrl) => setDesign({ ...design, logoUrl })}
+              />
+              <div className="onda-pass-designer-brand-color">
                 <OndaColorPicker
                   label="Color de marca"
                   value={design.backgroundColor || '#6E5AE6'}
@@ -328,6 +337,15 @@ export default function OrganizerPage() {
                 </p>
               </div>
             </div>
+
+            <ImageUploadField
+              label="Banner (opcional)"
+              hint="Horizontal · JPG, PNG o WEBP · se muestra arriba de los sellos"
+              aspectClass="aspect-[3/1]"
+              className="onda-pass-designer-banner"
+              value={design.stripImageUrl || ''}
+              onChange={(stripImageUrl) => setDesign({ ...design, stripImageUrl })}
+            />
 
             <div className="onda-pass-designer-fields">
               <div className="onda-pass-designer-row">

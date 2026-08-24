@@ -317,6 +317,7 @@ export interface PassDesignDto {
   foregroundColor: string;
   labelColor?: string | null;
   logoUrl?: string | null;
+  /** Banner horizontal opcional encima de los sellos (UI y Wallet). */
   stripImageUrl?: string | null;
   title: string;
   subtitle?: string | null;

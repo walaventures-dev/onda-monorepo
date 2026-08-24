@@ -18,6 +18,7 @@ export type PassDesignInput = {
   foregroundColor?: string;
   labelColor?: string | null;
   logoUrl?: string | null;
+  /** Banner horizontal opcional encima de los sellos. */
   stripImageUrl?: string | null;
 };
 

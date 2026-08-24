@@ -87,6 +87,7 @@ export default function OndaSpaProxyPage() {
               subtitle={design.subtitle}
               description={design.description}
               logoUrl={design.logoUrl}
+              stripImageUrl={design.stripImageUrl}
               points={state.points}
               maxStamps={state.maxStamps}
               memberName={state.memberName}

@@ -3,9 +3,15 @@
 import React, { useState } from 'react';
 import { API_URL } from './api';
 
-async function uploadFile(file: File): Promise<string> {
+async function uploadFile(
+  file: File,
+  variant: 'logo' | 'default' = 'default'
+): Promise<string> {
   const body = new FormData();
   body.append('file', file);
+  if (variant !== 'default') {
+    body.append('variant', variant);
+  }
   const res = await fetch(`${API_URL}/api/uploads`, {
     method: 'POST',
     body,
@@ -25,6 +31,8 @@ export function ImageUploadField({
   hint = 'JPG, PNG o WEBP · máx 2MB',
   className = '',
   aspectClass = 'aspect-square',
+  /** `logo` aplica esquinas redondeadas al guardar (PNG). */
+  variant = 'default',
 }: {
   value: string;
   onChange: (url: string) => void;
@@ -32,6 +40,7 @@ export function ImageUploadField({
   hint?: string;
   className?: string;
   aspectClass?: string;
+  variant?: 'logo' | 'default';
 }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -48,7 +57,7 @@ export function ImageUploadField({
     }
     setUploading(true);
     try {
-      const url = await uploadFile(file);
+      const url = await uploadFile(file, variant);
       onChange(url);
     } catch (e: any) {
       setError(e.message || 'Error al subir');
@@ -68,7 +77,13 @@ export function ImageUploadField({
           <span>Subiendo…</span>
         ) : value ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="h-full w-full object-cover" />
+          <img
+            src={value}
+            alt=""
+            className={`h-full w-full object-cover ${
+              variant === 'logo' ? 'rounded-xl' : ''
+            }`}
+          />
         ) : (
           <span className="px-3">
             Haz clic para subir

@@ -420,6 +420,7 @@ export function DemoSection() {
                             title={design.title}
                             subtitle={design.subtitle}
                             logoUrl={design.logoUrl}
+                            stripImageUrl={design.stripImageUrl}
                             points={displayPoints}
                             maxStamps={maxStamps}
                             memberName={

@@ -62,6 +62,7 @@ export {
   resetWalletPassService,
 } from './service';
 export type { IssueScenarioInput } from './service';
+export { roundLogoPng, roundLogoDataUri } from './round-logo';
 
 // ---------------------------------------------------------------------------
 // Compatibilidad con el API anterior (issueWalletPass / updateWalletPoints)

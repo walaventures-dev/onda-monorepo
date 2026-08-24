@@ -348,6 +348,7 @@ export default function StoreEntryPage() {
           subtitle: storeDesign?.subtitle || "Onda Rewards",
           description: storeDesign?.description,
           logoUrl: storeDesign?.logoUrl,
+          stripImageUrl: storeDesign?.stripImageUrl,
         },
         points: pass?.points ?? 0,
         maxStamps: pass?.maxStamps ?? pass?.cartilla?.maxStamps ?? store?.maxStamps ?? 12,

@@ -52,11 +52,12 @@ export function PassDesigner({
             label="Logo"
             hint={
               requireLogo
-                ? "Obligatorio. JPG, PNG o WEBP"
-                : "JPG, PNG o WEBP"
+                ? "Obligatorio. JPG, PNG o WEBP · esquinas redondeadas"
+                : "JPG, PNG o WEBP · esquinas redondeadas"
             }
             aspectClass="aspect-square"
             className="onda-pass-designer-logo"
+            variant="logo"
             value={design.logoUrl || ""}
             onChange={(logoUrl) => onChange({ ...design, logoUrl })}
           />
@@ -78,6 +79,15 @@ export function PassDesigner({
             </p>
           </div>
         </div>
+
+        <ImageUploadField
+          label="Banner (opcional)"
+          hint="Horizontal · JPG, PNG o WEBP · se muestra arriba de los sellos"
+          aspectClass="aspect-[3/1]"
+          className="onda-pass-designer-banner"
+          value={design.stripImageUrl || ""}
+          onChange={(stripImageUrl) => onChange({ ...design, stripImageUrl })}
+        />
 
         <div className="onda-pass-designer-fields">
           <div className="onda-pass-designer-row">
