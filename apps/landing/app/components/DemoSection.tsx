@@ -384,7 +384,7 @@ export function DemoSection() {
             onDrag={onPhoneDrag}
             onDragEnd={onPhoneDragEnd}
             whileDrag={{ scale: 1.02, zIndex: 40 }}
-            className={`absolute bottom-[2%] right-[2%] z-20 w-[36%] max-w-[280px] min-w-[140px] touch-none sm:bottom-[3%] sm:right-[4%] sm:w-[30%] md:right-[5%] md:w-[26%] md:max-w-[300px] ${
+            className={`absolute bottom-[4%] right-[3%] z-20 w-[20%] max-w-[140px] min-w-[96px] touch-none sm:bottom-[5%] sm:right-[5%] sm:w-[18%] sm:max-w-[155px] md:right-[6%] md:w-[16%] md:max-w-[168px] ${
               dragging ? 'cursor-grabbing' : 'cursor-grab'
             }`}
             aria-label="Arrastra el celular hacia el hablador para activar"

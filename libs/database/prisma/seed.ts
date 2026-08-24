@@ -206,56 +206,6 @@ async function main() {
     stores.push(store);
   }
 
-  const ondaSpa = await prisma.store.create({
-    data: {
-      name: "Onda Spa",
-      slug: "onda-spa",
-      category: StoreCategory.SERVICE,
-      subcategory: StoreSubcategory.BEAUTY,
-      segment: StoreSegment.BEAUTY_SPA,
-      planType: PlanType.PRO,
-      maxStamps: 10,
-      googlePlaceId: "demo-place-onda-spa",
-      address: "Calle Demo #1-01, Neiva",
-      lat: 2.93,
-      lng: -75.28,
-      ownerName: "Demo Onda",
-      ownerEmail: "spa@onda.lat",
-      referralCode: "ONDASPA1",
-      freeMonthsBalance: 1,
-      whatsappUsed: 0,
-      passDesign: {
-        create: {
-          title: "Onda Spa",
-          subtitle: "Masajes y bienestar",
-          description:
-            "Completa 10 ondas y lleva 30% en tu próxima sesión de masajes",
-          backgroundColor: "#C9DDD4",
-          foregroundColor: "#2F4F46",
-          labelColor: "#5F7F74",
-          logoUrl:
-            "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9Ik9uZGEgU3BhIj4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0ic3BhQmciIHgxPSIyMCIgeTE9IjgiIHgyPSIxMDgiIHkyPSIxMjAiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KICAgICAgPHN0b3Agc3RvcC1jb2xvcj0iI0U4RjNFRSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNENEU4REYiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiByeD0iMjgiIGZpbGw9InVybCgjc3BhQmcpIi8+CiAgPGcgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjM0Q2QjVDIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPgogICAgPHBhdGggZD0iTTY0IDkyYy0xNC0xMC0yMi0yNC0yMi0zOCAwLTEwIDYtMTggMTQtMjIiIHN0cm9rZS13aWR0aD0iMy4yIiBvcGFjaXR5PSIwLjQ1Ii8+CiAgICA8cGF0aCBkPSJNNjQgOTJjMTQtMTAgMjItMjQgMjItMzggMC0xMC02LTE4LTE0LTIyIiBzdHJva2Utd2lkdGg9IjMuMiIgb3BhY2l0eT0iMC40NSIvPgogICAgPHBhdGggZD0iTTY0IDk0VjUyIiBzdHJva2Utd2lkdGg9IjMuMiIvPgogICAgPHBhdGggZD0iTTY0IDU4Yy0xMC04LTE0LTE4LTEyLTI4IDggMiAxNiAxMCAxMiAyOFoiIGZpbGw9IiM1RjlCODYiIHN0cm9rZT0ibm9uZSIvPgogICAgPHBhdGggZD0iTTY0IDU4YzEwLTggMTQtMTggMTItMjgtOCAyLTE2IDEwLTEyIDI4WiIgZmlsbD0iIzdCQjU5RSIgc3Ryb2tlPSJub25lIi8+CiAgICA8cGF0aCBkPSJNNjQgNThjMC0xMiA0LTIyIDEyLTI4LTEwIDAtMTggOC0xOCAyMiAwLTE0LTgtMjItMTgtMjIgOCA2IDEyIDE2IDEyIDI4WiIgZmlsbD0iIzRFOEE3NCIgc3Ryb2tlPSJub25lIi8+CiAgPC9nPgogIDxjaXJjbGUgY3g9IjY0IiBjeT0iOTgiIHI9IjMuNSIgZmlsbD0iI0M5QTA4QSIvPgo8L3N2Zz4K",
-        },
-      },
-      promotions: {
-        create: [
-          {
-            title: "30% de descuento",
-            description: "30% de descuento en tu próxima sesión de masajes",
-            pointsRequired: 10,
-            isActive: true,
-            type: PromotionType.PERCENT_OFF,
-            value: 30,
-            expiryMode: PromotionExpiryMode.QUANTITY,
-            maxRedemptions: 1000,
-          },
-        ],
-      },
-    },
-    include: { promotions: true, passDesign: true },
-  });
-  stores.push(ondaSpa);
-
   for (const store of stores) {
     const def = await prisma.cartilla.create({
       data: {

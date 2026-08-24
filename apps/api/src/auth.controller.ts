@@ -10,6 +10,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from './prisma.service';
 import { FirebaseAuthService } from './firebase-auth.service';
+import { MerchantPasswordResetService } from './merchant-password-reset.service';
 
 const merchantStoreInclude = {
   passDesign: { select: { logoUrl: true } },
@@ -29,12 +30,20 @@ export class AuthController {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(JwtService) private jwt: JwtService,
-    @Inject(FirebaseAuthService) private firebase: FirebaseAuthService
+    @Inject(FirebaseAuthService) private firebase: FirebaseAuthService,
+    @Inject(MerchantPasswordResetService)
+    private passwordReset: MerchantPasswordResetService
   ) {}
 
   @Get('merchant/status')
   status() {
     return { firebaseAuth: this.firebase.isConfigured };
+  }
+
+  /** Público. Siempre responde ok (no revela si el email existe). */
+  @Post('merchant/password-reset')
+  passwordResetRequest(@Body() body: { email?: string }) {
+    return this.passwordReset.request(body.email || '');
   }
 
   @Post('merchant')

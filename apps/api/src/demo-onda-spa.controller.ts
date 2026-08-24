@@ -4,7 +4,6 @@ import {
   Controller,
   Get,
   Inject,
-  NotFoundException,
   Param,
   Post,
 } from '@nestjs/common';
@@ -16,6 +15,29 @@ const STORE_SLUG = 'onda-spa';
 /** Arranca cerca del final para que la demo muestre slots vacíos y cierre rápido. */
 const DEMO_START_POINTS = 8;
 const REDEEM_MESSAGE = '¡Listo! 30% en tu próxima sesión de masajes.';
+
+const DEMO_STORE = {
+  slug: STORE_SLUG,
+  name: 'Onda Spa',
+  maxStamps: 10,
+  design: {
+    title: 'Onda Spa',
+    subtitle: 'Masajes y bienestar',
+    description: 'Completa 10 ondas y lleva 30% en tu próxima sesión de masajes',
+    backgroundColor: '#C9DDD4',
+    foregroundColor: '#2F4F46',
+    labelColor: '#5F7F74',
+    logoUrl: null as string | null,
+    stripImageUrl: null as string | null,
+  },
+  promo: {
+    id: 'demo-spa-promo',
+    title: '30% de descuento',
+    description: '30% de descuento en tu próxima sesión de masajes',
+    pointsRequired: 10,
+    value: 30,
+  },
+};
 
 function devicePhone(deviceId: string) {
   const hex = createHash('sha256').update(`onda-spa:${deviceId}`).digest('hex').slice(0, 10);
@@ -31,6 +53,10 @@ function deviceSerial(deviceId: string) {
   return `ONDA-SPA-${hex}`;
 }
 
+function redeemedThisCycle(points: number) {
+  return points === 0;
+}
+
 @Controller('demo/onda-spa')
 export class DemoOndaSpaController {
   constructor(
@@ -38,41 +64,13 @@ export class DemoOndaSpaController {
     @Inject(WalletService) private wallet: WalletService,
   ) {}
 
-  private async getStore() {
-    const store = await this.prisma.store.findUnique({
-      where: { slug: STORE_SLUG },
-      include: {
-        passDesign: true,
-        promotions: { where: { isActive: true }, orderBy: { pointsRequired: 'asc' } },
-      },
-    });
-    if (!store) {
-      throw new NotFoundException('Onda Spa demo no está sembrado. Corre pnpm db:seed.');
-    }
-    return store;
-  }
-
-  private async passState(passId: string) {
-    const pass = await this.prisma.pass.findUniqueOrThrow({
-      where: { id: passId },
-      include: {
-        user: true,
-        store: { include: { passDesign: true, promotions: { where: { isActive: true } } } },
-      },
-    });
-    const redeemedThisCycle = await this.prisma.transaction.findFirst({
-      where: {
-        passId: pass.id,
-        type: 'REDEEM',
-        createdAt: { gte: pass.cycleStartedAt },
-      },
-    });
-    const design = pass.store?.passDesign;
-    const maxStamps = pass.store?.maxStamps ?? 10;
-    const promo =
-      pass.store?.promotions.find((p) => p.pointsRequired === maxStamps) ||
-      pass.store?.promotions[0] ||
-      null;
+  private passState(pass: {
+    id: string;
+    points: number;
+    walletRef: string | null;
+    user: { name: string };
+  }) {
+    const { design, promo, maxStamps } = DEMO_STORE;
 
     return {
       passId: pass.id,
@@ -80,41 +78,34 @@ export class DemoOndaSpaController {
       maxStamps,
       walletRef: pass.walletRef,
       memberName: pass.user.name,
-      redeemedThisCycle: Boolean(redeemedThisCycle),
-      design: design
-        ? {
-            title: design.title,
-            subtitle: design.subtitle,
-            description: design.description,
-            backgroundColor: design.backgroundColor,
-            foregroundColor: design.foregroundColor,
-            labelColor: design.labelColor,
-            logoUrl: design.logoUrl,
-          }
-        : null,
-      promo: promo
-        ? {
-            id: promo.id,
-            title: promo.title,
-            description: promo.description,
-            pointsRequired: promo.pointsRequired,
-            value: promo.value,
-          }
-        : null,
+      redeemedThisCycle: redeemedThisCycle(pass.points),
+      design: {
+        title: design.title,
+        subtitle: design.subtitle,
+        description: design.description,
+        backgroundColor: design.backgroundColor,
+        foregroundColor: design.foregroundColor,
+        labelColor: design.labelColor,
+        logoUrl: design.logoUrl,
+      },
+      promo: {
+        id: promo.id,
+        title: promo.title,
+        description: promo.description,
+        pointsRequired: promo.pointsRequired,
+        value: promo.value,
+      },
     };
   }
 
   @Get()
-  async info() {
-    const store = await this.getStore();
-    const promo =
-      store.promotions.find((p) => p.pointsRequired === store.maxStamps) || store.promotions[0];
+  info() {
+    const { slug, name, maxStamps, design, promo } = DEMO_STORE;
     return {
-      storeId: store.id,
-      slug: store.slug,
-      name: store.name,
-      maxStamps: store.maxStamps,
-      design: store.passDesign,
+      slug,
+      name,
+      maxStamps,
+      design,
       promo,
     };
   }
@@ -124,19 +115,20 @@ export class DemoOndaSpaController {
     if (!deviceId || deviceId.length < 8) {
       throw new BadRequestException('deviceId inválido');
     }
-    const store = await this.getStore();
     const phone = devicePhone(deviceId);
+    const serial = deviceSerial(deviceId);
     const user = await this.prisma.user.findUnique({ where: { phone } });
     if (!user) {
       return { active: false as const };
     }
     const pass = await this.prisma.pass.findFirst({
-      where: { userId: user.id, storeId: store.id },
+      where: { userId: user.id, serialNumber: serial },
+      include: { user: true },
     });
     if (!pass) {
       return { active: false as const };
     }
-    const state = await this.passState(pass.id);
+    const state = this.passState(pass);
     return {
       active: true as const,
       ...state,
@@ -151,9 +143,9 @@ export class DemoOndaSpaController {
       throw new BadRequestException('deviceId inválido');
     }
 
-    const store = await this.getStore();
     const phone = devicePhone(deviceId);
     const serial = deviceSerial(deviceId);
+    const { design, maxStamps, name } = DEMO_STORE;
 
     let user = await this.prisma.user.findUnique({ where: { phone } });
     if (!user) {
@@ -163,7 +155,8 @@ export class DemoOndaSpaController {
     }
 
     let pass = await this.prisma.pass.findFirst({
-      where: { userId: user.id, storeId: store.id },
+      where: { userId: user.id, serialNumber: serial },
+      include: { user: true },
     });
 
     const isNew = !pass;
@@ -171,23 +164,12 @@ export class DemoOndaSpaController {
       pass = await this.prisma.pass.create({
         data: {
           userId: user.id,
-          storeId: store.id,
           serialNumber: serial,
           points: DEMO_START_POINTS,
         },
+        include: { user: true },
       });
     }
-
-    const design = store.passDesign || {
-      title: store.name,
-      subtitle: 'Masajes y bienestar',
-      description: '',
-      backgroundColor: '#C9DDD4',
-      foregroundColor: '#2F4F46',
-      labelColor: '#5F7F74',
-      logoUrl: null as string | null,
-      stripImageUrl: null as string | null,
-    };
 
     let appleUrl: string | null = null;
     let googleUrl: string | null = null;
@@ -204,8 +186,8 @@ export class DemoOndaSpaController {
           serialNumber: pass.serialNumber,
           points: pass.points,
           holderName: user.name,
-          organizationName: store.name,
-          maxStamps: store.maxStamps,
+          organizationName: name,
+          maxStamps,
           kind: 'store',
           design: {
             title: design.title,
@@ -221,16 +203,17 @@ export class DemoOndaSpaController {
         appleUrl = issued.appleUrl;
         googleUrl = issued.googleUrl;
         stub = issued.walletRef.startsWith('stub-');
-        await this.prisma.pass.update({
+        pass = await this.prisma.pass.update({
           where: { id: pass.id },
           data: { walletRef: issued.walletRef },
+          include: { user: true },
         });
       } catch (err) {
         console.error('Demo Onda Spa issue failed', err);
       }
     }
 
-    const state = await this.passState(pass.id);
+    const state = this.passState(pass);
     return {
       ...state,
       isNew,
@@ -249,54 +232,33 @@ export class DemoOndaSpaController {
       throw new BadRequestException('deviceId inválido');
     }
 
-    const store = await this.getStore();
     const phone = devicePhone(deviceId);
+    const serial = deviceSerial(deviceId);
+    const { promo, maxStamps } = DEMO_STORE;
+
     const user = await this.prisma.user.findUnique({ where: { phone } });
     if (!user) {
       throw new BadRequestException('Activa la tarjeta primero');
     }
 
     const pass = await this.prisma.pass.findFirst({
-      where: { userId: user.id, storeId: store.id },
+      where: { userId: user.id, serialNumber: serial },
+      include: { user: true },
     });
     if (!pass) {
       throw new BadRequestException('Activa la tarjeta primero');
     }
 
-    const promo =
-      store.promotions.find((p) => p.pointsRequired === store.maxStamps) || store.promotions[0];
-    if (!promo) {
-      throw new BadRequestException('Promo demo no configurada');
-    }
-
-    const redeemedThisCycle = await this.prisma.transaction.findFirst({
-      where: {
-        passId: pass.id,
-        type: 'REDEEM',
-        createdAt: { gte: pass.cycleStartedAt },
-      },
-    });
-
-    if (redeemedThisCycle) {
-      const state = await this.passState(pass.id);
+    if (redeemedThisCycle(pass.points)) {
+      const state = this.passState(pass);
       return { ...state, action: 'already_redeemed' as const };
     }
 
-    if (pass.points < store.maxStamps) {
-      const updated = await this.prisma.$transaction(async (tx) => {
-        const next = await tx.pass.update({
-          where: { id: pass.id },
-          data: { points: { increment: 1 } },
-        });
-        await tx.transaction.create({
-          data: {
-            passId: pass.id,
-            storeId: store.id,
-            type: 'ACCUMULATE',
-            points: 1,
-          },
-        });
-        return next;
+    if (pass.points < maxStamps) {
+      const updated = await this.prisma.pass.update({
+        where: { id: pass.id },
+        data: { points: { increment: 1 } },
+        include: { user: true },
       });
 
       if (updated.walletRef) {
@@ -307,33 +269,16 @@ export class DemoOndaSpaController {
         }
       }
 
-      const state = await this.passState(pass.id);
+      const state = this.passState(updated);
       return { ...state, action: 'accumulated' as const };
     }
 
-    const isFinalReward = promo.pointsRequired === store.maxStamps;
-    await this.prisma.$transaction(async (tx) => {
-      const current = await tx.pass.findUniqueOrThrow({ where: { id: pass.id } });
-      if (current.points < promo.pointsRequired) {
-        throw new BadRequestException('Aún no alcanzas este premio');
-      }
-      await tx.transaction.create({
-        data: {
-          passId: pass.id,
-          storeId: store.id,
-          type: 'REDEEM',
-          points: promo.pointsRequired,
-          promotionId: promo.id,
-        },
-      });
-      // Demo: baja a 0 sin rotar cycleStartedAt para que redeemedThisCycle siga siendo true.
-      await tx.pass.update({
-        where: { id: pass.id },
-        data: isFinalReward ? { points: 0 } : {},
-      });
+    const updatedPass = await this.prisma.pass.update({
+      where: { id: pass.id },
+      data: { points: 0 },
+      include: { user: true },
     });
 
-    const updatedPass = await this.prisma.pass.findUniqueOrThrow({ where: { id: pass.id } });
     if (updatedPass.walletRef) {
       try {
         await this.wallet.updatePoints(updatedPass.walletRef, updatedPass.points);
@@ -343,7 +288,7 @@ export class DemoOndaSpaController {
       }
     }
 
-    const state = await this.passState(pass.id);
+    const state = this.passState(updatedPass);
     return {
       ...state,
       action: 'redeemed' as const,

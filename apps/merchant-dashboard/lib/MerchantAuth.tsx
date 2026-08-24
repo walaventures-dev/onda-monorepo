@@ -10,6 +10,8 @@ import {
 } from 'react';
 import {
   GoogleAuthProvider,
+  checkActionCode,
+  confirmPasswordReset as firebaseConfirmPasswordReset,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -18,7 +20,7 @@ import {
   updateProfile,
   type User,
 } from 'firebase/auth';
-import { setApiAuthTokenGetter } from '@onda/shared-ui';
+import { api, setApiAuthTokenGetter } from '@onda/shared-ui';
 import { getMerchantAuth, isMerchantFirebaseConfigured } from './firebase';
 
 type MerchantAuthValue = {
@@ -29,6 +31,11 @@ type MerchantAuthValue = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name?: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  /** Valida el oobCode del URL y devuelve el email asociado si existe. */
+  verifyPasswordResetCode: (oobCode: string) => Promise<{ email: string | null }>;
+  /** Confirma la nueva contraseña con el oobCode del correo. */
+  confirmPasswordReset: (oobCode: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -68,6 +75,21 @@ export function mapFirebaseAuthError(
   }
   if (/weak-password/i.test(hay)) {
     return 'La contraseña debe tener al menos 6 caracteres';
+  }
+  if (/auth\/invalid-email/i.test(hay)) {
+    return 'Ese email no es válido';
+  }
+  if (/auth\/too-many-requests/i.test(hay)) {
+    return 'Demasiados intentos. Espera un momento e intenta de nuevo.';
+  }
+  if (/auth\/user-not-found/i.test(hay)) {
+    return 'No hay una cuenta con ese email.';
+  }
+  if (/auth\/expired-action-code/i.test(hay)) {
+    return 'Este enlace ya expiró. Solicita uno nuevo.';
+  }
+  if (/auth\/invalid-action-code/i.test(hay)) {
+    return 'Este enlace no es válido o ya se usó. Solicita uno nuevo.';
   }
   return fallback;
 }
@@ -126,6 +148,23 @@ export function MerchantAuthProvider({ children }: { children: ReactNode }) {
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         await signInWithPopup(getMerchantAuth(), provider);
+      },
+      resetPassword: async (email) => {
+        await api('/auth/merchant/password-reset', {
+          method: 'POST',
+          body: JSON.stringify({ email }),
+        });
+      },
+      verifyPasswordResetCode: async (oobCode) => {
+        const info = await checkActionCode(getMerchantAuth(), oobCode);
+        return { email: info.data.email ?? null };
+      },
+      confirmPasswordReset: async (oobCode, newPassword) => {
+        await firebaseConfirmPasswordReset(
+          getMerchantAuth(),
+          oobCode,
+          newPassword
+        );
       },
       logout: async () => {
         if (firebaseEnabled) await signOut(getMerchantAuth());

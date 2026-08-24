@@ -7,6 +7,7 @@ import {
   GradientButton,
   OndaLogo,
   OndaScriptMark,
+  PasswordInput,
 } from '@onda/shared-ui';
 import { PLAN_META, parsePlanId } from '@onda/shared-utils';
 import { useMerchantAuth, mapFirebaseAuthError } from '../lib/MerchantAuth';
@@ -149,14 +150,12 @@ export function MerchantSignup() {
                 </label>
                 <label className="onda-field">
                   <span className="onda-field__label">Contraseña</span>
-                  <input
-                    type="password"
+                  <PasswordInput
                     required
                     minLength={6}
                     autoComplete="new-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="onda-input"
                   />
                 </label>
                 {error ? (

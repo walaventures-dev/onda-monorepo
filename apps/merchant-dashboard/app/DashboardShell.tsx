@@ -6,6 +6,7 @@ import { ToastProvider, api } from "@onda/shared-ui";
 import { MerchantWorkspace } from "./MerchantWorkspace";
 import { MerchantOnboarding } from "./MerchantOnboarding";
 import { MerchantLogin } from "./MerchantLogin";
+import { MerchantChangePassword } from "./MerchantChangePassword";
 import { MerchantAuthProvider, useMerchantAuth } from "../lib/MerchantAuth";
 import {
   isSetupAllowedPath,
@@ -23,6 +24,13 @@ function LoadingScreen() {
 
 function isLoginPath(pathname: string) {
   return pathname === "/login" || pathname.startsWith("/login/");
+}
+
+function isChangePasswordPath(pathname: string) {
+  return (
+    pathname === "/login/cambiar-contrasena" ||
+    pathname.startsWith("/login/cambiar-contrasena/")
+  );
 }
 
 function isOnboardingPath(pathname: string) {
@@ -51,10 +59,14 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const isOnboarding = isOnboardingPath(pathname);
   const isLogin = isLoginPath(pathname);
+  const isChangePassword = isChangePasswordPath(pathname);
   const { ready, firebaseEnabled, user } = useMerchantAuth();
 
   useEffect(() => {
     if (!ready) return;
+
+    // Cambio de contraseña: sesión = oobCode en el URL; no redirigir.
+    if (isChangePassword) return;
 
     if (firebaseEnabled && !user) {
       if (!isOnboarding && !isLogin) {
@@ -111,14 +123,29 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         cancelled = true;
       };
     }
-  }, [ready, firebaseEnabled, user, isOnboarding, isLogin, pathname, router]);
+  }, [
+    ready,
+    firebaseEnabled,
+    user,
+    isOnboarding,
+    isLogin,
+    isChangePassword,
+    pathname,
+    router,
+  ]);
 
   if (!ready) {
     return <LoadingScreen />;
   }
 
   let screen: ReactNode;
-  if (firebaseEnabled && !user && !isOnboarding) {
+  if (isChangePassword) {
+    screen = (
+      <Suspense fallback={<LoadingScreen />}>
+        <MerchantChangePassword />
+      </Suspense>
+    );
+  } else if (firebaseEnabled && !user && !isOnboarding) {
     screen = isLogin ? <MerchantLogin /> : <LoadingScreen />;
   } else if (user && isLogin) {
     screen = <LoadingScreen />;

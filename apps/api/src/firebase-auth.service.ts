@@ -68,4 +68,18 @@ export class FirebaseAuthService {
     }
     return email;
   }
+
+  /**
+   * Genera el enlace de reset (oobCode). El envío del correo lo hace MailService,
+   * no Firebase — así el proveedor de email es intercambiable.
+   */
+  async generatePasswordResetLink(
+    email: string,
+    continueUrl: string
+  ): Promise<string> {
+    return getAuth(this.ensureApp()).generatePasswordResetLink(email, {
+      url: continueUrl,
+      handleCodeInApp: false,
+    });
+  }
 }

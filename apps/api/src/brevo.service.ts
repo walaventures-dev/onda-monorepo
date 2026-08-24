@@ -1,31 +1,30 @@
 import { Injectable, Logger } from '@nestjs/common';
-
-type BrevoEmailInput = {
-  to: string;
-  toName?: string;
-  subject: string;
-  html: string;
-  text?: string;
-};
+import type { MailAddress, MailMessage, MailProvider } from './mail.types';
 
 type BrevoSmsInput = {
   to: string;
   message: string;
 };
 
+/** Adaptador Brevo → `MailProvider`. El resto de la app no importa este archivo. */
 @Injectable()
-export class BrevoService {
+export class BrevoService implements MailProvider {
+  readonly name = 'brevo';
   private readonly logger = new Logger(BrevoService.name);
 
   get isConfigured(): boolean {
     return Boolean(process.env.BREVO_API_KEY);
   }
 
-  async sendEmail(input: BrevoEmailInput) {
+  async send(message: MailMessage & { from: MailAddress }) {
     const apiKey = process.env.BREVO_API_KEY;
+    const toList = Array.isArray(message.to) ? message.to : [message.to];
+
     if (!apiKey) {
       this.logger.log(
-        `[Brevo stub] email to=${input.to} subject=${input.subject}`
+        `[Brevo stub] from=${message.from.email} to=${toList
+          .map((t) => t.email)
+          .join(',')} subject=${message.subject}`
       );
       return { ok: true as const, stub: true as const };
     }
@@ -39,19 +38,61 @@ export class BrevoService {
       },
       body: JSON.stringify({
         sender: {
-          email: process.env.BREVO_SENDER_EMAIL || 'hola@onda.lat',
-          name: process.env.BREVO_SENDER_NAME || 'Onda',
+          email: message.from.email,
+          name: message.from.name || message.from.email,
         },
-        to: [{ email: input.to, name: input.toName || input.to }],
-        subject: input.subject,
-        htmlContent: input.html,
-        textContent: input.text,
+        to: toList.map((t) => ({
+          email: t.email,
+          name: t.name || t.email,
+        })),
+        subject: message.subject,
+        htmlContent: message.html,
+        textContent: message.text,
       }),
     });
     if (!res.ok) {
-      throw new Error(`Brevo email ${res.status}: ${await res.text()}`);
+      const body = await res.text();
+      let detail = body;
+      try {
+        const parsed = JSON.parse(body) as { message?: string };
+        if (parsed.message) detail = parsed.message;
+      } catch {
+        /* raw */
+      }
+      if (/unrecognised IP|authorized_ips|authorised_ips/i.test(detail)) {
+        throw new Error(
+          'Brevo bloqueó el envío: autoriza la IP de este servidor en Brevo → Security → Authorised IPs.'
+        );
+      }
+      throw new Error(`No se pudo enviar el correo (${res.status}): ${detail}`);
     }
     return { ok: true as const };
+  }
+
+  /** @deprecated Preferir MailService.send — se mantiene por jobs legacy. */
+  async sendEmail(input: {
+    to: string;
+    toName?: string;
+    subject: string;
+    html: string;
+    text?: string;
+  }) {
+    return this.send({
+      to: { email: input.to, name: input.toName },
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+      from: {
+        email:
+          process.env.MAIL_FROM_EMAIL ||
+          process.env.BREVO_SENDER_EMAIL ||
+          'hola@onda.lat',
+        name:
+          process.env.MAIL_FROM_NAME ||
+          process.env.BREVO_SENDER_NAME ||
+          'Onda',
+      },
+    });
   }
 
   async sendSms(input: BrevoSmsInput) {

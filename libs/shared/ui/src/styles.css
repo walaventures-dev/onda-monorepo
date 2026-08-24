@@ -914,6 +914,45 @@ button.onda-gradient:focus-visible:not(:disabled) {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--onda-bridge) 22%, transparent);
 }
 
+.onda-password-input {
+  position: relative;
+  width: 100%;
+}
+
+.onda-password-input__field {
+  padding-right: 2.75rem;
+}
+
+.onda-password-input__toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0.65rem;
+  background: transparent;
+  color: var(--onda-muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.onda-password-input__toggle:hover {
+  color: var(--onda-ink);
+  background: color-mix(in srgb, var(--onda-bg) 80%, transparent);
+}
+
+.onda-password-input__toggle:focus-visible {
+  outline: 2px solid var(--onda-bridge);
+  outline-offset: 1px;
+}
+
 .onda-pass-designer input::placeholder,
 .onda-pass-designer textarea::placeholder,
 .onda-input::placeholder {

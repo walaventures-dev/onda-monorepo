@@ -75,10 +75,15 @@ export function IPhonePreview({
 }) {
   const gradId = `iphone-bezel-${useId().replace(/:/g, '')}`;
 
+  // viewBox 320×650: outer rx=54, hole inset (14,16)-(306,634) rx=42
   return (
-    <div className={`relative mx-auto w-full max-w-[280px] ${className}`}>
+    <div
+      className={`relative mx-auto w-full max-w-[280px] ${className}`}
+      style={{ aspectRatio: '320 / 650' }}
+    >
       <svg
         viewBox="0 0 320 650"
+        preserveAspectRatio="xMidYMid meet"
         className="pointer-events-none absolute inset-0 z-20 h-full w-full"
         aria-hidden
       >
@@ -102,15 +107,19 @@ export function IPhonePreview({
       </svg>
 
       <div
-        className="relative z-10 overflow-hidden rounded-[2.55rem] bg-[#0B1220]"
+        className="absolute z-10 overflow-hidden bg-[#0B1220]"
         style={{
-          aspectRatio: '9 / 19.5',
-          margin: '3.2% 4%',
+          top: `${(16 / 650) * 100}%`,
+          right: `${(14 / 320) * 100}%`,
+          bottom: `${(16 / 650) * 100}%`,
+          left: `${(14 / 320) * 100}%`,
+          // rx=ry=42 del hueco SVG, en % del propio screen (292×618)
+          borderRadius: `${(42 / 292) * 100}% / ${(42 / 618) * 100}%`,
         }}
       >
         <div className="absolute inset-0">{children}</div>
-        <div className="pointer-events-none absolute left-1/2 top-3 z-30 h-[22px] w-[88px] -translate-x-1/2 rounded-full bg-black" />
-        <div className="pointer-events-none absolute bottom-2 left-1/2 z-30 h-1 w-28 -translate-x-1/2 rounded-full bg-white/40" />
+        <div className="pointer-events-none absolute left-1/2 top-[3.2%] z-30 h-[3.4%] w-[30%] max-h-[22px] min-h-[14px] -translate-x-1/2 rounded-full bg-black" />
+        <div className="pointer-events-none absolute bottom-[1.6%] left-1/2 z-30 h-[0.6%] w-[38%] max-h-[4px] min-h-[2px] -translate-x-1/2 rounded-full bg-white/40" />
       </div>
     </div>
   );

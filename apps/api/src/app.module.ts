@@ -39,6 +39,9 @@ import { FirebaseAuthService } from './firebase-auth.service';
 import { JobsService } from './jobs.service';
 import { JobsController } from './jobs.controller';
 import { BrevoService } from './brevo.service';
+import { MailService } from './mail.service';
+import { MAIL_PROVIDER } from './mail.types';
+import { MerchantPasswordResetService } from './merchant-password-reset.service';
 import { WompiService } from './wompi.service';
 import { CartillaService } from './cartilla.service';
 import { CampaignsService } from './campaigns.service';
@@ -91,6 +94,9 @@ import { CampaignsService } from './campaigns.service';
     FirebaseAuthService,
     JobsService,
     BrevoService,
+    { provide: MAIL_PROVIDER, useExisting: BrevoService },
+    MailService,
+    MerchantPasswordResetService,
     WompiService,
     CartillaService,
     CampaignsService,

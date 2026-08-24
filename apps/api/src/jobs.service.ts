@@ -10,6 +10,7 @@ import { Queue, Worker } from 'bullmq';
 import { PrismaService } from './prisma.service';
 import { WhatsappService } from './whatsapp.service';
 import { BrevoService } from './brevo.service';
+import { MailService } from './mail.service';
 import { WalletService } from './wallet.service';
 import { WompiService } from './wompi.service';
 import type {
@@ -41,6 +42,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(forwardRef(() => WhatsappService)) private whatsapp: WhatsappService,
     @Inject(BrevoService) private brevo: BrevoService,
+    @Inject(MailService) private mail: MailService,
     @Inject(WalletService) private wallet: WalletService,
     @Inject(WompiService) private wompi: WompiService,
     @Inject(forwardRef(() => CartillaService)) private cartillas: CartillaService,
@@ -127,9 +129,16 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       case 'whatsapp-send':
         await this.whatsapp.sendViaKapso(payload as WhatsappJobPayload);
         return;
-      case 'brevo-email':
-        await this.brevo.sendEmail(payload as BrevoEmailJobPayload);
+      case 'brevo-email': {
+        const p = payload as BrevoEmailJobPayload;
+        await this.mail.send({
+          to: { email: p.to, name: p.toName },
+          subject: p.subject,
+          html: p.html,
+          text: p.text,
+        });
         return;
+      }
       case 'brevo-sms':
         await this.dispatchSmsCampaign(payload as BrevoSmsJobPayload);
         return;

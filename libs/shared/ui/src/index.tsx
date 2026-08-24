@@ -12,6 +12,8 @@ export { api, API_URL, getApiUrl, setApiAuthTokenGetter, getApiAuthToken } from 
 export { HeatmapPoints } from './HeatmapPoints';
 export { PhoneInput } from './PhoneInput';
 export type { PhoneInputProps } from './PhoneInput';
+export { PasswordInput } from './PasswordInput';
+export type { PasswordInputProps } from './PasswordInput';
 export { OndaSelect } from './OndaSelect';
 export type { OndaSelectProps, OndaSelectOption } from './OndaSelect';
 export { OndaDatePicker } from './OndaDatePicker';
