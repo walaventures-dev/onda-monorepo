@@ -13,6 +13,8 @@ export type TxActivityItem = {
   time: string;
   /** Nombre del cliente (auditoría) */
   person?: string | null;
+  paymentAmount?: number | null;
+  benefitAmount?: number | null;
   promotion?: {
     title?: string | null;
     type?: string | null;
@@ -92,6 +94,16 @@ export function TxActivityRow({
           )}
         </p>
         <p className="onda-tx-time">{item.time}</p>
+        {isAcc && item.paymentAmount != null && item.paymentAmount > 0 ? (
+          <p className="onda-tx-muted text-xs">
+            Cuenta ${item.paymentAmount.toLocaleString('es-CO')}
+          </p>
+        ) : null}
+        {!isAcc && item.benefitAmount != null && item.benefitAmount > 0 ? (
+          <p className="onda-tx-muted text-xs">
+            Beneficio ${item.benefitAmount.toLocaleString('es-CO')}
+          </p>
+        ) : null}
       </div>
       <span className={`onda-tx-points ${isAcc ? 'is-acc' : 'is-redeem'}`}>
         {isAcc ? '+' : '−'}

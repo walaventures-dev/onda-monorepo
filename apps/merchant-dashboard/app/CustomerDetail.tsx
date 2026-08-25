@@ -7,7 +7,7 @@ import {
   BadgePill,
   TxActivityRow,
 } from '@onda/shared-ui';
-import { displayPhone } from '@onda/shared-utils';
+import { displayPhone, formatCop } from '@onda/shared-utils';
 import {
   ResponsiveContainer,
   BarChart,
@@ -31,6 +31,11 @@ function waLink(phone?: string | null) {
   const digits = phone.replace(/\D/g, '');
   if (!digits) return null;
   return `https://wa.me/${digits}`;
+}
+
+function formatRoi(roi?: number | null) {
+  if (roi == null || !Number.isFinite(roi)) return '—';
+  return `${roi.toFixed(1)}x`;
 }
 
 export function CustomerDetail({
@@ -100,6 +105,11 @@ export function CustomerDetail({
               ? ` · Serial ${detail.pass.serialNumber}`
               : ''}
           </p>
+          {detail.ondaValue != null && Number(detail.ondaValue) > 0 ? (
+            <p className="mt-1 text-xs text-[var(--onda-muted)]">
+              Una onda cuesta {formatCop(Number(detail.ondaValue))}
+            </p>
+          ) : null}
           {detail.nearPromo ? (
             <p className="mt-1 text-sm text-[var(--onda-ink)]">
               A{' '}
@@ -126,7 +136,30 @@ export function CustomerDetail({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6 [&>*]:min-w-0">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 [&>*]:min-w-0">
+        <KpiCard
+          label="Ventas"
+          hint="Suma del valor de cuenta en acumulaciones del periodo."
+          value={formatCop(k?.ventas ?? 0)}
+          delta={deltaLabel(k?.ventasDelta)}
+          positive={(k?.ventasDelta ?? 0) >= 0}
+        />
+        <KpiCard
+          label="Beneficio otorgado"
+          hint="Costo estimado de los canjes en el periodo."
+          value={formatCop(k?.beneficioOtorgado ?? 0)}
+          delta={deltaLabel(k?.beneficioDelta)}
+          positive={(k?.beneficioDelta ?? 0) <= 0}
+        />
+        <KpiCard
+          label="ROI"
+          hint="Ventas ÷ beneficio otorgado."
+          value={formatRoi(k?.roi)}
+        />
+        <KpiCard
+          label="Ticket medio"
+          value={formatCop(k?.ticketMedioCop ?? 0)}
+        />
         <KpiCard
           label="Ondas acumuladas"
           hint="Onda = punto que el cliente gana en cada compra."
@@ -234,6 +267,18 @@ export function CustomerDetail({
           </h3>
           <ul className="mt-3 space-y-2.5 text-sm">
             <li className="flex justify-between gap-2 border-b border-[var(--onda-border)] pb-2">
+              <span className="text-[var(--onda-muted)]">Ventas</span>
+              <span className="font-medium">
+                {formatCop(k?.ventasAllTime ?? 0)}
+              </span>
+            </li>
+            <li className="flex justify-between gap-2 border-b border-[var(--onda-border)] pb-2">
+              <span className="text-[var(--onda-muted)]">Beneficio otorgado</span>
+              <span className="font-medium">
+                {formatCop(k?.beneficioAllTime ?? 0)}
+              </span>
+            </li>
+            <li className="flex justify-between gap-2 border-b border-[var(--onda-border)] pb-2">
               <span className="text-[var(--onda-muted)]">Ondas acumuladas</span>
               <span className="font-medium">{k?.ondasAllTime ?? 0}</span>
             </li>
@@ -272,6 +317,8 @@ export function CustomerDetail({
                   id: t.id,
                   type: t.type,
                   points: t.points,
+                  paymentAmount: t.paymentAmount,
+                  benefitAmount: t.benefitAmount,
                   promotion: t.promotion
                     ? { title: t.promotion.title, type: t.promotion.type }
                     : null,

@@ -19,6 +19,7 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "./prisma.service";
 import { CartillaService, assignmentCap } from "./cartilla.service";
+import { computeRoi } from "@onda/shared-utils";
 
 function parseDateStart(value?: string) {
   if (!value) return undefined;
@@ -127,6 +128,11 @@ function assertPromoConfig(body: {
   if (type === "BUY_GET") {
     if (!body.buyQuantity || !body.getQuantity) {
       throw new BadRequestException("Indica cuántos compra y cuántos lleva");
+    }
+    if (body.value == null || Number(body.value) <= 0) {
+      throw new BadRequestException(
+        "Indica el precio unitario del producto que regalas",
+      );
     }
   }
 }
@@ -410,6 +416,22 @@ export class PromotionsController {
     const ondasCost = txs.reduce((s, t) => s + t.points, 0);
     const canjes = txs.length;
     const repeatRedeemers = redeemers.filter((r) => r.redemptions > 1).length;
+    const beneficioTotal = txs.reduce((s, t) => s + (t.benefitAmount ?? 0), 0);
+    const redeemerPassIds = [...new Set(txs.map((t) => t.passId))];
+    const ventasAgg =
+      promo.storeId && redeemerPassIds.length > 0
+        ? await this.prisma.transaction.aggregate({
+            where: {
+              storeId: promo.storeId,
+              type: "ACCUMULATE",
+              passId: { in: redeemerPassIds },
+              createdAt: { gte: from, lte: to },
+              ...(cartillaId ? { cartillaId } : {}),
+            },
+            _sum: { paymentAmount: true },
+          })
+        : { _sum: { paymentAmount: null as number | null } };
+    const ventasClientesQueCanjearon = ventasAgg._sum.paymentAmount ?? 0;
 
     return {
       promotion: promo,
@@ -434,6 +456,9 @@ export class PromotionsController {
           elegibles > 0 ? Math.round((uniqueRedeemers / elegibles) * 100) : 0,
         costeMedioOndas:
           canjes > 0 ? Math.round(ondasCost / canjes) : promo.pointsRequired,
+        beneficioTotal,
+        ventasClientesQueCanjearon,
+        roi: computeRoi(ventasClientesQueCanjearon, beneficioTotal),
         remaining,
         maxRedemptions: promo.maxRedemptions,
         assignmentCount,
@@ -446,6 +471,8 @@ export class PromotionsController {
       history: txs.map((tx) => ({
         id: tx.id,
         points: tx.points,
+        paymentAmount: tx.paymentAmount,
+        benefitAmount: tx.benefitAmount,
         createdAt: tx.createdAt,
         passId: tx.passId,
         cartillaId: tx.cartillaId,

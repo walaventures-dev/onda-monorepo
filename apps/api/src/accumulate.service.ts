@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import { ondasFromPayment, parsePositiveInt } from '@onda/shared-utils';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { BrevoService } from './brevo.service';
@@ -19,6 +20,8 @@ export type AccumulateInput = {
   serialNumber?: string;
   pendingRequestId?: string;
   paymentAmount?: number;
+  /** Cantidad manual de ondas (obligatoria si el store no tiene ondaValue). */
+  points?: number;
 };
 
 export function parsePaymentAmount(raw: unknown): number | undefined {
@@ -87,11 +90,13 @@ function pickNextReward(input: {
 
 export function buildAccumulateMessage(
   storeName: string,
+  delta: number,
   points: number,
   maxStamps: number,
   next: NextReward | null
 ) {
-  const head = `${clip(storeName, 40)}: +1 onda (${points}/${maxStamps})`;
+  const deltaLabel = delta === 1 ? '+1 onda' : `+${delta} ondas`;
+  const head = `${clip(storeName, 40)}: ${deltaLabel} (${points}/${maxStamps})`;
   let tail = '';
   if (next?.ready) {
     tail = `. Ya puedes reclamar ${clip(next.title, 50)}`;
@@ -99,6 +104,41 @@ export function buildAccumulateMessage(
     tail = `. Próximo: ${clip(next.title, 40)} en onda ${next.pointsRequired}`;
   }
   return `${head}${tail}.`.slice(0, 160);
+}
+
+function resolveRequestedOndas(input: {
+  paymentAmount?: number;
+  points?: number;
+  ondaValue?: number | null;
+}): number {
+  const ondaValue =
+    input.ondaValue != null && Number(input.ondaValue) > 0
+      ? Number(input.ondaValue)
+      : null;
+
+  if (ondaValue != null) {
+    if (input.paymentAmount == null || !(input.paymentAmount > 0)) {
+      throw new BadRequestException('Indica el valor de la cuenta');
+    }
+    const auto = ondasFromPayment(input.paymentAmount, ondaValue);
+    if (auto <= 0) {
+      throw new BadRequestException(
+        `El monto no alcanza para 1 onda (mínimo ${Math.ceil(ondaValue)} COP)`
+      );
+    }
+    return auto;
+  }
+
+  const manual = parsePositiveInt(input.points);
+  if (manual == null) {
+    throw new BadRequestException(
+      'Indica cuántas ondas acumular (o configura el valor de una onda)'
+    );
+  }
+  if (input.paymentAmount == null || !(input.paymentAmount > 0)) {
+    throw new BadRequestException('Indica el valor de la cuenta');
+  }
+  return manual;
 }
 
 @Injectable()
@@ -116,6 +156,12 @@ export class AccumulateService {
     const paymentAmount = parsePaymentAmount(input.paymentAmount);
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: input.storeId },
+    });
+
+    const requested = resolveRequestedOndas({
+      paymentAmount,
+      points: input.points,
+      ondaValue: store.ondaValue,
     });
 
     const serial = input.serialNumber?.trim();
@@ -168,17 +214,21 @@ export class AccumulateService {
       throw new BadRequestException('Esta onda ya se acumuló hace un momento');
     }
 
-    const { updatedPass, confirmedIds } = await this.prisma.$transaction(
+    const { updatedPass, confirmedIds, delta } = await this.prisma.$transaction(
       async (tx) => {
-        const allowed = await assertCanAccumulate(tx, store.id, 1);
         const current = await tx.pass.findUniqueOrThrow({
           where: { id: pass.id },
         });
-        const delta = Math.max(
-          0,
-          Math.min(allowed, store.maxStamps - current.points)
-        );
-        if (delta <= 0) {
+        const room = Math.max(0, store.maxStamps - current.points);
+        if (room <= 0) {
+          throw new BadRequestException(
+            'Ya alcanzaste el máximo de sellos de este ciclo, reclama tu premio primero'
+          );
+        }
+        const capped = Math.min(requested, room);
+        const allowed = await assertCanAccumulate(tx, store.id, capped);
+        const nextDelta = Math.max(0, allowed);
+        if (nextDelta <= 0) {
           throw new BadRequestException(
             'Ya alcanzaste el máximo de sellos de este ciclo, reclama tu premio primero'
           );
@@ -207,7 +257,7 @@ export class AccumulateService {
 
         const updated = await tx.pass.update({
           where: { id: pass.id },
-          data: { points: { increment: delta } },
+          data: { points: { increment: nextDelta } },
           include: { user: true },
         });
         await tx.transaction.create({
@@ -215,7 +265,7 @@ export class AccumulateService {
             passId: pass.id,
             storeId: store.id,
             type: 'ACCUMULATE',
-            points: delta,
+            points: nextDelta,
             cartillaId: current.cartillaId,
             ...(paymentAmount != null ? { paymentAmount } : {}),
           },
@@ -223,6 +273,7 @@ export class AccumulateService {
         return {
           updatedPass: updated,
           confirmedIds: pendings.map((p) => p.id),
+          delta: nextDelta,
         };
       }
     );
@@ -253,6 +304,7 @@ export class AccumulateService {
     });
     const message = buildAccumulateMessage(
       store.name,
+      delta,
       full.points,
       maxStamps,
       next
@@ -282,10 +334,17 @@ export class AccumulateService {
     if (confirmedIds.length) {
       this.sse.emit(store.id, { kind: 'resolved', ids: confirmedIds });
     }
+    this.sse.emit(store.id, {
+      kind: 'activity',
+      type: 'ACCUMULATE',
+      passId: pass.id,
+      delta,
+    });
 
     return {
       pass: full,
       points: full.points,
+      delta,
       next,
       message,
     };

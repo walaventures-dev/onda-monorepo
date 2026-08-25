@@ -5,17 +5,28 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import {
+  computeBenefitAmount,
+  needsClaimBenefitInput,
+  needsClaimPaymentAmount,
+  parsePositiveInt,
+} from '@onda/shared-utils';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { BrevoService } from './brevo.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
 import { CartillaService } from './cartilla.service';
+import { parsePaymentAmount } from './accumulate.service';
 
 export type RedeemInput = {
   storeId: string;
   pendingRequestId?: string;
   passId?: string;
   promotionId?: string;
+  /** Ticket de la cuenta (obligatorio en PERCENT_OFF). No cuenta como venta. */
+  paymentAmount?: number;
+  /** Beneficio COP manual (OTHER sin value en promo). */
+  benefitAmount?: number;
 };
 
 function clip(text: string, max: number) {
@@ -99,6 +110,31 @@ export class RedeemService {
       throw new ForbiddenException('Este pase no es de esta sede');
     }
 
+    const paymentAmount = parsePaymentAmount(input.paymentAmount);
+    const benefitOverride = parsePositiveInt(input.benefitAmount);
+
+    if (needsClaimPaymentAmount(promo.type)) {
+      if (paymentAmount == null || !(paymentAmount > 0)) {
+        throw new BadRequestException(
+          'Indica el valor de la cuenta para calcular el descuento'
+        );
+      }
+    }
+    if (needsClaimBenefitInput(promo.type, promo.value)) {
+      if (benefitOverride == null) {
+        throw new BadRequestException('Indica el valor del beneficio (COP)');
+      }
+    }
+
+    const benefitAmount = computeBenefitAmount(
+      {
+        type: promo.type,
+        value: promo.value,
+        getQuantity: promo.getQuantity,
+      },
+      { paymentAmount, benefitOverride }
+    );
+
     const need = assignment.pointsRequired;
     const isFinalReward = need === store.maxStamps;
 
@@ -161,6 +197,8 @@ export class RedeemService {
           promotionId: resolvedPromoId,
           cartillaId: live.cartillaId,
           ...(lastAccumulate ? { accumulateId: lastAccumulate.id } : {}),
+          ...(paymentAmount != null ? { paymentAmount } : {}),
+          ...(benefitAmount != null ? { benefitAmount } : {}),
         },
       });
       if (isFinalReward) {
@@ -206,12 +244,21 @@ export class RedeemService {
     if (confirmedIds.length) {
       this.sse.emit(store.id, { kind: 'resolved', ids: confirmedIds });
     }
+    this.sse.emit(store.id, {
+      kind: 'activity',
+      type: 'REDEEM',
+      passId: resolvedPassId,
+      promotionId: resolvedPromoId,
+      benefitAmount,
+    });
 
     return {
       kind: 'redeem' as const,
       pass: full,
       points: full.points,
-      promotion: { id: promo.id, title: promo.title },
+      promotion: { id: promo.id, title: promo.title, type: promo.type },
+      benefitAmount,
+      ondaValue: store.ondaValue ?? null,
       message,
     };
   }

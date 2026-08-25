@@ -258,6 +258,16 @@ export {
   loyaltyProgressCopy,
 } from './loyalty-copy';
 
+export {
+  type PromoBenefitInput,
+  parsePositiveInt,
+  ondasFromPayment,
+  computeRoi,
+  computeBenefitAmount,
+  needsClaimPaymentAmount,
+  needsClaimBenefitInput,
+} from './loyalty-money';
+
 export { ONDA_CLAIM_QR_PREFIX, claimQrPayload, parseCajaQr } from './caja-qr';
 
 export {

@@ -8,15 +8,38 @@ import {
   OndaHandMark,
   setApiAuthTokenGetter,
 } from '@onda/shared-ui';
-import { formatMoneyInput, parseMoneyInput } from '@onda/shared-utils';
+import {
+  formatMoneyInput,
+  parseMoneyInput,
+  ondasFromPayment,
+  formatCop,
+} from '@onda/shared-utils';
 
 type Flash = { tone: 'ok' | 'err'; title: string; detail?: string };
 
 type Burst =
   | { phase: 'working' }
-  | { phase: 'ok'; name?: string; points?: number }
+  | { phase: 'ok'; name?: string; points?: number; delta?: number }
   | { phase: 'claim'; name?: string; title?: string }
   | { phase: 'err'; title: string; detail?: string };
+
+type Draft =
+  | {
+      mode: 'accumulate';
+      serial: string;
+      amount: string;
+      points: string;
+      needsPoints: boolean;
+    }
+  | {
+      mode: 'claim';
+      serial: string;
+      amount: string;
+      benefit: string;
+      needsPaymentAmount: boolean;
+      needsBenefitAmount: boolean;
+      promotionTitle?: string;
+    };
 
 function CajaBurst({
   burst,
@@ -29,7 +52,9 @@ function CajaBurst({
     burst.phase === 'working'
       ? 'Un momento…'
       : burst.phase === 'ok'
-        ? '+1 onda'
+        ? burst.delta != null && burst.delta !== 1
+          ? `+${burst.delta} ondas`
+          : '+1 onda'
         : burst.phase === 'claim'
           ? '¡Premio!'
           : burst.title;
@@ -89,21 +114,55 @@ function CajaBurst({
 }
 
 function CajaAmountSheet({
-  amount,
+  draft,
   currency,
-  onAmount,
+  ondaValue,
+  onChange,
   onCancel,
   onConfirm,
 }: {
-  amount: string;
+  draft: Draft;
   currency: string;
-  onAmount: (value: string) => void;
+  ondaValue: number | null;
+  onChange: (patch: Partial<Draft>) => void;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const ready = Boolean(parseMoneyInput(amount));
+  const hasOndaValue = ondaValue != null && ondaValue > 0;
+  const precio = Number(parseMoneyInput(draft.amount));
+  const preview =
+    draft.mode === 'accumulate' &&
+    hasOndaValue &&
+    Number.isFinite(precio) &&
+    precio > 0
+      ? ondasFromPayment(precio, ondaValue)
+      : null;
+
+  let ready = false;
+  if (draft.mode === 'accumulate') {
+    ready = Boolean(parseMoneyInput(draft.amount));
+    if (draft.needsPoints) {
+      const pts = Number(draft.points);
+      ready = ready && Number.isFinite(pts) && pts >= 1;
+    } else if (preview != null) {
+      ready = preview >= 1;
+    }
+  } else {
+    ready = true;
+    if (draft.needsPaymentAmount) {
+      ready = Boolean(parseMoneyInput(draft.amount));
+    }
+    if (draft.needsBenefitAmount) {
+      ready = ready && Boolean(parseMoneyInput(draft.benefit));
+    }
+  }
+
   return (
-    <div className="onda-caja-amount" role="dialog" aria-labelledby="onda-caja-amount-title">
+    <div
+      className="onda-caja-amount"
+      role="dialog"
+      aria-labelledby="onda-caja-amount-title"
+    >
       <form
         className="onda-caja-amount-card"
         onSubmit={(e) => {
@@ -111,29 +170,96 @@ function CajaAmountSheet({
           if (ready) onConfirm();
         }}
       >
-        <p className="onda-caja-amount-kicker">Acumular onda</p>
+        <p className="onda-caja-amount-kicker">
+          {draft.mode === 'accumulate' ? 'Acumular onda' : 'Reclamar premio'}
+        </p>
         <h2 id="onda-caja-amount-title" className="font-display">
-          Valor de la cuenta
+          {draft.mode === 'claim' && draft.needsBenefitAmount
+            ? 'Valor del beneficio'
+            : 'Valor de la cuenta'}
         </h2>
-        <label className="onda-caja-amount-field">
-          <span className="onda-caja-amount-prefix">$</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9.]*"
-            autoComplete="off"
-            enterKeyHint="done"
-            autoFocus
-            value={formatMoneyInput(amount)}
-            onChange={(e) => onAmount(parseMoneyInput(e.target.value))}
-            aria-label="Valor de la cuenta"
-          />
-          <span className="onda-caja-amount-currency">{currency}</span>
-        </label>
+        {hasOndaValue ? (
+          <p className="mb-2 text-xs text-[var(--onda-muted)]">
+            Una onda cuesta {formatCop(ondaValue)}
+          </p>
+        ) : null}
+        {draft.mode === 'claim' && draft.promotionTitle ? (
+          <p className="mb-2 text-sm text-[var(--onda-ink)]">
+            {draft.promotionTitle}
+          </p>
+        ) : null}
+
+        {(draft.mode === 'accumulate' ||
+          (draft.mode === 'claim' && draft.needsPaymentAmount)) && (
+          <label className="onda-caja-amount-field">
+            <span className="onda-caja-amount-prefix">$</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9.]*"
+              autoComplete="off"
+              enterKeyHint="done"
+              autoFocus
+              value={formatMoneyInput(draft.amount)}
+              onChange={(e) =>
+                onChange({ amount: parseMoneyInput(e.target.value) } as Partial<Draft>)
+              }
+              aria-label="Valor de la cuenta"
+            />
+            <span className="onda-caja-amount-currency">{currency}</span>
+          </label>
+        )}
+
+        {draft.mode === 'accumulate' && preview != null ? (
+          <p className="mt-2 text-center text-sm text-[var(--onda-muted)]">
+            {preview > 0
+              ? `→ ${preview} onda${preview === 1 ? '' : 's'}`
+              : 'El monto no alcanza para 1 onda'}
+          </p>
+        ) : null}
+
+        {draft.mode === 'accumulate' && draft.needsPoints ? (
+          <label className="mt-3 block text-left text-sm text-[var(--onda-muted)]">
+            Ondas a acumular
+            <input
+              type="number"
+              min={1}
+              className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+              value={draft.points}
+              onChange={(e) =>
+                onChange({ points: e.target.value } as Partial<Draft>)
+              }
+            />
+          </label>
+        ) : null}
+
+        {draft.mode === 'claim' && draft.needsBenefitAmount ? (
+          <label className="onda-caja-amount-field mt-2">
+            <span className="onda-caja-amount-prefix">$</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9.]*"
+              autoComplete="off"
+              autoFocus={!draft.needsPaymentAmount}
+              value={formatMoneyInput(draft.benefit)}
+              onChange={(e) =>
+                onChange({ benefit: parseMoneyInput(e.target.value) } as Partial<Draft>)
+              }
+              aria-label="Valor del beneficio"
+            />
+            <span className="onda-caja-amount-currency">{currency}</span>
+          </label>
+        ) : null}
+
         <button type="submit" className="onda-caja-amount-submit" disabled={!ready}>
-          Acumular
+          {draft.mode === 'accumulate' ? 'Acumular' : 'Confirmar canje'}
         </button>
-        <button type="button" className="onda-caja-amount-cancel" onClick={onCancel}>
+        <button
+          type="button"
+          className="onda-caja-amount-cancel"
+          onClick={onCancel}
+        >
           Cancelar
         </button>
       </form>
@@ -155,40 +281,42 @@ export function CajaClient() {
   const [storeName, setStoreName] = useState('');
   const [storeId, setStoreId] = useState('');
   const [currency, setCurrency] = useState('COP');
+  const [ondaValue, setOndaValue] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [flash, setFlash] = useState<Flash | null>(null);
   const [burst, setBurst] = useState<Burst | null>(null);
   const [camReady, setCamReady] = useState(false);
-  const [draft, setDraft] = useState<{ serial: string; amount: string } | null>(
-    null
-  );
+  const [draft, setDraft] = useState<Draft | null>(null);
   const burstTimerRef = useRef<number>(0);
 
   useEffect(() => {
     if (!token) return;
     try {
-      localStorage.setItem('onda-caja-token', token);
+      setApiAuthTokenGetter(async () => token);
     } catch {
-      /* ignore */
+      /* noop */
     }
-    setApiAuthTokenGetter(async () => token);
-    return () => {
-      setApiAuthTokenGetter(null);
-      window.clearTimeout(burstTimerRef.current);
-    };
   }, [token]);
 
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    api<{ storeId: string; storeName: string; currency?: string }>(
-      `/caja/session?token=${token}`
-    )
+    api<{
+      storeId: string;
+      storeName: string;
+      currency?: string;
+      ondaValue?: number | null;
+    }>(`/caja/session?token=${token}`)
       .then((session) => {
         if (cancelled) return;
         setStoreId(session.storeId);
         setStoreName(session.storeName);
         if (session.currency) setCurrency(session.currency);
+        setOndaValue(
+          session.ondaValue != null && Number(session.ondaValue) > 0
+            ? Number(session.ondaValue)
+            : null
+        );
       })
       .catch((err) => {
         if (!cancelled) {
@@ -229,8 +357,8 @@ export function CajaClient() {
         if (!cancelled) {
           setFlash({
             tone: 'err',
-            title: 'No se pudo abrir la cámara',
-            detail: 'Revisa el permiso de cámara en este navegador.',
+            title: 'Sin cámara',
+            detail: 'Permite el acceso a la cámara para escanear',
           });
         }
       }
@@ -241,9 +369,7 @@ export function CajaClient() {
       cancelled = true;
       controlsRef.current?.stop();
       controlsRef.current = null;
-      setCamReady(false);
     };
-    // handleScan is stable enough via refs
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
 
@@ -273,21 +399,51 @@ export function CajaClient() {
     void resolveScan(serial);
   }
 
-  async function resolveScan(serial: string, precio?: number) {
+  async function resolveScan(
+    serial: string,
+    opts?: { paymentAmount?: number; points?: number; benefitAmount?: number }
+  ) {
     setBurst({ phase: 'working' });
     try {
       const result = await api<{
-        kind?: 'redeem' | 'accumulate' | 'accumulated';
+        kind?: 'redeem' | 'accumulate' | 'accumulated' | 'claim';
         pass?: { user?: { name?: string }; points: number };
-        promotion?: { title?: string };
+        delta?: number;
+        promotion?: { title?: string; type?: string; value?: number | null };
         message?: string;
+        needsPoints?: boolean;
+        needsPaymentAmount?: boolean;
+        needsBenefitAmount?: boolean;
+        ondaValue?: number | null;
       }>('/caja/scan', {
         method: 'POST',
         body: JSON.stringify({
           serialNumber: serial,
-          ...(precio != null ? { paymentAmount: precio } : {}),
+          ...(opts?.paymentAmount != null
+            ? { paymentAmount: opts.paymentAmount }
+            : {}),
+          ...(opts?.points != null ? { points: opts.points } : {}),
+          ...(opts?.benefitAmount != null
+            ? { benefitAmount: opts.benefitAmount }
+            : {}),
         }),
       });
+
+      if (result.kind === 'claim') {
+        setBurst(null);
+        setDraft({
+          mode: 'claim',
+          serial,
+          amount: '',
+          benefit: '',
+          needsPaymentAmount: Boolean(result.needsPaymentAmount),
+          needsBenefitAmount: Boolean(result.needsBenefitAmount),
+          promotionTitle: result.promotion?.title,
+        });
+        if (result.ondaValue != null) setOndaValue(Number(result.ondaValue));
+        return;
+      }
+
       if (result.kind === 'redeem') {
         showBurst(
           {
@@ -301,7 +457,18 @@ export function CajaClient() {
       }
       if (result.kind === 'accumulate') {
         setBurst(null);
-        setDraft({ serial, amount: '' });
+        setDraft({
+          mode: 'accumulate',
+          serial,
+          amount: '',
+          points: '',
+          needsPoints: Boolean(result.needsPoints),
+        });
+        if (result.ondaValue != null) {
+          setOndaValue(
+            Number(result.ondaValue) > 0 ? Number(result.ondaValue) : null
+          );
+        }
         return;
       }
       showBurst(
@@ -309,6 +476,7 @@ export function CajaClient() {
           phase: 'ok',
           name: result.pass?.user?.name,
           points: result.pass?.points,
+          delta: result.delta,
         },
         2400
       );
@@ -316,7 +484,7 @@ export function CajaClient() {
       showBurst(
         {
           phase: 'err',
-          title: precio != null ? 'No se pudo acumular' : 'No se pudo validar',
+          title: opts ? 'No se pudo completar' : 'No se pudo validar',
           detail: err instanceof Error ? err.message : 'Intenta de nuevo',
         },
         2200
@@ -326,13 +494,29 @@ export function CajaClient() {
 
   async function confirmDraft() {
     if (!draft) return;
-    const precio = Number(parseMoneyInput(draft.amount));
     const serial = draft.serial;
+    const precio = Number(parseMoneyInput(draft.amount));
+    const paymentAmount =
+      Number.isFinite(precio) && precio > 0 ? precio : undefined;
+
+    if (draft.mode === 'accumulate') {
+      const points = draft.needsPoints ? Number(draft.points) : undefined;
+      setDraft(null);
+      await resolveScan(serial, {
+        paymentAmount,
+        ...(points != null && Number.isFinite(points) ? { points } : {}),
+      });
+      return;
+    }
+
+    const benefitRaw = Number(parseMoneyInput(draft.benefit));
+    const benefitAmount =
+      Number.isFinite(benefitRaw) && benefitRaw > 0 ? benefitRaw : undefined;
     setDraft(null);
-    await resolveScan(
-      serial,
-      Number.isFinite(precio) && precio > 0 ? precio : undefined
-    );
+    await resolveScan(serial, {
+      paymentAmount: draft.needsPaymentAmount ? paymentAmount : undefined,
+      benefitAmount: draft.needsBenefitAmount ? benefitAmount : undefined,
+    });
   }
 
   if (error) {
@@ -360,11 +544,21 @@ export function CajaClient() {
             Caja
           </p>
           <h1 className="font-display text-lg font-bold">{storeName}</h1>
+          {ondaValue != null ? (
+            <p className="text-xs text-[var(--onda-muted)]">
+              Una onda cuesta {formatCop(ondaValue)}
+            </p>
+          ) : null}
         </div>
       </header>
       <div className="onda-caja-body">
         <section className="onda-caja-scan" aria-label="Escanear QR">
-          <video ref={videoRef} muted playsInline className="bg-[var(--onda-ink)]" />
+          <video
+            ref={videoRef}
+            muted
+            playsInline
+            className="bg-[var(--onda-ink)]"
+          />
           <div className="onda-caja-scan-frame" />
           {!camReady && !flash ? (
             <p className="onda-caja-flash text-sm text-[var(--onda-muted)]">
@@ -394,9 +588,12 @@ export function CajaClient() {
       </div>
       {draft ? (
         <CajaAmountSheet
-          amount={draft.amount}
+          draft={draft}
           currency={currency}
-          onAmount={(amount) => setDraft((prev) => (prev ? { ...prev, amount } : prev))}
+          ondaValue={ondaValue}
+          onChange={(patch) =>
+            setDraft((prev) => (prev ? ({ ...prev, ...patch } as Draft) : prev))
+          }
           onCancel={cancelDraft}
           onConfirm={() => void confirmDraft()}
         />

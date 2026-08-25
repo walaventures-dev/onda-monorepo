@@ -19,6 +19,7 @@ import {
   displayPhone,
   formatMoneyInput,
   parseMoneyInput,
+  formatCop,
 } from "@onda/shared-utils";
 import {
   ResponsiveContainer,
@@ -372,35 +373,54 @@ export function PromoDetail({
                   </label>
                 ) : null}
                 {form.type === "BUY_GET" ? (
-                  <div className="flex flex-wrap gap-3">
-                    <label className="text-sm text-[var(--onda-muted)]">
-                      Compra N
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-3">
+                      <label className="text-sm text-[var(--onda-muted)]">
+                        Compra N
+                        <input
+                          type="number"
+                          min={1}
+                          required
+                          className="ml-2 w-20 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+                          value={form.buyQuantity}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              buyQuantity: e.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="text-sm text-[var(--onda-muted)]">
+                        Lleva M
+                        <input
+                          type="number"
+                          min={1}
+                          required
+                          className="ml-2 w-20 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+                          value={form.getQuantity}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              getQuantity: e.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    <label className="block text-sm text-[var(--onda-muted)]">
+                      Precio unitario del producto que regalas (COP)
                       <input
-                        type="number"
-                        min={1}
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
                         required
-                        className="ml-2 w-20 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                        value={form.buyQuantity}
+                        className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+                        value={formatMoneyInput(form.value)}
                         onChange={(e) =>
                           setForm((f) => ({
                             ...f,
-                            buyQuantity: e.target.value,
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="text-sm text-[var(--onda-muted)]">
-                      Lleva M
-                      <input
-                        type="number"
-                        min={1}
-                        required
-                        className="ml-2 w-20 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                        value={form.getQuantity}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            getQuantity: e.target.value,
+                            value: parseMoneyInput(e.target.value),
                           }))
                         }
                       />
@@ -555,6 +575,25 @@ export function PromoDetail({
           <KpiCard
             label="Conv. elegibles"
             value={`${k?.conversionElegibles ?? 0}%`}
+          />
+          <KpiCard
+            label="Beneficio otorgado"
+            hint="Costo estimado de canjes en el periodo."
+            value={formatCop(k?.beneficioTotal ?? 0)}
+          />
+          <KpiCard
+            label="Ventas (clientes)"
+            hint="Ventas de clientes que canjearon en el periodo."
+            value={formatCop(k?.ventasClientesQueCanjearon ?? 0)}
+          />
+          <KpiCard
+            label="ROI"
+            hint="Ventas ÷ beneficio otorgado."
+            value={
+              k?.roi != null && Number.isFinite(k.roi)
+                ? `${Number(k.roi).toFixed(1)}x`
+                : "—"
+            }
           />
           <KpiCard label="Ondas gastadas" value={k?.ondasGastadas ?? 0} />
           <KpiCard label="Canjes totales" value={k?.canjesAllTime ?? 0} />

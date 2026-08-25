@@ -14,15 +14,27 @@ export class TransactionsController {
   @Post('accumulate')
   async accumulate(
     @Headers('authorization') authHeader: string | undefined,
-    @Body() body: { passId: string; storeId: string; paymentAmount?: number }
+    @Body()
+    body: {
+      passId: string;
+      storeId: string;
+      paymentAmount?: number;
+      points?: number;
+    }
   ) {
     await this.access.requireStore(body.storeId, authHeader);
     const result = await this.accumulateSvc.accumulate({
       storeId: body.storeId,
       passId: body.passId,
       paymentAmount: body.paymentAmount,
+      points: body.points,
     });
-    return { pass: result.pass, points: result.points, next: result.next };
+    return {
+      pass: result.pass,
+      points: result.points,
+      delta: result.delta,
+      next: result.next,
+    };
   }
 
   @Post('redeem')
@@ -33,6 +45,8 @@ export class TransactionsController {
       passId: string;
       storeId: string;
       promotionId: string;
+      paymentAmount?: number;
+      benefitAmount?: number;
     }
   ) {
     await this.access.requireStore(body.storeId, authHeader);
@@ -40,11 +54,14 @@ export class TransactionsController {
       storeId: body.storeId,
       passId: body.passId,
       promotionId: body.promotionId,
+      paymentAmount: body.paymentAmount,
+      benefitAmount: body.benefitAmount,
     });
     return {
       pass: result.pass,
       promotion: result.promotion,
       points: result.points,
+      benefitAmount: result.benefitAmount,
     };
   }
 }

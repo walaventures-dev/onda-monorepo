@@ -2,26 +2,40 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { api, getApiAuthToken, getApiUrl, OndaIcons, toast } from '@onda/shared-ui';
-import { formatMoneyInput, parseMoneyInput } from '@onda/shared-utils';
+import {
+  formatMoneyInput,
+  parseMoneyInput,
+  ondasFromPayment,
+  needsClaimPaymentAmount,
+  needsClaimBenefitInput,
+  formatCop,
+} from '@onda/shared-utils';
 
 type PendingItem = {
   id: string;
   type: 'ACCUMULATE' | 'CLAIM';
   code: string;
   pass?: { user?: { name?: string } };
-  promotion?: { title?: string } | null;
+  promotion?: {
+    title?: string;
+    type?: string;
+    value?: number | null;
+  } | null;
   createdAt: string;
 };
 
 type SsePayload = {
-  kind?: 'created' | 'resolved' | 'ping';
+  kind?: 'created' | 'resolved' | 'ping' | 'activity';
   id?: string;
   ids?: string[];
-  type?: 'ACCUMULATE' | 'CLAIM';
+  type?: 'ACCUMULATE' | 'CLAIM' | 'REDEEM';
   code?: string;
   customerName?: string;
   promotionTitle?: string;
+  promotionType?: string;
+  promotionValue?: number | null;
   createdAt?: string;
+  passId?: string;
 };
 
 function itemFromSse(payload: SsePayload): PendingItem | null {
@@ -31,7 +45,13 @@ function itemFromSse(payload: SsePayload): PendingItem | null {
     type: payload.type,
     code: payload.code,
     pass: { user: { name: payload.customerName } },
-    promotion: payload.promotionTitle ? { title: payload.promotionTitle } : null,
+    promotion: payload.promotionTitle
+      ? {
+          title: payload.promotionTitle,
+          type: payload.promotionType,
+          value: payload.promotionValue,
+        }
+      : null,
     createdAt: payload.createdAt || new Date().toISOString(),
   };
 }
@@ -68,13 +88,27 @@ export function CajaOpenButton({ storeId }: { storeId: string }) {
   );
 }
 
-export function PendingRequestsPanel({ storeId }: { storeId: string }) {
+export function PendingRequestsPanel({
+  storeId,
+  ondaValue,
+  onStoreActivity,
+}: {
+  storeId: string;
+  ondaValue?: number | null;
+  /** Se dispara tras cada acumulación o canje confirmado (SSE o confirm local). */
+  onStoreActivity?: () => void;
+}) {
   const [items, setItems] = useState<PendingItem[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rotating, setRotating] = useState(false);
   const [open, setOpen] = useState(false);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [pointsById, setPointsById] = useState<Record<string, string>>({});
+  const [benefitsById, setBenefitsById] = useState<Record<string, string>>({});
   const removedRef = useRef(new Set<string>());
+  const onActivityRef = useRef(onStoreActivity);
+  onActivityRef.current = onStoreActivity;
+  const hasOndaValue = ondaValue != null && Number(ondaValue) > 0;
 
   useEffect(() => {
     if (!storeId) return;
@@ -86,7 +120,9 @@ export function PendingRequestsPanel({ storeId }: { storeId: string }) {
 
     function applyCreated(item: PendingItem) {
       if (removedRef.current.has(item.id)) return;
-      setItems((prev) => (prev.some((row) => row.id === item.id) ? prev : [...prev, item]));
+      setItems((prev) =>
+        prev.some((row) => row.id === item.id) ? prev : [...prev, item]
+      );
     }
 
     function applyResolved(ids: string[]) {
@@ -97,6 +133,10 @@ export function PendingRequestsPanel({ storeId }: { storeId: string }) {
     function handlePayload(raw: string) {
       const payload = JSON.parse(raw) as SsePayload;
       if (payload.kind === 'ping') return;
+      if (payload.kind === 'activity') {
+        onActivityRef.current?.();
+        return;
+      }
       if (payload.kind === 'resolved' || payload.ids?.length) {
         applyResolved(payload.ids || (payload.id ? [payload.id] : []));
         return;
@@ -165,32 +205,75 @@ export function PendingRequestsPanel({ storeId }: { storeId: string }) {
     };
   }, [storeId]);
 
+  function canConfirm(item: PendingItem): boolean {
+    const precio = Number(parseMoneyInput(amounts[item.id] || ''));
+    if (item.type === 'ACCUMULATE') {
+      if (!(Number.isFinite(precio) && precio > 0)) return false;
+      if (!hasOndaValue) {
+        const pts = Number(pointsById[item.id] || '');
+        return Number.isFinite(pts) && pts >= 1;
+      }
+      return ondasFromPayment(precio, Number(ondaValue)) >= 1;
+    }
+    const promoType = item.promotion?.type || 'OTHER';
+    if (needsClaimPaymentAmount(promoType)) {
+      return Number.isFinite(precio) && precio > 0;
+    }
+    if (needsClaimBenefitInput(promoType, item.promotion?.value)) {
+      const ben = Number(parseMoneyInput(benefitsById[item.id] || ''));
+      return Number.isFinite(ben) && ben > 0;
+    }
+    return true;
+  }
+
   async function resolve(id: string, action: 'confirm' | 'reject') {
     const item = items.find((row) => row.id === id);
+    if (action === 'confirm' && item && !canConfirm(item)) return;
+
     const precio = Number(parseMoneyInput(amounts[id] || ''));
-    if (
-      action === 'confirm' &&
-      item?.type === 'ACCUMULATE' &&
-      !(Number.isFinite(precio) && precio > 0)
-    ) {
-      return;
-    }
+    const pts = Number(pointsById[id] || '');
+    const ben = Number(parseMoneyInput(benefitsById[id] || ''));
+
     setBusyId(id);
     try {
+      const body: Record<string, number> = {};
+      if (action === 'confirm' && item) {
+        if (Number.isFinite(precio) && precio > 0) body.paymentAmount = precio;
+        if (item.type === 'ACCUMULATE' && !hasOndaValue && Number.isFinite(pts)) {
+          body.points = pts;
+        }
+        if (
+          item.type === 'CLAIM' &&
+          needsClaimBenefitInput(
+            item.promotion?.type || 'OTHER',
+            item.promotion?.value
+          ) &&
+          Number.isFinite(ben) &&
+          ben > 0
+        ) {
+          body.benefitAmount = ben;
+        }
+      }
       await api(`/pending-requests/${id}/${action}`, {
         method: 'POST',
         body:
-          action === 'confirm'
-            ? JSON.stringify({
-                ...(Number.isFinite(precio) && precio > 0
-                  ? { paymentAmount: precio }
-                  : {}),
-              })
+          action === 'confirm' && Object.keys(body).length
+            ? JSON.stringify(body)
             : undefined,
       });
       removedRef.current.add(id);
       setItems((prev) => prev.filter((i) => i.id !== id));
       setAmounts((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setPointsById((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setBenefitsById((prev) => {
         const next = { ...prev };
         delete next[id];
         return next;
@@ -254,6 +337,11 @@ export function PendingRequestsPanel({ storeId }: { storeId: string }) {
             <h2 className="onda-caja-dock-title">
               Pendientes{count ? ` · ${count}` : ''}
             </h2>
+            {hasOndaValue ? (
+              <p className="mt-0.5 text-[0.7rem] text-[var(--onda-muted)]">
+                Una onda cuesta {formatCop(Number(ondaValue))}
+              </p>
+            ) : null}
           </div>
           <button
             type="button"
@@ -270,70 +358,134 @@ export function PendingRequestsPanel({ storeId }: { storeId: string }) {
               Sin acumulaciones ni reclamos por confirmar.
             </p>
           ) : (
-            items.map((item) => (
-              <div
-                key={item.id}
-                className="space-y-2 rounded-xl border border-[var(--onda-border)] p-3"
-              >
-                <p className="text-sm font-semibold">
-                  {item.type === 'ACCUMULATE'
-                    ? 'Acumular onda'
-                    : `Reclamar: ${item.promotion?.title || 'premio'}`}
-                </p>
-                <p className="text-xs text-[var(--onda-muted)]">
-                  {item.pass?.user?.name || 'Cliente'}
-                </p>
-                <p className="font-display text-center text-3xl font-bold tracking-[0.2em] text-[var(--onda-primary-500)]">
-                  {item.code}
-                </p>
-                {item.type === 'ACCUMULATE' ? (
-                  <label className="block">
-                    <span className="text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
-                      Valor de la cuenta
-                    </span>
-                    <span className="mt-1 flex items-center gap-1 rounded-xl border border-[var(--onda-border)] bg-[var(--onda-bg)] px-3 py-2">
-                      <span className="text-sm text-[var(--onda-muted)]">$</span>
+            items.map((item) => {
+              const promoType = item.promotion?.type || 'OTHER';
+              const precioNum = Number(parseMoneyInput(amounts[item.id] || ''));
+              const previewOndas =
+                item.type === 'ACCUMULATE' &&
+                hasOndaValue &&
+                Number.isFinite(precioNum) &&
+                precioNum > 0
+                  ? ondasFromPayment(precioNum, Number(ondaValue))
+                  : null;
+              const askClaimTicket =
+                item.type === 'CLAIM' && needsClaimPaymentAmount(promoType);
+              const askClaimBenefit =
+                item.type === 'CLAIM' &&
+                needsClaimBenefitInput(promoType, item.promotion?.value);
+
+              return (
+                <div
+                  key={item.id}
+                  className="space-y-2 rounded-xl border border-[var(--onda-border)] p-3"
+                >
+                  <p className="text-sm font-semibold">
+                    {item.type === 'ACCUMULATE'
+                      ? 'Acumular onda'
+                      : `Reclamar: ${item.promotion?.title || 'premio'}`}
+                  </p>
+                  <p className="text-xs text-[var(--onda-muted)]">
+                    {item.pass?.user?.name || 'Cliente'}
+                  </p>
+                  <p className="font-display text-center text-3xl font-bold tracking-[0.2em] text-[var(--onda-primary-500)]">
+                    {item.code}
+                  </p>
+                  {item.type === 'ACCUMULATE' || askClaimTicket ? (
+                    <label className="block">
+                      <span className="text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+                        Valor de la cuenta
+                      </span>
+                      <span className="mt-1 flex items-center gap-1 rounded-xl border border-[var(--onda-border)] bg-[var(--onda-bg)] px-3 py-2">
+                        <span className="text-sm text-[var(--onda-muted)]">$</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          className="w-full bg-transparent text-sm text-[var(--onda-ink)] outline-none"
+                          value={formatMoneyInput(amounts[item.id] || '')}
+                          onChange={(e) =>
+                            setAmounts((prev) => ({
+                              ...prev,
+                              [item.id]: parseMoneyInput(e.target.value),
+                            }))
+                          }
+                          aria-label="Valor de la cuenta"
+                        />
+                      </span>
+                      {previewOndas != null ? (
+                        <span className="mt-1 block text-xs text-[var(--onda-muted)]">
+                          {previewOndas > 0
+                            ? `→ ${previewOndas} onda${previewOndas === 1 ? '' : 's'}`
+                            : 'El monto no alcanza para 1 onda'}
+                        </span>
+                      ) : null}
+                    </label>
+                  ) : null}
+                  {item.type === 'ACCUMULATE' && !hasOndaValue ? (
+                    <label className="block">
+                      <span className="text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+                        Ondas a acumular
+                      </span>
                       <input
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="off"
-                        className="w-full bg-transparent text-sm text-[var(--onda-ink)] outline-none"
-                        value={formatMoneyInput(amounts[item.id] || '')}
+                        type="number"
+                        min={1}
+                        className="mt-1 w-full rounded-xl border border-[var(--onda-border)] bg-[var(--onda-bg)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+                        value={pointsById[item.id] || ''}
                         onChange={(e) =>
-                          setAmounts((prev) => ({
+                          setPointsById((prev) => ({
                             ...prev,
-                            [item.id]: parseMoneyInput(e.target.value),
+                            [item.id]: e.target.value,
                           }))
                         }
-                        aria-label="Valor de la cuenta"
+                        aria-label="Ondas a acumular"
                       />
-                    </span>
-                  </label>
-                ) : null}
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className="flex-1 rounded-full bg-[var(--onda-success)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-                    disabled={
-                      busyId === item.id ||
-                      (item.type === 'ACCUMULATE' &&
-                        !parseMoneyInput(amounts[item.id] || ''))
-                    }
-                    onClick={() => resolve(item.id, 'confirm')}
-                  >
-                    Confirmar
-                  </button>
-                  <button
-                    type="button"
-                    className="flex-1 rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
-                    disabled={busyId === item.id}
-                    onClick={() => resolve(item.id, 'reject')}
-                  >
-                    Rechazar
-                  </button>
+                    </label>
+                  ) : null}
+                  {askClaimBenefit ? (
+                    <label className="block">
+                      <span className="text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+                        Valor del beneficio (COP)
+                      </span>
+                      <span className="mt-1 flex items-center gap-1 rounded-xl border border-[var(--onda-border)] bg-[var(--onda-bg)] px-3 py-2">
+                        <span className="text-sm text-[var(--onda-muted)]">$</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          className="w-full bg-transparent text-sm text-[var(--onda-ink)] outline-none"
+                          value={formatMoneyInput(benefitsById[item.id] || '')}
+                          onChange={(e) =>
+                            setBenefitsById((prev) => ({
+                              ...prev,
+                              [item.id]: parseMoneyInput(e.target.value),
+                            }))
+                          }
+                          aria-label="Valor del beneficio"
+                        />
+                      </span>
+                    </label>
+                  ) : null}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="flex-1 rounded-full bg-[var(--onda-success)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                      disabled={busyId === item.id || !canConfirm(item)}
+                      onClick={() => resolve(item.id, 'confirm')}
+                    >
+                      Confirmar
+                    </button>
+                    <button
+                      type="button"
+                      className="flex-1 rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+                      disabled={busyId === item.id}
+                      onClick={() => resolve(item.id, 'reject')}
+                    >
+                      Rechazar
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
         <button

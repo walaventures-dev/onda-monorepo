@@ -49,6 +49,8 @@ export class CajaController {
       storeId: link.store.id,
       storeName: link.store.name,
       currency: link.store.currency || 'COP',
+      ondaValue: link.store.ondaValue ?? null,
+      maxStamps: link.store.maxStamps,
     };
   }
 
@@ -82,7 +84,14 @@ export class CajaController {
   async scan(
     @Headers('authorization') authHeader: string | undefined,
     @Query('token') queryToken: string | undefined,
-    @Body() body: { serialNumber?: string; payload?: string; paymentAmount?: number }
+    @Body()
+    body: {
+      serialNumber?: string;
+      payload?: string;
+      paymentAmount?: number;
+      points?: number;
+      benefitAmount?: number;
+    }
   ) {
     const token = queryToken || this.access.bearerToken(authHeader);
     if (!token) throw new UnauthorizedException('Falta el enlace de caja');
@@ -92,9 +101,46 @@ export class CajaController {
 
     const scanned = parseCajaQr(raw);
     if (scanned.kind === 'claim') {
+      const pending = await this.prisma.pendingRequest.findUnique({
+        where: { id: scanned.pendingRequestId },
+        include: {
+          promotion: {
+            select: { id: true, title: true, type: true, value: true },
+          },
+        },
+      });
+      const promoType = pending?.promotion?.type;
+      const needsTicket = promoType === 'PERCENT_OFF';
+      const needsBenefit =
+        promoType === 'OTHER' &&
+        !(pending?.promotion?.value != null && pending.promotion.value > 0);
+
+      if (needsTicket && body.paymentAmount == null) {
+        return {
+          kind: 'claim' as const,
+          pendingRequestId: scanned.pendingRequestId,
+          promotion: pending?.promotion || null,
+          ondaValue: link.store.ondaValue ?? null,
+          needsPaymentAmount: true,
+          needsBenefitAmount: false,
+        };
+      }
+      if (needsBenefit && body.benefitAmount == null) {
+        return {
+          kind: 'claim' as const,
+          pendingRequestId: scanned.pendingRequestId,
+          promotion: pending?.promotion || null,
+          ondaValue: link.store.ondaValue ?? null,
+          needsPaymentAmount: false,
+          needsBenefitAmount: true,
+        };
+      }
+
       return this.redeem.redeem({
         storeId: link.storeId,
         pendingRequestId: scanned.pendingRequestId,
+        paymentAmount: body.paymentAmount,
+        benefitAmount: body.benefitAmount,
       });
     }
 
@@ -107,13 +153,23 @@ export class CajaController {
       throw new ForbiddenException('Este pase no es de esta sede');
     }
 
-    if (body.paymentAmount == null) {
+    const hasOndaValue =
+      link.store.ondaValue != null && Number(link.store.ondaValue) > 0;
+    const needsManualPoints = !hasOndaValue;
+    const readyToAccumulate =
+      body.paymentAmount != null &&
+      (!needsManualPoints || body.points != null);
+
+    if (!readyToAccumulate) {
       return {
         kind: 'accumulate' as const,
         pass: {
           user: { name: pass.user?.name },
           points: pass.points,
         },
+        ondaValue: link.store.ondaValue ?? null,
+        maxStamps: link.store.maxStamps,
+        needsPoints: needsManualPoints,
       };
     }
 
@@ -121,6 +177,7 @@ export class CajaController {
       storeId: link.storeId,
       serialNumber: scanned.serialNumber,
       paymentAmount: body.paymentAmount,
+      points: body.points,
     });
     return { kind: 'accumulated' as const, ...result };
   }

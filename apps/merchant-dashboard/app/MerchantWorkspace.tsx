@@ -37,6 +37,7 @@ import {
   displayPhone,
   formatMoneyInput,
   parseMoneyInput,
+  formatCop,
 } from "@onda/shared-utils";
 import {
   PLAN_ONDA_MONTHLY_LIMIT,
@@ -910,6 +911,68 @@ export function MerchantWorkspace() {
     );
   }, [storeId]);
 
+  const loadCustomerDetail = useCallback(async () => {
+    if (!storeId || !selectedCustomerPassId) return;
+    const q = new URLSearchParams({
+      from: filters.from,
+      to: filters.to,
+    });
+    try {
+      setCustomerDetailLoading(true);
+      setCustomerDetail(
+        await api(
+          `/analytics/store/${storeId}/customers/${selectedCustomerPassId}?${q}`,
+        ),
+      );
+    } catch {
+      setCustomerDetail(null);
+    } finally {
+      setCustomerDetailLoading(false);
+    }
+  }, [storeId, selectedCustomerPassId, filters.from, filters.to]);
+
+  const loadPromoDetail = useCallback(async () => {
+    if (!selectedPromoId || selectedPromoId === "nueva") return;
+    const q = new URLSearchParams({
+      from: filters.from,
+      to: filters.to,
+    });
+    try {
+      setPromoDetailLoading(true);
+      setPromoDetail(
+        await api(`/promotions/${selectedPromoId}/analytics?${q}`),
+      );
+    } catch {
+      setPromoDetail(null);
+    } finally {
+      setPromoDetailLoading(false);
+    }
+  }, [selectedPromoId, filters.from, filters.to]);
+
+  const activityRefreshTimer = useRef<number>(0);
+  const refreshAfterStoreActivity = useCallback(() => {
+    window.clearTimeout(activityRefreshTimer.current);
+    activityRefreshTimer.current = window.setTimeout(() => {
+      void loadOverview();
+      void loadCartillas();
+      void loadPromos();
+      if (selectedCustomerPassId) void loadCustomerDetail();
+      if (selectedPromoId && selectedPromoId !== "nueva") void loadPromoDetail();
+    }, 250);
+  }, [
+    loadOverview,
+    loadCartillas,
+    loadPromos,
+    loadCustomerDetail,
+    loadPromoDetail,
+    selectedCustomerPassId,
+    selectedPromoId,
+  ]);
+
+  useEffect(() => {
+    return () => window.clearTimeout(activityRefreshTimer.current);
+  }, []);
+
   useEffect(() => {
     api<any[]>("/auth/merchant/stores").then((list) => {
       setStores(list);
@@ -1008,26 +1071,8 @@ export function MerchantWorkspace() {
       setPromoDetail(null);
       return;
     }
-    let cancelled = false;
-    setPromoDetailLoading(true);
-    const q = new URLSearchParams({
-      from: filters.from,
-      to: filters.to,
-    });
-    api(`/promotions/${selectedPromoId}/analytics?${q}`)
-      .then((data) => {
-        if (!cancelled) setPromoDetail(data);
-      })
-      .catch(() => {
-        if (!cancelled) setPromoDetail(null);
-      })
-      .finally(() => {
-        if (!cancelled) setPromoDetailLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedPromoId, filters.from, filters.to]);
+    void loadPromoDetail();
+  }, [selectedPromoId, loadPromoDetail]);
 
   useEffect(() => {
     if (!justCreatedPromoId) return;
@@ -1044,26 +1089,8 @@ export function MerchantWorkspace() {
       setCustomerDetail(null);
       return;
     }
-    let cancelled = false;
-    setCustomerDetailLoading(true);
-    const q = new URLSearchParams({
-      from: filters.from,
-      to: filters.to,
-    });
-    api(`/analytics/store/${storeId}/customers/${selectedCustomerPassId}?${q}`)
-      .then((data) => {
-        if (!cancelled) setCustomerDetail(data);
-      })
-      .catch(() => {
-        if (!cancelled) setCustomerDetail(null);
-      })
-      .finally(() => {
-        if (!cancelled) setCustomerDetailLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedCustomerPassId, storeId, filters.from, filters.to]);
+    void loadCustomerDetail();
+  }, [selectedCustomerPassId, storeId, loadCustomerDetail]);
 
   function openPromoDetail(id: string) {
     router.push(`/promos/${id}`);
@@ -1418,14 +1445,18 @@ export function MerchantWorkspace() {
 
   function exportCsv() {
     const rows = [
-      "nombre,telefono,ondas,visitas_rango,badge,cerca_promo,serial",
+      "nombre,telefono,ondas,ventas,roi,visitas_rango,badge,cerca_promo,serial",
     ]
       .concat(
         filteredCustomers.map((c: any) => {
           const near = c.nearPromo
             ? `${c.nearPromo.title} (${c.nearPromo.gap} ondas)`
             : "";
-          return `${c.user.name},${displayPhone(c.user.phone)},${c.points},${c.visitsInRange},${c.badge || ""},${near},${c.serialNumber}`;
+          const roi =
+            c.roi != null && Number.isFinite(c.roi)
+              ? Number(c.roi).toFixed(2)
+              : "";
+          return `${c.user.name},${displayPhone(c.user.phone)},${c.points},${c.ventas ?? 0},${roi},${c.visitsInRange},${c.badge || ""},${near},${c.serialNumber}`;
         }),
       )
       .join("\n");
@@ -1978,12 +2009,14 @@ export function MerchantWorkspace() {
                 </GradientButton>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[40rem] text-left text-sm">
+                <table className="w-full min-w-[48rem] text-left text-sm">
                   <thead className="bg-[var(--onda-bg)] text-[var(--onda-muted)]">
                     <tr>
                       <th className="p-3">Nombre</th>
                       <th className="p-3">WhatsApp</th>
                       <th className="p-3">Ondas</th>
+                      <th className="p-3">Ventas</th>
+                      <th className="p-3">ROI</th>
                       <th className="p-3">Última visita</th>
                       <th className="p-3">Visitas</th>
                       <th className="p-3">Badge</th>
@@ -2008,6 +2041,12 @@ export function MerchantWorkspace() {
                         <td className="p-3 font-medium">{c.user.name}</td>
                         <td className="p-3">{displayPhone(c.user.phone)}</td>
                         <td className="p-3">{c.points}</td>
+                        <td className="p-3">{formatCop(c.ventas ?? 0)}</td>
+                        <td className="p-3">
+                          {c.roi != null && Number.isFinite(c.roi)
+                            ? `${Number(c.roi).toFixed(1)}x`
+                            : "—"}
+                        </td>
                         <td className="p-3 text-xs text-[var(--onda-muted)]">
                           {c.lastVisit
                             ? new Date(c.lastVisit).toLocaleDateString("es-CO")
@@ -2027,7 +2066,7 @@ export function MerchantWorkspace() {
                     {!filteredCustomers.length ? (
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={9}
                           className="p-6 text-center text-[var(--onda-muted)]"
                         >
                           Sin clientes en este segmento / rango.
@@ -2184,7 +2223,7 @@ export function MerchantWorkspace() {
                       ? "Vigente cuando ninguna ocasional cubre hoy"
                       : formatCartillaRange(c.startsAt, c.endsAt)}
                   </p>
-                  <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                  <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
                     <div>
                       <dt className="text-[11px] text-[var(--onda-muted)]">
                         Ondas
@@ -2213,6 +2252,24 @@ export function MerchantWorkspace() {
                       </dt>
                       <dd className="font-medium">
                         {(c.redemptions ?? 0).toLocaleString("es-CO")}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] text-[var(--onda-muted)]">
+                        Ventas
+                      </dt>
+                      <dd className="font-medium">
+                        {formatCop(c.ventas ?? 0)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] text-[var(--onda-muted)]">
+                        ROI
+                      </dt>
+                      <dd className="font-medium">
+                        {c.roi != null && Number.isFinite(c.roi)
+                          ? `${Number(c.roi).toFixed(1)}x`
+                          : "—"}
                       </dd>
                     </div>
                   </dl>
@@ -2448,9 +2505,14 @@ export function MerchantWorkspace() {
               <div>
                 <h3 className="font-display font-semibold">Valor de la onda</h3>
                 <p className="mt-1 text-sm text-[var(--onda-muted)]">
-                  Cuánto cuesta una onda en tu negocio. Sirve para seguimiento
-                  de recompensas. Por defecto la moneda es peso colombiano
-                  (COP).
+                  Cuánto cuesta una onda en tu negocio. Si lo configuras, al
+                  acumular las ondas se calculan solas (
+                  <span className="text-[var(--onda-ink)]">
+                    valor de la cuenta ÷ precio de la onda
+                  </span>
+                  ). Si lo dejas vacío, en caja pedirás el valor de la cuenta y
+                  cuántas ondas sumar. También sirve para seguimiento de
+                  recompensas. Por defecto la moneda es peso colombiano (COP).
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -2494,7 +2556,11 @@ export function MerchantWorkspace() {
           </div>
         )}
       </AppShell>
-      <PendingRequestsPanel storeId={storeId} />
+      <PendingRequestsPanel
+        storeId={storeId}
+        ondaValue={store?.ondaValue}
+        onStoreActivity={refreshAfterStoreActivity}
+      />
       {dialogs}
     </div>
   );

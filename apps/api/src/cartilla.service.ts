@@ -17,6 +17,7 @@ import {
   formatCartillaDay,
   parseCartillaDay,
   todayBogotaKey,
+  computeRoi,
 } from "@onda/shared-utils";
 import { PrismaService } from "./prisma.service";
 import { JobsService } from "./jobs.service";
@@ -356,25 +357,44 @@ export class CartillaService {
         type: { in: ["ACCUMULATE", "REDEEM"] },
       },
       _count: { _all: true },
+      _sum: { paymentAmount: true, benefitAmount: true },
     });
     const txById = new Map<
       string,
-      { accumulations: number; redemptions: number }
+      {
+        accumulations: number;
+        redemptions: number;
+        ventas: number;
+        beneficioOtorgado: number;
+      }
     >();
     for (const row of txRows) {
       if (!row.cartillaId) continue;
       const cur = txById.get(row.cartillaId) || {
         accumulations: 0,
         redemptions: 0,
+        ventas: 0,
+        beneficioOtorgado: 0,
       };
-      if (row.type === "ACCUMULATE") cur.accumulations = row._count._all;
-      if (row.type === "REDEEM") cur.redemptions = row._count._all;
+      if (row.type === "ACCUMULATE") {
+        cur.accumulations = row._count._all;
+        cur.ventas = row._sum.paymentAmount ?? 0;
+      }
+      if (row.type === "REDEEM") {
+        cur.redemptions = row._count._all;
+        cur.beneficioOtorgado = row._sum.benefitAmount ?? 0;
+      }
       txById.set(row.cartillaId, cur);
     }
     return {
       cartillas: items.map((c) => {
         const passCount = byId.get(c.id) || 0;
-        const tx = txById.get(c.id) || { accumulations: 0, redemptions: 0 };
+        const tx = txById.get(c.id) || {
+          accumulations: 0,
+          redemptions: 0,
+          ventas: 0,
+          beneficioOtorgado: 0,
+        };
         return {
           ...c,
           passCount,
@@ -382,6 +402,9 @@ export class CartillaService {
           promoCount: c.items.length,
           accumulations: tx.accumulations,
           redemptions: tx.redemptions,
+          ventas: tx.ventas,
+          beneficioOtorgado: tx.beneficioOtorgado,
+          roi: computeRoi(tx.ventas, tx.beneficioOtorgado),
         };
       }),
       activeId: active.id,

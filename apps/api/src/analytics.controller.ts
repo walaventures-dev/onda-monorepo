@@ -25,6 +25,7 @@ import {
   monthlySmsCampaignsUsed,
 } from './plan-quota';
 import { campaignPricing } from './campaign-pricing';
+import { computeRoi } from '@onda/shared-utils';
 
 const COMPARE_MAX_STORES = 20;
 
@@ -297,9 +298,17 @@ export class AnalyticsController {
 
     const customers = passes.map((p) => {
       const lastTx = p.transactions[0];
-      const visitsInRange = p.transactions.filter(
+      const inRange = p.transactions.filter(
         (t) => t.createdAt >= from && t.createdAt <= to
-      ).length;
+      );
+      const visitsInRange = inRange.length;
+      const ventas = inRange
+        .filter((t) => t.type === 'ACCUMULATE')
+        .reduce((s, t) => s + (t.paymentAmount ?? 0), 0);
+      const beneficioOtorgado = inRange
+        .filter((t) => t.type === 'REDEEM')
+        .reduce((s, t) => s + (t.benefitAmount ?? 0), 0);
+      const accumulateCount = inRange.filter((t) => t.type === 'ACCUMULATE').length;
       const daysSince = lastTx
         ? (now - lastTx.createdAt.getTime()) / 86400000
         : 999;
@@ -333,6 +342,11 @@ export class AnalyticsController {
         user: p.user,
         lastVisit: lastTx?.createdAt || null,
         visitsInRange,
+        ventas,
+        ticketMedioCop:
+          accumulateCount > 0 ? Math.round(ventas / accumulateCount) : 0,
+        beneficioOtorgado,
+        roi: computeRoi(ventas, beneficioOtorgado),
         badge,
         nearPromo: nearPromo
           ? {
@@ -377,19 +391,37 @@ export class AnalyticsController {
 
     const promoStats = await Promise.all(
       promos.map(async (p) => {
-        const [canjes, canjesAllTime] = await Promise.all([
-          this.prisma.transaction.count({
-            where: {
-              storeId,
-              type: 'REDEEM',
-              promotionId: p.id,
-              createdAt: { gte: from, lte: to },
-            },
-          }),
-          this.prisma.transaction.count({
-            where: { storeId, type: 'REDEEM', promotionId: p.id },
-          }),
-        ]);
+        const redeemTxs = await this.prisma.transaction.findMany({
+          where: {
+            storeId,
+            type: 'REDEEM',
+            promotionId: p.id,
+            createdAt: { gte: from, lte: to },
+          },
+          select: { passId: true, benefitAmount: true },
+        });
+        const canjes = redeemTxs.length;
+        const canjesAllTime = await this.prisma.transaction.count({
+          where: { storeId, type: 'REDEEM', promotionId: p.id },
+        });
+        const beneficioTotal = redeemTxs.reduce(
+          (s, t) => s + (t.benefitAmount ?? 0),
+          0
+        );
+        const redeemerPassIds = [...new Set(redeemTxs.map((t) => t.passId))];
+        const ventasAgg =
+          redeemerPassIds.length > 0
+            ? await this.prisma.transaction.aggregate({
+                where: {
+                  storeId,
+                  type: 'ACCUMULATE',
+                  passId: { in: redeemerPassIds },
+                  createdAt: { gte: from, lte: to },
+                },
+                _sum: { paymentAmount: true },
+              })
+            : { _sum: { paymentAmount: null } };
+        const ventasClientesQueCanjearon = ventasAgg._sum.paymentAmount ?? 0;
         const remaining =
           p.maxRedemptions != null
             ? Math.max(0, p.maxRedemptions - canjesAllTime)
@@ -401,6 +433,9 @@ export class AnalyticsController {
           canjesAllTime,
           remaining,
           daysLeft,
+          beneficioTotal,
+          ventasClientesQueCanjearon,
+          roi: computeRoi(ventasClientesQueCanjearon, beneficioTotal),
           elegibles: passes.filter((pass) =>
             pass.promoAssignments.some(
               (a) => a.promotionId === p.id && pass.points >= a.pointsRequired
@@ -625,7 +660,8 @@ export class AnalyticsController {
       })();
     const { prevFrom, prevTo } = previousPeriod(from, to);
 
-    const [txs, prevTxs, lastTx, allTimeAgg, assignments] = await Promise.all([
+    const [txs, prevTxs, lastTx, allTimeAgg, assignments, store] =
+      await Promise.all([
       this.prisma.transaction.findMany({
         where: { passId, storeId, createdAt: { gte: from, lte: to } },
         include: { promotion: true },
@@ -633,7 +669,12 @@ export class AnalyticsController {
       }),
       this.prisma.transaction.findMany({
         where: { passId, storeId, createdAt: { gte: prevFrom, lte: prevTo } },
-        select: { type: true, points: true },
+        select: {
+          type: true,
+          points: true,
+          paymentAmount: true,
+          benefitAmount: true,
+        },
       }),
       this.prisma.transaction.findFirst({
         where: { passId, storeId },
@@ -643,12 +684,16 @@ export class AnalyticsController {
         by: ['type'],
         where: { passId, storeId },
         _count: { _all: true },
-        _sum: { points: true },
+        _sum: { points: true, paymentAmount: true, benefitAmount: true },
       }),
       this.prisma.passPromoAssignment.findMany({
         where: { passId },
         include: { promotion: true },
         orderBy: { pointsRequired: 'asc' },
+      }),
+      this.prisma.store.findUnique({
+        where: { id: storeId },
+        select: { ondaValue: true, currency: true },
       }),
     ]);
 
@@ -658,13 +703,29 @@ export class AnalyticsController {
         .reduce((s, t) => s + t.points, 0);
     const countRedeem = (rows: { type: string }[]) =>
       rows.filter((t) => t.type === 'REDEEM').length;
+    const sumVentas = (
+      rows: { type: string; paymentAmount?: number | null }[]
+    ) =>
+      rows
+        .filter((t) => t.type === 'ACCUMULATE')
+        .reduce((s, t) => s + (t.paymentAmount ?? 0), 0);
+    const sumBeneficio = (
+      rows: { type: string; benefitAmount?: number | null }[]
+    ) =>
+      rows
+        .filter((t) => t.type === 'REDEEM')
+        .reduce((s, t) => s + (t.benefitAmount ?? 0), 0);
 
     const ondas = sumAccumulate(txs);
     const canjes = countRedeem(txs);
     const visitas = txs.length;
+    const ventas = sumVentas(txs);
+    const beneficioOtorgado = sumBeneficio(txs);
     const prevOndas = sumAccumulate(prevTxs);
     const prevCanjes = countRedeem(prevTxs);
     const prevVisitas = prevTxs.length;
+    const prevVentas = sumVentas(prevTxs);
+    const prevBeneficio = sumBeneficio(prevTxs);
 
     const daysSinceVisit = lastTx
       ? Math.floor((Date.now() - lastTx.createdAt.getTime()) / 86400000)
@@ -674,6 +735,10 @@ export class AnalyticsController {
     const ticketMedioOndas =
       accumulateTxs.length > 0
         ? Math.round(ondas / accumulateTxs.length)
+        : 0;
+    const ticketMedioCop =
+      accumulateTxs.length > 0
+        ? Math.round(ventas / accumulateTxs.length)
         : 0;
 
     const seriesMap = new Map<
@@ -785,10 +850,23 @@ export class AnalyticsController {
         puntosActuales: pass.points,
         diasDesdeVisita: daysSinceVisit,
         ticketMedioOndas,
+        ticketMedioCop,
+        ventas,
+        ventasDelta: pctDelta(ventas, prevVentas),
+        beneficioOtorgado,
+        beneficioDelta: pctDelta(beneficioOtorgado, prevBeneficio),
+        roi: computeRoi(ventas, beneficioOtorgado),
         ondasAllTime: allTimeOndas,
         canjesAllTime: allTimeCanjes,
         visitasAllTime: allTimeVisitas,
+        ventasAllTime:
+          allTimeAgg.find((g) => g.type === 'ACCUMULATE')?._sum.paymentAmount ??
+          0,
+        beneficioAllTime:
+          allTimeAgg.find((g) => g.type === 'REDEEM')?._sum.benefitAmount ?? 0,
       },
+      ondaValue: store?.ondaValue ?? null,
+      currency: store?.currency || 'COP',
       series,
       hourly,
       redemptionsByType,
@@ -797,6 +875,8 @@ export class AnalyticsController {
         id: t.id,
         type: t.type,
         points: t.points,
+        paymentAmount: t.paymentAmount,
+        benefitAmount: t.benefitAmount,
         createdAt: t.createdAt,
         promotion: t.promotion
           ? {

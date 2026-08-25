@@ -338,6 +338,8 @@ model Transaction {
   type        TransactionType
   points      Int             @default(1)
   paymentAmount Int?
+  /// Snapshot COP del beneficio otorgado en REDEEM (no cuenta como venta).
+  benefitAmount Int?
   accumulateId String?
   promotionId String?
   cartillaId  String?

@@ -218,6 +218,8 @@ export class PendingRequestsController {
       storeId: string | null;
       isActive: boolean;
       maxRedemptions: number | null;
+      type?: string;
+      value?: number | null;
     } | null = null;
     if (body.type === 'CLAIM') {
       if (!body.promotionId) {
@@ -278,6 +280,8 @@ export class PendingRequestsController {
       code: created.code,
       customerName: pass.user.name,
       promotionTitle: promotion?.title,
+      promotionType: promotion?.type,
+      promotionValue: promotion?.value ?? null,
       createdAt: created.createdAt,
       expiresAt: created.expiresAt,
     });
@@ -296,7 +300,8 @@ export class PendingRequestsController {
     @Param('id') id: string,
     @Headers('authorization') authHeader: string | undefined,
     @Query('token') token?: string,
-    @Body() body?: { paymentAmount?: number }
+    @Body()
+    body?: { paymentAmount?: number; points?: number; benefitAmount?: number }
   ) {
     const pending = await this.prisma.pendingRequest.findUniqueOrThrow({
       where: { id },
@@ -322,6 +327,7 @@ export class PendingRequestsController {
         passId: pending.passId,
         pendingRequestId: pending.id,
         paymentAmount: body?.paymentAmount,
+        points: body?.points,
       });
       return { ok: true as const };
     }
@@ -329,6 +335,8 @@ export class PendingRequestsController {
     await this.redeem.redeem({
       storeId: pending.storeId,
       pendingRequestId: pending.id,
+      paymentAmount: body?.paymentAmount,
+      benefitAmount: body?.benefitAmount,
     });
     return { ok: true as const };
   }

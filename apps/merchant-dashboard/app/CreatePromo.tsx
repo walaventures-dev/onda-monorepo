@@ -150,6 +150,17 @@ export function CreatePromo({
         return;
       }
     }
+    if (form.type === "BUY_GET") {
+      if (!form.value || Number(form.value) <= 0) {
+        await alert({
+          title: "Falta el precio",
+          message:
+            "Indica el precio unitario del producto que regalas para el seguimiento.",
+          tone: "warning",
+        });
+        return;
+      }
+    }
     if (
       duplicateFrom &&
       conditionsKey(form) === conditionsKey(formFromSource(duplicateFrom))
@@ -182,6 +193,7 @@ export function CreatePromo({
     if (form.type === "BUY_GET") {
       body.buyQuantity = Number(form.buyQuantity) || 1;
       body.getQuantity = Number(form.getQuantity) || 1;
+      body.value = Number(form.value);
     }
     if (form.type === "PRODUCT") {
       body.productName = form.productName.trim();
@@ -301,31 +313,51 @@ export function CreatePromo({
             </label>
           ) : null}
           {form.type === "BUY_GET" ? (
-            <div className="flex flex-wrap gap-3">
-              <label className="text-sm text-[var(--onda-muted)]">
-                Compra N
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-3">
+                <label className="text-sm text-[var(--onda-muted)]">
+                  Compra N
+                  <input
+                    type="number"
+                    min={1}
+                    required
+                    className="ml-2 w-20 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+                    value={form.buyQuantity}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, buyQuantity: e.target.value }))
+                    }
+                  />
+                </label>
+                <label className="text-sm text-[var(--onda-muted)]">
+                  Lleva M
+                  <input
+                    type="number"
+                    min={1}
+                    required
+                    className="ml-2 w-20 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+                    value={form.getQuantity}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, getQuantity: e.target.value }))
+                    }
+                  />
+                </label>
+              </div>
+              <label className="block text-sm text-[var(--onda-muted)]">
+                Precio unitario del producto que regalas (COP)
                 <input
-                  type="number"
-                  min={1}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
                   required
-                  className="ml-2 w-20 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                  value={form.buyQuantity}
+                  className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+                  value={formatMoneyInput(form.value)}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, buyQuantity: e.target.value }))
+                    setForm((f) => ({
+                      ...f,
+                      value: parseMoneyInput(e.target.value),
+                    }))
                   }
-                />
-              </label>
-              <label className="text-sm text-[var(--onda-muted)]">
-                Lleva M
-                <input
-                  type="number"
-                  min={1}
-                  required
-                  className="ml-2 w-20 rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
-                  value={form.getQuantity}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, getQuantity: e.target.value }))
-                  }
+                  placeholder="Ej. 12.000"
                 />
               </label>
             </div>
