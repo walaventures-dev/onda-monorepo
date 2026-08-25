@@ -40,6 +40,7 @@ type SsePayload = {
 
 function itemFromSse(payload: SsePayload): PendingItem | null {
   if (!payload.id || !payload.code || !payload.type) return null;
+  if (payload.type !== 'ACCUMULATE' && payload.type !== 'CLAIM') return null;
   return {
     id: payload.id,
     type: payload.type,
