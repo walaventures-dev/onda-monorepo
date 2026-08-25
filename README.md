@@ -12,11 +12,12 @@ Nx + Next.js + NestJS + Prisma + Hero UI v3.
 
 ## Quick start
 
-Guía completa (requisitos, Docker, env, DB y todas las apps): [GETTING_STARTED.md](./GETTING_STARTED.md).
+Guía completa (requisitos, env, DB y todas las apps): [GETTING_STARTED.md](./GETTING_STARTED.md).
+
+Docker es opcional: con Neon (`DATABASE_URL`) y Cloud Tasks (`GCP_PROJECT` + `CLOUD_TASKS_QUEUE`) no hace falta. `pnpm docker:up` solo si Postgres/Redis van en localhost.
 
 ```bash
 pnpm install
-pnpm docker:up
 pnpm db:push
 pnpm db:seed
 

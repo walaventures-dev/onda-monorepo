@@ -1,12 +1,13 @@
 # Cómo correr Onda (local)
 
-Guía para levantar el monorepo completo: Docker (Postgres + Redis), base de datos y todas las apps.
+Guía para levantar el monorepo completo: base de datos, jobs y todas las apps.
 
 ## Requisitos
 
 - **Node.js** 20+ (recomendado LTS)
 - **pnpm** 10.15.1 (el repo fija la versión vía `packageManager`)
-- **Docker** + **Docker Compose** (Postgres 16 y Redis 7)
+- **Postgres** alcanzable (`DATABASE_URL`): Neon o el contenedor local
+- **Docker** + **Docker Compose** — **opcional**. Solo si Postgres o Redis van en `localhost`. Con Neon + Cloud Tasks no hace falta.
 
 Si no tienes pnpm:
 
@@ -29,12 +30,13 @@ pnpm install
 cp .env.example .env
 ```
 
-El `.env.example` ya apunta a los servicios de Docker locales. Variables mínimas para desarrollo:
+El `.env.example` apunta a Postgres/Redis locales. Si usas Neon y Cloud Tasks, cambia `DATABASE_URL` / `DIRECT_URL` y define `GCP_PROJECT` + `CLOUD_TASKS_QUEUE`. Variables mínimas:
 
 | Variable | Uso |
 |---|---|
-| `DATABASE_URL` | Postgres (`postgresql://onda:onda@localhost:5432/onda?schema=public`) |
-| `REDIS_URL` | Redis (`redis://localhost:6379`) |
+| `DATABASE_URL` | Postgres (Neon o `postgresql://onda:onda@localhost:5432/onda?schema=public`) |
+| `DIRECT_URL` | En Neon: host sin `-pooler`. En local puede coincidir con `DATABASE_URL` |
+| `REDIS_URL` | Redis local. Innecesario si Cloud Tasks está configurado |
 | `JWT_SECRET` | Auth JWT |
 | `API_PORT` | Puerto del API (default `3333`) |
 | `NEXT_PUBLIC_API_URL` | URL del API para frontends (`http://localhost:3333`) |
@@ -49,9 +51,16 @@ Opcionales (integraciones externas; pueden quedar vacías en local). Guía compl
 - Wompi: `WOMPI_PUBLIC_KEY`, `WOMPI_PRIVATE_KEY`, `WOMPI_INTEGRITY_SECRET`, `WOMPI_EVENTS_SECRET`
 - Brevo (email + SMS): `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`
 
-## 3. Docker (Postgres + Redis)
+## 3. Infra (opcional: Docker)
 
-Levanta los contenedores en segundo plano:
+`pnpm dev` / `pnpm dev:api` corren `scripts/ensure-dev-infra.sh`. Ese script **no exige Docker** si:
+
+- `DATABASE_URL` no es `localhost` (p. ej. Neon), y
+- hay Cloud Tasks (`GCP_PROJECT` + `CLOUD_TASKS_QUEUE`) o Redis no es local
+
+En todos los casos genera el cliente Prisma y, si `Store` está vacía, carga el seed. El `db push` automático con `--accept-data-loss` solo corre contra Postgres local.
+
+Si Postgres o Redis van en localhost, levanta los contenedores:
 
 ```bash
 pnpm docker:up
@@ -91,7 +100,7 @@ docker compose down -v
 
 ## 4. Base de datos (Prisma)
 
-Con Docker arriba y el `.env` listo:
+Con el `.env` listo (y Docker arriba solo si Postgres es local):
 
 ```bash
 # Generar cliente Prisma
@@ -138,7 +147,7 @@ pnpm dev:organizer    # Dashboard organizers
 
 Orden recomendado la primera vez:
 
-1. `pnpm docker:up`
+1. `.env` con Neon + Cloud Tasks, **o** `pnpm docker:up` si es local
 2. `pnpm db:generate` → `pnpm db:push` → `pnpm db:seed`
 3. `pnpm dev:api`
 4. El resto de frontends cuando el API esté escuchando
@@ -148,7 +157,7 @@ Orden recomendado la primera vez:
 ```bash
 pnpm install
 cp .env.example .env
-pnpm docker:up
+# Neon + Cloud Tasks en .env, o: pnpm docker:up
 pnpm db:generate
 pnpm db:push
 pnpm db:seed
@@ -164,7 +173,6 @@ pnpm dev:organizer
 Las siguientes veces (si ya instalaste y configuraste):
 
 ```bash
-pnpm docker:up
 pnpm dev:api
 # + frontends que necesites
 ```
@@ -191,7 +199,7 @@ libs/
   shared/               # ui, types, utils
   wallets/
   whatsapp/
-docker-compose.yml      # Postgres + Redis
+docker-compose.yml      # Postgres + Redis (opcional)
 .env.example
 ```
 
@@ -201,7 +209,7 @@ docker-compose.yml      # Postgres + Redis
 Cierra el proceso que lo use o cambia el mapeo en `docker-compose.yml` / `API_PORT` / flags `-p` de los scripts `dev:*`.
 
 **API no conecta a Postgres**  
-Verifica `pnpm docker:up`, `docker compose ps` y que `DATABASE_URL` en `.env` coincida con Docker.
+Si `DATABASE_URL` es localhost: `pnpm docker:up` y `docker compose ps`. Si es Neon, verifica `DATABASE_URL` / `DIRECT_URL` (pooler vs host directo).
 
 **Prisma Client desactualizado**  
 Corre `pnpm db:generate` después de cambios en `libs/database/prisma/schema.prisma`.
@@ -210,4 +218,4 @@ Corre `pnpm db:generate` después de cambios en `libs/database/prisma/schema.pri
 Confirma que el API está en http://localhost:3333 y que `NEXT_PUBLIC_API_URL` apunta ahí. Reinicia el `next dev` si cambiaste el `.env`.
 
 **Docker no arranca**  
-Asegúrate de que Docker Desktop (u otro daemon) esté corriendo antes de `pnpm docker:up`.
+Solo es necesario si Postgres o Redis son locales. Con Neon + Cloud Tasks, ignóralo. Si sí lo usas, abre Docker Desktop antes de `pnpm docker:up`.

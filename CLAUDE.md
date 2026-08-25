@@ -12,7 +12,7 @@ Nx monorepo, pnpm workspaces: 5 apps (1 NestJS API + 4 Next.js frontends) and 6 
 
 ```bash
 pnpm install
-pnpm docker:up          # Postgres 16 + Redis 7 via docker-compose
+pnpm docker:up          # opcional: Postgres 16 + Redis 7 si no usas Neon / Cloud Tasks
 pnpm db:generate         # prisma generate
 pnpm db:push             # sync schema.prisma -> DB (dev)
 pnpm db:migrate          # prisma migrate dev (when versioning schema changes)
@@ -69,7 +69,7 @@ Guía de alta paso a paso: [docs/proveedores.md](docs/proveedores.md).
 
 - **Postgres / Prisma** — fuente de verdad (`libs/database`). No se usa Firestore.
 - **Firebase Auth** — solo merchant-dashboard (email/password). Clientes PWA: OTP WhatsApp interno.
-- **Google** — Places (autocomplete onboarding) y Cloud Tasks (cola en prod; local = Redis/BullMQ).
+- **Google** — Places (autocomplete onboarding) y Cloud Tasks (cola; sin GCP_* = Redis/BullMQ o inline). Postgres puede ser Neon; Docker es opcional.
 - **Kapso** — WhatsApp de plataforma (`libs/whatsapp`, `WhatsappService`).
 - **WalletWallet** — pases Apple/Google y push (`libs/wallets`, `WalletService`).
 - **Wompi** — cobro de suscripción PRO (`WompiService`).
