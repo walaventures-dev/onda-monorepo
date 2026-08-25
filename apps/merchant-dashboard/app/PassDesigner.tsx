@@ -22,6 +22,8 @@ export function PassDesigner({
   lockCycle = false,
   readOnly = false,
   deadlineLabel,
+  storeLogoUrl,
+  logoHint,
 }: {
   design: any;
   onChange: (next: any) => void;
@@ -34,7 +36,14 @@ export function PassDesigner({
   lockCycle?: boolean;
   readOnly?: boolean;
   deadlineLabel?: string | null;
+  storeLogoUrl?: string | null;
+  logoHint?: string;
 }) {
+  const inheritedLogo = storeLogoUrl?.trim() || "";
+  const ownLogo = design.logoUrl?.trim() || "";
+  const displayLogo = ownLogo || inheritedLogo;
+  const previewDesign = { ...design, logoUrl: displayLogo };
+
   return (
     <div className="onda-pass-designer-layout">
       <form
@@ -51,15 +60,24 @@ export function PassDesigner({
           <ImageUploadField
             label="Logo"
             hint={
-              requireLogo
+              logoHint ||
+              (requireLogo
                 ? "Obligatorio. JPG, PNG o WEBP · esquinas redondeadas"
-                : "JPG, PNG o WEBP · esquinas redondeadas"
+                : inheritedLogo && !ownLogo
+                  ? "Usando el logo del negocio. Sube otro solo si quieres uno distinto en esta cartilla."
+                  : "JPG, PNG o WEBP · esquinas redondeadas · solo afecta esta cartilla")
             }
             aspectClass="aspect-square"
             className="onda-pass-designer-logo"
             variant="logo"
-            value={design.logoUrl || ""}
-            onChange={(logoUrl) => onChange({ ...design, logoUrl })}
+            value={displayLogo}
+            onChange={(logoUrl) => {
+              if (!logoUrl.trim() && inheritedLogo) {
+                onChange({ ...design, logoUrl: "" });
+                return;
+              }
+              onChange({ ...design, logoUrl });
+            }}
           />
           <div className="onda-pass-designer-brand-color">
             <OndaColorPicker
@@ -156,7 +174,7 @@ export function PassDesigner({
       <div className="onda-pass-designer-preview">
         <p className="onda-pass-designer-label mb-3">Vista previa</p>
         <PassPreview
-          {...design}
+          {...previewDesign}
           points={Math.min(3, maxStamps)}
           maxStamps={maxStamps}
           milestoneStamps={milestoneStamps}

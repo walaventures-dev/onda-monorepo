@@ -5,6 +5,7 @@ import { WhatsappService } from './whatsapp.service';
 import { WalletService } from './wallet.service';
 import { remainingOndas } from './plan-quota';
 import { CartillaService } from './cartilla.service';
+import { resolvePassDesign, toPassDesignInput } from './pass-design.util';
 
 function toE164Colombia(input: string): string {
   const digits = input.replace(/\D/g, '');
@@ -95,25 +96,25 @@ export class UsersController {
       }
       await this.cartillas.assignPassPromos(pass.id);
 
-      const design = active.passDesign || store.passDesign;
-      if (design) {
-        try {
-          const issued = await this.wallet.issuePass({
-            serialNumber,
-            points: welcomePoints,
-            holderName: user.name,
-            organizationName: store.name,
-            maxStamps: active.maxStamps ?? store.maxStamps,
-            kind: 'store',
-            design,
-          });
-          pass = await this.prisma.pass.update({
-            where: { id: pass.id },
-            data: { walletRef: issued.walletRef },
-          });
-        } catch {
-          // Emisión wallet es best-effort: el Pass en DB ya existe.
-        }
+      const design = toPassDesignInput(
+        resolvePassDesign(active.passDesign, store.passDesign)
+      );
+      try {
+        const issued = await this.wallet.issuePass({
+          serialNumber,
+          points: welcomePoints,
+          holderName: user.name,
+          organizationName: store.name,
+          maxStamps: active.maxStamps ?? store.maxStamps,
+          kind: 'store',
+          design,
+        });
+        pass = await this.prisma.pass.update({
+          where: { id: pass.id },
+          data: { walletRef: issued.walletRef },
+        });
+      } catch {
+        // Emisión wallet es best-effort: el Pass en DB ya existe.
       }
     }
 

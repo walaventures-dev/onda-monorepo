@@ -1,6 +1,7 @@
-import { Inject, Body, Controller, Get, Param, Put } from '@nestjs/common';
+import { Inject, Body, Controller, Get, NotFoundException, Param, Put } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { CartillaService } from './cartilla.service';
+import { passDesignFromStoreName, resolvePassDesign } from './pass-design.util';
 
 @Controller('pass-designs')
 export class PassDesignsController {
@@ -11,14 +12,21 @@ export class PassDesignsController {
 
   @Get('store/:storeId')
   async byStore(@Param('storeId') storeId: string) {
-    const def = await this.cartillas.ensureDefaultCartilla(storeId);
-    if (def.passDesign) return def.passDesign;
-    return this.prisma.passDesign.findUniqueOrThrow({ where: { storeId } });
+    const design = await this.prisma.passDesign.findUnique({ where: { storeId } });
+    if (design) return design;
+    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
+    if (!store) throw new NotFoundException('Comercio no encontrado');
+    return passDesignFromStoreName(store.name);
   }
 
   @Get('cartilla/:cartillaId')
-  byCartilla(@Param('cartillaId') cartillaId: string) {
-    return this.prisma.passDesign.findUniqueOrThrow({ where: { cartillaId } });
+  async byCartilla(@Param('cartillaId') cartillaId: string) {
+    const cartilla = await this.prisma.cartilla.findUnique({
+      where: { id: cartillaId },
+      include: { passDesign: true, store: { include: { passDesign: true } } },
+    });
+    if (!cartilla) throw new NotFoundException('Cartilla no encontrada');
+    return resolvePassDesign(cartilla.passDesign, cartilla.store.passDesign);
   }
 
   @Get('event/:eventId')
@@ -34,7 +42,7 @@ export class PassDesignsController {
       backgroundColor?: string;
       foregroundColor?: string;
       labelColor?: string;
-      logoUrl?: string;
+      logoUrl?: string | null;
       stripImageUrl?: string;
       title?: string;
       subtitle?: string;
@@ -42,6 +50,10 @@ export class PassDesignsController {
     }
   ) {
     await this.cartillas.assertCanEdit(cartillaId);
+    const cartilla = await this.prisma.cartilla.findUniqueOrThrow({
+      where: { id: cartillaId },
+      select: { storeId: true },
+    });
     return this.prisma.passDesign.upsert({
       where: { cartillaId },
       create: {
@@ -50,12 +62,17 @@ export class PassDesignsController {
         backgroundColor: body.backgroundColor || '#6E5AE6',
         foregroundColor: body.foregroundColor || '#FFFFFF',
         labelColor: body.labelColor,
-        logoUrl: body.logoUrl,
+        logoUrl: body.logoUrl?.trim() || null,
         stripImageUrl: body.stripImageUrl,
         subtitle: body.subtitle,
         description: body.description,
       },
-      update: body,
+      update: {
+        ...body,
+        ...(body.logoUrl !== undefined
+          ? { logoUrl: body.logoUrl?.trim() || null }
+          : {}),
+      },
     });
   }
 
@@ -67,30 +84,36 @@ export class PassDesignsController {
       backgroundColor?: string;
       foregroundColor?: string;
       labelColor?: string;
-      logoUrl?: string;
+      logoUrl?: string | null;
       stripImageUrl?: string;
       title?: string;
       subtitle?: string;
       description?: string;
     }
   ) {
-    const def = await this.cartillas.ensureDefaultCartilla(storeId);
-    await this.cartillas.assertCanEdit(def.id);
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: storeId },
+    });
+    const payload = {
+      ...body,
+      ...(body.logoUrl !== undefined
+        ? { logoUrl: body.logoUrl?.trim() || null }
+        : {}),
+    };
     return this.prisma.passDesign.upsert({
       where: { storeId },
       create: {
         storeId,
-        cartillaId: def.id,
-        title: body.title || 'Onda Rewards',
+        title: body.title?.trim() || store.name,
         backgroundColor: body.backgroundColor || '#6E5AE6',
         foregroundColor: body.foregroundColor || '#FFFFFF',
         labelColor: body.labelColor,
-        logoUrl: body.logoUrl,
+        logoUrl: body.logoUrl?.trim() || null,
         stripImageUrl: body.stripImageUrl,
         subtitle: body.subtitle,
         description: body.description,
       },
-      update: { ...body, cartillaId: def.id },
+      update: payload,
     });
   }
 

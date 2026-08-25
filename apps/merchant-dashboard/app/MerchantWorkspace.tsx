@@ -17,6 +17,7 @@ import {
   KpiCard,
   ActivityTimeline,
   GradientButton,
+  ImageUploadField,
   OndaSelect,
   useOndaDialogs,
   AnalyticsFiltersBar,
@@ -54,6 +55,10 @@ import {
   PieChart,
   Pie,
   Cell,
+  ComposedChart,
+  Area,
+  Line,
+  CartesianGrid,
 } from "recharts";
 import { PromoDetail } from "./PromoDetail";
 import { CreatePromo } from "./CreatePromo";
@@ -124,6 +129,72 @@ function deltaLabel(n?: number | null) {
   if (n == null) return undefined;
   const sign = n > 0 ? "+" : "";
   return `${sign}${n}%`;
+}
+
+function formatRoi(roi?: number | null) {
+  if (roi == null || !Number.isFinite(roi)) return "—";
+  return `${roi.toFixed(1)}x`;
+}
+
+function formatMoneyAxis(v: number) {
+  const n = Math.abs(Number(v));
+  if (n >= 1_000_000) return `$${Math.round(n / 1_000_000)}M`;
+  if (n >= 1_000) return `$${Math.round(n / 1_000)}k`;
+  return `$${n}`;
+}
+
+function MoneyChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload as {
+    ventas?: number;
+    beneficio?: number;
+    neto?: number;
+    roiDia?: number | null;
+  };
+  const ventas = row?.ventas ?? 0;
+  const beneficio = row?.beneficio ?? 0;
+  const neto = row?.neto ?? ventas - beneficio;
+  const roiDia = row?.roiDia;
+
+  return (
+    <div className="rounded-xl border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-2.5 text-xs shadow-lg">
+      <p className="mb-2 font-medium text-[var(--onda-ink)]">
+        {String(label || "").slice(5).replace("-", "/")}
+      </p>
+      <ul className="space-y-1.5">
+        <li className="flex items-center justify-between gap-4">
+          <span className="flex items-center gap-1.5 text-[var(--onda-muted)]">
+            <span className="h-2 w-2 rounded-full bg-[#3DB9E8]" />
+            Ventas
+          </span>
+          <span className="font-medium tabular-nums">{formatCop(ventas)}</span>
+        </li>
+        <li className="flex items-center justify-between gap-4">
+          <span className="flex items-center gap-1.5 text-[var(--onda-muted)]">
+            <span className="h-2 w-2 rounded-full bg-[#6E5AE6]" />
+            Beneficio otorgado
+          </span>
+          <span className="font-medium tabular-nums">{formatCop(beneficio)}</span>
+        </li>
+        <li className="flex items-center justify-between gap-4 border-t border-[var(--onda-border)] pt-1.5">
+          <span className="text-[var(--onda-muted)]">Neto</span>
+          <span
+            className={`font-semibold tabular-nums ${
+              neto >= 0 ? "text-[var(--onda-success)]" : "text-[var(--onda-danger)]"
+            }`}
+          >
+            {formatCop(neto)}
+          </span>
+        </li>
+        {roiDia != null && Number.isFinite(roiDia) ? (
+          <li className="flex items-center justify-between gap-4">
+            <span className="text-[var(--onda-muted)]">ROI del día</span>
+            <span className="font-medium tabular-nums">{roiDia.toFixed(1)}x</span>
+          </li>
+        ) : null}
+      </ul>
+    </div>
+  );
 }
 
 function PromoTag({
@@ -790,6 +861,8 @@ export function MerchantWorkspace() {
   const [storesReady, setStoresReady] = useState(false);
   const [storeCurrency, setStoreCurrency] = useState("COP");
   const [storeOndaValue, setStoreOndaValue] = useState("");
+  const [storeLogoUrl, setStoreLogoUrl] = useState("");
+  const [savingStoreLogo, setSavingStoreLogo] = useState(false);
   const [savingStoreEconomics, setSavingStoreEconomics] = useState(false);
   const { confirm, alert, dialogs } = useOndaDialogs();
 
@@ -817,7 +890,8 @@ export function MerchantWorkspace() {
   useEffect(() => {
     setStoreCurrency(store?.currency || "COP");
     setStoreOndaValue(store?.ondaValue != null ? String(store.ondaValue) : "");
-  }, [store?.id, store?.currency, store?.ondaValue]);
+    setStoreLogoUrl(store?.passDesign?.logoUrl || "");
+  }, [store?.id, store?.currency, store?.ondaValue, store?.passDesign?.logoUrl]);
   const showSetupNav = storesReady && stores.length > 0 && !setup.complete;
   const kpis = overview?.kpis;
   const customers = overview?.customers || [];
@@ -1154,6 +1228,31 @@ export function MerchantWorkspace() {
     (overview.kpis?.redenciones ?? 0) === 0 &&
     (overview.series || []).every((r: any) => !r.ondas && !r.canjes);
 
+  const emptyMoneyRange =
+    overview &&
+    (overview.kpis?.ventas ?? 0) === 0 &&
+    (overview.kpis?.beneficioOtorgado ?? 0) === 0 &&
+    (overview.series || []).every(
+      (r: any) => !(r.ventas ?? 0) && !(r.beneficio ?? 0),
+    );
+
+  const moneySeries = useMemo(
+    () =>
+      (overview?.series || []).map((row: any) => {
+        const ventas = row.ventas ?? 0;
+        const beneficio = row.beneficio ?? 0;
+        const neto = ventas - beneficio;
+        return {
+          ...row,
+          neto,
+          roiDia: beneficio > 0 ? ventas / beneficio : null,
+        };
+      }),
+    [overview?.series],
+  );
+
+  const moneyNeto = (kpis?.ventas ?? 0) - (kpis?.beneficioOtorgado ?? 0);
+
   const filterPulseKey = `${filters.preset}|${filters.from}|${filters.to}|${filters.promoTypes.join(",")}`;
   const [pulseSeed, setPulseSeed] = useState(() => Math.random());
   const [pulseFilterKey, setPulseFilterKey] = useState(filterPulseKey);
@@ -1235,6 +1334,37 @@ export function MerchantWorkspace() {
 
     return { tone, title, line };
   }, [overview, emptyRange, kpis, filters.preset, pulseSeed]);
+
+  async function saveStoreLogo(e: FormEvent) {
+    e.preventDefault();
+    if (!storeId) return;
+    setSavingStoreLogo(true);
+    try {
+      const updated = await api<any>(`/pass-designs/store/${storeId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          logoUrl: storeLogoUrl.trim() || null,
+          title: store?.name,
+        }),
+      });
+      setStores((prev) =>
+        prev.map((s) =>
+          s.id === storeId
+            ? { ...s, passDesign: { ...s.passDesign, logoUrl: updated.logoUrl } }
+            : s,
+        ),
+      );
+      toast.success("Logo del negocio guardado");
+    } catch (err: any) {
+      await alert({
+        title: "No se pudo guardar el logo",
+        message: err.message || "Intenta de nuevo.",
+        tone: "danger",
+      });
+    } finally {
+      setSavingStoreLogo(false);
+    }
+  }
 
   async function saveStoreEconomics(e: FormEvent) {
     e.preventDefault();
@@ -1652,6 +1782,13 @@ export function MerchantWorkspace() {
                   s.id === storeId
                     ? {
                         ...s,
+                        passDesign: {
+                          logoUrl:
+                            cartilla._storeLogoUrl ??
+                            cartilla.passDesign?.logoUrl ??
+                            s.passDesign?.logoUrl ??
+                            null,
+                        },
                         cartillas: [
                           {
                             id: cartilla.id,
@@ -1777,6 +1914,165 @@ export function MerchantWorkspace() {
               </div>
             </Collapsible>
 
+            {overview ? (
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 [&>*]:min-w-0">
+                <KpiCard
+                  label="Ventas"
+                  hint="Suma del valor de cuenta en acumulaciones del periodo."
+                  value={formatCop(kpis?.ventas ?? 0)}
+                  delta={deltaLabel(kpis?.ventasDelta)}
+                  positive={(kpis?.ventasDelta ?? 0) >= 0}
+                />
+                <KpiCard
+                  label="Beneficio otorgado"
+                  hint="Costo estimado de los canjes en el periodo."
+                  value={formatCop(kpis?.beneficioOtorgado ?? 0)}
+                  delta={deltaLabel(kpis?.beneficioDelta)}
+                  positive={(kpis?.beneficioDelta ?? 0) <= 0}
+                />
+                <KpiCard
+                  label="ROI"
+                  hint="Ventas ÷ beneficio otorgado."
+                  value={formatRoi(kpis?.roi)}
+                />
+              </div>
+            ) : null}
+
+            {overview ? (
+              <div className="onda-card flex min-h-[22rem] flex-col overflow-hidden p-4">
+                <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-display text-sm font-semibold">
+                      Flujo de ingresos vs. costo en canjes
+                    </h3>
+                    <p className="mt-0.5 text-xs text-[var(--onda-muted)]">
+                      Ventas registradas en caja menos el beneficio otorgado por
+                      promo.
+                    </p>
+                  </div>
+                  {!emptyMoneyRange ? (
+                    <div className="flex flex-wrap gap-2 text-[11px]">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--onda-sky-soft)] px-2.5 py-1 font-medium text-[var(--onda-ink)]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#3DB9E8]" />
+                        Ventas {formatCop(kpis?.ventas ?? 0)}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--onda-violet-soft)] px-2.5 py-1 font-medium text-[var(--onda-ink)]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#6E5AE6]" />
+                        Beneficio {formatCop(kpis?.beneficioOtorgado ?? 0)}
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold ${
+                          moneyNeto >= 0
+                            ? "bg-[var(--onda-success)]/10 text-[var(--onda-success)]"
+                            : "bg-[var(--onda-danger)]/10 text-[var(--onda-danger)]"
+                        }`}
+                      >
+                        Neto {formatCop(moneyNeto)}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="relative mt-3 min-h-[16rem] flex-1">
+                  {emptyMoneyRange ? (
+                    <div className="flex h-full min-h-[16rem] flex-col items-center justify-center gap-2 px-4 text-center">
+                      <p className="text-sm text-[var(--onda-muted)]">
+                        Aún no hay montos registrados en este periodo.
+                      </p>
+                      <p className="max-w-md text-xs text-[var(--onda-muted)]">
+                        Al acumular, pide el valor de la cuenta en caja. Con eso
+                        verás ingresos, costo de canjes y el neto aquí.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart
+                          data={moneySeries}
+                          margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+                        >
+                          <defs>
+                            <linearGradient
+                              id="ondaVentasFill"
+                              x1="0"
+                              y1="0"
+                              x2="0"
+                              y2="1"
+                            >
+                              <stop
+                                offset="0%"
+                                stopColor="#3DB9E8"
+                                stopOpacity={0.35}
+                              />
+                              <stop
+                                offset="100%"
+                                stopColor="#3DB9E8"
+                                stopOpacity={0.02}
+                              />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid
+                            stroke="var(--onda-border)"
+                            strokeDasharray="3 3"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="date"
+                            tickFormatter={(v) => String(v).slice(5)}
+                            fontSize={11}
+                            tickMargin={6}
+                            interval="preserveStartEnd"
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <YAxis
+                            fontSize={11}
+                            width={52}
+                            tickFormatter={formatMoneyAxis}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <Tooltip content={<MoneyChartTooltip />} />
+                          <Legend
+                            wrapperStyle={{ fontSize: 12, paddingTop: 10 }}
+                            iconSize={10}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="ventas"
+                            name="Ventas"
+                            stroke="#3DB9E8"
+                            strokeWidth={2}
+                            fill="url(#ondaVentasFill)"
+                            dot={false}
+                            activeDot={{ r: 4, strokeWidth: 0 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="beneficio"
+                            name="Beneficio otorgado"
+                            stroke="#6E5AE6"
+                            strokeWidth={2}
+                            strokeDasharray="5 4"
+                            dot={false}
+                            activeDot={{ r: 4, strokeWidth: 0 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="neto"
+                            name="Neto (ventas − beneficio)"
+                            stroke="#22C55E"
+                            strokeWidth={2.5}
+                            dot={false}
+                            activeDot={{ r: 4, strokeWidth: 0 }}
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
             {!emptyRange ? (
               <div
                 className={`grid grid-cols-2 gap-3 ${
@@ -1892,6 +2188,8 @@ export function MerchantWorkspace() {
                   id: t.id,
                   type: t.type,
                   points: t.points,
+                  paymentAmount: t.paymentAmount,
+                  benefitAmount: t.benefitAmount,
                   promotion: t.promotion
                     ? { title: t.promotion.title, type: t.promotion.type }
                     : null,
@@ -2497,6 +2795,32 @@ export function MerchantWorkspace() {
                 </ul>
               </div>
             </div>
+
+            <form
+              onSubmit={(e) => void saveStoreLogo(e)}
+              className="onda-card space-y-4 p-5"
+            >
+              <div>
+                <h3 className="font-display font-semibold">Logo del negocio</h3>
+                <p className="mt-1 text-sm text-[var(--onda-muted)]">
+                  Es el logo por defecto en todas tus cartillas. Puedes cambiarlo
+                  aquí cuando quieras; las cartillas que no tengan logo propio lo
+                  heredarán automáticamente.
+                </p>
+              </div>
+              <ImageUploadField
+                label="Logo"
+                hint="JPG, PNG o WEBP · esquinas redondeadas"
+                aspectClass="aspect-square max-w-[8rem]"
+                variant="logo"
+                value={storeLogoUrl}
+                onChange={setStoreLogoUrl}
+              />
+              <GradientButton type="submit" disabled={savingStoreLogo || !storeId}>
+                {OndaIcons.save}
+                {savingStoreLogo ? "Guardando…" : "Guardar logo"}
+              </GradientButton>
+            </form>
 
             <form
               onSubmit={(e) => void saveStoreEconomics(e)}

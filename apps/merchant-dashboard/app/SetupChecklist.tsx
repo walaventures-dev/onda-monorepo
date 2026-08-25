@@ -28,7 +28,11 @@ export function SetupChecklist({
 }: {
   status: StoreSetupStatus;
   storeId: string;
-  store: { maxStamps?: number; name?: string } | null;
+  store: {
+    maxStamps?: number;
+    name?: string;
+    passDesign?: { logoUrl?: string | null } | null;
+  } | null;
   cartillaId: string | null;
   onCartillaSaved: (cartilla: any) => void;
   onPromoCreated: (promo: any) => void | Promise<void>;

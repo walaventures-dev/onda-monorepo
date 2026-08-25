@@ -22,6 +22,10 @@ import {
   isSubcategoryOfCategory,
   normalizeStoreSlug,
 } from './store-taxonomy';
+import {
+  storeCreatedEmailHtml,
+  storeCreatedEmailText,
+} from './mail-templates/store-created';
 
 const storePublicSelect = {
   id: true,
@@ -220,8 +224,16 @@ export class StoresController {
           to: store.ownerEmail,
           toName: store.ownerName,
           subject: `Tu negocio ${store.name} ya está en Onda`,
-          html: `<p>Hola ${store.ownerName},</p><p>Tu sede <strong>${store.name}</strong> quedó creada.</p>`,
-          text: `Hola ${store.ownerName}, tu sede ${store.name} quedó creada.`,
+          html: storeCreatedEmailHtml({
+            ownerName: store.ownerName,
+            storeName: store.name,
+            referralCode: store.referralCode,
+          }),
+          text: storeCreatedEmailText({
+            ownerName: store.ownerName,
+            storeName: store.name,
+            referralCode: store.referralCode,
+          }),
         });
       } catch (e) {
         this.logger.warn(

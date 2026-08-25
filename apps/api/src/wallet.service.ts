@@ -12,6 +12,7 @@ import {
 } from '@onda/wallets';
 import { PrismaService } from './prisma.service';
 import { pickLoyaltyReward, type LoyaltyRewardHint } from '@onda/shared-utils';
+import { resolvePassDesign, toPassDesignInput } from './pass-design.util';
 
 export type IssuePassInput = {
   serialNumber: string;
@@ -279,11 +280,16 @@ export class WalletService {
 
     if (!pass) return null;
 
-    const design =
-      pass.cartilla?.passDesign ||
-      pass.store?.passDesign ||
-      pass.event?.passDesign ||
-      FALLBACK_DESIGN;
+    const design = toPassDesignInput(
+      pass.eventId && pass.event?.passDesign
+        ? resolvePassDesign(pass.event.passDesign)
+        : pass.cartilla?.passDesign || pass.store?.passDesign
+          ? resolvePassDesign(
+              pass.cartilla?.passDesign,
+              pass.store?.passDesign
+            )
+          : FALLBACK_DESIGN
+    );
 
     const points = pointsOverride ?? pass.points;
     const assignments = pass.cartillaId
@@ -307,7 +313,7 @@ export class WalletService {
         backgroundColor: design.backgroundColor,
         foregroundColor: design.foregroundColor,
         labelColor: design.labelColor,
-        logoUrl: design.logoUrl,
+        logoUrl: design.logoUrl ?? null,
         stripImageUrl: design.stripImageUrl ?? null,
       },
       maxStamps,

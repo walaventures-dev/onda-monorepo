@@ -157,6 +157,14 @@ export class AnalyticsController {
         : {}),
     });
 
+    const redeemWhere = (start: Date, end: Date) => ({
+      ...baseTx(start, end),
+      type: 'REDEEM' as const,
+      ...(promoTypes?.length
+        ? { promotion: { type: { in: promoTypes } } }
+        : {}),
+    });
+
     const [
       ondas,
       redenciones,
@@ -164,6 +172,8 @@ export class AnalyticsController {
       prevOndas,
       prevRedenciones,
       prevAccumulateCount,
+      beneficio,
+      prevBeneficio,
       clientesNuevos,
       prevClientesNuevos,
       txs,
@@ -174,31 +184,31 @@ export class AnalyticsController {
     ] = await Promise.all([
       this.prisma.transaction.aggregate({
         where: { ...baseTx(from, to), type: 'ACCUMULATE' },
-        _sum: { points: true },
+        _sum: { points: true, paymentAmount: true },
       }),
       this.prisma.transaction.count({
-        where: {
-          ...baseTx(from, to),
-          type: 'REDEEM',
-          ...(promoTypes?.length ? { promotion: { type: { in: promoTypes } } } : {}),
-        },
+        where: redeemWhere(from, to),
       }),
       this.prisma.transaction.count({
         where: { ...baseTx(from, to), type: 'ACCUMULATE' },
       }),
       this.prisma.transaction.aggregate({
         where: { ...baseTx(prevFrom, prevTo), type: 'ACCUMULATE' },
-        _sum: { points: true },
+        _sum: { points: true, paymentAmount: true },
       }),
       this.prisma.transaction.count({
-        where: {
-          ...baseTx(prevFrom, prevTo),
-          type: 'REDEEM',
-          ...(promoTypes?.length ? { promotion: { type: { in: promoTypes } } } : {}),
-        },
+        where: redeemWhere(prevFrom, prevTo),
       }),
       this.prisma.transaction.count({
         where: { ...baseTx(prevFrom, prevTo), type: 'ACCUMULATE' },
+      }),
+      this.prisma.transaction.aggregate({
+        where: redeemWhere(from, to),
+        _sum: { benefitAmount: true },
+      }),
+      this.prisma.transaction.aggregate({
+        where: redeemWhere(prevFrom, prevTo),
+        _sum: { benefitAmount: true },
       }),
       this.prisma.pass.count({
         where: {
@@ -249,6 +259,10 @@ export class AnalyticsController {
 
     const ondasVal = ondas._sum.points ?? 0;
     const prevOndasVal = prevOndas._sum.points ?? 0;
+    const ventasVal = ondas._sum.paymentAmount ?? 0;
+    const prevVentasVal = prevOndas._sum.paymentAmount ?? 0;
+    const beneficioVal = beneficio._sum.benefitAmount ?? 0;
+    const prevBeneficioVal = prevBeneficio._sum.benefitAmount ?? 0;
     const redeemRate =
       accumulateCount > 0 ? Math.round((redenciones / accumulateCount) * 100) : 0;
     const prevRedeemRate =
@@ -257,16 +271,30 @@ export class AnalyticsController {
         : 0;
 
     // Series by day
-    const seriesMap = new Map<string, { date: string; ondas: number; canjes: number }>();
+    const seriesMap = new Map<
+      string,
+      { date: string; ondas: number; canjes: number; ventas: number; beneficio: number }
+    >();
     for (let t = from.getTime(); t <= to.getTime(); t += 86400000) {
       const key = dayKey(new Date(t));
-      seriesMap.set(key, { date: key, ondas: 0, canjes: 0 });
+      seriesMap.set(key, { date: key, ondas: 0, canjes: 0, ventas: 0, beneficio: 0 });
     }
     for (const tx of txs) {
       const key = dayKey(tx.createdAt);
-      const row = seriesMap.get(key) || { date: key, ondas: 0, canjes: 0 };
-      if (tx.type === 'ACCUMULATE') row.ondas += tx.points;
-      else row.canjes += 1;
+      const row = seriesMap.get(key) || {
+        date: key,
+        ondas: 0,
+        canjes: 0,
+        ventas: 0,
+        beneficio: 0,
+      };
+      if (tx.type === 'ACCUMULATE') {
+        row.ondas += tx.points;
+        row.ventas += tx.paymentAmount ?? 0;
+      } else {
+        row.canjes += 1;
+        row.beneficio += tx.benefitAmount ?? 0;
+      }
       seriesMap.set(key, row);
     }
     const series = [...seriesMap.values()];
@@ -601,6 +629,11 @@ export class AnalyticsController {
         clientesNuevosDelta: pctDelta(clientesNuevos, prevClientesNuevos),
         tasaRedencion: redeemRate,
         tasaRedencionDelta: redeemRate - prevRedeemRate,
+        ventas: ventasVal,
+        ventasDelta: pctDelta(ventasVal, prevVentasVal),
+        beneficioOtorgado: beneficioVal,
+        beneficioDelta: pctDelta(beneficioVal, prevBeneficioVal),
+        roi: computeRoi(ventasVal, beneficioVal),
         ondasMonthUsed,
         ondasMonthLimit: PLAN_ONDA_MONTHLY_LIMIT,
         whatsappUsed: store.whatsappUsed,
@@ -624,6 +657,8 @@ export class AnalyticsController {
           id: t.id,
           type: t.type,
           points: t.points,
+          paymentAmount: t.paymentAmount,
+          benefitAmount: t.benefitAmount,
           createdAt: t.createdAt,
           promotion: t.promotion,
         })),

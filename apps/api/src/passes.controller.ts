@@ -3,6 +3,7 @@ import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { CustomerAuthService } from './customer-auth.service';
 import { CartillaService } from './cartilla.service';
+import { resolvePassDesign, toPassDesignInput } from './pass-design.util';
 
 function randomSerial() {
   return `ONDA-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
@@ -95,11 +96,14 @@ export class PassesController {
     const ok = new Set(remainingByPromo.filter((r) => r.ok).map((r) => r.id));
     const promotions = assignedPromos.filter((p) => ok.has(p.id));
 
-    const design =
-      pass.cartilla?.passDesign ||
-      pass.store?.passDesign ||
-      pass.event?.passDesign ||
-      null;
+    const design = toPassDesignInput(
+      pass.eventId
+        ? resolvePassDesign(pass.event?.passDesign)
+        : resolvePassDesign(
+            pass.cartilla?.passDesign,
+            pass.store?.passDesign
+          )
+    );
 
     const withClaimed = await this.withClaimedThisCycle(pass);
     const walletLinks = pass.walletRef ? this.wallet.linksFor(pass.walletRef) : null;

@@ -142,30 +142,51 @@ export class CartillaService {
     db: Db,
     existing?: PassDesign | null,
   ) {
-    const design =
-      existing ||
-      (await db.passDesign.findUnique({ where: { cartillaId } })) ||
+    const cartillaDesign = await db.passDesign.findUnique({
+      where: { cartillaId },
+    });
+    if (cartillaDesign) return;
+
+    const storeDesign =
+      existing ??
       (await db.passDesign.findUnique({ where: { storeId } }));
-    if (design) {
-      if (design.cartillaId !== cartillaId) {
-        await db.passDesign.update({
-          where: { id: design.id },
-          data: { cartillaId },
-        });
-      }
+
+    // Legacy: un solo registro servía store + cartilla — separar copiando a la cartilla.
+    if (storeDesign?.cartillaId === cartillaId) {
+      await db.passDesign.create({
+        data: {
+          cartillaId,
+          title: storeDesign.title,
+          subtitle: storeDesign.subtitle,
+          description: storeDesign.description,
+          backgroundColor: storeDesign.backgroundColor,
+          foregroundColor: storeDesign.foregroundColor,
+          labelColor: storeDesign.labelColor,
+          logoUrl: storeDesign.logoUrl,
+          stripImageUrl: storeDesign.stripImageUrl,
+        },
+      });
+      await db.passDesign.update({
+        where: { id: storeDesign.id },
+        data: { cartillaId: null },
+      });
       return;
     }
+
     const store = await db.store.findUniqueOrThrow({ where: { id: storeId } });
     await db.passDesign.create({
       data: {
-        storeId,
         cartillaId,
-        title: store.name,
-        subtitle: "Programa de lealtad Onda",
-        description: "Gana ondas en cada visita y canjea recompensas",
-        backgroundColor: "#6E5AE6",
-        foregroundColor: "#FFFFFF",
-        labelColor: "#E5F6FC",
+        title: storeDesign?.title ?? store.name,
+        subtitle: storeDesign?.subtitle ?? "Programa de lealtad Onda",
+        description:
+          storeDesign?.description ??
+          "Gana ondas en cada visita y canjea recompensas",
+        backgroundColor: storeDesign?.backgroundColor ?? "#6E5AE6",
+        foregroundColor: storeDesign?.foregroundColor ?? "#FFFFFF",
+        labelColor: storeDesign?.labelColor ?? "#E5F6FC",
+        logoUrl: storeDesign?.logoUrl ?? null,
+        stripImageUrl: storeDesign?.stripImageUrl ?? null,
       },
     });
   }
@@ -453,6 +474,7 @@ export class CartillaService {
     }
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: body.storeId },
+      include: { passDesign: true },
     });
     await this.ensureDefaultCartilla(body.storeId);
     const def = await this.prisma.cartilla.findFirstOrThrow({
@@ -476,6 +498,8 @@ export class CartillaService {
     );
 
     const cloned = def.passDesign;
+    const storeLogo = store.passDesign?.logoUrl?.trim() || null;
+    const cartillaLogo = cloned?.logoUrl?.trim() || storeLogo;
     const cartilla = await this.prisma.cartilla.create({
       data: {
         storeId: body.storeId,
@@ -493,7 +517,7 @@ export class CartillaService {
             backgroundColor: cloned?.backgroundColor || "#6E5AE6",
             foregroundColor: cloned?.foregroundColor || "#FFFFFF",
             labelColor: cloned?.labelColor,
-            logoUrl: cloned?.logoUrl,
+            logoUrl: cartillaLogo,
             stripImageUrl: cloned?.stripImageUrl,
           },
         },

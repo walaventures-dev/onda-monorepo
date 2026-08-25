@@ -55,7 +55,11 @@ export function CartillaEditor({
   onPromoCreated,
 }: {
   storeId: string;
-  store: { maxStamps?: number; name?: string } | null;
+  store: {
+    maxStamps?: number;
+    name?: string;
+    passDesign?: { logoUrl?: string | null } | null;
+  } | null;
   cartillaId: string | "nueva";
   onClose: () => void;
   embedded?: boolean;
@@ -93,6 +97,24 @@ export function CartillaEditor({
     logoUrl: "",
   });
   const [busy, setBusy] = useState(false);
+
+  const storeLogoUrl = store?.passDesign?.logoUrl || "";
+
+  useEffect(() => {
+    if (cartillaId !== "nueva") return;
+    void api<any>(`/pass-designs/store/${storeId}`).then((storeDesign) => {
+      setDesign((prev: any) => ({
+        ...prev,
+        title: prev.title || store?.name || storeDesign.title || "Onda",
+        subtitle: prev.subtitle || storeDesign.subtitle || "Programa de lealtad",
+        description: prev.description || storeDesign.description || "",
+        backgroundColor: prev.backgroundColor || storeDesign.backgroundColor || "#6E5AE6",
+        foregroundColor: prev.foregroundColor || storeDesign.foregroundColor || "#FFFFFF",
+        labelColor: prev.labelColor || storeDesign.labelColor || "#E5F6FC",
+        logoUrl: prev.logoUrl || storeDesign.logoUrl || "",
+      }));
+    });
+  }, [cartillaId, storeId, store?.name]);
 
   useEffect(() => {
     void api<any[]>(`/promotions?storeId=${storeId}&isActive=true`).then(
@@ -205,6 +227,31 @@ export function CartillaEditor({
     setSlots((current) => current.filter((s) => s.promotionId !== id));
   }
 
+  async function saveDesign(cartillaTargetId: string) {
+    const logoForCartilla = design.logoUrl?.trim() || null;
+    await api(`/pass-designs/cartilla/${cartillaTargetId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        ...design,
+        logoUrl: logoForCartilla,
+      }),
+    });
+
+    if (embedded) {
+      const logoForStore =
+        design.logoUrl?.trim() || storeLogoUrl.trim() || null;
+      if (logoForStore) {
+        await api(`/pass-designs/store/${storeId}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            logoUrl: logoForStore,
+            title: design.title || store?.name,
+          }),
+        });
+      }
+    }
+  }
+
   async function saveMeta() {
     const items = selected.map((p: any) => ({
       promotionId: p.id,
@@ -223,22 +270,14 @@ export function CartillaEditor({
         method: "POST",
         body: JSON.stringify(body),
       });
-      if (design) {
-        await api(`/pass-designs/cartilla/${created.id}`, {
-          method: "PUT",
-          body: JSON.stringify(design),
-        });
-      }
+      await saveDesign(created.id);
       return created;
     }
     const updated = await api<any>(`/cartillas/${cartillaId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     });
-    await api(`/pass-designs/cartilla/${cartillaId}`, {
-      method: "PUT",
-      body: JSON.stringify(design),
-    });
+    await saveDesign(cartillaId);
     return updated;
   }
 
@@ -257,9 +296,11 @@ export function CartillaEditor({
       });
       return;
     }
-    if (embedded && !design?.logoUrl?.trim()) {
+    const effectiveLogo = design?.logoUrl?.trim() || storeLogoUrl.trim();
+    if (embedded && !effectiveLogo) {
       toast.danger("Falta el logo", {
-        description: "Sube el logo de tu negocio en el diseño de la cartilla.",
+        description:
+          "Sube el logo de tu negocio. Quedará guardado para todas tus cartillas.",
       });
       return;
     }
@@ -267,7 +308,11 @@ export function CartillaEditor({
     try {
       const saved = await saveMeta();
       toast.success("Cartilla guardada");
-      onSaved?.(saved);
+      onSaved?.({
+        ...saved,
+        _storeLogoUrl:
+          design.logoUrl?.trim() || storeLogoUrl.trim() || null,
+      });
       if (!embedded) onClose();
     } catch (err: any) {
       toast.danger("No se pudo guardar", { description: err.message });
@@ -633,6 +678,12 @@ export function CartillaEditor({
           lockCycle
           readOnly={locked}
           requireLogo={embedded}
+          storeLogoUrl={storeLogoUrl}
+          logoHint={
+            embedded
+              ? "Obligatorio. Se guarda como logo del negocio y aparece en todas tus cartillas."
+              : undefined
+          }
           deadlineLabel={cartillaDeadlineLabel(
             isDefault ? null : endsAt || null,
             isDefault,
