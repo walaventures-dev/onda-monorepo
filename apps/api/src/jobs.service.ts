@@ -127,7 +127,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
   async dispatch(type: JobType, payload: unknown) {
     switch (type) {
       case 'whatsapp-send':
-        await this.whatsapp.sendViaKapso(payload as WhatsappJobPayload);
+        await this.whatsapp.send(payload as WhatsappJobPayload);
         return;
       case 'brevo-email': {
         const p = payload as BrevoEmailJobPayload;

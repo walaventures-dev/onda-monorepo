@@ -5,7 +5,7 @@ import { WhatsappService } from './whatsapp.service';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
-/** Código fijo mientras Kapso no esté listo: no se envía WhatsApp y la PWA lo muestra como `devCode`. */
+/** Código fijo en modo mock: no se envía WhatsApp y la PWA lo muestra como `devCode`. */
 const MOCK_OTP_CODE = '123456';
 
 function isOtpMock(): boolean {
@@ -43,8 +43,9 @@ export class CustomerAuthService {
     } else {
       await this.whatsapp.enqueue({
         to: phone,
-        template: 'onda_otp_login',
+        template: process.env.WHATSAPP_OTP_TEMPLATE || 'otp_template',
         variables: { code },
+        authOtp: true,
       });
     }
 

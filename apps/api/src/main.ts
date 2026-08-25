@@ -11,8 +11,12 @@ async function bootstrap() {
   const otpMockOff =
     process.env.OTP_MOCK?.trim().toLowerCase() === '0' ||
     process.env.OTP_MOCK?.trim().toLowerCase() === 'false';
-  if (process.env.NODE_ENV === 'production' && otpMockOff && !process.env.KAPSO_API_KEY) {
-    throw new Error('KAPSO_API_KEY is required when OTP_MOCK is disabled in production');
+  if (process.env.NODE_ENV === 'production' && otpMockOff) {
+    if (!process.env.WHATSAPP_TOKEN || !process.env.WHATSAPP_PHONE_NUMBER_ID) {
+      throw new Error(
+        'WHATSAPP_TOKEN y WHATSAPP_PHONE_NUMBER_ID son requeridos cuando OTP_MOCK está desactivado en producción'
+      );
+    }
   }
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,

@@ -1,9 +1,8 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
-import { sendKapsoTemplate, type KapsoMessageJob } from '@onda/whatsapp';
+import { sendKapsoTemplate, sendWhatsappAuthOtp } from '@onda/whatsapp';
 import { JobsService } from './jobs.service';
-
-export type WhatsappJob = KapsoMessageJob;
+import type { WhatsappJobPayload } from './jobs.types';
 
 @Injectable()
 export class WhatsappService {
@@ -13,12 +12,18 @@ export class WhatsappService {
     @Inject(forwardRef(() => JobsService)) private readonly jobs: JobsService
   ) {}
 
-  async enqueue(job: WhatsappJob) {
+  async enqueue(job: WhatsappJobPayload) {
     return this.jobs.enqueue('whatsapp-send', job);
   }
 
-  async sendViaKapso(job: WhatsappJob) {
-    this.logger.log(`WhatsApp ${job.template} -> ${job.to}`);
+  async send(job: WhatsappJobPayload) {
+    if (job.authOtp) {
+      const code = job.variables?.['code'];
+      if (!code) throw new Error('authOtp job requiere variables.code');
+      this.logger.log(`WhatsApp OTP (Cloud API) -> ${job.to}`);
+      return sendWhatsappAuthOtp({ to: job.to, code });
+    }
+    this.logger.log(`WhatsApp ${job.template} (Kapso) -> ${job.to}`);
     return sendKapsoTemplate(job);
   }
 

@@ -175,9 +175,72 @@ Sin `BREVO_API_KEY`, solo hay logs `[Brevo stub]`.
 
 ---
 
-## 5. Kapso (WhatsApp)
+## 5. WhatsApp OTP — Meta Cloud API
 
-OTP de clientes, bienvenida, códigos de caja e invitaciones a eventos. Número de plataforma Onda (no por comercio).
+OTP de login de clientes en la PWA. Va directamente por la Cloud API de Meta (no pasa por Kapso).
+
+### Plantilla requerida
+
+En WhatsApp Manager crea (o verifica que exista) una plantilla de categoría **AUTHENTICATION** con botón **Copiar código**:
+
+| Campo | Valor |
+|---|---|
+| Nombre | `otp_template` (o el que configures en `WHATSAPP_OTP_TEMPLATE`) |
+| Categoría | AUTHENTICATION |
+| Idioma | Spanish (`es`) |
+| Botón | Copy code (OTP) |
+
+Meta genera el texto fijo del body ("es tu código de verificación") y el pie de página de expiración. No hay variables de texto libre en el body que necesites definir: el código va en el componente `button`.
+
+### Obtener credenciales
+
+1. En [Meta for Developers](https://developers.facebook.com/) → selecciona tu app.
+2. **WhatsApp > API Setup** → copia el **Phone number ID** (campo numérico, no el número visible).
+3. Crea un **System User** en [Business Settings](https://business.facebook.com/settings/system-users) con rol Worker → asígnale la app → genérale un token con permiso `whatsapp_business_messaging` (sin expiración).
+
+### Variables
+
+```bash
+# OTP de clientes — Meta Cloud API
+OTP_MOCK="true"
+# Token permanente de System User (no el de 24 h del Graph Explorer)
+WHATSAPP_TOKEN=""
+# ID numérico del número (WhatsApp Manager > API Setup)
+WHATSAPP_PHONE_NUMBER_ID=""
+# Nombre exacto de la plantilla aprobada en WhatsApp Manager
+WHATSAPP_OTP_TEMPLATE="otp_template"
+# Código de idioma (debe coincidir exactamente con lo registrado en Meta)
+WHATSAPP_OTP_LANGUAGE="es"
+# Versión de Graph API
+WHATSAPP_API_VERSION="v22.0"
+```
+
+Sin token o phone number ID la función entra en modo stub (log sin exponer el código).
+
+### Activar envío real
+
+1. Pega `WHATSAPP_TOKEN` y `WHATSAPP_PHONE_NUMBER_ID` en `.env`.
+2. Pon `OTP_MOCK=false`.
+3. Reinicia el API (`pnpm dev:api`).
+4. Abre la PWA con un número que tenga WhatsApp → pide el código → debe llegar la plantilla con el botón Copiar código. El campo `devCode` ya no aparece en la respuesta.
+
+### Errores frecuentes
+
+| Código Meta | Causa | Solución |
+|---|---|---|
+| 132001 | Template not found | El nombre o idioma de la plantilla no coincide con lo aprobado |
+| 190 | Token inválido o caducado | Usar token de System User, no el de Graph Explorer |
+| 131030 | Recipient no tiene WhatsApp | El número no está registrado en WhatsApp |
+
+### Guard de producción
+
+El API no arranca con `NODE_ENV=production` + `OTP_MOCK=false` si faltan `WHATSAPP_TOKEN` o `WHATSAPP_PHONE_NUMBER_ID`.
+
+---
+
+## 5b. Kapso (WhatsApp — mensajes de negocio)
+
+Bienvenida, códigos de caja e invitaciones a eventos. **El OTP ya no pasa por Kapso.**
 
 1. Cuenta en [Kapso](https://kapso.ai/) ligada a Meta WhatsApp Business.
 2. Copia API key, Phone number ID y webhook secret.
@@ -185,7 +248,6 @@ OTP de clientes, bienvenida, códigos de caja e invitaciones a eventos. Número 
 
 | Template | Uso |
 |---|---|
-| `onda_otp_login` | OTP de login PWA |
 | `onda_bienvenida` | Alta de cliente |
 | `onda_puntos` | Acumulación |
 | `onda_confirmar_codigo` | Código para caja |
@@ -200,7 +262,7 @@ KAPSO_PHONE_NUMBER_ID=""
 KAPSO_WEBHOOK_SECRET=""
 ```
 
-En **producción** el API no arranca sin `KAPSO_API_KEY` (evita el bypass de OTP). En local, sin key, el PWA muestra `devCode`.
+Sin `KAPSO_API_KEY`, los envíos de negocio entran en modo stub (log). El OTP sigue funcionando por Cloud API independientemente.
 
 Los envíos pasan por la cola (`JobsService` → Kapso).
 
@@ -228,11 +290,12 @@ Las campañas `channel: WALLET` (`POST /api/campaigns`) hacen push (`WalletServi
 
 ## Orden recomendado
 
-1. Postgres + Redis (`pnpm docker:up`) — siempre.
-2. Kapso — OTP real; sin él el PWA usa `devCode`.
-3. WalletWallet — pases reales.
-4. Google Places — autocomplete en onboarding.
-5. Firebase — login del dashboard (crea el usuario con el email del seed).
-6. Wompi sandbox — cobro PRO.
-7. Brevo — emails y SMS de campañas.
-8. Cloud Tasks — cuando el API esté en GCP; hasta entonces BullMQ basta.
+1. Postgres (Neon en `DATABASE_URL`, o `pnpm docker:up` si es localhost) y jobs (Cloud Tasks, o Redis/BullMQ local). Docker es opcional.
+2. Meta Cloud API (`WHATSAPP_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID`) — OTP real; sin ello el PWA usa `devCode`.
+3. Kapso — mensajes de negocio (bienvenida, invitaciones, código de caja).
+4. WalletWallet — pases reales.
+5. Google Places — autocomplete en onboarding.
+6. Firebase — login del dashboard (crea el usuario con el email del seed).
+7. Wompi sandbox — cobro PRO.
+8. Brevo — emails y SMS de campañas.
+9. Cloud Tasks — cuando el API esté en GCP; hasta entonces BullMQ basta.

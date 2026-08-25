@@ -13,6 +13,8 @@ export type WhatsappJobPayload = {
   template: string;
   variables?: Record<string, string>;
   storeId?: string;
+  /** true → envía por Meta Cloud API (AUTHENTICATION template). false/ausente → Kapso. */
+  authOtp?: boolean;
 };
 
 export type BrevoEmailJobPayload = {
