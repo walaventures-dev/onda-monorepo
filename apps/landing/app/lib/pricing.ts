@@ -10,13 +10,22 @@ export {
   quotePlan,
 } from '@onda/shared-utils';
 
-export const MERCHANT_ONBOARDING_BASE = process.env.NEXT_PUBLIC_MERCHANT_URL
-  ? `${process.env.NEXT_PUBLIC_MERCHANT_URL.replace(/\/$/, '')}/onboarding`
-  : 'http://localhost:4202/onboarding';
+/** Temporal: ocultar marketing de POS en la landing hasta el lanzamiento. */
+export const SHOW_POS_LANDING = false;
+
+const MERCHANT_BASE = process.env.NEXT_PUBLIC_MERCHANT_URL
+  ? process.env.NEXT_PUBLIC_MERCHANT_URL.replace(/\/$/, '')
+  : 'http://localhost:4202';
+
+export const MERCHANT_ONBOARDING_BASE = `${MERCHANT_BASE}/onboarding`;
 
 export function onboardingUrl(plan?: PlanId, billing?: BillingPeriod) {
   if (!plan) return MERCHANT_ONBOARDING_BASE;
   const params = new URLSearchParams({ plan });
   if (billing) params.set('billing', billing);
   return `${MERCHANT_ONBOARDING_BASE}?${params.toString()}`;
+}
+
+export function loginUrl() {
+  return `${MERCHANT_BASE}/login`;
 }

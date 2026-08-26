@@ -11,6 +11,7 @@ import { PosSection } from './components/PosSection';
 import { PricingSection } from './components/PricingSection';
 import { ProductPillarsSection } from './components/ProductPillarsSection';
 import { SmoothScrollProvider } from './components/SmoothScroll';
+import { SHOW_POS_LANDING } from './lib/pricing';
 
 export default function LandingPage() {
   return (
@@ -22,7 +23,7 @@ export default function LandingPage() {
           <ProductPillarsSection />
           <DemoSection />
           <ConceptSection />
-          <PosSection />
+          {SHOW_POS_LANDING ? <PosSection /> : null}
           <CampaignSection />
           <PricingSection />
           <FaqSection />

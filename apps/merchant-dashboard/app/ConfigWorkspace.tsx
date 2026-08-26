@@ -3,18 +3,25 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { FormEvent, ReactNode } from 'react';
+import { BooksIcon as Books } from '@phosphor-icons/react/dist/csr/Books';
+import { BuildingsIcon as Buildings } from '@phosphor-icons/react/dist/csr/Buildings';
+import { CameraIcon as Camera } from '@phosphor-icons/react/dist/csr/Camera';
+import { CashRegisterIcon as CashRegister } from '@phosphor-icons/react/dist/csr/CashRegister';
+import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/CreditCard';
+import { GearIcon as Gear } from '@phosphor-icons/react/dist/csr/Gear';
+import { GiftIcon as Gift } from '@phosphor-icons/react/dist/csr/Gift';
+import { UsersThreeIcon as UsersThree } from '@phosphor-icons/react/dist/csr/UsersThree';
 import {
   GradientButton,
   ImageUploadField,
   OndaIcons,
   OndaSelect,
 } from '@onda/shared-ui';
-import { formatMoneyInput, parseMoneyInput } from '@onda/shared-utils';
+import { formatMoneyInput, parseMoneyInput, formatCop } from '@onda/shared-utils';
 import {
   PLAN_ONDA_MONTHLY_LIMIT,
-  PLAN_SMS_CAMPAIGNS_MONTHLY,
+  CAMPAIGN_FREE_REACH_MONTHLY,
 } from '@onda/shared-types';
-import { TeamMembersPanel } from './TeamMembersPanel';
 import { PosPaymentMethodsConfig } from './PosPaymentMethodsConfig';
 import { PosAccountingConfig } from './PosAccountingConfig';
 
@@ -23,6 +30,8 @@ const STORE_CURRENCIES = [
   { id: 'USD', label: 'USD — dólar' },
   { id: 'EUR', label: 'EUR — euro' },
 ] as const;
+
+const NAV_ICON_SIZE = 18;
 
 export type ConfigSectionId =
   | 'general'
@@ -50,37 +59,75 @@ export function parseConfigSection(pathname: string): ConfigSectionId {
   }
 }
 
-type NavItem = { id: ConfigSectionId; href: string; label: string; description?: string };
+type NavItem = {
+  id: ConfigSectionId;
+  href: string;
+  label: string;
+  description?: string;
+  icon: ReactNode;
+};
 
-const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+type NavGroup = {
+  id: string;
+  label: string;
+  icon: ReactNode;
+  items: NavItem[];
+};
+
+const NAV_GROUPS: NavGroup[] = [
   {
+    id: 'negocio',
     label: 'Negocio',
+    icon: <Buildings size={14} weight="regular" aria-hidden />,
     items: [
-      { id: 'general', href: '/config', label: 'General', description: 'Sede y plan' },
-      { id: 'marca', href: '/config/marca', label: 'Marca', description: 'Logo del negocio' },
+      {
+        id: 'general',
+        href: '/config',
+        label: 'General',
+        description: 'Sede y plan',
+        icon: <Gear size={NAV_ICON_SIZE} weight="regular" aria-hidden />,
+      },
+      {
+        id: 'marca',
+        href: '/config/marca',
+        label: 'Marca',
+        description: 'Logo del negocio',
+        icon: <Camera size={NAV_ICON_SIZE} weight="regular" aria-hidden />,
+      },
       {
         id: 'lealtad',
         href: '/config/lealtad',
         label: 'Lealtad',
         description: 'Moneda y valor onda',
+        icon: <Gift size={NAV_ICON_SIZE} weight="regular" aria-hidden />,
       },
-      { id: 'equipo', href: '/config/equipo', label: 'Equipo', description: 'Accesos de caja' },
+      {
+        id: 'equipo',
+        href: '/config/equipo',
+        label: 'Equipo',
+        description: 'Accesos de caja',
+        icon: <UsersThree size={NAV_ICON_SIZE} weight="regular" aria-hidden />,
+      },
     ],
   },
   {
+    id: 'pos',
     label: 'POS',
+    icon: <CashRegister size={14} weight="regular" aria-hidden />,
     items: [
       {
         id: 'pos-pagos',
         href: '/config/pos-pagos',
         label: 'Medios de pago',
         description: 'Cobro en caja',
+        icon: <CreditCard size={NAV_ICON_SIZE} weight="regular" aria-hidden />,
       },
       {
         id: 'contabilidad',
         href: '/config/contabilidad',
         label: 'Contabilidad',
         description: 'Alegra, Siigo…',
+        icon: <Books size={NAV_ICON_SIZE} weight="regular" aria-hidden />,
       },
     ],
   },
@@ -93,17 +140,26 @@ function ConfigNav({
 }: {
   section: ConfigSectionId;
   pathname: string;
-  groups?: typeof NAV_GROUPS;
+  groups?: NavGroup[];
 }) {
   return (
-    <nav className="lg:w-56 lg:shrink-0" aria-label="Secciones de configuración">
-      <div className="space-y-6">
-        {groups.map((group) => (
-          <div key={group.label}>
-            <p className="mb-2 px-3 text-[0.65rem] font-semibold uppercase tracking-wider text-[var(--onda-muted)]">
+    <nav className="lg:w-64 lg:shrink-0" aria-label="Secciones de configuración">
+      <div className="onda-card space-y-5 p-3 sm:p-3.5">
+        {groups.map((group, groupIndex) => (
+          <div key={group.id}>
+            {groupIndex > 0 ? (
+              <div
+                className="mb-4 border-t border-[var(--onda-border)]"
+                aria-hidden
+              />
+            ) : null}
+            <p className="mb-2 flex items-center gap-1.5 px-2.5 text-[0.65rem] font-semibold uppercase tracking-wider text-[var(--onda-muted)]">
+              <span className="inline-flex text-[var(--onda-muted)] opacity-80">
+                {group.icon}
+              </span>
               {group.label}
             </p>
-            <ul className="space-y-0.5">
+            <ul className="space-y-1">
               {group.items.map((item) => {
                 const active =
                   item.id === section ||
@@ -114,29 +170,43 @@ function ConfigNav({
                   <li key={item.id}>
                     <Link
                       href={item.href}
-                      className={`block rounded-xl px-3 py-2.5 transition-colors ${
+                      className={`group flex items-start gap-3 rounded-xl px-2.5 py-2.5 transition-colors ${
                         active
                           ? 'bg-[var(--onda-primary-100)] text-[var(--onda-primary-700)]'
-                          : 'text-[var(--onda-muted)] hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]'
+                          : 'text-[var(--onda-ink)] hover:bg-[var(--onda-bg)]'
                       }`}
                       aria-current={active ? 'page' : undefined}
                     >
                       <span
-                        className={`block text-sm ${active ? 'font-semibold' : 'font-medium'}`}
+                        className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                          active
+                            ? 'bg-[var(--onda-primary-500)] text-white shadow-[0_6px_14px_rgba(5,45,222,0.22)]'
+                            : 'bg-[var(--onda-bg)] text-[var(--onda-muted)] ring-1 ring-[var(--onda-border)] group-hover:text-[var(--onda-ink)]'
+                        }`}
+                        aria-hidden
                       >
-                        {item.label}
+                        {item.icon}
                       </span>
-                      {item.description ? (
+                      <span className="min-w-0 pt-0.5">
                         <span
-                          className={`mt-0.5 block text-xs ${
-                            active
-                              ? 'text-[var(--onda-primary-700)]/80'
-                              : 'text-[var(--onda-muted)]'
+                          className={`block text-sm leading-tight ${
+                            active ? 'font-semibold' : 'font-medium'
                           }`}
                         >
-                          {item.description}
+                          {item.label}
                         </span>
-                      ) : null}
+                        {item.description ? (
+                          <span
+                            className={`mt-0.5 block text-xs leading-snug ${
+                              active
+                                ? 'text-[var(--onda-primary-700)]/75'
+                                : 'text-[var(--onda-muted)]'
+                            }`}
+                          >
+                            {item.description}
+                          </span>
+                        ) : null}
+                      </span>
                     </Link>
                   </li>
                 );
@@ -179,8 +249,6 @@ export function ConfigWorkspace({
   onSaveLogo,
   onSaveEconomics,
   onUpgrade,
-  onTogglePos,
-  savingPos,
 }: {
   storeId: string;
   store: any;
@@ -196,16 +264,18 @@ export function ConfigWorkspace({
   onSaveLogo: (e: FormEvent) => void;
   onSaveEconomics: (e: FormEvent) => void;
   onUpgrade: () => void;
-  onTogglePos: (enabled: boolean) => void;
-  savingPos?: boolean;
 }) {
   const pathname = usePathname();
   const section = parseConfigSection(pathname);
   const posEnabled = Boolean(store?.posEnabled);
 
   const navGroups = NAV_GROUPS.filter(
-    (group) => group.label !== 'POS' || posEnabled,
-  );
+    (group) => group.id !== 'pos' || posEnabled,
+  ).map((group) => ({
+    ...group,
+    // Temporal: ocultar Equipo del menú de config
+    items: group.items.filter((item) => item.id !== 'equipo'),
+  }));
 
   function renderSection() {
     if (
@@ -213,32 +283,14 @@ export function ConfigWorkspace({
       (section === 'pos-pagos' || section === 'contabilidad')
     ) {
       return (
-        <>
-          <SectionHeader
-            title="POS deshabilitado"
-            description="Activa el punto de venta en General para configurar pagos y contabilidad."
-          />
-          <Link
-            href="/config"
-            className="text-sm font-medium text-[var(--onda-primary)]"
-          >
-            Ir a General
-          </Link>
-        </>
+        <SectionHeader
+          title="POS no disponible"
+          description="El punto de venta no está habilitado para este negocio."
+        />
       );
     }
 
     switch (section) {
-      case 'equipo':
-        return (
-          <>
-            <SectionHeader
-              title="Equipo y accesos"
-              description="Invita cajeros y administra quién puede operar la caja."
-            />
-            <TeamMembersPanel storeId={storeId} />
-          </>
-        );
       case 'pos-pagos':
         return (
           <>
@@ -383,18 +435,16 @@ export function ConfigWorkspace({
                     </dd>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <dt className="text-[var(--onda-muted)]">Campañas SMS</dt>
+                    <dt className="text-[var(--onda-muted)]">Alcance campañas</dt>
                     <dd className="tabular-nums text-[var(--onda-ink)]">
-                      {billing?.smsCampaignsUsed ?? 0}/
-                      {billing?.smsCampaignsLimit ?? PLAN_SMS_CAMPAIGNS_MONTHLY} gratis
+                      {billing?.reachUsed ?? billing?.smsCampaignsUsed ?? 0}/
+                      {billing?.reachLimit ?? billing?.smsCampaignsLimit ?? CAMPAIGN_FREE_REACH_MONTHLY}{' '}
+                      personas gratis
                     </dd>
                   </div>
-                  {billing?.campaignCredits != null ? (
-                    <div className="flex justify-between gap-4">
-                      <dt className="text-[var(--onda-muted)]">Créditos campaña</dt>
-                      <dd className="text-[var(--onda-ink)]">{billing.campaignCredits}</dd>
-                    </div>
-                  ) : null}
+                  <p className="text-xs text-[var(--onda-muted)]">
+                    Excedente: {formatCop(billing?.reachUnitCop ?? 200)} por persona al enviar.
+                  </p>
                 </dl>
                 {billing?.planType === 'BASIC' ? (
                   <GradientButton type="button" onClick={onUpgrade}>
@@ -402,29 +452,6 @@ export function ConfigWorkspace({
                     Upgrade a PRO
                   </GradientButton>
                 ) : null}
-              </div>
-            </div>
-            <div className="onda-card mt-6 space-y-3 p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
-                    Punto de venta (POS)
-                  </h3>
-                  <p className="mt-1 text-sm text-[var(--onda-muted)]">
-                    Actívalo para vender con catálogo, cuentas y cobro. Si lo dejas apagado, el
-                    negocio opera solo con lealtad (acumular / redimir) como siempre.
-                  </p>
-                </div>
-                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-[var(--onda-border)]"
-                    checked={posEnabled}
-                    disabled={savingPos}
-                    onChange={(e) => onTogglePos(e.target.checked)}
-                  />
-                  {posEnabled ? 'Habilitado' : 'Deshabilitado'}
-                </label>
               </div>
             </div>
             <div className="onda-card mt-6 p-5">
@@ -464,7 +491,7 @@ export function ConfigWorkspace({
           Configuración
         </h1>
         <p className="mt-1 text-sm text-[var(--onda-muted)]">
-          Ajustes del negocio, lealtad y punto de venta.
+          Ajustes del negocio{posEnabled ? ', lealtad y punto de venta' : ' y lealtad'}.
         </p>
       </div>
       <div className="flex flex-col gap-8 lg:flex-row lg:items-start">

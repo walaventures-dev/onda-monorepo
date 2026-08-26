@@ -289,27 +289,51 @@ model Store {
 }
 
 model Campaign {
-  id             String             @id @default(uuid())
-  storeId        String
-  store          Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  channel        CampaignChannel
-  title          String
-  status         CampaignStatus     @default(SCHEDULED)
-  origin         CampaignOrigin     @default(MANUAL)
-  objective      CampaignObjective?
-  scheduledAt    DateTime?
-  sentAt         DateTime?
-  smsBody        String?
-  walletBody     String?
-  sendSms        Boolean            @default(true)
-  sendWallet     Boolean            @default(true)
-  audienceFilter Json?
-  promoSnapshot  Json?
-  billingKind    CampaignBillingKind @default(FREE)
-  createdAt      DateTime           @default(now())
+  id                 String              @id @default(uuid())
+  storeId            String
+  store              Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  channel            CampaignChannel
+  title              String
+  status             CampaignStatus      @default(SCHEDULED)
+  origin             CampaignOrigin      @default(MANUAL)
+  objective          CampaignObjective?
+  scheduledAt        DateTime?
+  sentAt             DateTime?
+  smsBody            String?
+  walletBody         String?
+  sendSms            Boolean             @default(true)
+  sendWallet         Boolean             @default(true)
+  audienceFilter     Json?
+  promoSnapshot      Json?
+  billingKind        CampaignBillingKind @default(FREE)
+  audienceCount      Int?
+  reachCount         Int?
+  freeReachApplied   Int?
+  paidReachCount     Int?
+  costCop            Int                 @default(0)
+  estimatedCostCop   Int?
+  successCount       Int?
+  successEvaluatedAt DateTime?
+  attributedSalesCop Int?
+  roiRatio           Float?
+  createdAt          DateTime            @default(now())
+  reaches            CampaignReach[]
 
   @@index([storeId, channel, createdAt])
   @@index([storeId, status, scheduledAt])
+}
+
+model CampaignReach {
+  id         String   @id @default(uuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  passId     String
+  userId     String
+  sentAt     DateTime @default(now())
+
+  @@unique([campaignId, passId])
+  @@index([userId, sentAt])
+  @@index([campaignId])
 }
 
 model CampaignPurchase {

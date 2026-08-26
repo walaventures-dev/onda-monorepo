@@ -1,33 +1,37 @@
 import {
-  CAMPAIGN_PACK_DISCOUNT,
-  CAMPAIGN_PACK_SIZE,
-  CAMPAIGN_PRICE_COP,
-  PLAN_SMS_CAMPAIGNS_MONTHLY,
+  CAMPAIGN_FREE_REACH_MONTHLY,
+  CAMPAIGN_REACH_PRICE_COP,
 } from '@onda/shared-types';
-import { campaignCatalogPricing } from '@onda/shared-utils';
 
 function envInt(name: string, fallback: number) {
   const n = Number(process.env[name]);
   return Number.isFinite(n) ? Math.floor(n) : fallback;
 }
 
-function envFloat(name: string, fallback: number) {
-  const n = Number(process.env[name]);
-  return Number.isFinite(n) ? n : fallback;
+export function campaignReachPricing(opts?: {
+  freeMonthly?: number;
+  unitCop?: number;
+}) {
+  const freeMonthly = Math.max(
+    0,
+    opts?.freeMonthly ??
+      envInt('CAMPAIGN_FREE_REACH_MONTHLY', CAMPAIGN_FREE_REACH_MONTHLY)
+  );
+  const unitCop = Math.max(
+    0,
+    opts?.unitCop ?? envInt('CAMPAIGN_REACH_PRICE_COP', CAMPAIGN_REACH_PRICE_COP)
+  );
+  return { freeMonthly, unitCop };
 }
 
+/** @deprecated Legacy pack pricing */
 export function campaignPricing() {
-  const freeMonthly = Math.max(0, envInt('CAMPAIGN_FREE_MONTHLY', PLAN_SMS_CAMPAIGNS_MONTHLY));
-  const unitCop = Math.max(0, envInt('CAMPAIGN_PRICE_COP', CAMPAIGN_PRICE_COP));
-  const packSize = Math.max(1, envInt('CAMPAIGN_PACK_SIZE', CAMPAIGN_PACK_SIZE));
-  const packDiscount = Math.min(
-    0.9,
-    Math.max(0, envFloat('CAMPAIGN_PACK_DISCOUNT', CAMPAIGN_PACK_DISCOUNT))
-  );
-  return campaignCatalogPricing({
+  const { freeMonthly, unitCop } = campaignReachPricing();
+  return {
     freeMonthly,
     unitCop,
-    packSize,
-    packDiscount,
-  });
+    packSize: 0,
+    packDiscount: 0,
+    packCop: 0,
+  };
 }

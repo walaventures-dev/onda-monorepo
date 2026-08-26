@@ -11,8 +11,7 @@ import { CheckCircleIcon as CheckCircle } from '@phosphor-icons/react/dist/csr/C
 import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/CreditCard';
 import { MoneyIcon as Money } from '@phosphor-icons/react/dist/csr/Money';
 import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
-import { WavesIcon as Waves } from '@phosphor-icons/react/dist/csr/Waves';
-import { api, SkeletonTable } from '@onda/shared-ui';
+import { api, OndaMark, SkeletonTable } from '@onda/shared-ui';
 import { formatCop } from '@onda/shared-utils';
 import type { PosSaleDto } from '@onda/shared-types';
 
@@ -274,11 +273,7 @@ export function PosSalesList({
                       <td className="px-4 py-3.5">
                         {sale.ondasGranted > 0 ? (
                           <span className="inline-flex items-center gap-1 font-display text-sm font-semibold tabular-nums text-[var(--onda-primary-700)]">
-                            <Waves
-                              className="h-3.5 w-3.5"
-                              weight="duotone"
-                              aria-hidden
-                            />
+                            <OndaMark className="h-3.5 w-3.5" />
                             +{sale.ondasGranted}
                           </span>
                         ) : (

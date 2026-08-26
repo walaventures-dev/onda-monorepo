@@ -16,6 +16,8 @@ export { PasswordInput } from './PasswordInput';
 export type { PasswordInputProps } from './PasswordInput';
 export { OndaSelect } from './OndaSelect';
 export type { OndaSelectProps, OndaSelectOption } from './OndaSelect';
+export { ObjectiveDetailsEditor } from './ObjectiveDetailsEditor';
+export type { ObjectiveDetailsEditorProps } from './ObjectiveDetailsEditor';
 export { OndaDatePicker } from './OndaDatePicker';
 export type { OndaDatePickerProps } from './OndaDatePicker';
 export {
@@ -58,7 +60,7 @@ export type {
   DatePreset,
   PromoTypeKey,
 } from './AnalyticsFilters';
-export { OndaIcons, BadgePill, badgeIcon } from './icons';
+export { OndaIcons, OndaMark, BadgePill, badgeIcon } from './icons';
 export { PunchCardGrid } from './PunchCardGrid';
 export {
   IPhonePreview,

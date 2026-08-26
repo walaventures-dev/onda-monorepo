@@ -11,9 +11,8 @@ import { MoneyIcon as Money } from '@phosphor-icons/react/dist/csr/Money';
 import { PackageIcon as Package } from '@phosphor-icons/react/dist/csr/Package';
 import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
 import { SealCheckIcon as SealCheck } from '@phosphor-icons/react/dist/csr/SealCheck';
-import { WavesIcon as Waves } from '@phosphor-icons/react/dist/csr/Waves';
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from '@phosphor-icons/react/dist/csr/ArrowCounterClockwise';
-import { Button, SkeletonDetail, api } from '@onda/shared-ui';
+import { Button, OndaMark, SkeletonDetail, api } from '@onda/shared-ui';
 import { formatCop } from '@onda/shared-utils';
 import type { PosSaleDto } from '@onda/shared-types';
 
@@ -228,7 +227,7 @@ export function PosSaleDetail({
             ) : null}
             <div className="rounded-xl bg-white/70 px-3 py-2.5 shadow-sm col-span-2 sm:col-span-1">
               <p className="flex items-center gap-1 text-[11px] font-medium text-[var(--onda-muted)]">
-                <Waves className="h-3.5 w-3.5" weight="duotone" aria-hidden />
+                <OndaMark className="h-3.5 w-3.5" />
                 Ondas
               </p>
               <p className="mt-0.5 font-display text-lg font-semibold tabular-nums text-[var(--onda-primary-700)]">
@@ -392,7 +391,7 @@ export function PosSaleDetail({
                 ) : null}
                 {r.ondasReversed > 0 ? (
                   <p className="inline-flex items-center gap-1 text-xs font-medium text-[var(--onda-muted)]">
-                    <Waves className="h-3.5 w-3.5" weight="duotone" aria-hidden />
+                    <OndaMark className="h-3.5 w-3.5" />
                     {r.ondasReversed} ondas revertidas
                   </p>
                 ) : null}

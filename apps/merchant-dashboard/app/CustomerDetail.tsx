@@ -1,14 +1,17 @@
-'use client';
+"use client";
 
+import type { ReactNode } from "react";
 import {
-  KpiCard,
+  OndaHandMark,
   promoTypeLabel,
   OndaIcons,
   BadgePill,
   TxActivityRow,
   SkeletonDetail,
-} from '@onda/shared-ui';
-import { displayPhone, formatCop } from '@onda/shared-utils';
+} from "@onda/shared-ui";
+import { displayPhone, formatCop } from "@onda/shared-utils";
+import { CurrencyCircleDollarIcon as CurrencyCircleDollar } from "@phosphor-icons/react/dist/csr/CurrencyCircleDollar";
+import { CalendarBlankIcon as CalendarBlank } from "@phosphor-icons/react/dist/csr/CalendarBlank";
 import {
   ResponsiveContainer,
   BarChart,
@@ -19,24 +22,142 @@ import {
   Legend,
   LineChart,
   Line,
-} from 'recharts';
+} from "recharts";
 
 function deltaLabel(n?: number | null) {
   if (n == null) return undefined;
-  const sign = n > 0 ? '+' : '';
+  const sign = n > 0 ? "+" : "";
   return `${sign}${n}%`;
 }
 
 function waLink(phone?: string | null) {
   if (!phone) return null;
-  const digits = phone.replace(/\D/g, '');
+  const digits = phone.replace(/\D/g, "");
   if (!digits) return null;
   return `https://wa.me/${digits}`;
 }
 
 function formatRoi(roi?: number | null) {
-  if (roi == null || !Number.isFinite(roi)) return '—';
+  if (roi == null || !Number.isFinite(roi)) return "—";
   return `${roi.toFixed(1)}x`;
+}
+
+function Delta({ label, positive }: { label?: string; positive?: boolean }) {
+  if (!label) return null;
+  return (
+    <span
+      className={`text-xs font-medium ${
+        positive ? "text-[var(--onda-success)]" : "text-[var(--onda-danger)]"
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function KpiStat({
+  label,
+  value,
+  delta,
+  positive,
+  hint,
+}: {
+  label: string;
+  value: string | number;
+  delta?: string;
+  positive?: boolean;
+  hint?: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] text-[var(--onda-muted)]" title={hint}>
+        {label}
+      </p>
+      <p className="mt-0.5 truncate font-display text-base font-semibold tabular-nums text-[var(--onda-ink)]">
+        {value}
+      </p>
+      <Delta label={delta} positive={positive} />
+    </div>
+  );
+}
+
+function KpiCluster({
+  title,
+  subtitle,
+  icon,
+  tone,
+  heroLabel,
+  heroValue,
+  heroDelta,
+  heroPositive,
+  statsCols = 3,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  icon: ReactNode;
+  tone: "sky" | "primary" | "amber";
+  heroLabel: string;
+  heroValue: string | number;
+  heroDelta?: string;
+  heroPositive?: boolean;
+  statsCols?: 2 | 3;
+  children: ReactNode;
+}) {
+  const tones = {
+    sky: {
+      wrap: "border-[var(--onda-sky)]/20 bg-[linear-gradient(160deg,var(--onda-sky-soft)_0%,white_50%)]",
+      icon: "bg-[var(--onda-sky-soft)] text-[var(--onda-sky)]",
+    },
+    primary: {
+      wrap: "border-[var(--onda-primary)]/15 bg-[linear-gradient(160deg,var(--onda-primary-50)_0%,white_50%)]",
+      icon: "bg-[var(--onda-violet-soft)] text-[var(--onda-primary)]",
+    },
+    amber: {
+      wrap: "border-[#F5A524]/25 bg-[linear-gradient(160deg,#FFF6E5_0%,white_50%)]",
+      icon: "bg-[#FFF6E5] text-[#D97706]",
+    },
+  }[tone];
+
+  return (
+    <section
+      className={`onda-card flex h-full flex-col border p-4 ${tones.wrap}`}
+    >
+      <div className="flex items-start gap-2.5">
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tones.icon}`}
+        >
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
+            {title}
+          </h3>
+          <p className="text-xs text-[var(--onda-muted)]">{subtitle}</p>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--onda-muted)]">
+          {heroLabel}
+        </p>
+        <div className="mt-0.5 flex flex-wrap items-baseline gap-2">
+          <p className="font-display text-3xl font-semibold tabular-nums text-[var(--onda-ink)]">
+            {heroValue}
+          </p>
+          <Delta label={heroDelta} positive={heroPositive} />
+        </div>
+      </div>
+
+      <div
+        className={`mt-4 grid flex-1 gap-x-3 gap-y-3 border-t border-[var(--onda-border)]/80 pt-3 ${
+          statsCols === 2 ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3"
+        }`}
+      >
+        {children}
+      </div>
+    </section>
+  );
 }
 
 export function CustomerDetail({
@@ -73,8 +194,7 @@ export function CustomerDetail({
     );
   }
 
-  const rangeDays =
-    detail?.series?.length > 0 && detail.series.length <= 8;
+  const rangeDays = detail?.series?.length > 0 && detail.series.length <= 8;
 
   return (
     <div className="space-y-5">
@@ -96,11 +216,11 @@ export function CustomerDetail({
           <p className="mt-1 text-sm text-[var(--onda-muted)]">
             {displayPhone(user.phone)}
             {detail.lastVisit
-              ? ` · Última visita ${new Date(detail.lastVisit).toLocaleDateString('es-CO')}`
-              : ' · Sin visitas aún'}
+              ? ` · Última visita ${new Date(detail.lastVisit).toLocaleDateString("es-CO")}`
+              : " · Sin visitas aún"}
             {detail.pass?.serialNumber
               ? ` · Serial ${detail.pass.serialNumber}`
-              : ''}
+              : ""}
           </p>
           {detail.ondaValue != null && Number(detail.ondaValue) > 0 ? (
             <p className="mt-1 text-xs text-[var(--onda-muted)]">
@@ -109,12 +229,11 @@ export function CustomerDetail({
           ) : null}
           {detail.nearPromo ? (
             <p className="mt-1 text-sm text-[var(--onda-ink)]">
-              A{' '}
-              <span className="font-semibold">{detail.nearPromo.gap}</span>{' '}
-              ondas de{' '}
+              A <span className="font-semibold">{detail.nearPromo.gap}</span>{" "}
+              ondas de{" "}
               <span className="font-medium">{detail.nearPromo.title}</span>
               <span className="text-[var(--onda-muted)]">
-                {' '}
+                {" "}
                 ({promoTypeLabel(detail.nearPromo.type)})
               </span>
             </p>
@@ -133,59 +252,103 @@ export function CustomerDetail({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 [&>*]:min-w-0">
-        <KpiCard
-          label="Ventas"
-          hint="Suma del valor de cuenta en acumulaciones del periodo."
-          value={formatCop(k?.ventas ?? 0)}
-          delta={deltaLabel(k?.ventasDelta)}
-          positive={(k?.ventasDelta ?? 0) >= 0}
-        />
-        <KpiCard
-          label="Beneficio otorgado"
-          hint="Costo estimado de los canjes en el periodo."
-          value={formatCop(k?.beneficioOtorgado ?? 0)}
-          delta={deltaLabel(k?.beneficioDelta)}
-          positive={(k?.beneficioDelta ?? 0) <= 0}
-        />
-        <KpiCard
-          label="ROI"
-          hint="Ventas ÷ beneficio otorgado."
-          value={formatRoi(k?.roi)}
-        />
-        <KpiCard
-          label="Ticket medio"
-          value={formatCop(k?.ticketMedioCop ?? 0)}
-        />
-        <KpiCard
-          label="Ondas acumuladas"
-          hint="Onda = punto que el cliente gana en cada compra."
-          value={k?.ondas ?? 0}
-          delta={deltaLabel(k?.ondasDelta)}
-          positive={(k?.ondasDelta ?? 0) >= 0}
-        />
-        <KpiCard
-          label="Canjes"
-          value={k?.canjes ?? 0}
-          delta={deltaLabel(k?.canjesDelta)}
-          positive={(k?.canjesDelta ?? 0) >= 0}
-        />
-        <KpiCard
-          label="Visitas"
-          value={k?.visitas ?? 0}
-          delta={deltaLabel(k?.visitasDelta)}
-          positive={(k?.visitasDelta ?? 0) >= 0}
-        />
-        <KpiCard label="Saldo actual" value={k?.puntosActuales ?? 0} />
-        <KpiCard
-          label="Días sin visita"
-          value={k?.diasDesdeVisita ?? '—'}
-          positive={(k?.diasDesdeVisita ?? 0) < 21}
-        />
-        <KpiCard
-          label="Ticket medio (ondas)"
-          value={k?.ticketMedioOndas ?? 0}
-        />
+      <div className="grid gap-3 lg:grid-cols-3 [&>*]:min-w-0">
+        <KpiCluster
+          title="Dinero"
+          subtitle="Cuánto dejó y cuánto te costó"
+          tone="sky"
+          icon={
+            <CurrencyCircleDollar
+              className="h-5 w-5"
+              weight="regular"
+              aria-hidden
+            />
+          }
+          heroLabel="Ventas"
+          heroValue={formatCop(k?.ventas ?? 0)}
+          heroDelta={deltaLabel(k?.ventasDelta)}
+          heroPositive={(k?.ventasDelta ?? 0) >= 0}
+        >
+          <KpiStat
+            label="Costo canjes"
+            hint="Costo estimado de los canjes en el periodo."
+            value={formatCop(k?.beneficioOtorgado ?? 0)}
+            delta={deltaLabel(k?.beneficioDelta)}
+            positive={(k?.beneficioDelta ?? 0) <= 0}
+          />
+          <KpiStat
+            label="ROI"
+            hint="Ventas ÷ costo de canjes."
+            value={formatRoi(k?.roi)}
+          />
+          <KpiStat
+            label="Ticket medio"
+            value={formatCop(k?.ticketMedioCop ?? 0)}
+          />
+        </KpiCluster>
+
+        <KpiCluster
+          title="Actividad"
+          subtitle="Qué tan seguido viene"
+          tone="amber"
+          icon={
+            <CalendarBlank className="h-5 w-5" weight="regular" aria-hidden />
+          }
+          heroLabel="Visitas"
+          heroValue={k?.visitas ?? 0}
+          heroDelta={deltaLabel(k?.visitasDelta)}
+          heroPositive={(k?.visitasDelta ?? 0) >= 0}
+          statsCols={2}
+        >
+          <KpiStat
+            label="Canjes"
+            value={k?.canjes ?? 0}
+            delta={deltaLabel(k?.canjesDelta)}
+            positive={(k?.canjesDelta ?? 0) >= 0}
+          />
+          <KpiStat
+            label="Sin visitar"
+            value={
+              k?.diasDesdeVisita == null
+                ? "—"
+                : k.diasDesdeVisita === 0
+                  ? "Hoy"
+                  : `${k.diasDesdeVisita} d`
+            }
+            positive={(k?.diasDesdeVisita ?? 0) < 21}
+          />
+        </KpiCluster>
+
+        <KpiCluster
+          title="Ondas"
+          subtitle="Saldo y ritmo de acumulación"
+          tone="primary"
+          icon={<OndaHandMark variant="current" className="h-5 w-5" />}
+          heroLabel="Saldo actual"
+          heroValue={k?.puntosActuales ?? 0}
+        >
+          <KpiStat
+            label="Ganadas"
+            hint="Ondas que sumó en el periodo."
+            value={k?.ondas ?? 0}
+            delta={deltaLabel(k?.ondasDelta)}
+            positive={(k?.ondasDelta ?? 0) >= 0}
+          />
+          <KpiStat
+            label="Por visita"
+            hint="Promedio de ondas que gana en cada visita."
+            value={k?.ticketMedioOndas ?? 0}
+          />
+          {detail.nearPromo ? (
+            <KpiStat
+              label="Faltan"
+              hint={`Para canjear «${detail.nearPromo.title}»`}
+              value={detail.nearPromo.gap}
+            />
+          ) : (
+            <KpiStat label="Histórico" value={k?.ondasAllTime ?? 0} />
+          )}
+        </KpiCluster>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -270,7 +433,9 @@ export function CustomerDetail({
               </span>
             </li>
             <li className="flex justify-between gap-2 border-b border-[var(--onda-border)] pb-2">
-              <span className="text-[var(--onda-muted)]">Beneficio otorgado</span>
+              <span className="text-[var(--onda-muted)]">
+                Beneficio otorgado
+              </span>
               <span className="font-medium">
                 {formatCop(k?.beneficioAllTime ?? 0)}
               </span>
@@ -291,8 +456,8 @@ export function CustomerDetail({
               <span className="text-[var(--onda-muted)]">Cliente desde</span>
               <span className="font-medium">
                 {user.createdAt
-                  ? new Date(user.createdAt).toLocaleDateString('es-CO')
-                  : '—'}
+                  ? new Date(user.createdAt).toLocaleDateString("es-CO")
+                  : "—"}
               </span>
             </li>
           </ul>
@@ -301,12 +466,12 @@ export function CustomerDetail({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="onda-card overflow-hidden">
-          <div className="border-b border-[var(--onda-border)] px-4 py-3">
+          <div className="border-b border-[var(--onda-border)] px-5 py-3.5">
             <h3 className="font-display text-sm font-semibold">
               Actividad del periodo
             </h3>
           </div>
-          <ul className="onda-tx-list max-h-80 overflow-auto px-4 py-1">
+          <ul className="max-h-80 overflow-auto px-5 py-3">
             {(detail.recent || []).map((t: any) => (
               <TxActivityRow
                 key={t.id}
@@ -319,7 +484,7 @@ export function CustomerDetail({
                   promotion: t.promotion
                     ? { title: t.promotion.title, type: t.promotion.type }
                     : null,
-                  time: new Date(t.createdAt).toLocaleString('es-CO'),
+                  time: new Date(t.createdAt).toLocaleString("es-CO"),
                 }}
               />
             ))}
@@ -332,16 +497,16 @@ export function CustomerDetail({
         </div>
 
         <div className="onda-card overflow-hidden">
-          <div className="border-b border-[var(--onda-border)] px-4 py-3">
+          <div className="border-b border-[var(--onda-border)] px-5 py-3.5">
             <h3 className="font-display text-sm font-semibold">
               Promos vs su saldo
             </h3>
           </div>
-          <ul className="max-h-80 space-y-0 overflow-auto">
+          <ul className="max-h-80 space-y-0 overflow-auto px-5 py-2">
             {(detail.eligiblePromos || []).map((p: any) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between gap-3 border-b border-[var(--onda-border)] px-4 py-2.5 text-sm last:border-b-0"
+                className="flex items-center justify-between gap-3 border-b border-[var(--onda-border)] py-3 text-sm last:border-b-0"
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium">{p.title}</p>
@@ -363,7 +528,7 @@ export function CustomerDetail({
               </li>
             ))}
             {!detail.eligiblePromos?.length ? (
-              <li className="px-4 py-8 text-center text-sm text-[var(--onda-muted)]">
+              <li className="py-8 text-center text-sm text-[var(--onda-muted)]">
                 No hay promos activas en el catálogo.
               </li>
             ) : null}

@@ -4,24 +4,30 @@ import { motion } from 'framer-motion';
 import { CashRegisterIcon as CashRegister } from '@phosphor-icons/react/dist/csr/CashRegister';
 import { DeviceMobileIcon as DeviceMobile } from '@phosphor-icons/react/dist/csr/DeviceMobile';
 import { EnvelopeSimpleIcon as EnvelopeSimple } from '@phosphor-icons/react/dist/csr/EnvelopeSimple';
+import { GiftIcon as Gift } from '@phosphor-icons/react/dist/csr/Gift';
 import { LightningIcon as Lightning } from '@phosphor-icons/react/dist/csr/Lightning';
 import { MapPinIcon as MapPin } from '@phosphor-icons/react/dist/csr/MapPin';
 import { ShieldCheckIcon as ShieldCheck } from '@phosphor-icons/react/dist/csr/ShieldCheck';
 import { WalletIcon as Wallet } from '@phosphor-icons/react/dist/csr/Wallet';
 import { OndaLogo, OndaWordmark } from '@onda/shared-ui';
 import { fadeUp, inViewStagger, staggerItem } from '../lib/motion';
-import { onboardingUrl } from '../lib/pricing';
+import { onboardingUrl, SHOW_POS_LANDING } from '../lib/pricing';
 
 const BADGES = [
-  { icon: CashRegister, label: 'POS + lealtad en un solo lugar' },
+  ...(SHOW_POS_LANDING
+    ? [{ icon: CashRegister, label: 'POS + lealtad en un solo lugar' }]
+    : [{ icon: Gift, label: 'Lealtad con Ondas en Wallet' }]),
   { icon: DeviceMobile, label: 'Sin app que descargar' },
   { icon: Wallet, label: 'Apple y Google Wallet' },
   { icon: Lightning, label: 'Listo en minutos' },
 ];
 
 const PRODUCT_LINKS = [
-  { href: '#producto', label: 'Lealtad y POS' },
-  { href: '#pos', label: 'Punto de venta' },
+  {
+    href: '#producto',
+    label: SHOW_POS_LANDING ? 'Lealtad y POS' : 'Lealtad',
+  },
+  ...(SHOW_POS_LANDING ? [{ href: '#pos', label: 'Punto de venta' }] : []),
   { href: '#demo', label: 'Pruébalo en vivo' },
   { href: '#campanas', label: 'Campañas' },
   { href: '#pricing', label: 'Planes y precios' },
@@ -29,7 +35,9 @@ const PRODUCT_LINKS = [
 
 const TRUST_POINTS = [
   'Hecho en Colombia para comercios locales',
-  'Cobra en el POS y fideliza con Ondas',
+  SHOW_POS_LANDING
+    ? 'Cobra en el POS y fideliza con Ondas'
+    : 'Fideliza con Ondas en cada visita',
   'El cliente guarda el pase en su Wallet',
   'Activación digital; Kit físico en 6 y 12 meses',
 ];
@@ -52,7 +60,9 @@ export function FooterCta() {
               variants={staggerItem}
               className="mt-4 font-display text-2xl font-semibold md:text-3xl"
             >
-              ¿Listo para cobrar y que vuelvan?
+              {SHOW_POS_LANDING
+                ? '¿Listo para cobrar y que vuelvan?'
+                : '¿Listo para que vuelvan?'}
             </motion.p>
             <motion.div
               variants={staggerItem}
@@ -83,8 +93,9 @@ export function FooterCta() {
               <OndaWordmark className="h-8 w-auto" />
             </a>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-[var(--onda-muted)]">
-              POS y lealtad con Ondas en Wallet. Cobra el día a día y haz que el
-              cliente vuelva por el premio — sin app extra.
+              {SHOW_POS_LANDING
+                ? 'POS y lealtad con Ondas en Wallet. Cobra el día a día y haz que el cliente vuelva por el premio — sin app extra.'
+                : 'Lealtad con Ondas en Wallet. Haz que el cliente vuelva por el premio — sin app extra.'}
             </p>
             <div className="mt-5 space-y-2 text-sm text-[var(--onda-muted)]">
               <p className="inline-flex items-center gap-2">

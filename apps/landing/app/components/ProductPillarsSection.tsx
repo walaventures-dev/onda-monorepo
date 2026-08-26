@@ -5,8 +5,9 @@ import { ArrowRightIcon as ArrowRight } from '@phosphor-icons/react/dist/csr/Arr
 import { CashRegisterIcon as CashRegister } from '@phosphor-icons/react/dist/csr/CashRegister';
 import { GiftIcon as Gift } from '@phosphor-icons/react/dist/csr/Gift';
 import { fadeUpDelay, inViewStagger, staggerItem } from '../lib/motion';
+import { SHOW_POS_LANDING } from '../lib/pricing';
 
-const PILLARS = [
+const ALL_PILLARS = [
   {
     id: 'lealtad',
     icon: Gift,
@@ -36,6 +37,10 @@ const PILLARS = [
 ] as const;
 
 export function ProductPillarsSection() {
+  const pillars = SHOW_POS_LANDING
+    ? ALL_PILLARS
+    : ALL_PILLARS.filter((p) => p.id !== 'pos');
+
   return (
     <section id="producto" className="mx-auto max-w-6xl px-6 py-16 md:py-24">
       <motion.div {...inViewStagger} className="mx-auto max-w-2xl text-center">
@@ -43,16 +48,23 @@ export function ProductPillarsSection() {
           variants={staggerItem}
           className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-tight text-[var(--onda-ink)]"
         >
-          Un solo producto. Dos motores.
+          {SHOW_POS_LANDING
+            ? 'Un solo producto. Dos motores.'
+            : 'Lealtad que hace volver'}
         </motion.h2>
         <motion.p variants={staggerItem} className="mt-3 text-lg text-[var(--onda-muted)]">
-          Lealtad que hace volver al cliente y un POS para vender sin fricción —
-          conectados cuando quieres.
+          {SHOW_POS_LANDING
+            ? 'Lealtad que hace volver al cliente y un POS para vender sin fricción — conectados cuando quieres.'
+            : 'Ondas en Wallet para que el cliente vuelva por el premio — sin app que descargar.'}
         </motion.p>
       </motion.div>
 
-      <div className="mt-12 grid gap-5 md:grid-cols-2">
-        {PILLARS.map((pillar, i) => {
+      <div
+        className={`mt-12 grid gap-5 ${
+          pillars.length > 1 ? 'md:grid-cols-2' : 'mx-auto max-w-xl md:grid-cols-1'
+        }`}
+      >
+        {pillars.map((pillar, i) => {
           const Icon = pillar.icon;
           return (
             <motion.article

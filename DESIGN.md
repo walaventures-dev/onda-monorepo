@@ -235,7 +235,7 @@ Sombras de color (no neutras) se usan solo para reforzar un CTA de marca: `.onda
 
 ### 5.1 Librería
 
-**Phosphor Icons** (`@phosphor-icons/react`), exclusivamente. Import siempre de exports nombrados y de la ruta `csr` para tree-shaking, nunca el paquete raíz completo:
+**Phosphor Icons** (`@phosphor-icons/react`), exclusivamente — **excepto** la mano de marca (`OndaHandMark` / `OndaMark`) para cualquier UI de «Ondas». Import siempre de exports nombrados y de la ruta `csr` para tree-shaking, nunca el paquete raíz completo:
 
 ```tsx
 import { TagIcon as Tag } from '@phosphor-icons/react/dist/csr/Tag';
@@ -255,7 +255,14 @@ No uses `import { Tag } from '@phosphor-icons/react'` (importa todo el barrel) n
 
 ### 5.3 Ícono centralizado — `OndaIcons`
 
-Todos los íconos de producto están centralizados en `libs/shared/ui/src/icons.tsx` como `OndaIcons.<nombre>` (ya instanciados como JSX, no como componentes). **Antes de importar un ícono de Phosphor directamente en un componente nuevo, revisa si ya existe una entrada equivalente en `OndaIcons`** — hay ~40 íconos ya mapeados a conceptos de producto (`OndaIcons.accumulate`, `OndaIcons.redeem`, `OndaIcons.pass`, `OndaIcons.gear`, etc.). Reutilízalos por su rol semántico en vez de crear una nueva instancia del mismo ícono de Phosphor.
+Todos los íconos de producto están centralizados en `libs/shared/ui/src/icons.tsx` como `OndaIcons.<nombre>` (ya instanciados como JSX, no como componentes). **Antes de importar un ícono de Phosphor directamente en un componente nuevo, revisa si ya existe una entrada equivalente en `OndaIcons`** — hay ~40 íconos ya mapeados a conceptos de producto (`OndaIcons.accumulate`, `OndaIcons.redeem`, `OndaIcons.pass`, `OndaIcons.gear`, `OndaIcons.ondas`, etc.). Reutilízalos por su rol semántico en vez de crear una nueva instancia del mismo ícono de Phosphor.
+
+**Mano de Onda = «Ondas».** Cualquier sección, KPI, chip o label de *ondas* usa la mano de marca — nunca Phosphor `Waves`. El tratamiento visual depende del contexto:
+- Dentro de un ícono toned (KPI/sección con `text-[var(--onda-*)]`) → `OndaHandMark variant="current"` (hereda el color como un Phosphor)
+- Inline junto a un número/chip de color → `OndaMark` / `OndaIcons.ondas` (también `currentColor`)
+- Marca / logo / fondo primario → `OndaHandMark` default u `onPrimary`
+
+Asset: `/brand/onda-hand.png` (`ONDA_BRAND.hand`).
 
 ### 5.4 Otros assets
 
@@ -326,6 +333,7 @@ Reglas estrictas — **NUNCA** hagas lo siguiente al generar o modificar UI en e
 3. **No importes `@heroui/react` directamente en código de app.** Todo primitivo (`Button`, `Card`, `Table`, etc.) debe venir de `@onda/shared-ui`. Si un primitivo que necesitas no está re-exportado ahí, añádelo al export de `libs/shared/ui/src/index.tsx` en vez de importar el paquete original en el componente de la app.
 4. **No mezcles pesos de ícono de Phosphor.** Todo ícono es `weight="regular"`. No uses `bold`, `fill`, `duotone`, ni mezcles con otra librería de íconos (Lucide, Heroicons, Font Awesome, emoji como ícono funcional).
 5. **No importes el barrel completo de Phosphor.** Siempre `import { XIcon as X } from '@phosphor-icons/react/dist/csr/X'`, nunca `import { X } from '@phosphor-icons/react'`. Y antes de añadir un ícono nuevo, comprueba si ya existe un rol equivalente en `OndaIcons`.
+5b. **No uses Phosphor `Waves` (ni otro ícono genérico) para «Ondas».** El ícono de ondas/puntos es siempre la mano de marca (`OndaHandMark` / `OndaMark` / `OndaIcons.ondas`).
 6. **No implementes dark mode "de facto".** No añadas clases `dark:` sueltas a un componente aislado — hoy no existe dark mode en el sistema. Si el usuario lo pide, es una decisión de tokens a nivel de `:root`, no un parche por componente.
 7. **No uses `window.confirm` / `window.alert` / modales custom para confirmaciones simples.** Usa `useOndaDialogs()`.
 8. **No generes texto de UI en inglés.** Todo el copy del producto es español (es-CO). Mantén el tono directo y cercano ya presente (ej. "El pase se siente vivo estas dos semanas", no "Your pass is performing well").

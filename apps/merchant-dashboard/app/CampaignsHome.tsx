@@ -1,7 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  ComposedChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import {
   GradientButton,
   api,
@@ -9,7 +20,13 @@ import {
   OndaIcons,
   SkeletonList,
 } from '@onda/shared-ui';
-import { formatCop, type CampaignPromo, type ObjectiveKind } from '@onda/shared-utils';
+import {
+  formatCampaignRoi,
+  formatCop,
+  OBJECTIVE_TITLES,
+  type ObjectiveKind,
+} from '@onda/shared-utils';
+import { CAMPAIGN_FREE_REACH_MONTHLY } from '@onda/shared-types';
 
 type Recommendation = {
   id: string;
@@ -17,7 +34,6 @@ type Recommendation = {
   reason: string;
   title: string;
   audienceCount: number;
-  promo: CampaignPromo;
   slowWindow?: string;
   cartillaId?: string;
 };
@@ -33,25 +49,54 @@ type CampaignRow = {
   sendSms: boolean;
   sendWallet: boolean;
   createdAt: string;
-};
-
-type CampaignPricing = {
-  freeMonthly: number;
-  unitCop: number;
-  packSize: number;
-  packDiscount: number;
-  packCop: number;
+  audienceCount: number | null;
+  reachCount: number | null;
+  costCop: number;
+  estimatedCostCop: number | null;
+  successCount: number | null;
+  roiRatio: number | null;
 };
 
 type CampaignsList = {
   campaigns: CampaignRow[];
-  smsCampaignsUsed: number;
-  smsCampaignsLimit: number;
+  reachUsed: number;
+  reachLimit: number;
   freeRemaining: number;
-  campaignCredits: number;
-  packSubscribed: boolean;
+  unitCop: number;
   hasPaymentMethod: boolean;
-  pricing: CampaignPricing;
+};
+
+type AnalyticsResponse = {
+  kpis: {
+    totalReach: number;
+    avgSuccessRate: number;
+    totalCost: number;
+    totalAttributedSales: number;
+    weightedRoi: number | null;
+  };
+  series: Array<{
+    date: string;
+    reach: number;
+    successCount: number;
+    costCop: number;
+    attributedSalesCop: number;
+    successRate: number;
+    roi: number | null;
+  }>;
+  campaigns: Array<{
+    id: string;
+    title: string;
+    objective: ObjectiveKind;
+    sentAt: string | null;
+    audienceCount: number | null;
+    reachCount: number;
+    successCount: number;
+    successRate: number;
+    worked: boolean;
+    costCop: number;
+    attributedSalesCop: number;
+    roiRatio: number | null;
+  }>;
 };
 
 const STATUS_LABEL: Record<CampaignRow['status'], string> = {
@@ -61,6 +106,10 @@ const STATUS_LABEL: Record<CampaignRow['status'], string> = {
   CANCELLED: 'Cancelada',
   FAILED: 'Falló',
 };
+
+function isoDate(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
 
 export function CampaignsHome({
   storeId,
@@ -75,26 +124,21 @@ export function CampaignsHome({
   }) => Promise<boolean>;
 }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
-  const [buying, setBuying] = useState(false);
-  const [paywallOpen, setPaywallOpen] = useState(false);
-  const [sku, setSku] = useState<'single' | 'pack' | 'subscribe'>('pack');
-  const [pendingPath, setPendingPath] = useState('/campanas/nueva');
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [quota, setQuota] = useState<Omit<CampaignsList, 'campaigns'> | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
+  const [chartMode, setChartMode] = useState<'date' | 'campaign'>('date');
 
   const applyList = (list: CampaignsList) => {
     setCampaigns(list.campaigns || []);
     setQuota({
-      smsCampaignsUsed: list.smsCampaignsUsed ?? 0,
-      smsCampaignsLimit: list.smsCampaignsLimit ?? 1,
+      reachUsed: list.reachUsed ?? 0,
+      reachLimit: list.reachLimit ?? CAMPAIGN_FREE_REACH_MONTHLY,
       freeRemaining: list.freeRemaining ?? 0,
-      campaignCredits: list.campaignCredits ?? 0,
-      packSubscribed: Boolean(list.packSubscribed),
+      unitCop: list.unitCop ?? 200,
       hasPaymentMethod: Boolean(list.hasPaymentMethod),
-      pricing: list.pricing,
     });
   };
 
@@ -102,14 +146,20 @@ export function CampaignsHome({
     if (!storeId) return;
     setLoading(true);
     try {
-      const [list, rec] = await Promise.all([
+      const to = new Date();
+      const from = new Date(Date.now() - 30 * 86400000);
+      const [list, rec, an] = await Promise.all([
         api<CampaignsList>(`/campaigns?storeId=${storeId}`),
         api<{ recommendations: Recommendation[] }>(
           `/campaigns/recommendations?storeId=${storeId}`
         ),
+        api<AnalyticsResponse>(
+          `/campaigns/analytics?storeId=${storeId}&from=${isoDate(from)}&to=${isoDate(to)}`
+        ),
       ]);
       applyList(list);
       setRecs(rec.recommendations || []);
+      setAnalytics(an);
     } catch (e: any) {
       toast(e?.message || 'No se pudieron cargar las campañas');
     } finally {
@@ -124,7 +174,7 @@ export function CampaignsHome({
   async function cancelCampaign(id: string) {
     const ok = await confirm({
       title: '¿Cancelar esta campaña?',
-      message: 'No se enviará SMS ni push si aún no salió. Si era de un crédito, te lo devolvemos.',
+      message: 'No se enviará SMS ni push si aún no salió.',
       confirmLabel: 'Cancelar envío',
       tone: 'danger',
     });
@@ -138,79 +188,26 @@ export function CampaignsHome({
     }
   }
 
-  const canLaunch =
-    (quota?.freeRemaining ?? 0) > 0 || (quota?.campaignCredits ?? 0) > 0;
+  const dateChartData = useMemo(() => {
+    if (!analytics) return [];
+    return analytics.series.map((s) => ({
+      name: s.date.slice(5).replace('-', '/'),
+      alcance: s.reach,
+      costo: s.costCop,
+      ventas: s.attributedSalesCop,
+      exito: Math.round(s.successRate * 100),
+    }));
+  }, [analytics]);
 
-  function goCreate(path = '/campanas/nueva') {
-    if (!quota) return;
-    if (canLaunch) {
-      router.push(path);
-      return;
-    }
-    setPendingPath(path);
-    setPaywallOpen(true);
-  }
-
-  async function buySelected() {
-    if (!quota) return;
-    if (!quota.hasPaymentMethod) {
-      toast('Completa facturación y tarjeta en Configuración (Wompi) para comprar extras.');
-      setPaywallOpen(false);
-      router.push('/config');
-      return;
-    }
-    setBuying(true);
-    try {
-      const list = await api<CampaignsList>('/campaigns/purchase', {
-        method: 'POST',
-        body: JSON.stringify({ storeId, sku }),
-      });
-      applyList(list);
-      setPaywallOpen(false);
-      toast('Compra lista. Arma tu campaña.');
-      router.push(pendingPath);
-    } catch (e: any) {
-      toast(e?.message || 'No se pudo cobrar');
-    } finally {
-      setBuying(false);
-    }
-  }
-
-  async function cancelSub() {
-    const ok = await confirm({
-      title: '¿Cancelar la suscripción de campañas?',
-      message: 'No se renovará el paquete el próximo mes. Los créditos que ya compraste siguen vigentes.',
-      confirmLabel: 'Dejar de renovar',
-      tone: 'danger',
-    });
-    if (!ok) return;
-    try {
-      const list = await api<CampaignsList>('/campaigns/subscription/cancel', {
-        method: 'POST',
-        body: JSON.stringify({ storeId }),
-      });
-      applyList(list);
-      toast('Suscripción cancelada');
-    } catch (e: any) {
-      toast(e?.message || 'No se pudo cancelar');
-    }
-  }
-
-  const p = quota?.pricing;
-
-  useEffect(() => {
-    if (searchParams.get('comprar') === '1' && quota && !canLaunch) {
-      setPaywallOpen(true);
-    }
-  }, [searchParams, quota, canLaunch]);
-
-  const payLabel = p
-    ? sku === 'single'
-      ? `Pagar ${formatCop(p.unitCop)}`
-      : sku === 'pack'
-        ? `Pagar ${formatCop(p.packCop)}`
-        : `Suscribirme · ${formatCop(p.packCop)}/mes`
-    : 'Pagar';
+  const campaignChartData = useMemo(() => {
+    if (!analytics) return [];
+    return analytics.campaigns.map((c) => ({
+      name: c.title.length > 14 ? `${c.title.slice(0, 12)}…` : c.title,
+      alcance: c.reachCount,
+      costo: c.costCop,
+      roi: c.roiRatio ?? 0,
+    }));
+  }, [analytics]);
 
   return (
     <div className="space-y-6">
@@ -218,26 +215,27 @@ export function CampaignsHome({
         <div>
           <h2 className="font-display text-2xl font-semibold">Campañas</h2>
           <p className="mt-1 text-sm text-[var(--onda-muted)]">
-            Recomendadas según tus cartillas y clientes, o ármala tú.
+            Objetivo → audiencia → revisión. Cobro por personas alcanzadas:{' '}
+            {CAMPAIGN_FREE_REACH_MONTHLY} gratis al mes
             {quota
-              ? ` Gratis este mes: ${quota.smsCampaignsUsed}/${quota.smsCampaignsLimit} · Créditos: ${quota.campaignCredits}.`
-              : null}
-            {quota?.packSubscribed ? ' Suscripción activa.' : ''}
-            {quota?.packSubscribed ? (
+              ? ` · ${quota.reachUsed}/${quota.reachLimit} usadas · ${formatCop(quota.unitCop)}/persona extra`
+              : ''}
+            {quota && !quota.hasPaymentMethod ? (
               <>
                 {' '}
+                ·{' '}
                 <button
                   type="button"
-                  className="font-medium text-[var(--onda-ink)] underline decoration-[var(--onda-border)] underline-offset-2 hover:decoration-[var(--onda-ink)]"
-                  onClick={() => void cancelSub()}
+                  className="font-medium underline underline-offset-2"
+                  onClick={() => router.push('/config')}
                 >
-                  Dejar de renovar
+                  Agrega tarjeta en Config
                 </button>
               </>
             ) : null}
           </p>
         </div>
-        <GradientButton type="button" onClick={() => goCreate()}>
+        <GradientButton type="button" onClick={() => router.push('/campanas/nueva')}>
           {OndaIcons.plus} Nueva campaña
         </GradientButton>
       </header>
@@ -246,14 +244,89 @@ export function CampaignsHome({
         <SkeletonList rows={4} />
       ) : (
         <>
+          {analytics && analytics.campaigns.length > 0 ? (
+            <section className="onda-card space-y-4 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="font-display text-sm font-semibold">Resultados (30 días)</h3>
+                <div className="flex gap-1 rounded-full bg-[var(--onda-bg)] p-1">
+                  {(
+                    [
+                      { id: 'date' as const, label: 'Por fecha' },
+                      { id: 'campaign' as const, label: 'Por campaña' },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setChartMode(opt.id)}
+                      className={`rounded-full px-3 py-1 text-xs font-medium ${
+                        chartMode === opt.id
+                          ? 'bg-white text-[var(--onda-ink)] shadow-sm'
+                          : 'text-[var(--onda-muted)]'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <Kpi label="Alcance" value={String(analytics.kpis.totalReach)} />
+                <Kpi
+                  label="Éxito medio"
+                  value={`${Math.round(analytics.kpis.avgSuccessRate * 100)}%`}
+                />
+                <Kpi label="Costo total" value={formatCop(analytics.kpis.totalCost)} />
+                <Kpi
+                  label="Ventas atrib."
+                  value={formatCop(analytics.kpis.totalAttributedSales)}
+                />
+                <Kpi
+                  label="ROI medio"
+                  value={formatCampaignRoi(analytics.kpis.weightedRoi)}
+                />
+              </div>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  {chartMode === 'date' ? (
+                    <ComposedChart data={dateChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--onda-border)" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar yAxisId="left" dataKey="alcance" fill="#3DB9E8" radius={[4, 4, 0, 0]} />
+                      <Line
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey="exito"
+                        stroke="#052DDE"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </ComposedChart>
+                  ) : (
+                    <BarChart data={campaignChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--onda-border)" />
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="alcance" fill="#3DB9E8" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  )}
+                </ResponsiveContainer>
+              </div>
+            </section>
+          ) : null}
+
           <section className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
               Recomendadas para confirmar
             </h3>
             {recs.length === 0 ? (
               <p className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] px-4 py-5 text-sm text-[var(--onda-muted)]">
-                Todavía no hay una sugerencia clara. Crea una campaña con el
-                objetivo que quieras lograr.
+                Todavía no hay una sugerencia clara. Crea una campaña con el objetivo que
+                quieras lograr.
               </p>
             ) : (
               <div className="grid gap-3 md:grid-cols-2">
@@ -262,7 +335,7 @@ export function CampaignsHome({
                     key={r.id}
                     type="button"
                     onClick={() =>
-                      goCreate(
+                      router.push(
                         `/campanas/nueva?objective=${encodeURIComponent(r.objective)}&rec=${encodeURIComponent(r.id)}`
                       )
                     }
@@ -293,160 +366,86 @@ export function CampaignsHome({
               </p>
             ) : (
               <ul className="divide-y divide-[var(--onda-border)] overflow-hidden rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)]">
-                {campaigns.map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-[var(--onda-ink)]">
-                        {c.title}
-                      </p>
-                      <p className="text-xs text-[var(--onda-muted)]">
-                        {STATUS_LABEL[c.status]}
-                        {c.scheduledAt
-                          ? ` · ${new Date(c.scheduledAt).toLocaleString('es-CO', {
-                              dateStyle: 'medium',
-                              timeStyle: 'short',
-                            })}`
-                          : ''}
-                        {c.sendSms ? ' · SMS' : ''}
-                        {c.sendWallet ? ' · Wallet' : ''}
-                      </p>
-                    </div>
-                    {c.status === 'SCHEDULED' ? (
-                      <button
-                        type="button"
-                        onClick={() => void cancelCampaign(c.id)}
-                        className="rounded-full px-3 py-1.5 text-xs font-medium text-[var(--onda-danger)] hover:bg-[var(--onda-danger)]/8"
-                      >
-                        Cancelar
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
+                {campaigns.map((c) => {
+                  const obj = c.objective?.toLowerCase().replace('_hours', '_hours') as
+                    | ObjectiveKind
+                    | undefined;
+                  const objectiveKey =
+                    obj === 'slow_hours' ||
+                    obj === 'reactivate' ||
+                    obj === 'new_reward' ||
+                    obj === 'reviews'
+                      ? obj
+                      : null;
+                  return (
+                    <li key={c.id}>
+                      <div className="flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-[var(--onda-bg)]/60">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            c.status === 'SENT'
+                              ? router.push(`/campanas/${c.id}`)
+                              : undefined
+                          }
+                          disabled={c.status !== 'SENT'}
+                          className="min-w-0 flex-1 text-left disabled:cursor-default"
+                        >
+                          <p className="truncate font-medium text-[var(--onda-ink)]">
+                            {c.title}
+                          </p>
+                          <p className="text-xs text-[var(--onda-muted)]">
+                            {objectiveKey ? OBJECTIVE_TITLES[objectiveKey] : 'Campaña'} ·{' '}
+                            {STATUS_LABEL[c.status]}
+                            {c.audienceCount != null && c.reachCount != null
+                              ? ` · Alcance ${c.audienceCount}→${c.reachCount}`
+                              : c.audienceCount != null
+                                ? ` · Est. ${c.audienceCount}`
+                                : ''}
+                            {c.status === 'SENT' && c.costCop != null
+                              ? ` · ${formatCop(c.costCop)}`
+                              : ''}
+                            {c.status === 'SENT' && c.roiRatio != null
+                              ? ` · ROI ${formatCampaignRoi(c.roiRatio)}`
+                              : ''}
+                          </p>
+                        </button>
+                        {c.status === 'SCHEDULED' ? (
+                          <button
+                            type="button"
+                            onClick={() => void cancelCampaign(c.id)}
+                            className="rounded-full px-3 py-1.5 text-xs font-medium text-[var(--onda-danger)] hover:bg-[var(--onda-danger)]/8"
+                          >
+                            Cancelar
+                          </button>
+                        ) : c.status === 'SENT' ? (
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/campanas/${c.id}`)}
+                            className="text-xs text-[var(--onda-primary-700)]"
+                          >
+                            Ver →
+                          </button>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
         </>
       )}
+    </div>
+  );
+}
 
-      {paywallOpen && p ? (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
-          role="presentation"
-        >
-          <button
-            type="button"
-            aria-label="Cerrar"
-            className="absolute inset-0 bg-[rgba(26,27,46,0.45)] backdrop-blur-[4px]"
-            onClick={() => setPaywallOpen(false)}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="campaign-paywall-title"
-            className="relative z-10 w-full max-w-[40rem] overflow-hidden rounded-[1.25rem] border border-[var(--onda-border)] bg-[var(--onda-card)] p-5 shadow-[0_24px_60px_rgba(26,27,46,0.2)] sm:p-6"
-          >
-            <div className="flex items-start gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--onda-primary-50)] text-[var(--onda-primary-700)] [&>svg]:h-5 [&>svg]:w-5">
-                {OndaIcons.megaphone}
-              </span>
-              <div className="min-w-0">
-                <h3
-                  id="campaign-paywall-title"
-                  className="font-display text-xl font-semibold text-[var(--onda-ink)]"
-                >
-                  Sigue llegando a tus clientes
-                </h3>
-                <p className="mt-1 text-sm leading-relaxed text-[var(--onda-muted)]">
-                  Ya usaste la campaña SMS gratis de este mes. Elige un extra y
-                  cobramos con la tarjeta de Wompi que ya tienes en Configuración.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-2.5 sm:grid-cols-3">
-              {(
-                [
-                  {
-                    id: 'single' as const,
-                    kicker: 'Una',
-                    title: formatCop(p.unitCop),
-                    hint: '1 campaña extra',
-                  },
-                  {
-                    id: 'pack' as const,
-                    kicker: 'Paquete',
-                    title: formatCop(p.packCop),
-                    hint: `${p.packSize} campañas · ${Math.round(p.packDiscount * 100)}% off`,
-                    badge: 'Recomendado',
-                  },
-                  {
-                    id: 'subscribe' as const,
-                    kicker: 'Mensual',
-                    title: `${formatCop(p.packCop)}/mes`,
-                    hint: `${p.packSize} al mes · ritmo semanal`,
-                    disabled: quota?.packSubscribed,
-                  },
-                ] as const
-              ).map((opt) => {
-                const selected = sku === opt.id;
-                const disabled = 'disabled' in opt && opt.disabled;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => setSku(opt.id)}
-                    className={`rounded-2xl border p-4 text-left transition ${
-                      disabled
-                        ? 'cursor-not-allowed border-[var(--onda-border)] bg-[var(--onda-bg)] opacity-55'
-                        : selected
-                          ? 'border-[var(--onda-bridge)] bg-[var(--onda-primary-50)] shadow-[0_8px_24px_rgba(26,27,46,0.06)]'
-                          : 'border-[var(--onda-border)] bg-[var(--onda-bg)] hover:border-[var(--onda-bridge)]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--onda-muted)]">
-                        {opt.kicker}
-                      </p>
-                      {'badge' in opt && opt.badge ? (
-                        <span className="rounded-full bg-[var(--onda-violet)] px-2 py-0.5 text-[10px] font-semibold text-white">
-                          {opt.badge}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-1.5 font-display text-lg font-semibold text-[var(--onda-ink)]">
-                      {opt.title}
-                    </p>
-                    <p className="mt-0.5 text-xs leading-snug text-[var(--onda-muted)]">
-                      {disabled ? 'Ya está activa' : opt.hint}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-full px-4 py-2.5 text-sm font-semibold text-[var(--onda-muted)] hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
-                onClick={() => setPaywallOpen(false)}
-              >
-                Ahora no
-              </button>
-              <GradientButton
-                type="button"
-                disabled={buying || (sku === 'subscribe' && quota?.packSubscribed)}
-                onClick={() => void buySelected()}
-              >
-                {buying ? 'Cobrando…' : payLabel}
-              </GradientButton>
-            </div>
-          </div>
-        </div>
-      ) : null}
+function Kpi({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-[var(--onda-border)] bg-[var(--onda-bg)] px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+        {label}
+      </p>
+      <p className="mt-1 font-display text-lg font-semibold tabular-nums">{value}</p>
     </div>
   );
 }

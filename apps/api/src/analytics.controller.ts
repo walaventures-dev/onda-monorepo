@@ -22,9 +22,9 @@ import { WhatsappService } from './whatsapp.service';
 import {
   PLAN_ONDA_MONTHLY_LIMIT,
   monthlyOndasUsed,
-  monthlySmsCampaignsUsed,
+  monthlyReachUsed,
 } from './plan-quota';
-import { campaignPricing } from './campaign-pricing';
+import { campaignReachPricing } from './campaign-pricing';
 import { computeRoi } from '@onda/shared-utils';
 
 const COMPARE_MAX_STORES = 20;
@@ -540,7 +540,7 @@ export class AnalyticsController {
       }
     }
 
-    if (ventasPOSVal > 0 && posSales._count > 0) {
+    if (store.posEnabled && ventasPOSVal > 0 && posSales._count > 0) {
       insights.push({
         id: 'pos-sales',
         tone: 'accent',
@@ -1874,20 +1874,23 @@ export class BillingController {
   @Get('store/:storeId')
   async summary(@Param('storeId') storeId: string) {
     const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
-    const pricing = campaignPricing();
-    const [ondasUsed, smsCampaignsUsed] = await Promise.all([
+    const pricing = campaignReachPricing();
+    const [ondasUsed, reachUsed] = await Promise.all([
       monthlyOndasUsed(this.prisma, storeId),
-      monthlySmsCampaignsUsed(this.prisma, storeId),
+      monthlyReachUsed(this.prisma, storeId),
     ]);
     return {
       planType: store.planType,
       billingStatus: store.billingStatus,
       ondasUsed,
       ondasLimit: PLAN_ONDA_MONTHLY_LIMIT,
-      smsCampaignsUsed,
+      reachUsed,
+      reachLimit: pricing.freeMonthly,
+      reachUnitCop: pricing.unitCop,
+      smsCampaignsUsed: reachUsed,
       smsCampaignsLimit: pricing.freeMonthly,
-      campaignCredits: store.campaignCredits,
-      packSubscribed: store.campaignPackSubscribed,
+      campaignCredits: 0,
+      packSubscribed: false,
       hasPaymentMethod: Boolean(store.wompiPaymentSourceId) || !this.wompi.isConfigured,
       campaignPricing: pricing,
       planPriceCop: store.planType === 'PRO' ? 69_900 : 49_900,

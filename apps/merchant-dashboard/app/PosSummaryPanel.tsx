@@ -24,10 +24,10 @@ import { PackageIcon as Package } from '@phosphor-icons/react/dist/csr/Package';
 import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
 import { TicketIcon as Ticket } from '@phosphor-icons/react/dist/csr/Ticket';
 import { UsersThreeIcon as UsersThree } from '@phosphor-icons/react/dist/csr/UsersThree';
-import { WavesIcon as Waves } from '@phosphor-icons/react/dist/csr/Waves';
 import {
   AnalyticsSectionHeader,
   KpiCard,
+  OndaHandMark,
   SkeletonDashboard,
   api,
   type AnalyticsFiltersValue,
@@ -172,7 +172,7 @@ export function PosSummaryPanel({
           label="Ondas POS"
           value={summary.ondasGranted}
           tone="success"
-          icon={<Waves className="h-5 w-5" weight="duotone" aria-hidden />}
+          icon={<OndaHandMark variant="current" className="h-5 w-5" />}
         />
       </div>
 

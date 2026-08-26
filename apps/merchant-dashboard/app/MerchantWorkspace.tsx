@@ -33,6 +33,7 @@ import {
   toast,
   type AnalyticsFiltersValue,
   OndaIcons,
+  OndaHandMark,
   BadgePill,
   SkeletonDetail,
   SkeletonDashboard,
@@ -51,9 +52,6 @@ import {
   YAxis,
   Tooltip,
   Legend,
-  PieChart,
-  Pie,
-  Cell,
   ComposedChart,
   Area,
   Line,
@@ -65,11 +63,9 @@ import { CurrencyCircleDollarIcon as CurrencyCircleDollar } from "@phosphor-icon
 import { GiftIcon as Gift } from "@phosphor-icons/react/dist/csr/Gift";
 import { PercentIcon as Percent } from "@phosphor-icons/react/dist/csr/Percent";
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/dist/csr/Receipt";
-import { TagIcon as Tag } from "@phosphor-icons/react/dist/csr/Tag";
 import { TargetIcon as Target } from "@phosphor-icons/react/dist/csr/Target";
 import { TrendUpIcon as TrendUp } from "@phosphor-icons/react/dist/csr/TrendUp";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/dist/csr/UsersThree";
-import { WavesIcon as Waves } from "@phosphor-icons/react/dist/csr/Waves";
 import { PromoDetail } from "./PromoDetail";
 import { CreatePromo } from "./CreatePromo";
 import { CartillaEditor } from "./CartillaEditor";
@@ -80,6 +76,7 @@ import { PendingRequestsPanel, CajaOpenButton } from "./PendingRequestsPanel";
 import { ReferralsPanel } from "./ReferralsPanel";
 import { CampaignsHome } from "./CampaignsHome";
 import { CampaignWizard } from "./CampaignWizard";
+import { CampaignDetail } from "./CampaignDetail";
 import { SetupChecklist } from "./SetupChecklist";
 import { isSetupAllowedTab, storeSetupStatus } from "./setupStatus";
 import { useMerchantAuth } from "../lib/MerchantAuth";
@@ -127,14 +124,6 @@ const SECTIONS: Tab[] = [
   "caja",
   "config",
 ];
-
-const TYPE_COLORS: Record<string, string> = {
-  PERCENT_OFF: "#052DDE",
-  AMOUNT_OFF: "#3DB9E8",
-  BUY_GET: "#2BB673",
-  PRODUCT: "#F5A524",
-  OTHER: "#94A3B8",
-};
 
 function deltaLabel(n?: number | null) {
   if (n == null) return undefined;
@@ -330,33 +319,19 @@ function PromoCatalogCard({
         ? poolOpt?.label
         : null;
 
-  const statsList = (
-    <dl className="space-y-1.5">
-      <div className="flex items-center gap-1.5">
-        <span className="shrink-0 text-[var(--onda-violet)]" aria-hidden>
-          {OndaIcons.redeem}
-        </span>
-        <div className="min-w-0">
-          <dt className="text-[10px] font-medium leading-none text-[var(--onda-muted)]">
-            Canjes
-          </dt>
-          <dd className="tabular-nums text-sm font-semibold leading-tight text-[var(--onda-ink)]">
-            {canjes}
-          </dd>
-        </div>
+  const statsInline = (
+    <dl className="flex shrink-0 items-center gap-3 sm:gap-4">
+      <div className="flex items-baseline gap-1">
+        <dt className="text-[11px] text-[var(--onda-muted)]">Canjes</dt>
+        <dd className="tabular-nums text-sm font-semibold text-[var(--onda-ink)]">
+          {canjes}
+        </dd>
       </div>
-      <div className="flex items-center gap-1.5">
-        <span className="shrink-0 text-[var(--onda-sky)]" aria-hidden>
-          {OndaIcons.users}
-        </span>
-        <div className="min-w-0">
-          <dt className="text-[10px] font-medium leading-none text-[var(--onda-muted)]">
-            Elegibles
-          </dt>
-          <dd className="tabular-nums text-sm font-semibold leading-tight text-[var(--onda-ink)]">
-            {elegibles}
-          </dd>
-        </div>
+      <div className="flex items-baseline gap-1">
+        <dt className="text-[11px] text-[var(--onda-muted)]">Elegibles</dt>
+        <dd className="tabular-nums text-sm font-semibold text-[var(--onda-ink)]">
+          {elegibles}
+        </dd>
       </div>
     </dl>
   );
@@ -387,9 +362,9 @@ function PromoCatalogCard({
             onOpen();
           }
         }}
-        className={`onda-card flex cursor-pointer items-start gap-2.5 p-2.5 transition hover:shadow-[0_1px_2px_rgba(26,27,46,0.08)] ${highlightCls} ${inactiveCls}`}
+        className={`onda-card flex cursor-pointer items-center gap-3 px-3 py-2 transition hover:shadow-[0_1px_2px_rgba(26,27,46,0.08)] ${highlightCls} ${inactiveCls}`}
       >
-        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-[var(--onda-bg)]">
+        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-[var(--onda-bg)]">
           {promo.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -403,8 +378,8 @@ function PromoCatalogCard({
             </div>
           )}
         </div>
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <div className="flex min-w-0 items-center gap-1.5">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
             {showTypeTag ? (
               <span className="shrink-0 text-[var(--onda-violet)]" aria-hidden>
                 {promoTypeIcon(promo.type)}
@@ -414,14 +389,14 @@ function PromoCatalogCard({
               {promo.title}
             </h3>
             {insightTag}
+            {contextLine ? (
+              <span className="text-[11px] text-[var(--onda-muted)]">
+                · {contextLine}
+              </span>
+            ) : null}
           </div>
-          {contextLine ? (
-            <p className="text-[11px] text-[var(--onda-muted)]">
-              {contextLine}
-            </p>
-          ) : null}
-          {statsList}
         </div>
+        {statsInline}
         {actions}
       </article>
     );
@@ -457,7 +432,7 @@ function PromoCatalogCard({
           <div className="absolute left-1.5 top-1.5">{insightTag}</div>
         ) : null}
       </div>
-      <div className="px-2 py-1.5">
+      <div className="px-2.5 py-2">
         <div className="flex items-center gap-1">
           {showTypeTag ? (
             <span
@@ -478,10 +453,7 @@ function PromoCatalogCard({
           </p>
         ) : null}
         <dl className="mt-1.5 flex items-center gap-3">
-          <div className="flex min-w-0 items-center gap-1">
-            <span className="shrink-0 text-[var(--onda-violet)]" aria-hidden>
-              {OndaIcons.redeem}
-            </span>
+          <div className="flex min-w-0 items-baseline gap-1">
             <dt className="text-[10px] font-medium text-[var(--onda-muted)]">
               Canjes
             </dt>
@@ -489,10 +461,7 @@ function PromoCatalogCard({
               {canjes}
             </dd>
           </div>
-          <div className="flex min-w-0 items-center gap-1">
-            <span className="shrink-0 text-[var(--onda-sky)]" aria-hidden>
-              {OndaIcons.users}
-            </span>
+          <div className="flex min-w-0 items-baseline gap-1">
             <dt className="text-[10px] font-medium text-[var(--onda-muted)]">
               Elegibles
             </dt>
@@ -774,6 +743,7 @@ function parseRoute(pathname: string): {
   customerPassId: string | null;
   cartillaId: string | null;
   campaignNew: boolean;
+  campaignId: string | null;
 } {
   const parts = pathname.split("/").filter(Boolean);
   const raw = parts[0] || "resumen";
@@ -784,6 +754,7 @@ function parseRoute(pathname: string): {
       customerPassId: null,
       cartillaId: null,
       campaignNew: false,
+      campaignId: null,
     };
   }
   if (raw === "caja" || raw === "operacion") {
@@ -793,6 +764,7 @@ function parseRoute(pathname: string): {
       customerPassId: null,
       cartillaId: null,
       campaignNew: false,
+      campaignId: null,
     };
   }
   if (raw === "cartillas") {
@@ -802,6 +774,7 @@ function parseRoute(pathname: string): {
       customerPassId: null,
       cartillaId: parts[1] && parts[1] !== "calendario" ? parts[1] : null,
       campaignNew: false,
+      campaignId: null,
     };
   }
   const section = (raw === "pase" ? "config" : raw) as Tab;
@@ -817,7 +790,9 @@ function parseRoute(pathname: string): {
   }
   const customerPassId = tab === "clientes" && parts[1] ? parts[1] : null;
   const campaignNew = tab === "campanas" && parts[1] === "nueva";
-  return { tab, promoId, customerPassId, cartillaId, campaignNew };
+  const campaignId =
+    tab === "campanas" && parts[1] && parts[1] !== "nueva" ? parts[1] : null;
+  return { tab, promoId, customerPassId, cartillaId, campaignNew, campaignId };
 }
 
 const POS_METHOD_OPTIONS = [
@@ -836,6 +811,7 @@ export function MerchantWorkspace() {
     customerPassId: selectedCustomerPassId,
     cartillaId: selectedCartillaId,
     campaignNew,
+    campaignId,
   } = parseRoute(pathname);
 
   useEffect(() => {
@@ -902,7 +878,6 @@ export function MerchantWorkspace() {
   const [storeLogoUrl, setStoreLogoUrl] = useState("");
   const [savingStoreLogo, setSavingStoreLogo] = useState(false);
   const [savingStoreEconomics, setSavingStoreEconomics] = useState(false);
-  const [savingPos, setSavingPos] = useState(false);
   const { confirm, alert, dialogs } = useOndaDialogs();
 
   const initialRange = rangeFromPreset("14d");
@@ -1595,32 +1570,6 @@ export function MerchantWorkspace() {
       });
     } finally {
       setSavingStoreEconomics(false);
-    }
-  }
-
-  async function togglePosEnabled(enabled: boolean) {
-    if (!storeId) return;
-    setSavingPos(true);
-    try {
-      const updated = await api<any>(`/stores/${storeId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ posEnabled: enabled }),
-      });
-      setStores((prev) =>
-        prev.map((s) => (s.id === storeId ? { ...s, ...updated } : s)),
-      );
-      toast.success(enabled ? "POS habilitado" : "POS deshabilitado");
-      if (!enabled && pathname.startsWith("/pos")) {
-        router.replace("/caja");
-      }
-    } catch (err: any) {
-      await alert({
-        title: "No se pudo actualizar",
-        message: err.message || "Intenta de nuevo.",
-        tone: "danger",
-      });
-    } finally {
-      setSavingPos(false);
     }
   }
 
@@ -2415,9 +2364,7 @@ export function MerchantWorkspace() {
                   delta={deltaLabel(kpis?.ondasDelta)}
                   positive={(kpis?.ondasDelta ?? 0) >= 0}
                   tone="sky"
-                  icon={
-                    <Waves className="h-5 w-5" weight="duotone" aria-hidden />
-                  }
+                  icon={<OndaHandMark variant="current" className="h-5 w-5" />}
                 />
                 <KpiCard
                   label="Redenciones"
@@ -2481,17 +2428,21 @@ export function MerchantWorkspace() {
               </div>
             ) : null}
 
-            {(overview?.insights || []).length > 0 ? (
+            {(overview?.insights || []).filter(
+              (i: any) => posEnabled || !String(i.id).startsWith("pos-"),
+            ).length > 0 ? (
               <InsightsPanel
-                items={(overview.insights as any[]).map((ins) => ({
-                  id: ins.id,
-                  tone: ins.tone,
-                  title: ins.title,
-                  message: ins.message,
-                  stat: ins.stat,
-                  action: ins.action,
-                  onAction: () => handleInsightAction(ins.id, ins.promoId),
-                }))}
+                items={(overview.insights as any[])
+                  .filter((i) => posEnabled || !String(i.id).startsWith("pos-"))
+                  .map((ins) => ({
+                    id: ins.id,
+                    tone: ins.tone,
+                    title: ins.title,
+                    message: ins.message,
+                    stat: ins.stat,
+                    action: ins.action,
+                    onAction: () => handleInsightAction(ins.id, ins.promoId),
+                  }))}
               />
             ) : null}
 
@@ -2558,48 +2509,6 @@ export function MerchantWorkspace() {
               />
             </div>
 
-            <div className="onda-card p-5">
-              <AnalyticsSectionHeader
-                icon={<Tag className="h-4 w-4" weight="duotone" aria-hidden />}
-                title="Canjes por tipo de promo"
-                subtitle="Distribución de redenciones"
-                tone="primary"
-              />
-              <div className="mt-4 h-56">
-                {(overview?.redemptionsByType || []).length ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={overview.redemptionsByType}
-                        dataKey="count"
-                        nameKey="type"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        label={(e: any) => promoTypeLabel(e.type)}
-                      >
-                        {overview.redemptionsByType.map((row: any) => (
-                          <Cell
-                            key={row.type}
-                            fill={TYPE_COLORS[row.type] || "#94A3B8"}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(v: any, _n: any, p: any) => [
-                          v,
-                          promoTypeLabel(p?.payload?.type),
-                        ]}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-sm text-[var(--onda-muted)]">
-                    Sin canjes tipados en el rango.
-                  </p>
-                )}
-              </div>
-            </div>
               </>
             )}
           </div>
@@ -3101,7 +3010,16 @@ export function MerchantWorkspace() {
           </Suspense>
         ) : null}
 
-        {tab === "campanas" && !campaignNew && storeId ? (
+        {tab === "campanas" && campaignId && storeId ? (
+          <Suspense fallback={<SkeletonDetail />}>
+            <CampaignDetail
+              campaignId={campaignId}
+              onBack={() => router.push("/campanas")}
+            />
+          </Suspense>
+        ) : null}
+
+        {tab === "campanas" && !campaignNew && !campaignId && storeId ? (
           <CampaignsHome storeId={storeId} confirm={confirm} />
         ) : null}
 
@@ -3121,8 +3039,6 @@ export function MerchantWorkspace() {
             onSaveLogo={(e) => void saveStoreLogo(e)}
             onSaveEconomics={(e) => void saveStoreEconomics(e)}
             onUpgrade={() => void upgrade()}
-            onTogglePos={(enabled) => void togglePosEnabled(enabled)}
-            savingPos={savingPos}
           />
         ) : null}
       </AppShell>

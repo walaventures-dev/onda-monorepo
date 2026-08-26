@@ -17,6 +17,7 @@ import {
   onboardingUrl,
   PLAN_META,
   quotePlan,
+  SHOW_POS_LANDING,
   type BillingPeriod,
   type PlanId,
 } from '../lib/pricing';
@@ -57,7 +58,9 @@ export function PricingSection() {
           Planes que se pagan solos
         </motion.h2>
         <motion.p variants={staggerItem} className="mt-3 text-lg text-[var(--onda-muted)]">
-          POS y lealtad incluidos. Primer mes gratis — sin tarjeta para empezar.
+          {SHOW_POS_LANDING
+            ? 'POS y lealtad incluidos. Primer mes gratis — sin tarjeta para empezar.'
+            : 'Lealtad con Ondas incluida. Primer mes gratis — sin tarjeta para empezar.'}
         </motion.p>
       </motion.div>
 

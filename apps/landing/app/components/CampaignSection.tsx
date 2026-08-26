@@ -12,35 +12,38 @@ import {
 } from 'recharts';
 import {
   OndaSelect,
-  PROMO_TYPE_OPTIONS,
-  type PromoTypeKey,
+  ObjectiveDetailsEditor,
 } from '@onda/shared-ui';
 import {
   AUDIENCE_BY_OBJECTIVE,
   CHANNELS,
   DEMO_STORE,
   OBJECTIVE_KINDS,
+  OBJECTIVE_TITLES,
   STORE_CATEGORY_LABELS,
+  STORE_SUBCATEGORY_LABELS,
+  STORE_SEGMENT_LABELS,
   StoreCategory,
   StoreSubcategory,
   StoreSegment,
-  buildCampaignMessages,
-  defaultPromo,
+  buildObjectiveMessages,
+  campaignReachQuote,
   demoStoreName,
+  formatCop,
+  objectiveHint,
   objectiveLabel,
-  promoForType,
-  promoHeadline,
+  recommendedObjectiveDetails,
   subcategoryOptions,
   segmentOptions,
   defaultSegmentFor,
   voiceFor,
   type CampaignMessage,
-  type DemoPromo,
+  type ObjectiveDetails,
   type ObjectiveKind,
 } from '../lib/campaign-demo';
 import { fadeUpDelay, inViewStagger, staggerItem } from '../lib/motion';
 import { onboardingUrl } from '../lib/pricing';
-import { PLAN_SMS_CAMPAIGNS_MONTHLY } from '@onda/shared-types';
+import { CAMPAIGN_FREE_REACH_MONTHLY } from '@onda/shared-types';
 import {
   IPhonePreview,
   LockScreen,
@@ -50,8 +53,7 @@ import {
 const STEPS = [
   { id: 0, label: '1. Objetivo' },
   { id: 1, label: '2. Audiencia' },
-  { id: 2, label: '3. Promo' },
-  { id: 3, label: '4. Revisión' },
+  { id: 2, label: '3. Revisión' },
 ] as const;
 
 const NOTIF_DELAYS_MS = [900, 2600] as const;
@@ -68,29 +70,40 @@ export function CampaignSection() {
   );
   const [segment, setSegment] = useState<StoreSegment>(DEMO_STORE.segment);
   const [objectiveKind, setObjectiveKind] = useState<ObjectiveKind>('reactivate');
-  const [promo, setPromo] = useState<DemoPromo>(() =>
-    defaultPromo('reactivate', voiceFor(DEMO_STORE.subcategory))
+  const [details, setDetails] = useState<ObjectiveDetails>(() =>
+    recommendedObjectiveDetails(
+      voiceFor(DEMO_STORE.subcategory, DEMO_STORE.segment)
+    )
   );
   const [launched, setLaunched] = useState(false);
   const [visibleNotifs, setVisibleNotifs] = useState<LockScreenNotification[]>([]);
   const launchTimersRef = useRef<number[]>([]);
 
-  const voice = voiceFor(subcategory);
+  const voice = voiceFor(subcategory, segment);
   const storeName = demoStoreName(subcategory);
   const audience = AUDIENCE_BY_OBJECTIVE[objectiveKind];
-  const objective = objectiveLabel(objectiveKind, voice);
+  const objective = objectiveLabel(objectiveKind, voice, details);
   const messages = useMemo(
     () =>
-      buildCampaignMessages({
-        promo,
+      buildObjectiveMessages({
         kind: objectiveKind,
         voice,
         storeName,
+        details,
         firstName: audience.people[0]?.name.split(' ')[0],
+        slowWindow: details.slowWindow,
       }),
-    [promo, objectiveKind, voice, storeName, audience.people]
+    [objectiveKind, voice, storeName, audience.people, details]
   );
-  const benefitPreview = promoHeadline(promo);
+
+  const demoQuote = useMemo(
+    () =>
+      campaignReachQuote({
+        audienceCount: Number(audience.kpis[0]?.value) || 104,
+        reachUsedThisMonth: 12,
+      }),
+    [audience.kpis]
+  );
 
   const clearLaunchTimers = () => {
     launchTimersRef.current.forEach((id) => window.clearTimeout(id));
@@ -113,19 +126,34 @@ export function CampaignSection() {
   const applyVertical = (
     nextCategory: StoreCategory,
     nextSub: StoreSubcategory,
-    nextSegment?: StoreSegment
+    nextSegment?: StoreSegment,
+    keepObjective: ObjectiveKind = objectiveKind
   ) => {
+    const nextSeg = nextSegment ?? defaultSegmentFor(nextSub);
+    const nextVoice = voiceFor(nextSub, nextSeg);
+    const nextDetails = recommendedObjectiveDetails(nextVoice);
     setCategory(nextCategory);
     setSubcategory(nextSub);
-    setSegment(nextSegment ?? defaultSegmentFor(nextSub));
-    setObjectiveKind('reactivate');
-    setPromo(defaultPromo('reactivate', voiceFor(nextSub)));
+    setSegment(nextSeg);
+    setDetails(nextDetails);
+    resetLaunch();
+  };
+
+  const selectObjective = (kind: ObjectiveKind) => {
+    const nextDetails = recommendedObjectiveDetails(voice);
+    setObjectiveKind(kind);
+    setDetails(nextDetails);
+    resetLaunch();
+  };
+
+  const patchDetails = (patch: Partial<ObjectiveDetails>) => {
+    setDetails({ ...details, ...patch });
     resetLaunch();
   };
 
   const handleCta = () => {
     if (launched) return;
-    if (step < 3) {
+    if (step < 2) {
       goToStep(step + 1);
       return;
     }
@@ -148,7 +176,7 @@ export function CampaignSection() {
   };
 
   const ctaLabel =
-    step < 3 ? 'Siguiente' : launched ? null : 'Lanzar campaña';
+    step < 2 ? 'Siguiente' : launched ? null : 'Lanzar campaña';
 
   return (
     <section id="campanas" className="mx-auto max-w-6xl px-6 py-20 md:py-28">
@@ -160,9 +188,9 @@ export function CampaignSection() {
           Llena el local cuando esté flojo.
         </motion.h2>
         <motion.p variants={staggerItem} className="mt-3 text-lg text-[var(--onda-muted)]">
-          Desde Lealtad: objetivo, audiencia y promo en cuatro pasos. Llegas a
-          tus clientes por Wallet y SMS — {PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS
-          gratis al mes.
+          Desde Lealtad: objetivo, audiencia y revisión en tres pasos. Llegas a
+          tus clientes por Wallet y SMS — {CAMPAIGN_FREE_REACH_MONTHLY} personas
+          alcanzadas gratis al mes.
         </motion.p>
       </motion.div>
 
@@ -208,20 +236,20 @@ export function CampaignSection() {
                     subcategory={subcategory}
                     segment={segment}
                     objectiveKind={objectiveKind}
+                    details={details}
                     onCategoryChange={(next) => {
                       const subs = subcategoryOptions(next);
-                      applyVertical(next, subs[0]?.id ?? StoreSubcategory.BEAUTY);
+                      applyVertical(
+                        next,
+                        subs[0]?.id ?? StoreSubcategory.BEAUTY
+                      );
                     }}
                     onSubcategoryChange={(next) => applyVertical(category, next)}
                     onSegmentChange={(next) => {
-                      setSegment(next);
-                      resetLaunch();
+                      applyVertical(category, subcategory, next);
                     }}
-                    onObjectiveChange={(kind) => {
-                      setObjectiveKind(kind);
-                      setPromo(defaultPromo(kind, voice));
-                      resetLaunch();
-                    }}
+                    onObjectiveChange={selectObjective}
+                    onDetailsChange={patchDetails}
                   />
                 ) : null}
 
@@ -230,28 +258,11 @@ export function CampaignSection() {
                 ) : null}
 
                 {step === 2 ? (
-                  <PromoStep
-                    promo={promo}
-                    benefitPreview={benefitPreview}
-                    messages={messages}
-                    onChange={(next) => {
-                      setPromo(next);
-                      resetLaunch();
-                    }}
-                    onTypeChange={(type) => {
-                      setPromo(promoForType(type, objectiveKind, voice));
-                      resetLaunch();
-                    }}
-                  />
-                ) : null}
-
-                {step === 3 ? (
                   <ReviewStep
                     objective={objective}
                     audience={audience}
-                    promoTitle={promo.title}
-                    benefit={promoHeadline(promo)}
                     messages={messages}
+                    quote={demoQuote}
                   />
                 ) : null}
               </motion.div>
@@ -280,7 +291,7 @@ export function CampaignSection() {
                 className="mt-5 flex w-full max-w-[280px] items-center justify-center rounded-full bg-[var(--onda-primary-500)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--onda-primary-600)] active:scale-[0.98]"
               >
                 {ctaLabel}
-                {step < 3 ? ' →' : ''}
+                {step < 2 ? ' →' : ''}
               </button>
             )}
           </aside>
@@ -295,27 +306,35 @@ function ObjectiveStep({
   subcategory,
   segment,
   objectiveKind,
+  details,
   onCategoryChange,
   onSubcategoryChange,
   onSegmentChange,
   onObjectiveChange,
+  onDetailsChange,
 }: {
   category: StoreCategory;
   subcategory: StoreSubcategory;
   segment: StoreSegment;
   objectiveKind: ObjectiveKind;
+  details: ObjectiveDetails;
   onCategoryChange: (category: StoreCategory) => void;
   onSubcategoryChange: (subcategory: StoreSubcategory) => void;
   onSegmentChange: (segment: StoreSegment) => void;
   onObjectiveChange: (kind: ObjectiveKind) => void;
+  onDetailsChange: (patch: Partial<ObjectiveDetails>) => void;
 }) {
-  const voice = voiceFor(subcategory);
+  const voice = voiceFor(subcategory, segment);
+  const liveLabel = objectiveLabel(objectiveKind, voice, details);
+  const categoryLabel = STORE_CATEGORY_LABELS[category];
+  const subcategoryLabel = STORE_SUBCATEGORY_LABELS[subcategory];
+  const segmentLabel = STORE_SEGMENT_LABELS[segment];
 
   return (
     <div>
       <h3 className="font-display text-xl font-semibold">¿Qué quieres lograr?</h3>
       <p className="mt-1 text-sm text-[var(--onda-muted)]">
-        El objetivo se ajusta al tipo de negocio, categoría y subcategoría.
+        Elige el propósito (trae recomendación) y ajústalo a detalle.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -357,25 +376,85 @@ function ObjectiveStep({
         </label>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+      <p className="mt-2 text-[11px] text-[var(--onda-muted)]">
+        Combinación:{' '}
+        <span className="font-medium text-[var(--onda-ink)]">
+          {categoryLabel} → {subcategoryLabel} → {segmentLabel}
+        </span>
+      </p>
+
+      <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
         {OBJECTIVE_KINDS.map((kind) => {
-          const label = objectiveLabel(kind, voice);
           const selected = objectiveKind === kind;
+          const label = objectiveLabel(
+            kind,
+            voice,
+            selected ? details : recommendedObjectiveDetails(voice)
+          );
           return (
             <button
               key={kind}
               type="button"
               onClick={() => onObjectiveChange(kind)}
-              className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
+              className={`rounded-2xl border px-4 py-3.5 text-left transition ${
                 selected
-                  ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-50)] text-[var(--onda-ink)]'
-                  : 'border-[var(--onda-border)] text-[var(--onda-muted)] hover:border-[var(--onda-bridge)]'
+                  ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-50)] text-[var(--onda-ink)] shadow-[0_8px_20px_rgba(5,45,222,0.08)]'
+                  : 'border-[var(--onda-border)] text-[var(--onda-muted)] hover:border-[var(--onda-bridge)] hover:bg-white'
               }`}
             >
-              {label}
+              <span
+                className={`block text-sm font-semibold ${
+                  selected ? 'text-[var(--onda-primary-700)]' : 'text-[var(--onda-ink)]'
+                }`}
+              >
+                {OBJECTIVE_TITLES[kind]}
+              </span>
+              <span className="mt-1 block text-xs leading-snug text-[var(--onda-muted)]">
+                {objectiveHint(kind)}
+              </span>
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={`${kind}-${subcategory}-${segment}-${label}`}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.2 }}
+                  className={`mt-2 block text-xs leading-snug ${
+                    selected
+                      ? 'font-medium text-[var(--onda-ink)]'
+                      : 'text-[var(--onda-muted)]'
+                  }`}
+                >
+                  {label}
+                </motion.span>
+              </AnimatePresence>
             </button>
           );
         })}
+      </div>
+
+      <ObjectiveDetailsEditor
+        kind={objectiveKind}
+        details={details}
+        onChange={onDetailsChange}
+      />
+
+      <div className="mt-4 overflow-hidden rounded-2xl bg-[var(--onda-sky-soft)] px-4 py-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--onda-muted)]">
+          Objetivo vivo
+        </p>
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={liveLabel}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.22 }}
+            className="mt-1 text-sm font-medium text-[var(--onda-ink)]"
+          >
+            {liveLabel}
+          </motion.p>
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -477,184 +556,18 @@ function AudienceStep({
   );
 }
 
-function PromoStep({
-  promo,
-  benefitPreview,
-  messages,
-  onChange,
-  onTypeChange,
-}: {
-  promo: DemoPromo;
-  benefitPreview: string;
-  messages: CampaignMessage[];
-  onChange: (promo: DemoPromo) => void;
-  onTypeChange: (type: PromoTypeKey) => void;
-}) {
-  const patch = (partial: Partial<DemoPromo>) => onChange({ ...promo, ...partial });
-
-  return (
-    <div>
-      <h3 className="font-display text-xl font-semibold">La promo</h3>
-      <p className="mt-1 text-sm text-[var(--onda-muted)]">
-        Configúrala como en el dashboard. Onda arma un push y un SMS.
-      </p>
-
-      <div className="mt-4 flex flex-wrap gap-1.5">
-        {PROMO_TYPE_OPTIONS.map((t) => {
-          const selected = promo.type === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onTypeChange(t.id)}
-              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                selected
-                  ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-500)] text-white'
-                  : 'border-[var(--onda-border)] bg-white text-[var(--onda-muted)] hover:border-[var(--onda-bridge)] hover:text-[var(--onda-ink)]'
-              }`}
-            >
-              {t.icon}
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <input
-        value={promo.title}
-        onChange={(e) => patch({ title: e.target.value })}
-        placeholder="Título (ej. Facial 20% off)"
-        className="mt-3 w-full rounded-2xl border border-[var(--onda-border)] bg-white px-4 py-3 text-sm font-medium text-[var(--onda-ink)] outline-none transition focus:border-[var(--onda-bridge)]"
-      />
-
-      {promo.type === 'PERCENT_OFF' ? (
-        <label className="mt-3 block text-sm text-[var(--onda-muted)]">
-          Porcentaje (1–100)
-          <input
-            type="number"
-            min={1}
-            max={100}
-            value={promo.value}
-            onChange={(e) => patch({ value: e.target.value })}
-            className="mt-1 w-full rounded-2xl border border-[var(--onda-border)] bg-white px-4 py-2.5 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
-          />
-        </label>
-      ) : null}
-
-      {promo.type === 'AMOUNT_OFF' ? (
-        <label className="mt-3 block text-sm text-[var(--onda-muted)]">
-          Valor de descuento (COP)
-          <input
-            type="number"
-            min={1}
-            value={promo.value}
-            onChange={(e) => patch({ value: e.target.value })}
-            className="mt-1 w-full rounded-2xl border border-[var(--onda-border)] bg-white px-4 py-2.5 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
-          />
-        </label>
-      ) : null}
-
-      {promo.type === 'BUY_GET' ? (
-        <div className="mt-3 flex flex-wrap gap-3">
-          <label className="text-sm text-[var(--onda-muted)]">
-            Compra N
-            <input
-              type="number"
-              min={1}
-              value={promo.buyQuantity}
-              onChange={(e) => patch({ buyQuantity: e.target.value })}
-              className="ml-2 w-20 rounded-2xl border border-[var(--onda-border)] bg-white px-3 py-2 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
-            />
-          </label>
-          <label className="text-sm text-[var(--onda-muted)]">
-            Lleva M
-            <input
-              type="number"
-              min={1}
-              value={promo.getQuantity}
-              onChange={(e) => patch({ getQuantity: e.target.value })}
-              className="ml-2 w-20 rounded-2xl border border-[var(--onda-border)] bg-white px-3 py-2 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
-            />
-          </label>
-        </div>
-      ) : null}
-
-      {promo.type === 'PRODUCT' ? (
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <label className="text-sm text-[var(--onda-muted)]">
-            Nombre del producto
-            <input
-              value={promo.productName}
-              onChange={(e) => patch({ productName: e.target.value })}
-              placeholder="Ej. Masaje de 30 min"
-              className="mt-1 w-full rounded-2xl border border-[var(--onda-border)] bg-white px-4 py-2.5 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
-            />
-          </label>
-          <label className="text-sm text-[var(--onda-muted)]">
-            Precio especial (opcional)
-            <input
-              type="number"
-              min={0}
-              value={promo.value}
-              onChange={(e) => patch({ value: e.target.value })}
-              className="mt-1 w-full rounded-2xl border border-[var(--onda-border)] bg-white px-4 py-2.5 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
-            />
-          </label>
-        </div>
-      ) : null}
-
-      {promo.type === 'PERCENT_OFF' || promo.type === 'AMOUNT_OFF' || promo.type === 'BUY_GET' ? (
-        <label className="mt-3 block text-sm text-[var(--onda-muted)]">
-          En qué (opcional)
-          <input
-            value={promo.productName}
-            onChange={(e) => patch({ productName: e.target.value })}
-            placeholder="Ej. facial, manicure"
-            className="mt-1 w-full rounded-2xl border border-[var(--onda-border)] bg-white px-4 py-2.5 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
-          />
-        </label>
-      ) : null}
-
-      <p className="mt-3 rounded-2xl bg-[var(--onda-bg)] px-4 py-2.5 text-xs text-[var(--onda-muted)]">
-        Preview: {benefitPreview}
-      </p>
-
-      <div className="mt-5">
-        <p className="text-xs font-semibold text-[var(--onda-ink)]">
-          Así les llega
-        </p>
-        <ul className="mt-2 space-y-2">
-          {messages.map((msg) => (
-            <li
-              key={msg.channel}
-              className="rounded-2xl border border-[var(--onda-border)] bg-white px-3 py-2.5"
-            >
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--onda-primary-700)]">
-                {msg.channelLabel}
-              </p>
-              <p className="mt-1 text-sm leading-snug text-[var(--onda-ink)]">{msg.text}</p>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
-}
-
 function ReviewStep({
   objective,
   audience,
-  promoTitle,
-  benefit,
   messages,
+  quote,
 }: {
   objective: string;
   audience: (typeof AUDIENCE_BY_OBJECTIVE)[ObjectiveKind];
-  promoTitle: string;
-  benefit: string;
   messages: CampaignMessage[];
+  quote: ReturnType<typeof campaignReachQuote>;
 }) {
+  const audienceCount = Number(audience.kpis[0]?.value) || 104;
   return (
     <div>
       <h3 className="font-display text-xl font-semibold">Listo para lanzar</h3>
@@ -673,7 +586,7 @@ function ReviewStep({
             Audiencia
           </p>
           <p className="mt-1 font-display text-3xl font-bold text-[var(--onda-ink)]">
-            104
+            {audienceCount}
           </p>
           <p className="text-sm text-[var(--onda-muted)]">clientes</p>
           <div className="mt-3 flex flex-wrap gap-1.5">
@@ -707,12 +620,37 @@ function ReviewStep({
 
         <div className="rounded-2xl border border-[var(--onda-border)] bg-white p-4 sm:col-span-2">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
-            Promo
+            Costo estimado (alcance)
           </p>
-          <p className="mt-2 font-display text-xl font-semibold leading-snug text-[var(--onda-ink)]">
-            {promoTitle}
+          <dl className="mt-3 space-y-2 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-[var(--onda-muted)]">Personas a alcanzar</dt>
+              <dd>{audienceCount}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-[var(--onda-muted)]">
+                Gratis este mes ({quote.freeMonthly})
+              </dt>
+              <dd>
+                {quote.reachUsedThisMonth} usadas → {quote.freeApplied} gratis
+              </dd>
+            </div>
+            {quote.paidCount > 0 ? (
+              <div className="flex justify-between gap-4">
+                <dt className="text-[var(--onda-muted)]">Personas de pago</dt>
+                <dd>
+                  {quote.paidCount} × {formatCop(quote.unitCop)}
+                </dd>
+              </div>
+            ) : null}
+            <div className="flex justify-between gap-4 border-t border-[var(--onda-border)] pt-2 font-semibold">
+              <dt>Costo estimado</dt>
+              <dd>{formatCop(quote.costCop)}</dd>
+            </div>
+          </dl>
+          <p className="mt-3 text-xs text-[var(--onda-muted)]">
+            ROI tras el envío: — (demo)
           </p>
-          <p className="mt-1 text-sm text-[var(--onda-muted)]">{benefit}</p>
         </div>
 
         <div className="rounded-2xl border border-[var(--onda-border)] bg-white p-4 sm:col-span-2">
@@ -734,3 +672,4 @@ function ReviewStep({
     </div>
   );
 }
+

@@ -468,7 +468,13 @@ export const PLAN_ONDA_MONTHLY_LIMIT = 300;
 /** Campañas SMS/Wallet incluidas gratis por mes (override API: CAMPAIGN_FREE_MONTHLY). */
 export const PLAN_SMS_CAMPAIGNS_MONTHLY = 1;
 
-/** Precio de una campaña extra a demanda (COP). */
+/** Personas alcanzadas gratis al mes (todas las campañas). */
+export const CAMPAIGN_FREE_REACH_MONTHLY = 30;
+
+/** Precio por persona alcanzada fuera del cupo gratis (COP). */
+export const CAMPAIGN_REACH_PRICE_COP = 200;
+
+/** @deprecated Cobro legacy por campaña extra; usar CAMPAIGN_REACH_PRICE_COP */
 export const CAMPAIGN_PRICE_COP = 29_900;
 
 /** Tamaño del paquete (aprox. una por semana). */

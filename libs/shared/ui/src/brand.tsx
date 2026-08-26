@@ -11,7 +11,7 @@ export const ONDA_BRAND = {
   addToGoogleWallet: '/brand/add-to-google-wallet.png',
 } as const;
 
-export type OndaBrandVariant = 'default' | 'onDark' | 'onPrimary';
+export type OndaBrandVariant = 'default' | 'onDark' | 'onPrimary' | 'current';
 
 function variantFilter(variant: OndaBrandVariant): string | undefined {
   // Wordmark is blue; invert to white on dark/primary surfaces.
@@ -20,6 +20,17 @@ function variantFilter(variant: OndaBrandVariant): string | undefined {
   return undefined;
 }
 
+const handMaskStyle: CSSProperties = {
+  WebkitMaskImage: `url(${ONDA_BRAND.hand})`,
+  maskImage: `url(${ONDA_BRAND.hand})`,
+  WebkitMaskSize: 'contain',
+  maskSize: 'contain',
+  WebkitMaskRepeat: 'no-repeat',
+  maskRepeat: 'no-repeat',
+  WebkitMaskPosition: 'center',
+  maskPosition: 'center',
+};
+
 export function OndaWordmark({
   className = '',
   variant = 'default',
@@ -27,13 +38,13 @@ export function OndaWordmark({
   style,
 }: {
   className?: string;
-  variant?: OndaBrandVariant;
+  variant?: Exclude<OndaBrandVariant, 'current'>;
   alt?: string;
   style?: CSSProperties;
 }) {
   const filter = variantFilter(variant);
   return (
-      <img
+    <img
       src={ONDA_BRAND.wordmark}
       alt={alt}
       className={`h-8 w-auto ${filter ?? ''} ${className}`.trim()}
@@ -52,13 +63,26 @@ export function OndaHandMark({
   variant?: OndaBrandVariant;
   alt?: string;
 }) {
-  // Cream asset: on light → dark silhouette; on dark/primary → white.
+  // `current`: hereda color del contenedor (KPIs/secciones toned).
+  // default / onDark / onPrimary: silueta de marca.
+  if (variant === 'current') {
+    return (
+      <span
+        className={`inline-block h-5 w-5 shrink-0 bg-current ${className}`.trim()}
+        style={handMaskStyle}
+        aria-hidden={alt ? undefined : true}
+        role={alt ? 'img' : undefined}
+        aria-label={alt || undefined}
+      />
+    );
+  }
+
   const filter =
     variant === 'onDark' || variant === 'onPrimary'
       ? 'brightness-0 invert'
       : 'brightness-0';
   return (
-      <img
+    <img
       src={ONDA_BRAND.hand}
       alt={alt}
       className={`h-8 w-auto ${filter} ${className}`.trim()}

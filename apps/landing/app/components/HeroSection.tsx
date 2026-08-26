@@ -12,7 +12,7 @@ import { CashRegisterIcon as CashRegister } from "@phosphor-icons/react/dist/csr
 import { GiftIcon as Gift } from "@phosphor-icons/react/dist/csr/Gift";
 import { MegaphoneIcon as Megaphone } from "@phosphor-icons/react/dist/csr/Megaphone";
 import { WalletIcon as Wallet } from "@phosphor-icons/react/dist/csr/Wallet";
-import { onboardingUrl } from "../lib/pricing";
+import { onboardingUrl, SHOW_POS_LANDING } from "../lib/pricing";
 import {
   easeSoft,
   heroItem,
@@ -70,7 +70,9 @@ function HeroHighlight({ children }: { children: string }) {
 
 const VALUE_POINTS = [
   { icon: Gift, title: "Lealtad", desc: "Ondas hacia el premio" },
-  { icon: CashRegister, title: "POS", desc: "Vende e inventaria" },
+  ...(SHOW_POS_LANDING
+    ? [{ icon: CashRegister, title: "POS", desc: "Vende e inventaria" }]
+    : []),
   { icon: Wallet, title: "Wallet", desc: "Sin descargar app" },
   { icon: Megaphone, title: "Campañas", desc: "Llena el local" },
 ];
@@ -111,19 +113,32 @@ export function HeroSection() {
             variants={heroItem}
             className="max-w-xl overflow-visible font-display text-[clamp(2rem,5vw,3.5rem)] font-bold leading-[1.08] tracking-tight text-[var(--onda-ink)]"
           >
-            Cobra. Fideliza. <HeroHighlight>Vuelve</HeroHighlight>.
+            {SHOW_POS_LANDING ? (
+              <>
+                Cobra. Fideliza. <HeroHighlight>Vuelve</HeroHighlight>.
+              </>
+            ) : (
+              <>
+                Fideliza. Premia. <HeroHighlight>Vuelve</HeroHighlight>.
+              </>
+            )}
           </motion.h1>
           <motion.p
             variants={heroItem}
             className="mt-5 max-w-lg text-lg text-[var(--onda-muted)]"
           >
-            POS para vender e inventariar, y un pase en Wallet para que el
-            cliente vuelva por el premio — sin app que descargar.
+            {SHOW_POS_LANDING
+              ? "POS para vender e inventariar, y un pase en Wallet para que el cliente vuelva por el premio — sin app que descargar."
+              : "Un pase en Wallet para que el cliente vuelva por el premio — sin app que descargar."}
           </motion.p>
 
           <motion.div
             variants={staggerContainerFast}
-            className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4"
+            className={`mt-8 grid gap-4 ${
+              VALUE_POINTS.length === 4
+                ? "grid-cols-2 sm:grid-cols-4"
+                : "grid-cols-3"
+            }`}
           >
             {VALUE_POINTS.map(({ icon: Icon, title, desc }) => (
               <motion.div

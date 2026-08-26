@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { OndaLogo } from '@onda/shared-ui';
-import { onboardingUrl } from '../lib/pricing';
+import { loginUrl, onboardingUrl, SHOW_POS_LANDING } from '../lib/pricing';
 
 const NAV = [
   { href: '#producto', label: 'Producto' },
-  { href: '#pos', label: 'POS' },
+  ...(SHOW_POS_LANDING ? [{ href: '#pos', label: 'POS' }] : []),
   { href: '#campanas', label: 'Campañas' },
   { href: '#pricing', label: 'Planes' },
 ];
@@ -44,6 +44,12 @@ export function LandingHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <a
+            href={loginUrl()}
+            className="hidden rounded-full px-3.5 py-2.5 text-sm font-semibold text-[var(--onda-ink)] transition hover:bg-[var(--onda-bg)] sm:inline-flex"
+          >
+            Iniciar sesión
+          </a>
           <a
             href={onboardingUrl()}
             className="hidden rounded-full bg-[var(--onda-primary-500)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(5,45,222,0.28)] transition hover:bg-[var(--onda-primary-600)] active:scale-[0.98] sm:inline-flex"
@@ -90,6 +96,13 @@ export function LandingHeader() {
                   {l.label}
                 </a>
               ))}
+              <a
+                href={loginUrl()}
+                className="rounded-xl px-3 py-2.5 font-semibold text-[var(--onda-ink)] hover:bg-[var(--onda-primary-50)]"
+                onClick={() => setMenuOpen(false)}
+              >
+                Iniciar sesión
+              </a>
             </nav>
             <a
               href={onboardingUrl()}

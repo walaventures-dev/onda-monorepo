@@ -1,10 +1,14 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { PLAN_ONDA_MONTHLY_LIMIT } from '@onda/shared-types';
-import { campaignPricing } from './campaign-pricing';
+import {
+  CAMPAIGN_FREE_REACH_MONTHLY,
+  CAMPAIGN_REACH_PRICE_COP,
+} from '@onda/shared-types';
+import { campaignReachQuote } from '@onda/shared-utils';
+import { campaignReachPricing } from './campaign-pricing';
 
-export { PLAN_ONDA_MONTHLY_LIMIT };
-export { PLAN_SMS_CAMPAIGNS_MONTHLY } from '@onda/shared-types';
+export { PLAN_ONDA_MONTHLY_LIMIT } from '@onda/shared-types';
+export { CAMPAIGN_FREE_REACH_MONTHLY, CAMPAIGN_REACH_PRICE_COP };
 
 const BILLING_TZ = 'America/Bogota';
 
@@ -20,7 +24,6 @@ export function startOfCurrentMonth(now = new Date()): Date {
       .formatToParts(now)
       .map((p) => [p.type, p.value])
   );
-  // Bogotá es UTC-5 todo el año: el 1° a las 00:00 local = 05:00 UTC.
   return new Date(`${parts.year}-${parts.month}-01T05:00:00.000Z`);
 }
 
@@ -46,6 +49,7 @@ export async function remainingOndas(
   now = new Date()
 ): Promise<number> {
   const used = await monthlyOndasUsed(db, storeId, now);
+  const { PLAN_ONDA_MONTHLY_LIMIT } = await import('@onda/shared-types');
   return Math.max(0, PLAN_ONDA_MONTHLY_LIMIT - used);
 }
 
@@ -56,6 +60,7 @@ export async function assertCanAccumulate(
   now = new Date()
 ): Promise<number> {
   const remaining = await remainingOndas(db, storeId, now);
+  const { PLAN_ONDA_MONTHLY_LIMIT } = await import('@onda/shared-types');
   if (remaining <= 0) {
     throw new BadRequestException(
       `Este mes ya usaste las ${PLAN_ONDA_MONTHLY_LIMIT} ondas incluidas en tu suscripción.`
@@ -64,64 +69,88 @@ export async function assertCanAccumulate(
   return Math.min(Math.max(0, points), remaining);
 }
 
-export async function monthlySmsCampaignsUsed(
+/** Personas alcanzadas (reachCount) en campañas enviadas este mes. */
+export async function monthlyReachUsed(
   db: QuotaDb,
   storeId: string,
   now = new Date()
 ): Promise<number> {
   const monthStart = startOfCurrentMonth(now);
-  return db.campaign.count({
+  const agg = await db.campaign.aggregate({
     where: {
       storeId,
-      sendSms: true,
-      billingKind: 'FREE',
-      status: { in: ['SCHEDULED', 'SENT'] },
-      OR: [
-        { scheduledAt: { gte: monthStart } },
-        { scheduledAt: null, createdAt: { gte: monthStart } },
-      ],
+      status: 'SENT',
+      sentAt: { gte: monthStart },
     },
+    _sum: { reachCount: true },
+  });
+  return agg._sum.reachCount ?? 0;
+}
+
+export function quoteReachCost(
+  reachUsedThisMonth: number,
+  projectedReach: number,
+  opts?: { unitCop?: number; freeMonthly?: number }
+) {
+  const pricing = campaignReachPricing(opts);
+  return campaignReachQuote({
+    audienceCount: projectedReach,
+    reachUsedThisMonth,
+    unitCop: pricing.unitCop,
+    freeMonthly: pricing.freeMonthly,
   });
 }
 
+export async function assertCanLaunchReach(
+  db: QuotaDb,
+  storeId: string,
+  projectedReach: number,
+  now = new Date()
+) {
+  const used = await monthlyReachUsed(db, storeId, now);
+  const quote = quoteReachCost(used, projectedReach);
+  if (quote.paidCount <= 0) return quote;
+
+  const store = await db.store.findUniqueOrThrow({
+    where: { id: storeId },
+    select: { wompiPaymentSourceId: true },
+  });
+  if (!store.wompiPaymentSourceId) {
+    throw new BadRequestException({
+      code: 'PAYMENT_METHOD_REQUIRED',
+      message:
+        'Para alcanzar más de 30 personas al mes necesitas tarjeta en Configuración.',
+      hasPaymentMethod: false,
+      quote,
+    });
+  }
+  return quote;
+}
+
+/** @deprecated Legacy slot billing — use monthlyReachUsed */
+export async function monthlySmsCampaignsUsed(
+  db: QuotaDb,
+  storeId: string,
+  now = new Date()
+): Promise<number> {
+  return monthlyReachUsed(db, storeId, now);
+}
+
+/** @deprecated Legacy — use assertCanLaunchReach */
 export async function consumeCampaignSlot(
   db: QuotaDb,
   storeId: string,
   now = new Date()
 ): Promise<'FREE' | 'CREDIT'> {
-  const pricing = campaignPricing();
-  const used = await monthlySmsCampaignsUsed(db, storeId, now);
-  if (used < pricing.freeMonthly) return 'FREE';
-
-  const store = await db.store.findUniqueOrThrow({
-    where: { id: storeId },
-    select: {
-      campaignCredits: true,
-      wompiPaymentSourceId: true,
-      campaignPackSubscribed: true,
-    },
-  });
-  if (store.campaignCredits > 0) {
-    await db.store.update({
-      where: { id: storeId },
-      data: { campaignCredits: { decrement: 1 } },
-    });
-    return 'CREDIT';
-  }
-
-  throw new BadRequestException({
-    code: 'CAMPAIGN_QUOTA',
-    message: `Ya usaste tu${pricing.freeMonthly === 1 ? '' : 's'} ${pricing.freeMonthly} campaña${pricing.freeMonthly === 1 ? '' : 's'} gratis de este mes. Compra créditos extra o el paquete de ${pricing.packSize}.`,
-    hasPaymentMethod: Boolean(store.wompiPaymentSourceId),
-    packSubscribed: store.campaignPackSubscribed,
-    pricing,
-  });
+  await assertCanLaunchReach(db, storeId, 0, now);
+  return 'FREE';
 }
 
+/** @deprecated Legacy */
 export async function assertCanLaunchSmsCampaign(
   db: QuotaDb,
   storeId: string,
   now = new Date()
 ): Promise<void> {
-  await consumeCampaignSlot(db, storeId, now);
+  await assertCanLaunchReach(db, storeId, 0, now);
 }

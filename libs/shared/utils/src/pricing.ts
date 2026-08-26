@@ -4,6 +4,8 @@ import {
   CAMPAIGN_PRICE_COP,
   CAMPAIGN_PACK_SIZE,
   CAMPAIGN_PACK_DISCOUNT,
+  CAMPAIGN_FREE_REACH_MONTHLY,
+  CAMPAIGN_REACH_PRICE_COP,
 } from '@onda/shared-types';
 
 export type PlanId = 'BASIC' | 'PRO';
@@ -46,7 +48,7 @@ export const PLAN_META: Record<
       'Punto de venta (POS) incluido',
       '1 admin + 1 caja',
       `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
-      `${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis al mes`,
+      `${CAMPAIGN_FREE_REACH_MONTHLY} personas alcanzadas gratis al mes`,
       'Recompensas que tú defines',
       'Tu propia base de clientes',
       'Avisos push desde el Wallet',
@@ -60,7 +62,7 @@ export const PLAN_META: Record<
       'Punto de venta (POS) incluido',
       '1 admin + hasta 3 cajas',
       `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
-      `${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis al mes`,
+      `${CAMPAIGN_FREE_REACH_MONTHLY} personas alcanzadas gratis al mes`,
       'Campañas para llenar el local',
       'Pide reseñas en Google al canjear',
       'Aviso cuando el cliente está cerca',
@@ -68,6 +70,37 @@ export const PLAN_META: Record<
     ],
   },
 };
+
+export function campaignReachQuote(opts: {
+  audienceCount: number;
+  reachUsedThisMonth: number;
+  unitCop?: number;
+  freeMonthly?: number;
+}) {
+  const unitCop = opts.unitCop ?? CAMPAIGN_REACH_PRICE_COP;
+  const freeMonthly = opts.freeMonthly ?? CAMPAIGN_FREE_REACH_MONTHLY;
+  const remainingFree = Math.max(0, freeMonthly - opts.reachUsedThisMonth);
+  const freeApplied = Math.min(opts.audienceCount, remainingFree);
+  const paidCount = Math.max(0, opts.audienceCount - freeApplied);
+  const costCop = paidCount * unitCop;
+  return {
+    freeMonthly,
+    reachUsedThisMonth: opts.reachUsedThisMonth,
+    reachRemainingThisMonth: remainingFree,
+    freeApplied,
+    paidCount,
+    costCop,
+    unitCop,
+    reachUsedAfter: opts.reachUsedThisMonth + opts.audienceCount,
+  };
+}
+
+export function formatCampaignRoi(ratio: number | null | undefined): string {
+  if (ratio == null) return '—';
+  if (!Number.isFinite(ratio) || ratio <= 0) return '0×';
+  if (ratio >= 10) return `${Math.round(ratio)}×`;
+  return `${ratio.toLocaleString('es-CO', { maximumFractionDigits: 1 })}×`;
+}
 
 export function campaignPackPriceCop(
   unitCop = CAMPAIGN_PRICE_COP,

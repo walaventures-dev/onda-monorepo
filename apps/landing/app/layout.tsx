@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Onda — Cobra. Fideliza. Vuelve.",
+  title: "Onda — Fideliza. Premia. Vuelve.",
   description:
-    "POS para vender e inventariar, y lealtad con pase en Wallet para que el cliente vuelva por el premio — sin app que descargar.",
+    "Lealtad con pase en Wallet para que el cliente vuelva por el premio — sin app que descargar.",
 };
 
 export const viewport: Viewport = {

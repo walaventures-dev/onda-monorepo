@@ -10,18 +10,19 @@ import {
   CampaignBillingKind,
   CampaignObjective,
   CampaignOrigin,
-  CampaignPurchaseSku,
   CampaignStatus,
   Prisma,
 } from '@prisma/client';
-import { StoreSubcategory } from '@onda/shared-types';
+import { StoreSegment, StoreSubcategory } from '@onda/shared-types';
 import {
-  buildCampaignMessages,
-  defaultPromo,
+  buildObjectiveMessages,
   objectiveLabel,
   renderCampaignTemplate,
   voiceFor,
-  type CampaignPromo,
+  campaignWorked,
+  computeRoiRatio,
+  successLabel,
+  successWindowDays,
   type ObjectiveKind,
 } from '@onda/shared-utils';
 import { PrismaService } from './prisma.service';
@@ -30,10 +31,11 @@ import { WalletService } from './wallet.service';
 import { BrevoService } from './brevo.service';
 import { WompiService } from './wompi.service';
 import {
-  consumeCampaignSlot,
-  monthlySmsCampaignsUsed,
+  assertCanLaunchReach,
+  monthlyReachUsed,
+  quoteReachCost,
 } from './plan-quota';
-import { campaignPricing } from './campaign-pricing';
+import { campaignReachPricing } from './campaign-pricing';
 
 const MS_30_DAYS = 30 * 24 * 60 * 60 * 1000;
 const DAY_MS = 86400000;
@@ -42,8 +44,20 @@ const DOW_LABELS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sába
 export type AudienceFilter = {
   objective: ObjectiveKind;
   slowWindow?: string;
+  inactiveDays?: number;
+  minVisits?: number;
+  maxPointsGap?: number;
+  activeWithinDays?: number;
+  redeemWithinDays?: number;
+  requireWallet?: boolean;
   cartillaId?: string | null;
+  rewardName?: string;
+  reviewIncentive?: string;
 };
+
+type AudienceQueryOpts = Partial<
+  Omit<AudienceFilter, 'objective' | 'cartillaId'>
+>;
 
 type PassRow = Prisma.PassGetPayload<{
   include: {
@@ -66,46 +80,80 @@ export class CampaignsService {
   ) {}
 
   async list(storeId: string) {
-    const pricing = campaignPricing();
+    const pricing = campaignReachPricing();
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: storeId },
-      select: {
-        campaignCredits: true,
-        campaignPackSubscribed: true,
-        wompiPaymentSourceId: true,
-      },
+      select: { wompiPaymentSourceId: true },
     });
-    const [campaigns, smsUsed] = await Promise.all([
+    const [campaigns, reachUsed] = await Promise.all([
       this.prisma.campaign.findMany({
         where: { storeId },
         orderBy: { createdAt: 'desc' },
         take: 50,
       }),
-      monthlySmsCampaignsUsed(this.prisma, storeId),
+      monthlyReachUsed(this.prisma, storeId),
     ]);
+    const freeRemaining = Math.max(0, pricing.freeMonthly - reachUsed);
     return {
       campaigns,
-      smsCampaignsUsed: smsUsed,
-      smsCampaignsLimit: pricing.freeMonthly,
-      freeRemaining: Math.max(0, pricing.freeMonthly - smsUsed),
-      campaignCredits: store.campaignCredits,
-      packSubscribed: store.campaignPackSubscribed,
+      reachUsed,
+      reachLimit: pricing.freeMonthly,
+      freeRemaining,
+      unitCop: pricing.unitCop,
       hasPaymentMethod: Boolean(store.wompiPaymentSourceId) || !this.wompi.isConfigured,
       pricing,
+      // Legacy aliases for older clients
+      smsCampaignsUsed: reachUsed,
+      smsCampaignsLimit: pricing.freeMonthly,
+      campaignCredits: 0,
+      packSubscribed: false,
     };
   }
 
-  async audience(storeId: string, objective: ObjectiveKind, cartillaId?: string) {
+  async quota(storeId: string) {
+    if (!storeId) throw new BadRequestException('storeId es obligatorio');
+    const pricing = campaignReachPricing();
+    const reachUsed = await monthlyReachUsed(this.prisma, storeId);
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: storeId },
+      select: { wompiPaymentSourceId: true },
+    });
+    return {
+      reachUsed,
+      reachLimit: pricing.freeMonthly,
+      freeRemaining: Math.max(0, pricing.freeMonthly - reachUsed),
+      unitCop: pricing.unitCop,
+      hasPaymentMethod: Boolean(store.wompiPaymentSourceId) || !this.wompi.isConfigured,
+    };
+  }
+
+  async audience(
+    storeId: string,
+    objective: ObjectiveKind,
+    cartillaId?: string,
+    opts: AudienceQueryOpts = {}
+  ) {
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: storeId },
     });
-    const voice = voiceFor(store.subcategory as StoreSubcategory);
+    const voice = voiceFor(
+      store.subcategory as StoreSubcategory,
+      store.segment as StoreSegment | null
+    );
     const slow = await this.slowWindowForStore(storeId, voice.slowWindow);
-    const members = await this.resolveMembers(storeId, {
+    const slowWindow = opts.slowWindow?.trim() || slow.label;
+    const filter: AudienceFilter = {
       objective,
-      slowWindow: slow.label,
-      cartillaId,
-    });
+      slowWindow,
+      inactiveDays: clampInt(opts.inactiveDays, 7, 180, 21),
+      minVisits: clampInt(opts.minVisits, 1, 20, 1),
+      maxPointsGap: clampInt(opts.maxPointsGap, 1, 10, 2),
+      activeWithinDays: clampInt(opts.activeWithinDays, 1, 90, 14),
+      redeemWithinDays: clampInt(opts.redeemWithinDays, 1, 60, 14),
+      requireWallet: opts.requireWallet === true,
+      cartillaId: cartillaId || null,
+    };
+    const members = await this.resolveMembers(storeId, filter);
     const withWallet = members.filter((m) => m.walletRef).length;
     const avgDays =
       members.length === 0
@@ -125,8 +173,8 @@ export class CampaignsService {
       initials: initials(m.name),
       meta: m.meta,
     }));
-    const chips = chipsFor(objective, slow.label);
-    const headline = headlineFor(objective, members.length, voice, slow.label);
+    const chips = chipsFor(objective, filter);
+    const headline = headlineFor(objective, members.length, voice, filter);
     const kpis =
       objective === 'new_reward'
         ? [
@@ -162,11 +210,17 @@ export class CampaignsService {
       people,
       visitFrequency,
       count: members.length,
-      slowWindow: slow.label,
+      slowWindow,
       filter: {
-        objective,
-        slowWindow: slow.label,
-        cartillaId: cartillaId || null,
+        objective: filter.objective,
+        slowWindow: filter.slowWindow,
+        inactiveDays: filter.inactiveDays,
+        minVisits: filter.minVisits,
+        maxPointsGap: filter.maxPointsGap,
+        activeWithinDays: filter.activeWithinDays,
+        redeemWithinDays: filter.redeemWithinDays,
+        requireWallet: filter.requireWallet,
+        cartillaId: filter.cartillaId,
       } satisfies AudienceFilter,
     };
   }
@@ -175,7 +229,10 @@ export class CampaignsService {
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: storeId },
     });
-    const voice = voiceFor(store.subcategory as StoreSubcategory);
+    const voice = voiceFor(
+      store.subcategory as StoreSubcategory,
+      store.segment as StoreSegment | null
+    );
     const slow = await this.slowWindowForStore(storeId, voice.slowWindow);
     const cartillas = await this.prisma.cartilla.findMany({
       where: { storeId, status: 'ACTIVE' },
@@ -193,15 +250,15 @@ export class CampaignsService {
       reason: string;
       title: string;
       audienceCount: number;
-      promo: CampaignPromo;
-      messages: ReturnType<typeof buildCampaignMessages>;
+      messages: ReturnType<typeof buildObjectiveMessages>;
       slowWindow?: string;
       cartillaId?: string;
+      rewardName?: string;
     }> = [];
 
     const reactivate = await this.audience(storeId, 'reactivate');
     if (reactivate.count >= 1) {
-      const promo = defaultPromo('reactivate', voice);
+      const details = recommendedDetails(voice, { slowWindow: slow.label });
       recs.push({
         id: 'reactivate',
         objective: 'reactivate',
@@ -209,12 +266,11 @@ export class CampaignsService {
         reason: `${reactivate.count} clientes en riesgo o dormidos (más de 21 días sin visita).`,
         title: objectiveLabel('reactivate', voice),
         audienceCount: reactivate.count,
-        promo,
-        messages: buildCampaignMessages({
-          promo,
+        messages: buildObjectiveMessages({
           kind: 'reactivate',
           voice,
           storeName: store.name,
+          details,
         }),
       });
     }
@@ -222,10 +278,7 @@ export class CampaignsService {
     if (slow.recommend) {
       const audience = await this.audience(storeId, 'slow_hours');
       if (audience.count >= 1) {
-        const promo = {
-          ...defaultPromo('slow_hours', { ...voice, slowWindow: slow.label }),
-          title: `Promo ${slow.label}`,
-        };
+        const details = recommendedDetails(voice, { slowWindow: slow.label });
         recs.push({
           id: 'slow_hours',
           objective: 'slow_hours',
@@ -233,12 +286,11 @@ export class CampaignsService {
           reason: `El local está más flojo ${slow.label}.`,
           title: objectiveLabel('slow_hours', voice, slow.label),
           audienceCount: audience.count,
-          promo,
-          messages: buildCampaignMessages({
-            promo,
+          messages: buildObjectiveMessages({
             kind: 'slow_hours',
             voice,
             storeName: store.name,
+            details,
             slowWindow: slow.label,
           }),
           slowWindow: slow.label,
@@ -259,19 +311,7 @@ export class CampaignsService {
       ? Date.now() - rewardItem.promotion.createdAt.getTime() < 14 * DAY_MS
       : false;
     if (rewardItem && (nearAudience.count >= 1 || recentPromo)) {
-      const promo: CampaignPromo = {
-        type: rewardItem.promotion.type as CampaignPromo['type'],
-        title: rewardItem.promotion.title,
-        value:
-          rewardItem.promotion.value != null
-            ? String(rewardItem.promotion.value)
-            : '',
-        buyQuantity: String(rewardItem.promotion.buyQuantity ?? 2),
-        getQuantity: String(rewardItem.promotion.getQuantity ?? 1),
-        productName: rewardItem.promotion.productName || rewardItem.promotion.title,
-        cartillaId: rewardCartilla?.id,
-        promotionId: rewardItem.promotion.id,
-      };
+      const rewardName = rewardItem.promotion.title;
       recs.push({
         id: 'new_reward',
         objective: 'new_reward',
@@ -281,21 +321,20 @@ export class CampaignsService {
           : `${nearAudience.count} clientes están cerca de canjear.`,
         title: `Avisar la recompensa «${rewardItem.promotion.title}»`,
         audienceCount: nearAudience.count,
-        promo,
-        messages: buildCampaignMessages({
-          promo,
+        messages: buildObjectiveMessages({
           kind: 'new_reward',
           voice,
           storeName: store.name,
+          details: recommendedDetails(voice, { rewardName }),
         }),
         cartillaId: rewardCartilla?.id,
+        rewardName,
       });
     }
 
     if (store.googlePlaceId) {
       const reviews = await this.audience(storeId, 'reviews');
       if (reviews.count >= 1) {
-        const promo = defaultPromo('reviews', voice);
         recs.push({
           id: 'reviews',
           objective: 'reviews',
@@ -303,12 +342,11 @@ export class CampaignsService {
           reason: `${reviews.count} clientes canjearon hace poco y aún no dejaron reseña.`,
           title: objectiveLabel('reviews', voice),
           audienceCount: reviews.count,
-          promo,
-          messages: buildCampaignMessages({
-            promo,
+          messages: buildObjectiveMessages({
             kind: 'reviews',
             voice,
             storeName: store.name,
+            details: recommendedDetails(voice),
           }),
         });
       }
@@ -320,7 +358,6 @@ export class CampaignsService {
       return days > 0 && days <= 10;
     });
     if (ending && !recs.some((r) => r.id === 'reactivate')) {
-      const promo = defaultPromo('reactivate', voice);
       const audience = await this.audience(storeId, 'reactivate');
       recs.unshift({
         id: 'cartilla-ending',
@@ -329,12 +366,11 @@ export class CampaignsService {
         reason: `La cartilla «${ending.name}» cierra pronto. Conviene avisar a quienes no han vuelto.`,
         title: `Aprovechar ${ending.name} antes de que cierre`,
         audienceCount: audience.count,
-        promo,
-        messages: buildCampaignMessages({
-          promo,
+        messages: buildObjectiveMessages({
           kind: 'reactivate',
           voice,
           storeName: store.name,
+          details: recommendedDetails(voice),
         }),
         cartillaId: ending.id,
       });
@@ -353,8 +389,9 @@ export class CampaignsService {
     walletBody?: string;
     sendSms?: boolean;
     sendWallet?: boolean;
-    promoSnapshot?: CampaignPromo | null;
     audienceFilter?: AudienceFilter | null;
+    audienceCount?: number;
+    estimatedCostCop?: number;
   }) {
     const storeId = body.storeId;
     if (!storeId) throw new BadRequestException('storeId es obligatorio');
@@ -382,39 +419,38 @@ export class CampaignsService {
       body.origin === 'RECOMMENDED'
         ? CampaignOrigin.RECOMMENDED
         : CampaignOrigin.MANUAL;
+    const filter = (body.audienceFilter ?? {
+      objective: objectiveToKind(objective),
+    }) as AudienceFilter;
+    const members = await this.resolveMembers(storeId, filter);
+    const audienceCount = body.audienceCount ?? members.length;
+    const reachUsed = await monthlyReachUsed(this.prisma, storeId);
+    const quote = quoteReachCost(reachUsed, audienceCount);
+    await assertCanLaunchReach(this.prisma, storeId, audienceCount);
+
     const title = (body.title || '').trim() || defaultTitle(objective);
     const smsBody = (body.smsBody || title).trim();
     const walletBody = (body.walletBody || title).trim();
     const channel = sendSms ? 'SMS' : 'WALLET';
 
-    const campaign = await this.prisma.$transaction(async (tx) => {
-      const slot = await consumeCampaignSlot(tx, storeId);
-      const billingKind =
-        slot === 'CREDIT'
-          ? CampaignBillingKind.CREDIT
-          : CampaignBillingKind.FREE;
-      return tx.campaign.create({
-        data: {
-          storeId,
-          channel,
-          title,
-          status: CampaignStatus.SCHEDULED,
-          origin,
-          objective,
-          scheduledAt,
-          smsBody,
-          walletBody,
-          sendSms,
-          sendWallet,
-          billingKind,
-          audienceFilter: (body.audienceFilter ?? {
-            objective: objectiveToKind(objective),
-          }) as Prisma.InputJsonValue,
-          promoSnapshot: body.promoSnapshot
-            ? (body.promoSnapshot as Prisma.InputJsonValue)
-            : undefined,
-        },
-      });
+    const campaign = await this.prisma.campaign.create({
+      data: {
+        storeId,
+        channel,
+        title,
+        status: CampaignStatus.SCHEDULED,
+        origin,
+        objective,
+        scheduledAt,
+        smsBody,
+        walletBody,
+        sendSms,
+        sendWallet,
+        billingKind: quote.paidCount > 0 ? CampaignBillingKind.CREDIT : CampaignBillingKind.FREE,
+        audienceCount,
+        estimatedCostCop: body.estimatedCostCop ?? quote.costCop,
+        audienceFilter: filter as Prisma.InputJsonValue,
+      },
     });
 
     await this.jobs.enqueue(
@@ -431,17 +467,9 @@ export class CampaignsService {
     if (campaign.status !== CampaignStatus.SCHEDULED) {
       throw new BadRequestException('Solo se pueden cancelar campañas programadas');
     }
-    await this.prisma.$transaction(async (tx) => {
-      if (campaign.billingKind === CampaignBillingKind.CREDIT) {
-        await tx.store.update({
-          where: { id: campaign.storeId },
-          data: { campaignCredits: { increment: 1 } },
-        });
-      }
-      await tx.campaign.update({
-        where: { id },
-        data: { status: CampaignStatus.CANCELLED },
-      });
+    await this.prisma.campaign.update({
+      where: { id },
+      data: { status: CampaignStatus.CANCELLED },
     });
     return this.prisma.campaign.findUniqueOrThrow({ where: { id } });
   }
@@ -450,138 +478,27 @@ export class CampaignsService {
     storeId: string,
     sku: 'single' | 'pack' | 'subscribe'
   ) {
-    if (!storeId) throw new BadRequestException('storeId es obligatorio');
-    const pricing = campaignPricing();
-    const store = await this.prisma.store.findUniqueOrThrow({
-      where: { id: storeId },
-    });
-    const hasCard = Boolean(store.wompiPaymentSourceId);
-    if (this.wompi.isConfigured && !hasCard) {
-      throw new BadRequestException({
-        code: 'PAYMENT_METHOD_REQUIRED',
-        message:
-          'Para comprar campañas extra necesitas tu facturación y tarjeta de Wompi (la misma del onboarding). Complétalas en Configuración.',
-        hasPaymentMethod: false,
-        pricing,
-      });
-    }
-    if (sku === 'subscribe' && store.campaignPackSubscribed) {
-      throw new BadRequestException('Ya tienes la suscripción del paquete de campañas.');
-    }
-
-    const credits =
-      sku === 'single' ? 1 : pricing.packSize;
-    const amountCop = sku === 'single' ? pricing.unitCop : pricing.packCop;
-    const prismaSku =
-      sku === 'single'
-        ? CampaignPurchaseSku.SINGLE
-        : sku === 'subscribe'
-          ? CampaignPurchaseSku.PACK_SUB
-          : CampaignPurchaseSku.PACK;
-    const reference = `onda-camp-${sku}-${storeId}-${Date.now()}`;
-
-    if (hasCard) {
-      await this.wompi.chargePaymentSource({
-        paymentSourceId: store.wompiPaymentSourceId!,
-        storeId,
-        amountInCents: amountCop * 100,
-        reference,
-        customerEmail: store.ownerEmail || undefined,
-      });
-    } else {
-      this.logger.log(`[Wompi stub] campaña ${sku} store=${storeId} ${amountCop} COP`);
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.campaignPurchase.create({
-        data: {
-          storeId,
-          sku: prismaSku,
-          credits,
-          amountCop,
-          wompiReference: reference,
-        },
-      });
-      await tx.store.update({
-        where: { id: storeId },
-        data: {
-          campaignCredits: { increment: credits },
-          ...(sku === 'subscribe' ? { campaignPackSubscribed: true } : {}),
-        },
-      });
-    });
-
-    if (sku === 'subscribe') {
-      await this.jobs.enqueue(
-        'campaign-pack-renew',
-        { storeId },
-        { delayMs: MS_30_DAYS }
-      );
-    }
-
-    return this.list(storeId);
+    void storeId;
+    void sku;
+    throw new BadRequestException(
+      'Las campañas se cobran por alcance al enviar. Configura tu tarjeta en Configuración si superas las 30 personas gratis al mes.'
+    );
   }
 
   async cancelPackSubscription(storeId: string) {
-    const store = await this.prisma.store.findUniqueOrThrow({
-      where: { id: storeId },
-    });
-    if (!store.campaignPackSubscribed) {
-      throw new BadRequestException('No hay una suscripción de campañas activa.');
-    }
-    await this.prisma.store.update({
-      where: { id: storeId },
-      data: { campaignPackSubscribed: false },
-    });
-    return this.list(storeId);
+    void storeId;
+    throw new BadRequestException('La suscripción de paquete de campañas ya no está disponible.');
   }
 
   async renewPackSubscription(storeId: string) {
-    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
-    if (!store?.campaignPackSubscribed) {
-      this.logger.log(`campaign-pack-renew omitido store=${storeId}`);
-      return;
-    }
-    if (!store.wompiPaymentSourceId && this.wompi.isConfigured) {
-      this.logger.warn(`campaign-pack-renew sin tarjeta store=${storeId}`);
-      return;
-    }
-    const pricing = campaignPricing();
-    const reference = `onda-camp-sub-${storeId}-${Date.now()}`;
-    if (store.wompiPaymentSourceId) {
-      await this.wompi.chargePaymentSource({
-        paymentSourceId: store.wompiPaymentSourceId,
-        storeId,
-        amountInCents: pricing.packCop * 100,
-        reference,
-        customerEmail: store.ownerEmail || undefined,
-      });
-    }
-    await this.prisma.$transaction(async (tx) => {
-      await tx.campaignPurchase.create({
-        data: {
-          storeId,
-          sku: CampaignPurchaseSku.PACK_SUB,
-          credits: pricing.packSize,
-          amountCop: pricing.packCop,
-          wompiReference: reference,
-        },
-      });
-      await tx.store.update({
-        where: { id: storeId },
-        data: { campaignCredits: { increment: pricing.packSize } },
-      });
-    });
-    await this.jobs.enqueue(
-      'campaign-pack-renew',
-      { storeId },
-      { delayMs: MS_30_DAYS }
-    );
+    void storeId;
+    this.logger.log('campaign-pack-renew omitido (legacy)');
   }
 
   async dispatch(payload: { campaignId: string }) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: payload.campaignId },
+      include: { store: { select: { wompiPaymentSourceId: true, ownerEmail: true } } },
     });
     if (!campaign) {
       this.logger.warn(`campaign-dispatch: ${payload.campaignId} no existe`);
@@ -599,26 +516,65 @@ export class CampaignsService {
     const members = await this.resolveMembers(campaign.storeId, {
       objective,
       slowWindow: filter.slowWindow,
+      inactiveDays: filter.inactiveDays,
+      minVisits: filter.minVisits,
+      maxPointsGap: filter.maxPointsGap,
+      activeWithinDays: filter.activeWithinDays,
+      redeemWithinDays: filter.redeemWithinDays,
+      requireWallet: filter.requireWallet,
       cartillaId: filter.cartillaId,
     });
 
+    const sentAt = new Date();
+    const reached = new Map<
+      string,
+      { passId: string; userId: string; phone?: string; name: string; walletRef?: string | null }
+    >();
+
+    for (const m of members) {
+      const canSms = campaign.sendSms && campaign.smsBody && m.phone;
+      const canWallet = campaign.sendWallet && campaign.walletBody && m.walletRef;
+      if (!canSms && !canWallet) continue;
+      if (!reached.has(m.passId)) {
+        reached.set(m.passId, m);
+      }
+    }
+
+    const reachList = [...reached.values()];
+    const reachCount = reachList.length;
+    const reachUsedBefore = await monthlyReachUsed(this.prisma, campaign.storeId);
+    const quote = quoteReachCost(reachUsedBefore, reachCount);
+
     try {
-      if (campaign.sendSms && campaign.smsBody) {
-        const phones = new Map<string, string>();
-        for (const m of members) {
-          if (m.phone) phones.set(m.phone, m.name.split(' ')[0] || 'tú');
+      if (quote.paidCount > 0) {
+        const store = campaign.store;
+        if (this.wompi.isConfigured && !store.wompiPaymentSourceId) {
+          throw new BadRequestException('Tarjeta Wompi requerida para alcance de pago');
         }
-        for (const [to, nombre] of phones) {
-          const message = renderCampaignTemplate(campaign.smsBody, { nombre }).slice(
-            0,
-            160
+        if (store.wompiPaymentSourceId) {
+          const reference = `onda-reach-${campaign.id}-${Date.now()}`;
+          await this.wompi.chargePaymentSource({
+            paymentSourceId: store.wompiPaymentSourceId,
+            storeId: campaign.storeId,
+            amountInCents: quote.costCop * 100,
+            reference,
+            customerEmail: store.ownerEmail || undefined,
+          });
+        } else {
+          this.logger.log(
+            `[Wompi stub] reach store=${campaign.storeId} ${quote.costCop} COP`
           );
-          await this.brevo.sendSms({ to, message });
         }
       }
-      if (campaign.sendWallet && campaign.walletBody) {
-        for (const m of members) {
-          if (!m.walletRef) continue;
+
+      for (const m of reachList) {
+        if (campaign.sendSms && campaign.smsBody && m.phone) {
+          const message = renderCampaignTemplate(campaign.smsBody, {
+            nombre: m.name.split(' ')[0] || 'tú',
+          }).slice(0, 160);
+          await this.brevo.sendSms({ to: m.phone, message });
+        }
+        if (campaign.sendWallet && campaign.walletBody && m.walletRef) {
           await this.wallet.notify(
             m.walletRef,
             renderCampaignTemplate(campaign.walletBody, {
@@ -627,12 +583,34 @@ export class CampaignsService {
           );
         }
       }
-      await this.prisma.campaign.update({
-        where: { id: campaign.id },
-        data: { status: CampaignStatus.SENT, sentAt: new Date() },
+
+      await this.prisma.$transaction(async (tx) => {
+        if (reachList.length > 0) {
+          await tx.campaignReach.createMany({
+            data: reachList.map((m) => ({
+              campaignId: campaign.id,
+              passId: m.passId,
+              userId: m.userId,
+              sentAt,
+            })),
+            skipDuplicates: true,
+          });
+        }
+        await tx.campaign.update({
+          where: { id: campaign.id },
+          data: {
+            status: CampaignStatus.SENT,
+            sentAt,
+            reachCount,
+            freeReachApplied: quote.freeApplied,
+            paidReachCount: quote.paidCount,
+            costCop: quote.costCop,
+          },
+        });
       });
+
       this.logger.log(
-        `Campaña ${campaign.id} enviada n=${members.length} sms=${campaign.sendSms} wallet=${campaign.sendWallet}`
+        `Campaña ${campaign.id} enviada reach=${reachCount} cost=${quote.costCop} sms=${campaign.sendSms} wallet=${campaign.sendWallet}`
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -643,6 +621,289 @@ export class CampaignsService {
       });
       throw e;
     }
+  }
+
+  async evaluateCampaignSuccess(campaignId: string) {
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: campaignId },
+      include: { reaches: true },
+    });
+    if (!campaign) throw new NotFoundException('Campaña no encontrada');
+    if (campaign.status !== CampaignStatus.SENT || !campaign.sentAt) {
+      throw new BadRequestException('Solo campañas enviadas tienen resultados');
+    }
+
+    const filter = (campaign.audienceFilter || {}) as AudienceFilter;
+    const kind = filter.objective || objectiveToKind(campaign.objective);
+    const windowDays = successWindowDays(kind);
+    const windowEnd = new Date(
+      campaign.sentAt.getTime() + windowDays * DAY_MS
+    );
+    const userIds = [...new Set(campaign.reaches.map((r) => r.userId))];
+    const passIds = campaign.reaches.map((r) => r.passId);
+    const reachCount = campaign.reachCount ?? campaign.reaches.length;
+
+    let successUserIds = new Set<string>();
+
+    if (kind === 'reviews') {
+      const feedbacks = await this.prisma.feedback.findMany({
+        where: {
+          storeId: campaign.storeId,
+          userId: { in: userIds },
+          createdAt: { gte: campaign.sentAt, lte: windowEnd },
+        },
+        select: { userId: true, rating: true, redirectedToGoogle: true },
+      });
+      for (const f of feedbacks) {
+        if (f.redirectedToGoogle || (f.rating != null && f.rating >= 4)) {
+          successUserIds.add(f.userId);
+        }
+      }
+    } else {
+      const txs = await this.prisma.transaction.findMany({
+        where: {
+          storeId: campaign.storeId,
+          passId: { in: passIds },
+          createdAt: { gte: campaign.sentAt, lte: windowEnd },
+        },
+        select: { passId: true, type: true },
+      });
+      const passToUser = new Map(campaign.reaches.map((r) => [r.passId, r.userId]));
+      for (const tx of txs) {
+        const uid = passToUser.get(tx.passId);
+        if (!uid) continue;
+        if (kind === 'new_reward') {
+          if (tx.type === 'REDEEM' || tx.type === 'ACCUMULATE') {
+            successUserIds.add(uid);
+          }
+        } else if (tx.type === 'ACCUMULATE') {
+          successUserIds.add(uid);
+        }
+      }
+    }
+
+    const successCount = successUserIds.size;
+    const successRate = reachCount > 0 ? successCount / reachCount : 0;
+    const worked = campaignWorked(kind, successCount, reachCount);
+
+    const salesAgg = await this.prisma.transaction.aggregate({
+      where: {
+        storeId: campaign.storeId,
+        passId: { in: passIds },
+        type: 'ACCUMULATE',
+        createdAt: { gte: campaign.sentAt, lte: windowEnd },
+        paymentAmount: { not: null },
+      },
+      _sum: { paymentAmount: true },
+    });
+    const attributedSalesCop = salesAgg._sum.paymentAmount ?? 0;
+    const costCop = campaign.costCop ?? 0;
+    const roiRatio = computeRoiRatio(attributedSalesCop, costCop);
+
+    await this.prisma.campaign.update({
+      where: { id: campaignId },
+      data: {
+        successCount,
+        successEvaluatedAt: new Date(),
+        attributedSalesCop,
+        roiRatio,
+      },
+    });
+
+    return {
+      campaignId,
+      objective: kind,
+      reachCount,
+      audienceCount: campaign.audienceCount,
+      successCount,
+      successRate,
+      worked,
+      successLabel: successLabel(kind),
+      attributedSalesCop,
+      costCop,
+      estimatedCostCop: campaign.estimatedCostCop,
+      roiRatio,
+      freeReachApplied: campaign.freeReachApplied,
+      paidReachCount: campaign.paidReachCount,
+      windowDays,
+    };
+  }
+
+  async results(campaignId: string) {
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: campaignId },
+    });
+    if (!campaign) throw new NotFoundException('Campaña no encontrada');
+
+    let metrics = null;
+    if (campaign.status === CampaignStatus.SENT) {
+      if (campaign.successEvaluatedAt) {
+        const filter = (campaign.audienceFilter || {}) as AudienceFilter;
+        const kind = filter.objective || objectiveToKind(campaign.objective);
+        const reachCount = campaign.reachCount ?? 0;
+        const successCount = campaign.successCount ?? 0;
+        metrics = {
+          objective: kind,
+          reachCount,
+          audienceCount: campaign.audienceCount,
+          successCount,
+          successRate: reachCount > 0 ? successCount / reachCount : 0,
+          worked: campaignWorked(kind, successCount, reachCount),
+          successLabel: successLabel(kind),
+          attributedSalesCop: campaign.attributedSalesCop ?? 0,
+          costCop: campaign.costCop ?? 0,
+          estimatedCostCop: campaign.estimatedCostCop,
+          roiRatio: campaign.roiRatio,
+          freeReachApplied: campaign.freeReachApplied,
+          paidReachCount: campaign.paidReachCount,
+          windowDays: successWindowDays(kind),
+        };
+      } else {
+        metrics = await this.evaluateCampaignSuccess(campaignId);
+      }
+    }
+
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: campaign.storeId },
+      select: { name: true, subcategory: true, segment: true },
+    });
+    const voice = voiceFor(
+      store.subcategory as StoreSubcategory,
+      store.segment as StoreSegment | null
+    );
+    const filter = (campaign.audienceFilter || {}) as AudienceFilter;
+    const kind = filter.objective || objectiveToKind(campaign.objective);
+
+    return {
+      campaign,
+      configuration: {
+        objective: kind,
+        objectiveLabel: objectiveLabel(kind, voice, filter),
+        filter,
+        smsBody: campaign.smsBody,
+        walletBody: campaign.walletBody,
+        sendSms: campaign.sendSms,
+        sendWallet: campaign.sendWallet,
+        scheduledAt: campaign.scheduledAt,
+        sentAt: campaign.sentAt,
+      },
+      metrics,
+    };
+  }
+
+  async analytics(
+    storeId: string,
+    from?: string,
+    to?: string
+  ) {
+    if (!storeId) throw new BadRequestException('storeId es obligatorio');
+    const fromDate = from ? new Date(from) : new Date(Date.now() - 30 * DAY_MS);
+    const toDate = to ? new Date(to) : new Date();
+    fromDate.setHours(0, 0, 0, 0);
+    toDate.setHours(23, 59, 59, 999);
+
+    const campaigns = await this.prisma.campaign.findMany({
+      where: {
+        storeId,
+        status: CampaignStatus.SENT,
+        sentAt: { gte: fromDate, lte: toDate },
+      },
+      orderBy: { sentAt: 'asc' },
+    });
+
+    for (const c of campaigns) {
+      if (!c.successEvaluatedAt) {
+        await this.evaluateCampaignSuccess(c.id);
+      }
+    }
+
+    const refreshed = await this.prisma.campaign.findMany({
+      where: {
+        storeId,
+        status: CampaignStatus.SENT,
+        sentAt: { gte: fromDate, lte: toDate },
+      },
+      orderBy: { sentAt: 'asc' },
+    });
+
+    const byDate = new Map<
+      string,
+      {
+        date: string;
+        reach: number;
+        successCount: number;
+        costCop: number;
+        attributedSalesCop: number;
+        campaigns: number;
+      }
+    >();
+
+    for (const c of refreshed) {
+      const key = c.sentAt!.toISOString().slice(0, 10);
+      const row = byDate.get(key) ?? {
+        date: key,
+        reach: 0,
+        successCount: 0,
+        costCop: 0,
+        attributedSalesCop: 0,
+        campaigns: 0,
+      };
+      row.reach += c.reachCount ?? 0;
+      row.successCount += c.successCount ?? 0;
+      row.costCop += c.costCop ?? 0;
+      row.attributedSalesCop += c.attributedSalesCop ?? 0;
+      row.campaigns += 1;
+      byDate.set(key, row);
+    }
+
+    const series = [...byDate.values()].map((row) => ({
+      ...row,
+      successRate: row.reach > 0 ? row.successCount / row.reach : 0,
+      roi: row.costCop > 0 ? row.attributedSalesCop / row.costCop : null,
+    }));
+
+    const totalReach = refreshed.reduce((s, c) => s + (c.reachCount ?? 0), 0);
+    const totalSuccess = refreshed.reduce((s, c) => s + (c.successCount ?? 0), 0);
+    const totalCost = refreshed.reduce((s, c) => s + (c.costCop ?? 0), 0);
+    const totalSales = refreshed.reduce(
+      (s, c) => s + (c.attributedSalesCop ?? 0),
+      0
+    );
+
+    const perCampaign = refreshed.map((c) => {
+      const filter = (c.audienceFilter || {}) as AudienceFilter;
+      const kind = filter.objective || objectiveToKind(c.objective);
+      const reach = c.reachCount ?? 0;
+      const success = c.successCount ?? 0;
+      return {
+        id: c.id,
+        title: c.title,
+        objective: kind,
+        sentAt: c.sentAt,
+        audienceCount: c.audienceCount,
+        reachCount: reach,
+        successCount: success,
+        successRate: reach > 0 ? success / reach : 0,
+        worked: campaignWorked(kind, success, reach),
+        costCop: c.costCop ?? 0,
+        attributedSalesCop: c.attributedSalesCop ?? 0,
+        roiRatio: c.roiRatio,
+      };
+    });
+
+    return {
+      from: fromDate.toISOString(),
+      to: toDate.toISOString(),
+      kpis: {
+        totalReach,
+        avgSuccessRate: totalReach > 0 ? totalSuccess / totalReach : 0,
+        totalCost,
+        totalAttributedSales: totalSales,
+        weightedRoi: totalCost > 0 ? totalSales / totalCost : null,
+      },
+      series,
+      campaigns: perCampaign,
+    };
   }
 
   private async resolveMembers(storeId: string, filter: AudienceFilter) {
@@ -665,20 +926,48 @@ export class CampaignsService {
     );
 
     const mapped = passes.map((p) => this.mapPass(p, now, feedbackUserIds));
+    let members: ReturnType<typeof this.mapPass>[];
     switch (filter.objective) {
-      case 'reactivate':
-        return mapped.filter((m) => m.daysSince >= 21 && m.visits > 0);
-      case 'slow_hours':
-        return mapped.filter((m) => m.visits > 0);
-      case 'new_reward':
-        return mapped.filter(
-          (m) => m.visits > 0 && (m.nearGap == null || m.nearGap <= 2 || m.daysSince <= 14)
+      case 'reactivate': {
+        const days = filter.inactiveDays ?? 21;
+        const minVisits = filter.minVisits ?? 1;
+        members = mapped.filter(
+          (m) => m.daysSince >= days && m.visits >= minVisits
         );
-      case 'reviews':
-        return mapped.filter((m) => m.redeemedRecently && !m.hasFeedback);
+        break;
+      }
+      case 'slow_hours': {
+        const minVisits = filter.minVisits ?? 1;
+        members = mapped.filter((m) => m.visits >= minVisits);
+        break;
+      }
+      case 'new_reward': {
+        const gap = filter.maxPointsGap ?? 2;
+        const activeDays = filter.activeWithinDays ?? 14;
+        members = mapped.filter(
+          (m) =>
+            m.visits > 0 &&
+            (m.nearGap == null || m.nearGap <= gap || m.daysSince <= activeDays)
+        );
+        break;
+      }
+      case 'reviews': {
+        const redeemDays = filter.redeemWithinDays ?? 14;
+        members = mapped.filter(
+          (m) =>
+            !m.hasFeedback &&
+            m.daysSinceRedeem != null &&
+            m.daysSinceRedeem <= redeemDays
+        );
+        break;
+      }
       default:
-        return mapped.filter((m) => m.visits > 0);
+        members = mapped.filter((m) => m.visits > 0);
     }
+    if (filter.requireWallet) {
+      members = members.filter((m) => m.walletRef);
+    }
+    return members;
   }
 
   private mapPass(
@@ -702,8 +991,11 @@ export class CampaignsService {
       .sort((a, b) => a.pointsRequired - b.pointsRequired)[0];
     const nearGap = next ? next.pointsRequired - p.points : null;
     const lastRedeem = p.transactions.find((t) => t.type === 'REDEEM');
+    const daysSinceRedeem = lastRedeem
+      ? (now - lastRedeem.createdAt.getTime()) / DAY_MS
+      : null;
     const redeemedRecently = Boolean(
-      lastRedeem && now - lastRedeem.createdAt.getTime() <= 14 * DAY_MS
+      daysSinceRedeem != null && daysSinceRedeem <= 14
     );
     const name = p.user.name || p.user.phone;
     let meta = lastTx
@@ -715,6 +1007,7 @@ export class CampaignsService {
     }
     return {
       passId: p.id,
+      userId: p.userId,
       walletRef: p.walletRef,
       phone: p.user.phone,
       name,
@@ -722,6 +1015,7 @@ export class CampaignsService {
       visits,
       nearGap,
       redeemedRecently,
+      daysSinceRedeem,
       hasFeedback: feedbackUserIds.has(p.userId),
       meta,
     };
@@ -780,16 +1074,35 @@ function initials(name: string) {
   return (a + b).toUpperCase();
 }
 
-function chipsFor(kind: ObjectiveKind, slowWindow: string) {
+function chipsFor(kind: ObjectiveKind, filter: AudienceFilter) {
+  const slowWindow = filter.slowWindow || '';
   switch (kind) {
     case 'reactivate':
-      return ['En riesgo / dormidos', 'Wallet o SMS', 'Visitaron antes'];
+      return [
+        `Inactivos ${filter.inactiveDays ?? 21}d`,
+        filter.minVisits && filter.minVisits > 1
+          ? `${filter.minVisits}+ visitas`
+          : 'Visitaron antes',
+        filter.requireWallet ? 'Solo Wallet' : 'Wallet o SMS',
+      ];
     case 'slow_hours':
-      return ['Ya conocen el local', slowWindow, 'Invitación a horario flojo'];
+      return [
+        'Ya conocen el local',
+        slowWindow,
+        filter.requireWallet ? 'Solo Wallet' : 'Invitación a horario flojo',
+      ];
     case 'new_reward':
-      return ['Activos', 'Cerca del canje', 'Cartilla vigente'];
+      return [
+        'Activos',
+        `≤ ${filter.maxPointsGap ?? 2} ondas al premio`,
+        `${filter.activeWithinDays ?? 14}d de actividad`,
+      ];
     case 'reviews':
-      return ['Canje reciente', 'Sin reseña', '14 días'];
+      return [
+        `Canje ≤ ${filter.redeemWithinDays ?? 14}d`,
+        'Sin reseña',
+        filter.requireWallet ? 'Solo Wallet' : 'Google Reviews',
+      ];
   }
 }
 
@@ -797,21 +1110,40 @@ function headlineFor(
   kind: ObjectiveKind,
   count: number,
   voice: ReturnType<typeof voiceFor>,
-  slowWindow: string
+  filter: AudienceFilter
 ) {
+  const slowWindow = filter.slowWindow || voice.slowWindow;
+  const inactiveDays = filter.inactiveDays ?? 21;
+  const minVisits = filter.minVisits ?? 1;
+  const maxPointsGap = filter.maxPointsGap ?? 2;
+  const activeWithinDays = filter.activeWithinDays ?? 14;
+  const redeemWithinDays = filter.redeemWithinDays ?? 14;
+
   if (count === 0) {
     return `Aún no hay ${voice.customerPlural} para este objetivo.`;
   }
   switch (kind) {
     case 'reactivate':
-      return `Encontramos ${count} ${voice.customerPlural} que no regresan hace más de 21 días.`;
+      return minVisits > 1
+        ? `Encontramos ${count} ${voice.customerPlural} con ${minVisits}+ visitas que no regresan hace más de ${inactiveDays} días.`
+        : `Encontramos ${count} ${voice.customerPlural} que no regresan hace más de ${inactiveDays} días.`;
     case 'slow_hours':
       return `Encontramos ${count} ${voice.customerPlural} a quienes invitar ${slowWindow}.`;
     case 'new_reward':
-      return `Encontramos ${count} ${voice.customerPlural} listos para la nueva recompensa.`;
+      return `Encontramos ${count} ${voice.customerPlural} a ${maxPointsGap} ondas del premio o activos en ${activeWithinDays} días.`;
     case 'reviews':
-      return `Encontramos ${count} ${voice.customerPlural} felices que aún no dejaron reseña.`;
+      return `Encontramos ${count} ${voice.customerPlural} que canjearon en los últimos ${redeemWithinDays} días y aún no dejaron reseña.`;
   }
+}
+
+function clampInt(
+  raw: number | undefined,
+  min: number,
+  max: number,
+  fallback: number
+) {
+  if (raw == null || !Number.isFinite(raw)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(raw)));
 }
 
 function parseObjective(raw?: string): CampaignObjective | null {
@@ -854,4 +1186,21 @@ function defaultTitle(objective: CampaignObjective | null) {
     default:
       return 'Campaña de reactivación';
   }
+}
+
+function recommendedDetails(
+  voice: ReturnType<typeof voiceFor>,
+  patch?: Partial<AudienceFilter>
+) {
+  return {
+    inactiveDays: patch?.inactiveDays ?? 21,
+    minVisits: patch?.minVisits ?? 1,
+    slowWindow: patch?.slowWindow ?? voice.slowWindow,
+    rewardName: patch?.rewardName ?? voice.signatureReward,
+    maxPointsGap: patch?.maxPointsGap ?? 2,
+    activeWithinDays: patch?.activeWithinDays ?? 14,
+    reviewIncentive: patch?.reviewIncentive ?? '1 onda extra por reseña',
+    redeemWithinDays: patch?.redeemWithinDays ?? 14,
+    requireWallet: patch?.requireWallet ?? false,
+  };
 }

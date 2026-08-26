@@ -5,24 +5,40 @@ import { useState } from 'react';
 import { CaretDownIcon as CaretDown } from '@phosphor-icons/react/dist/csr/CaretDown';
 import { PLAN_ONDA_MONTHLY_LIMIT, PLAN_SMS_CAMPAIGNS_MONTHLY } from '@onda/shared-types';
 import { easeOut, fadeUpDelay, inViewStagger, staggerItem } from '../lib/motion';
+import { SHOW_POS_LANDING } from '../lib/pricing';
 
-const FAQS = [
-  {
-    q: '¿Onda es solo fidelización?',
-    a: 'No. Onda une Lealtad y POS: vendes e inventarias en caja, y das Ondas con un pase en Wallet para que el cliente vuelva por el premio.',
-  },
+const FAQS_ALL = [
+  ...(SHOW_POS_LANDING
+    ? [
+        {
+          q: '¿Onda es solo fidelización?',
+          a: 'No. Onda une Lealtad y POS: vendes e inventarias en caja, y das Ondas con un pase en Wallet para que el cliente vuelva por el premio.',
+        },
+      ]
+    : [
+        {
+          q: '¿Qué es Onda?',
+          a: 'Onda es lealtad con pase en Wallet. Das Ondas para que el cliente vuelva por el premio — sin app que descargar.',
+        },
+      ]),
   {
     q: '¿Mis clientes necesitan descargar una app?',
     a: 'No. El pase vive en Apple Wallet o Google Wallet. Lo agregan una vez y lo usan en cada visita — sin instalar nada nuevo.',
   },
   {
     q: '¿Cómo acumulan Ondas mis clientes?',
-    a: 'Al cobrar en el POS (si asocias el pase), con el Kit NFC + QR, o desde el panel / PWA de caja. Cada visita o compra suma progreso hacia la recompensa que tú defines.',
+    a: SHOW_POS_LANDING
+      ? 'Al cobrar en el POS (si asocias el pase), con el Kit NFC + QR, o desde el panel / PWA de caja. Cada visita o compra suma progreso hacia la recompensa que tú defines.'
+      : 'Con el Kit NFC + QR, o desde el panel / PWA de caja. Cada visita suma progreso hacia la recompensa que tú defines.',
   },
-  {
-    q: '¿Necesito el POS para dar Ondas?',
-    a: 'No. El Kit, el panel y la PWA de caja siguen funcionando. Sumar Ondas al cobrar es un canal más — la venta anónima es válida sin lealtad.',
-  },
+  ...(SHOW_POS_LANDING
+    ? [
+        {
+          q: '¿Necesito el POS para dar Ondas?',
+          a: 'No. El Kit, el panel y la PWA de caja siguen funcionando. Sumar Ondas al cobrar es un canal más — la venta anónima es válida sin lealtad.',
+        },
+      ]
+    : []),
   {
     q: '¿Qué incluye el Kit?',
     a: 'En planes de 6 o 12 meses te enviamos el Kit a tu negocio con NFC y QR listos para usar. En el plan mensual la activación es digital; el Kit está disponible al pasar a 6 o 12 meses.',
@@ -33,17 +49,23 @@ const FAQS = [
   },
   {
     q: '¿Cuál es la diferencia entre Onda y Onda Pro?',
-    a: `Ambos incluyen POS, pase en Wallet, hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes y ${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis. Onda trae 1 admin + 1 caja. Onda Pro suma hasta 3 cajas, campañas para traer clientes, avisos de proximidad, reseñas en Google y analítica.`,
+    a: SHOW_POS_LANDING
+      ? `Ambos incluyen POS, pase en Wallet, hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes y ${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis. Onda trae 1 admin + 1 caja. Onda Pro suma hasta 3 cajas, campañas para traer clientes, avisos de proximidad, reseñas en Google y analítica.`
+      : `Ambos incluyen pase en Wallet, hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes y ${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis. Onda trae 1 admin + 1 caja. Onda Pro suma hasta 3 cajas, campañas para traer clientes, avisos de proximidad, reseñas en Google y analítica.`,
   },
   {
     q: '¿Qué cubre la suscripción cada mes?',
-    a: `POS + lealtad: hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas acumuladas por tus clientes y ${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis. Si llegas al tope de ondas, la acumulación se pausa hasta el siguiente mes. El push de Wallet no cuenta contra ese cupo.`,
+    a: SHOW_POS_LANDING
+      ? `POS + lealtad: hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas acumuladas por tus clientes y ${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis. Si llegas al tope de ondas, la acumulación se pausa hasta el siguiente mes. El push de Wallet no cuenta contra ese cupo.`
+      : `Lealtad con Ondas: hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas acumuladas por tus clientes y ${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis. Si llegas al tope de ondas, la acumulación se pausa hasta el siguiente mes. El push de Wallet no cuenta contra ese cupo.`,
   },
   {
     q: '¿El primer mes es gratis de verdad?',
     a: 'Sí. Todos los planes incluyen el primer mes gratis y no necesitas tarjeta de crédito para iniciar. En 6 o 12 meses el mes gratis va adicional al descuento del prepago.',
   },
-] as const;
+];
+
+const FAQS = FAQS_ALL;
 
 export function FaqSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);

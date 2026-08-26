@@ -16,31 +16,32 @@ import {
   IPhonePreview,
   LockScreen,
   OndaDatePicker,
-  PROMO_TYPE_OPTIONS,
+  ObjectiveDetailsEditor,
   api,
   toast,
   type LockScreenNotification,
-  type PromoTypeKey,
 } from '@onda/shared-ui';
 import {
   OBJECTIVE_KINDS,
-  buildCampaignMessages,
-  defaultPromo,
+  OBJECTIVE_TITLES,
+  buildObjectiveMessages,
+  campaignReachQuote,
+  objectiveAudienceQueryParams,
+  objectiveHint,
   objectiveLabel,
-  promoForType,
-  promoHeadline,
+  recommendedObjectiveDetails,
   renderCampaignTemplate,
   voiceFor,
-  type CampaignPromo,
+  formatCop,
+  type ObjectiveDetails,
   type ObjectiveKind,
 } from '@onda/shared-utils';
-import { StoreSubcategory } from '@onda/shared-types';
+import { CAMPAIGN_FREE_REACH_MONTHLY, CAMPAIGN_REACH_PRICE_COP, StoreSegment, StoreSubcategory } from '@onda/shared-types';
 
 const STEPS = [
   { id: 0, label: '1. Objetivo' },
   { id: 1, label: '2. Audiencia' },
-  { id: 2, label: '3. Promo' },
-  { id: 3, label: '4. Revisión' },
+  { id: 2, label: '3. Revisión' },
 ] as const;
 
 const NOTIF_DELAYS_MS = [900, 2600] as const;
@@ -56,20 +57,22 @@ type AudienceResponse = {
   filter: {
     objective: ObjectiveKind;
     slowWindow?: string;
+    inactiveDays?: number;
+    minVisits?: number;
+    maxPointsGap?: number;
+    activeWithinDays?: number;
+    redeemWithinDays?: number;
+    requireWallet?: boolean;
     cartillaId?: string | null;
   };
 };
 
-type CartillaReward = {
-  cartillaId: string;
-  cartillaName: string;
-  promotionId: string;
-  title: string;
-  type: PromoTypeKey;
-  value?: number | null;
-  buyQuantity?: number | null;
-  getQuantity?: number | null;
-  productName?: string | null;
+type ReachQuota = {
+  reachUsed: number;
+  reachLimit: number;
+  freeRemaining: number;
+  unitCop: number;
+  hasPaymentMethod: boolean;
 };
 
 export function CampaignWizard({
@@ -82,6 +85,7 @@ export function CampaignWizard({
   store: {
     name?: string;
     subcategory?: string;
+    segment?: string | null;
     passDesign?: { logoUrl?: string | null } | null;
   };
   onClose: () => void;
@@ -93,16 +97,17 @@ export function CampaignWizard({
   const recId = search.get('rec');
 
   const subcategory = (store.subcategory || StoreSubcategory.OTHER_SERVICE) as StoreSubcategory;
-  const voice = voiceFor(subcategory);
+  const segment = (store.segment || null) as StoreSegment | null;
+  const voice = voiceFor(subcategory, segment);
   const storeName = store.name || 'Tu negocio';
 
   const [step, setStep] = useState(0);
   const [objectiveKind, setObjectiveKind] = useState<ObjectiveKind>(initialObjective);
-  const [promo, setPromo] = useState<CampaignPromo>(() =>
-    defaultPromo(initialObjective, voice)
+  const [details, setDetails] = useState<ObjectiveDetails>(() =>
+    recommendedObjectiveDetails(voice)
   );
   const [audience, setAudience] = useState<AudienceResponse | null>(null);
-  const [rewards, setRewards] = useState<CartillaReward[]>([]);
+  const [quota, setQuota] = useState<ReachQuota | null>(null);
   const [launchMode, setLaunchMode] = useState<'now' | 'schedule'>('now');
   const [scheduleDate, setScheduleDate] = useState(() => isoDateBogota(new Date()));
   const [scheduleTime, setScheduleTime] = useState(() => {
@@ -113,32 +118,61 @@ export function CampaignWizard({
   const [launched, setLaunched] = useState(false);
   const [visibleNotifs, setVisibleNotifs] = useState<LockScreenNotification[]>([]);
   const launchTimersRef = useRef<number[]>([]);
+  const [isLocalDev, setIsLocalDev] = useState(false);
+
+  useEffect(() => {
+    setIsLocalDev(
+      process.env.NODE_ENV === 'development' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1'
+    );
+  }, []);
 
   const messages = useMemo(
     () =>
-      buildCampaignMessages({
-        promo,
+      buildObjectiveMessages({
         kind: objectiveKind,
         voice,
         storeName,
-        slowWindow: audience?.slowWindow,
+        details,
+        slowWindow: details.slowWindow || audience?.slowWindow,
       }),
-    [promo, objectiveKind, voice, storeName, audience?.slowWindow]
+    [objectiveKind, voice, storeName, details, audience?.slowWindow]
   );
+
+  const reachQuote = useMemo(() => {
+    const count = audience?.count ?? 0;
+    const used = quota?.reachUsed ?? 0;
+    return campaignReachQuote({
+      audienceCount: count,
+      reachUsedThisMonth: used,
+      unitCop: quota?.unitCop ?? CAMPAIGN_REACH_PRICE_COP,
+      freeMonthly: quota?.reachLimit ?? CAMPAIGN_FREE_REACH_MONTHLY,
+    });
+  }, [audience?.count, quota]);
 
   const previewName = audience?.people[0]?.name.split(' ')[0] || 'Camila';
   const previewMessages = messages.map((m) => ({
     ...m,
     text: renderCampaignTemplate(m.text, { nombre: previewName }),
   }));
-  const benefitPreview = promoHeadline(promo);
-  const objective = objectiveLabel(objectiveKind, voice, audience?.slowWindow);
+  const objective = objectiveLabel(objectiveKind, voice, {
+    ...details,
+    slowWindow: details.slowWindow || audience?.slowWindow,
+  });
 
   useEffect(() => {
     let cancelled = false;
-    void api<AudienceResponse>(
-      `/campaigns/audience?storeId=${storeId}&objective=${objectiveKind}`
-    )
+    const qs = new URLSearchParams({
+      storeId,
+      objective: objectiveKind,
+    });
+    for (const [key, value] of Object.entries(
+      objectiveAudienceQueryParams(objectiveKind, details)
+    )) {
+      qs.set(key, value);
+    }
+    void api<AudienceResponse>(`/campaigns/audience?${qs.toString()}`)
       .then((data) => {
         if (!cancelled) setAudience(data);
       })
@@ -148,34 +182,24 @@ export function CampaignWizard({
     return () => {
       cancelled = true;
     };
-  }, [storeId, objectiveKind]);
+  }, [storeId, objectiveKind, details]);
 
   useEffect(() => {
-    void api<{ cartillas: any[] }>(`/cartillas?storeId=${storeId}`)
-      .then((data) => {
-        const list: CartillaReward[] = [];
-        for (const c of data.cartillas || []) {
-          if (c.status !== 'ACTIVE') continue;
-          for (const item of c.items || []) {
-            const p = item.promotion;
-            if (!p?.isActive) continue;
-            list.push({
-              cartillaId: c.id,
-              cartillaName: c.name,
-              promotionId: p.id,
-              title: p.title,
-              type: p.type,
-              value: p.value,
-              buyQuantity: p.buyQuantity,
-              getQuantity: p.getQuantity,
-              productName: p.productName,
-            });
-          }
-        }
-        setRewards(list);
-      })
-      .catch(() => setRewards([]));
+    void api<ReachQuota>(`/campaigns/quota?storeId=${storeId}`)
+      .then(setQuota)
+      .catch(() => setQuota(null));
   }, [storeId]);
+
+  // Si la API sugiere una ventana floja distinta a la del vertical, úsala como default
+  // mientras el usuario no la haya personalizado.
+  useEffect(() => {
+    if (objectiveKind !== 'slow_hours' || !audience?.slowWindow) return;
+    setDetails((d) =>
+      d.slowWindow === voice.slowWindow
+        ? { ...d, slowWindow: audience.slowWindow! }
+        : d
+    );
+  }, [audience?.slowWindow, objectiveKind, voice.slowWindow]);
 
   useEffect(() => {
     if (!recId) return;
@@ -184,10 +208,26 @@ export function CampaignWizard({
     ).then((data) => {
       const rec = (data.recommendations || []).find((r) => r.id === recId);
       if (!rec) return;
+      const nextDetails = recommendedObjectiveDetails(voice, {
+        slowWindow: rec.slowWindow || voice.slowWindow,
+        rewardName: rec.rewardName || voice.signatureReward,
+      });
       setObjectiveKind(rec.objective);
-      if (rec.promo) setPromo(rec.promo);
+      setDetails(nextDetails);
     });
-  }, [recId, storeId]);
+  }, [recId, storeId, subcategory, segment]);
+
+  const selectObjective = (kind: ObjectiveKind) => {
+    const nextDetails = recommendedObjectiveDetails(voice, {
+      slowWindow: audience?.slowWindow || voice.slowWindow,
+    });
+    setObjectiveKind(kind);
+    setDetails(nextDetails);
+  };
+
+  const patchDetails = (patch: Partial<ObjectiveDetails>) => {
+    setDetails({ ...details, ...patch });
+  };
 
   const clearLaunchTimers = () => {
     launchTimersRef.current.forEach((id) => window.clearTimeout(id));
@@ -221,7 +261,7 @@ export function CampaignWizard({
         method: 'POST',
         body: JSON.stringify({
           storeId,
-          title: promo.title || objective,
+          title: objective,
           objective: objectiveKind,
           origin: recId ? 'RECOMMENDED' : 'MANUAL',
           scheduledAt,
@@ -229,8 +269,21 @@ export function CampaignWizard({
           walletBody: wallet?.text,
           sendSms: true,
           sendWallet: true,
-          promoSnapshot: promo,
-          audienceFilter: audience.filter,
+          audienceCount: audience.count,
+          estimatedCostCop: reachQuote.costCop,
+          audienceFilter: {
+            ...(audience.filter || { objective: objectiveKind }),
+            objective: objectiveKind,
+            inactiveDays: details.inactiveDays,
+            minVisits: details.minVisits,
+            slowWindow: details.slowWindow || audience.filter?.slowWindow,
+            maxPointsGap: details.maxPointsGap,
+            activeWithinDays: details.activeWithinDays,
+            redeemWithinDays: details.redeemWithinDays,
+            requireWallet: details.requireWallet,
+            rewardName: details.rewardName,
+            reviewIncentive: details.reviewIncentive,
+          },
         }),
       });
       setLaunched(true);
@@ -256,11 +309,11 @@ export function CampaignWizard({
       const msg = e?.message || 'No se pudo lanzar la campaña';
       toast(msg);
       if (
-        String(msg).includes('gratis') ||
-        String(msg).includes('crédito') ||
-        String(msg).includes('Wompi')
+        String(msg).includes('tarjeta') ||
+        String(msg).includes('Wompi') ||
+        String(msg).includes('PAYMENT')
       ) {
-        router.push('/campanas?comprar=1');
+        router.push('/config');
       }
     } finally {
       setSaving(false);
@@ -268,7 +321,7 @@ export function CampaignWizard({
   }
 
   const ctaLabel =
-    step < 3 ? 'Siguiente' : launched ? null : saving ? 'Lanzando…' : 'Lanzar campaña';
+    step < 2 ? 'Siguiente' : launched ? null : saving ? 'Lanzando…' : 'Lanzar campaña';
 
   return (
     <div className="overflow-hidden rounded-[1.5rem] border border-[var(--onda-border)] bg-[var(--onda-card)]">
@@ -320,194 +373,94 @@ export function CampaignWizard({
                     ¿Qué quieres lograr?
                   </h3>
                   <p className="mt-1 text-sm text-[var(--onda-muted)]">
-                    El copy se ajusta a {storeName}.
+                    Elige el propósito (trae recomendación) y ajústalo a detalle
+                    {segment ? ` · ${voice.place}` : ''}.
                   </p>
-                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
                     {OBJECTIVE_KINDS.map((kind) => {
-                      const label = objectiveLabel(kind, voice, audience?.slowWindow);
                       const selected = objectiveKind === kind;
+                      const label = objectiveLabel(
+                        kind,
+                        voice,
+                        selected
+                          ? {
+                              ...details,
+                              slowWindow:
+                                details.slowWindow || audience?.slowWindow,
+                            }
+                          : recommendedObjectiveDetails(voice, {
+                              slowWindow:
+                                audience?.slowWindow || voice.slowWindow,
+                            })
+                      );
                       return (
                         <button
                           key={kind}
                           type="button"
-                          onClick={() => {
-                            setObjectiveKind(kind);
-                            setPromo(defaultPromo(kind, voice));
-                          }}
-                          className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                          onClick={() => selectObjective(kind)}
+                          className={`rounded-2xl border px-4 py-3.5 text-left transition ${
                             selected
-                              ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-50)] text-[var(--onda-ink)]'
-                              : 'border-[var(--onda-border)] text-[var(--onda-muted)] hover:border-[var(--onda-bridge)]'
+                              ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-50)] text-[var(--onda-ink)] shadow-[0_8px_20px_rgba(5,45,222,0.08)]'
+                              : 'border-[var(--onda-border)] text-[var(--onda-muted)] hover:border-[var(--onda-bridge)] hover:bg-white'
                           }`}
                         >
-                          {label}
+                          <span
+                            className={`block text-sm font-semibold ${
+                              selected
+                                ? 'text-[var(--onda-primary-700)]'
+                                : 'text-[var(--onda-ink)]'
+                            }`}
+                          >
+                            {OBJECTIVE_TITLES[kind]}
+                          </span>
+                          <span className="mt-1 block text-xs leading-snug text-[var(--onda-muted)]">
+                            {objectiveHint(kind)}
+                          </span>
+                          <span
+                            className={`mt-2 block text-xs leading-snug ${
+                              selected
+                                ? 'font-medium text-[var(--onda-ink)]'
+                                : 'text-[var(--onda-muted)]'
+                            }`}
+                          >
+                            {label}
+                          </span>
                         </button>
                       );
                     })}
+                  </div>
+
+                  <ObjectiveDetailsEditor
+                    kind={objectiveKind}
+                    details={details}
+                    onChange={patchDetails}
+                  />
+
+                  <div className="mt-4 rounded-2xl bg-[var(--onda-sky-soft)] px-4 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--onda-muted)]">
+                      Objetivo
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-[var(--onda-ink)]">
+                      {objective}
+                    </p>
                   </div>
                 </div>
               ) : null}
 
               {step === 1 ? (
-                <AudienceStep audience={audience} />
+                <AudienceStep
+                  audience={audience}
+                  isLocalDev={isLocalDev}
+                  onLoadMock={() => {
+                    setAudience(
+                      buildMockAudience(objectiveKind, details, voice, audience?.slowWindow)
+                    );
+                    toast('Audiencia demo cargada (solo local)');
+                  }}
+                />
               ) : null}
 
               {step === 2 ? (
-                <div>
-                  <h3 className="font-display text-xl font-semibold">La promo</h3>
-                  <p className="mt-1 text-sm text-[var(--onda-muted)]">
-                    Es el texto de la oferta. No crea una promoción nueva en la
-                    cartilla.
-                  </p>
-                  {rewards.length > 0 ? (
-                    <div className="mt-4">
-                      <p className="text-xs font-semibold text-[var(--onda-ink)]">
-                        De tus cartillas
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {rewards.map((r) => (
-                          <button
-                            key={`${r.cartillaId}-${r.promotionId}`}
-                            type="button"
-                            onClick={() =>
-                              setPromo({
-                                type: r.type,
-                                title: r.title,
-                                value: r.value != null ? String(r.value) : '',
-                                buyQuantity: String(r.buyQuantity ?? 2),
-                                getQuantity: String(r.getQuantity ?? 1),
-                                productName: r.productName || r.title,
-                                cartillaId: r.cartillaId,
-                                promotionId: r.promotionId,
-                              })
-                            }
-                            className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
-                              promo.promotionId === r.promotionId
-                                ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-500)] text-white'
-                                : 'border-[var(--onda-border)] bg-white text-[var(--onda-muted)]'
-                            }`}
-                          >
-                            {r.title}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                  <div className="mt-4 flex flex-wrap gap-1.5">
-                    {PROMO_TYPE_OPTIONS.map((t) => {
-                      const selected = promo.type === t.id;
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() =>
-                            setPromo(promoForType(t.id, objectiveKind, voice))
-                          }
-                          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                            selected
-                              ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-500)] text-white'
-                              : 'border-[var(--onda-border)] bg-white text-[var(--onda-muted)]'
-                          }`}
-                        >
-                          {t.icon}
-                          {t.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <input
-                    value={promo.title}
-                    onChange={(e) => setPromo({ ...promo, title: e.target.value })}
-                    placeholder="Título"
-                    className="mt-3 w-full rounded-2xl border border-[var(--onda-border)] bg-white px-4 py-3 text-sm font-medium text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
-                  />
-                  {promo.type === 'PERCENT_OFF' ? (
-                    <label className="mt-3 block text-sm text-[var(--onda-muted)]">
-                      Porcentaje (1–100)
-                      <input
-                        type="number"
-                        min={1}
-                        max={100}
-                        value={promo.value}
-                        onChange={(e) => setPromo({ ...promo, value: e.target.value })}
-                        className="mt-1 w-full rounded-2xl border border-[var(--onda-border)] bg-white px-4 py-2.5 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
-                      />
-                    </label>
-                  ) : null}
-                  {promo.type === 'AMOUNT_OFF' ? (
-                    <label className="mt-3 block text-sm text-[var(--onda-muted)]">
-                      Valor de descuento (COP)
-                      <input
-                        type="number"
-                        min={1}
-                        value={promo.value}
-                        onChange={(e) => setPromo({ ...promo, value: e.target.value })}
-                        className="mt-1 w-full rounded-2xl border border-[var(--onda-border)] bg-white px-4 py-2.5 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
-                      />
-                    </label>
-                  ) : null}
-                  {promo.type === 'BUY_GET' ? (
-                    <div className="mt-3 flex flex-wrap gap-3">
-                      <label className="text-sm text-[var(--onda-muted)]">
-                        Compra N
-                        <input
-                          type="number"
-                          min={1}
-                          value={promo.buyQuantity}
-                          onChange={(e) =>
-                            setPromo({ ...promo, buyQuantity: e.target.value })
-                          }
-                          className="ml-2 w-20 rounded-2xl border border-[var(--onda-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--onda-bridge)]"
-                        />
-                      </label>
-                      <label className="text-sm text-[var(--onda-muted)]">
-                        Lleva M
-                        <input
-                          type="number"
-                          min={1}
-                          value={promo.getQuantity}
-                          onChange={(e) =>
-                            setPromo({ ...promo, getQuantity: e.target.value })
-                          }
-                          className="ml-2 w-20 rounded-2xl border border-[var(--onda-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--onda-bridge)]"
-                        />
-                      </label>
-                    </div>
-                  ) : null}
-                  {promo.type === 'PRODUCT' ? (
-                    <label className="mt-3 block text-sm text-[var(--onda-muted)]">
-                      Nombre del producto
-                      <input
-                        value={promo.productName}
-                        onChange={(e) =>
-                          setPromo({ ...promo, productName: e.target.value })
-                        }
-                        className="mt-1 w-full rounded-2xl border border-[var(--onda-border)] bg-white px-4 py-2.5 text-sm outline-none focus:border-[var(--onda-bridge)]"
-                      />
-                    </label>
-                  ) : null}
-                  <p className="mt-3 rounded-2xl bg-[var(--onda-bg)] px-4 py-2.5 text-xs text-[var(--onda-muted)]">
-                    Preview: {benefitPreview}
-                  </p>
-                  <ul className="mt-4 space-y-2">
-                    {previewMessages.map((msg) => (
-                      <li
-                        key={msg.channel}
-                        className="rounded-2xl border border-[var(--onda-border)] bg-white px-3 py-2.5"
-                      >
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--onda-primary-700)]">
-                          {msg.channelLabel}
-                        </p>
-                        <p className="mt-1 text-sm leading-snug text-[var(--onda-ink)]">
-                          {msg.text}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {step === 3 ? (
                 <div>
                   <h3 className="font-display text-xl font-semibold">
                     Listo para lanzar
@@ -536,6 +489,66 @@ export function CampaignWizard({
                       </p>
                       <p className="mt-3 text-sm">Push · Wallet</p>
                       <p className="text-sm">SMS</p>
+                    </div>
+                    <div className="rounded-2xl border border-[var(--onda-border)] bg-white p-4 sm:col-span-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
+                        Costo estimado (alcance)
+                      </p>
+                      <dl className="mt-3 space-y-2 text-sm">
+                        <div className="flex justify-between gap-4">
+                          <dt className="text-[var(--onda-muted)]">Personas a alcanzar</dt>
+                          <dd className="font-medium tabular-nums">{audience?.count ?? 0}</dd>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <dt className="text-[var(--onda-muted)]">
+                            Gratis este mes ({reachQuote.freeMonthly})
+                          </dt>
+                          <dd className="text-[var(--onda-ink)]">
+                            {reachQuote.reachUsedThisMonth} usadas →{' '}
+                            {reachQuote.freeApplied} aplicadas gratis
+                          </dd>
+                        </div>
+                        {reachQuote.paidCount > 0 ? (
+                          <div className="flex justify-between gap-4">
+                            <dt className="text-[var(--onda-muted)]">Personas de pago</dt>
+                            <dd className="font-medium tabular-nums">
+                              {reachQuote.paidCount} × {formatCop(reachQuote.unitCop)}
+                            </dd>
+                          </div>
+                        ) : null}
+                        <div className="flex justify-between gap-4 border-t border-[var(--onda-border)] pt-2">
+                          <dt className="font-semibold text-[var(--onda-ink)]">Costo estimado</dt>
+                          <dd className="font-display text-lg font-bold text-[var(--onda-ink)]">
+                            {formatCop(reachQuote.costCop)}
+                          </dd>
+                        </div>
+                      </dl>
+                      {reachQuote.paidCount > 0 && quota && !quota.hasPaymentMethod ? (
+                        <p className="mt-3 rounded-xl bg-[var(--onda-warning)]/10 px-3 py-2 text-xs text-[var(--onda-ink)]">
+                          Necesitas tarjeta en Configuración para superar las{' '}
+                          {reachQuote.freeMonthly} personas gratis al mes.
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="rounded-2xl border border-[var(--onda-border)] bg-white p-4 sm:col-span-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
+                        Mensajes
+                      </p>
+                      <ul className="mt-3 space-y-2">
+                        {previewMessages.map((msg) => (
+                          <li
+                            key={msg.channel}
+                            className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-bg)] px-3 py-2.5"
+                          >
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--onda-primary-700)]">
+                              {msg.channelLabel}
+                            </p>
+                            <p className="mt-1 text-sm leading-snug text-[var(--onda-ink)]">
+                              {msg.text}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                     <div className="rounded-2xl border border-[var(--onda-border)] bg-white p-4 sm:col-span-2">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
@@ -611,13 +624,13 @@ export function CampaignWizard({
               type="button"
               disabled={saving}
               onClick={() => {
-                if (step < 3) goToStep(step + 1);
+                if (step < 2) goToStep(step + 1);
                 else void launch();
               }}
               className="mt-5 w-full max-w-[280px]"
             >
               {ctaLabel}
-              {step < 3 ? ' →' : ''}
+              {step < 2 ? ' →' : ''}
             </GradientButton>
           ) : (
             <GradientButton
@@ -634,13 +647,54 @@ export function CampaignWizard({
   );
 }
 
-function AudienceStep({ audience }: { audience: AudienceResponse | null }) {
+function AudienceStep({
+  audience,
+  isLocalDev,
+  onLoadMock,
+}: {
+  audience: AudienceResponse | null;
+  isLocalDev?: boolean;
+  onLoadMock?: () => void;
+}) {
   if (!audience) {
-    return <p className="text-sm text-[var(--onda-muted)]">Calculando audiencia…</p>;
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-[var(--onda-muted)]">Calculando audiencia…</p>
+        {isLocalDev && onLoadMock ? (
+          <button
+            type="button"
+            onClick={onLoadMock}
+            className="rounded-full border border-dashed border-[var(--onda-bridge)] bg-[var(--onda-primary-50)] px-4 py-2 text-xs font-semibold text-[var(--onda-primary-700)] hover:bg-[var(--onda-primary-100)]"
+          >
+            Cargar audiencia demo (local)
+          </button>
+        ) : null}
+      </div>
+    );
   }
   return (
     <div>
-      <h3 className="font-display text-xl font-semibold">Audiencia encontrada</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-display text-xl font-semibold">Audiencia encontrada</h3>
+        {isLocalDev && onLoadMock ? (
+          <button
+            type="button"
+            onClick={onLoadMock}
+            className="rounded-full border border-dashed border-[var(--onda-border)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--onda-muted)] hover:border-[var(--onda-bridge)] hover:text-[var(--onda-ink)]"
+          >
+            {audience.count === 0 ? 'Cargar audiencia demo' : 'Recargar demo'}
+          </button>
+        ) : null}
+      </div>
+      {audience.count === 0 ? (
+        <p className="mt-3 rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-bg)] px-4 py-3 text-sm text-[var(--onda-muted)]">
+          No hay clientes en este filtro con tus datos actuales.
+          {isLocalDev && onLoadMock
+            ? ' Usa el botón de arriba para probar el flujo con audiencia demo.'
+            : null}
+        </p>
+      ) : (
+        <>
       <p className="mt-3 rounded-2xl bg-[var(--onda-sky-soft)] px-4 py-3 text-sm text-[var(--onda-ink)]">
         {audience.headline}
       </p>
@@ -723,8 +777,100 @@ function AudienceStep({ audience }: { audience: AudienceResponse | null }) {
           </span>
         ))}
       </div>
+        </>
+      )}
     </div>
   );
+}
+
+const MOCK_PEOPLE = [
+  { name: 'Camila Rojas', initials: 'CR', meta: 'hace 34 días' },
+  { name: 'Andrés Mejía', initials: 'AM', meta: 'hace 41 días' },
+  { name: 'Valentina Díaz', initials: 'VD', meta: 'hace 28 días' },
+  { name: 'Santiago Pérez', initials: 'SP', meta: 'hace 52 días' },
+  { name: 'Laura Gómez', initials: 'LG', meta: 'hace 37 días' },
+  { name: 'Juan Esteban', initials: 'JE', meta: 'hace 45 días' },
+  { name: 'María Fernanda', initials: 'MF', meta: '2 ondas · cerca del premio' },
+  { name: 'Diego Castillo', initials: 'DC', meta: 'canjeó hace 5 días' },
+] as const;
+
+function buildMockAudience(
+  objectiveKind: ObjectiveKind,
+  details: ObjectiveDetails,
+  voice: ReturnType<typeof voiceFor>,
+  slowWindow?: string
+): AudienceResponse {
+  const count = 104;
+  const windowLabel = slowWindow || details.slowWindow || voice.slowWindow;
+  const filter: AudienceResponse['filter'] = {
+    objective: objectiveKind,
+    slowWindow: windowLabel,
+    inactiveDays: details.inactiveDays,
+    minVisits: details.minVisits,
+    maxPointsGap: details.maxPointsGap,
+    activeWithinDays: details.activeWithinDays,
+    redeemWithinDays: details.redeemWithinDays,
+    requireWallet: details.requireWallet,
+    cartillaId: null,
+  };
+
+  const headlines: Record<ObjectiveKind, string> = {
+    reactivate: `Encontramos ${count} ${voice.customerPlural} que no regresan hace más de ${details.inactiveDays} días.`,
+    slow_hours: `Encontramos ${count} ${voice.customerPlural} a quienes invitar ${windowLabel}.`,
+    new_reward: `Encontramos ${count} ${voice.customerPlural} a ${details.maxPointsGap} ondas del premio o activos en ${details.activeWithinDays} días.`,
+    reviews: `Encontramos ${count} ${voice.customerPlural} que canjearon en los últimos ${details.redeemWithinDays} días y aún no dejaron reseña.`,
+  };
+
+  const chips: Record<ObjectiveKind, string[]> = {
+    reactivate: [
+      `Inactivos ${details.inactiveDays}d`,
+      details.minVisits > 1 ? `${details.minVisits}+ visitas` : 'Visitaron antes',
+      details.requireWallet ? 'Solo Wallet' : 'Wallet o SMS',
+    ],
+    slow_hours: [
+      'Ya conocen el local',
+      windowLabel,
+      details.requireWallet ? 'Solo Wallet' : 'Invitación a horario flojo',
+    ],
+    new_reward: [
+      'Activos',
+      `≤ ${details.maxPointsGap} ondas al premio`,
+      `${details.activeWithinDays}d de actividad`,
+    ],
+    reviews: [
+      `Canje ≤ ${details.redeemWithinDays}d`,
+      'Sin reseña',
+      details.requireWallet ? 'Solo Wallet' : 'Google Reviews',
+    ],
+  };
+
+  const kpis =
+    objectiveKind === 'new_reward'
+      ? [
+          { label: 'Alcanzables', value: String(count) },
+          { label: 'Cerca del premio', value: '38%' },
+          { label: 'Con Wallet', value: '72%' },
+        ]
+      : [
+          { label: 'Alcanzables', value: String(count) },
+          { label: 'Días sin visita', value: '36' },
+          { label: 'Con Wallet', value: '68%' },
+        ];
+
+  return {
+    headline: headlines[objectiveKind],
+    chips: chips[objectiveKind],
+    kpis,
+    people: MOCK_PEOPLE.map((p) => ({ ...p })),
+    visitFrequency: [
+      { bucket: '1–2', count: 48 },
+      { bucket: '3–5', count: 37 },
+      { bucket: '6+', count: 19 },
+    ],
+    count,
+    slowWindow: windowLabel,
+    filter,
+  };
 }
 
 function parseObjective(raw: string | null): ObjectiveKind {

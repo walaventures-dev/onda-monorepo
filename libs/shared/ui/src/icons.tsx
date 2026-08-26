@@ -111,16 +111,41 @@ export const OndaIcons = {
   megaphone: <Megaphone size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   camera: <Camera size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   qr: <QrCode size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
+  /** Mano de marca — único ícono para «Ondas». Hereda `currentColor`. */
+  ondas: (
+    <span
+      className={`inline-block bg-current ${CLASS}`}
+      style={{
+        WebkitMaskImage: 'url(/brand/onda-hand.png)',
+        maskImage: 'url(/brand/onda-hand.png)',
+        WebkitMaskSize: 'contain',
+        maskSize: 'contain',
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+        WebkitMaskPosition: 'center',
+        maskPosition: 'center',
+      }}
+      aria-hidden
+    />
+  ),
 };
 
+/** Mano inline; hereda el color del texto padre (coherente con chips/filas). */
 export function OndaMark({ className = 'h-3 w-3 shrink-0' }: { className?: string }) {
   return (
-    <img
-      src="/brand/onda-hand.png"
-      alt=""
+    <span
+      className={`inline-block bg-current ${className}`.trim()}
+      style={{
+        WebkitMaskImage: 'url(/brand/onda-hand.png)',
+        maskImage: 'url(/brand/onda-hand.png)',
+        WebkitMaskSize: 'contain',
+        maskSize: 'contain',
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+        WebkitMaskPosition: 'center',
+        maskPosition: 'center',
+      }}
       aria-hidden
-      draggable={false}
-      className={`object-contain brightness-0 ${className}`.trim()}
     />
   );
 }
