@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CajaOperationsPanel,
@@ -9,9 +9,11 @@ import {
   api,
   setApiAuthTokenGetter,
   SkeletonScreen,
+  type PosVenderMemberSession,
 } from '@onda/shared-ui';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { getMerchantAuth } from '../lib/firebase';
+import type { PosAttendantDto } from '@onda/shared-types';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth';
+import { getMerchantAuth, isMerchantFirebaseConfigured } from '../lib/firebase';
 import { loadDefaultStoreId, useCajaAuth } from '../lib/useCajaAuth';
 
 type CajaSession = {
@@ -21,7 +23,90 @@ type CajaSession = {
   ondaValue?: number | null;
 };
 
-/** App única de caja (kiosk): acumular + cuentas abiertas / asociar. */
+function useFirebaseApiToken() {
+  setApiAuthTokenGetter(async () => {
+    const user = getMerchantAuth().currentUser;
+    return user ? user.getIdToken() : null;
+  });
+}
+
+/** Espera a que Firebase restaure la sesión persistida del dispositivo. */
+function waitForFirebaseUser(): Promise<User | null> {
+  const auth = getMerchantAuth();
+  if (auth.currentUser) return Promise.resolve(auth.currentUser);
+  return new Promise((resolve) => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      unsub();
+      resolve(user);
+    });
+  });
+}
+
+function useCajaMemberAuth(storeId: string, cajaToken: string) {
+  /** Vuelve al bearer del enlace; no cierra Firebase (sesión de Vender persiste). */
+  const restoreCajaAuth = useCallback(() => {
+    setApiAuthTokenGetter(async () => cajaToken);
+  }, [cajaToken]);
+
+  const fetchMemberSession = useCallback(async (): Promise<PosVenderMemberSession> => {
+    const me = await api<PosAttendantDto>(`/pos/stores/${storeId}/me`);
+    return { memberId: me.id, name: me.name, role: me.role };
+  }, [storeId]);
+
+  const activateMemberAuth = useCallback(async () => {
+    if (!isMerchantFirebaseConfigured() || !getMerchantAuth().currentUser) {
+      throw new Error('Sesión de miembro no disponible');
+    }
+    useFirebaseApiToken();
+  }, []);
+
+  /** Si Firebase ya tiene usuario (mismo dispositivo), reutiliza sin pedir clave. */
+  const resumeMemberSession = useCallback(async (): Promise<PosVenderMemberSession | null> => {
+    if (!isMerchantFirebaseConfigured() || !storeId) return null;
+    const user = await waitForFirebaseUser();
+    if (!user) return null;
+    useFirebaseApiToken();
+    try {
+      return await fetchMemberSession();
+    } catch {
+      restoreCajaAuth();
+      return null;
+    }
+  }, [storeId, fetchMemberSession, restoreCajaAuth]);
+
+  const signInMember = useCallback(
+    async (email: string, password: string): Promise<PosVenderMemberSession> => {
+      if (!isMerchantFirebaseConfigured()) {
+        throw new Error('Firebase no está configurado en esta caja');
+      }
+      await signInWithEmailAndPassword(
+        getMerchantAuth(),
+        email.trim(),
+        password,
+      );
+      useFirebaseApiToken();
+      try {
+        return await fetchMemberSession();
+      } catch (e) {
+        restoreCajaAuth();
+        void signOut(getMerchantAuth()).catch(() => undefined);
+        throw e instanceof Error
+          ? e
+          : new Error('No eres miembro activo de esta sede');
+      }
+    },
+    [fetchMemberSession, restoreCajaAuth],
+  );
+
+  return {
+    signInMember,
+    restoreCajaAuth,
+    activateMemberAuth,
+    resumeMemberSession,
+  };
+}
+
+/** App única de caja (kiosk): acumular + vender + cuentas. */
 export function CajaKioskClient({ token }: { token: string }) {
   const [session, setSession] = useState<CajaSession | null>(null);
   const [error, setError] = useState('');
@@ -46,6 +131,14 @@ export function CajaKioskClient({ token }: { token: string }) {
     };
   }, [token]);
 
+  const storeId = session?.storeId || '';
+  const {
+    signInMember,
+    restoreCajaAuth,
+    activateMemberAuth,
+    resumeMemberSession,
+  } = useCajaMemberAuth(storeId, token);
+
   if (error) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-2 p-6 text-center">
@@ -62,13 +155,17 @@ export function CajaKioskClient({ token }: { token: string }) {
   }
 
   return (
-    <main className="mx-auto min-h-dvh max-w-lg p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <main className="mx-auto min-h-dvh max-w-6xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <CajaOperationsPanel
         storeId={session.storeId}
         storeName={session.storeName}
         posEnabled={Boolean(session.posEnabled)}
         ondaValue={session.ondaValue}
         token={token}
+        signInMember={signInMember}
+        restoreCajaAuth={restoreCajaAuth}
+        activateMemberAuth={activateMemberAuth}
+        resumeMemberSession={resumeMemberSession}
       />
     </main>
   );
@@ -100,10 +197,14 @@ export function CajaLoginClient() {
     }
   }
 
+  if (!ready) {
+    return <SkeletonScreen />;
+  }
+
   if (!firebaseEnabled) {
     return (
-      <p className="p-6 text-center text-sm text-[var(--onda-muted)]">
-        Usa «Abrir caja» en el panel del comercio para el enlace kiosk.
+      <p className="p-6 text-center text-sm text-[var(--onda-danger)]">
+        Firebase no configurado
       </p>
     );
   }
@@ -182,18 +283,29 @@ export function CajaHubClient() {
     })();
   }, [ready, user, firebaseEnabled, router]);
 
+  const {
+    signInMember,
+    restoreCajaAuth,
+    activateMemberAuth,
+    resumeMemberSession,
+  } = useCajaMemberAuth(storeId, cajaToken || '');
+
   if (!storeId) {
     return <SkeletonScreen label="Cargando sede" />;
   }
 
   return (
-    <main className="mx-auto min-h-dvh max-w-lg p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <main className="mx-auto min-h-dvh max-w-6xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <CajaOperationsPanel
         storeId={storeId}
         storeName={storeName || undefined}
         posEnabled={posEnabled}
         ondaValue={ondaValue}
         token={cajaToken}
+        signInMember={cajaToken ? signInMember : undefined}
+        restoreCajaAuth={cajaToken ? restoreCajaAuth : undefined}
+        activateMemberAuth={cajaToken ? activateMemberAuth : undefined}
+        resumeMemberSession={cajaToken ? resumeMemberSession : undefined}
       />
     </main>
   );

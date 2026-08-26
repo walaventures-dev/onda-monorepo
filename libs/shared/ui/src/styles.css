@@ -320,6 +320,74 @@ button.onda-gradient:focus-visible:not(:disabled) {
   min-width: 0;
 }
 
+.onda-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: -0.35rem 0 1.35rem;
+  padding: 0.55rem 0.65rem;
+  min-width: 0;
+  /* outer = logo radius (0.7) + padding (0.55) */
+  border-radius: 1.25rem;
+  background: var(--onda-card);
+  border: 1px solid var(--onda-border);
+  box-shadow: 0 1px 2px rgba(26, 27, 46, 0.04);
+}
+
+.onda-sidebar-brand-logo,
+.onda-sidebar-brand-fallback {
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  border-radius: 0.7rem;
+  object-fit: cover;
+  border: 1.5px solid var(--onda-primary-200);
+  box-shadow: 0 2px 6px rgba(5, 45, 222, 0.1);
+}
+
+.onda-sidebar-brand-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--onda-primary-500);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.onda-sidebar-brand-name {
+  min-width: 0;
+  font-family: "Sora", "Manrope", system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--onda-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onda-sidebar.is-collapsed .onda-sidebar-brand {
+  justify-content: center;
+  margin: -0.15rem 0 1rem;
+  padding: 0.35rem;
+  /* outer = logo radius (0.6) + padding (0.35) */
+  border-radius: 0.95rem;
+}
+
+.onda-sidebar.is-collapsed .onda-sidebar-brand-logo,
+.onda-sidebar.is-collapsed .onda-sidebar-brand-fallback {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.6rem;
+}
+
+.onda-sidebar.is-collapsed .onda-sidebar-brand-name {
+  display: none;
+}
+
 .onda-sidebar-footer {
   margin-top: auto;
   padding-top: 0.75rem;
@@ -373,6 +441,7 @@ button.onda-gradient:focus-visible:not(:disabled) {
   justify-content: center;
   padding: 0.7rem 0.5rem;
   gap: 0;
+  position: relative;
 }
 
 .onda-sidebar.is-collapsed .onda-nav-label {
@@ -385,6 +454,45 @@ button.onda-gradient:focus-visible:not(:disabled) {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+@media (min-width: 768px) {
+  .onda-sidebar.is-collapsed .onda-nav-link:hover .onda-nav-label,
+  .onda-sidebar.is-collapsed .onda-nav-link:focus-visible .onda-nav-label,
+  .onda-sidebar.is-collapsed .onda-sidebar-collapse:hover .onda-nav-label,
+  .onda-sidebar.is-collapsed .onda-sidebar-collapse:focus-visible .onda-nav-label {
+    left: calc(100% + 0.55rem);
+    top: 50%;
+    width: max-content;
+    height: auto;
+    max-width: 14rem;
+    margin: 0;
+    padding: 0.4rem 0.7rem;
+    overflow: visible;
+    clip: auto;
+    border-radius: 0.55rem;
+    background: var(--onda-ink);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    box-shadow: 0 6px 18px rgba(26, 27, 46, 0.18);
+    opacity: 1;
+    z-index: 60;
+    transform: translateY(-50%);
+  }
+
+  .onda-sidebar.is-collapsed {
+    overflow: visible;
+  }
+
+  .onda-sidebar.is-collapsed .onda-sidebar-nav {
+    overflow: visible;
+  }
 }
 
 .onda-sidebar-nav {
@@ -625,6 +733,13 @@ button.onda-gradient:focus-visible:not(:disabled) {
     overflow: visible;
     clip: auto;
     white-space: nowrap;
+    opacity: 1;
+    transform: none;
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    box-shadow: none;
+    max-width: none;
   }
 
   .onda-sidebar.is-collapsed .onda-nav-cluster-label {

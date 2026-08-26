@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Headers,
   Inject,
@@ -34,8 +35,9 @@ export class PosController {
     token?: string,
     ...roles: StoreMemberRole[]
   ) {
-    await this.access.requireRole(storeId, auth, token, ...roles);
+    const ctx = await this.access.requireRole(storeId, auth, token, ...roles);
     await this.access.requirePosEnabled(storeId);
+    return ctx;
   }
 
   @Get('stores/:storeId/items')
@@ -214,10 +216,11 @@ export class PosController {
   async listTabs(
     @Query('storeId') storeId: string,
     @Query('status') status?: string,
+    @Query('attendedBy') attendedBy?: string,
     @Headers('authorization') auth?: string,
     @Query('token') token?: string
   ) {
-    await this.guardPos(
+    const ctx = await this.guardPos(
       storeId,
       auth,
       token,
@@ -227,13 +230,53 @@ export class PosController {
     const statuses = status
       ? (status.split(',') as any)
       : (['OPEN', 'CHECKOUT'] as any);
-    return this.pos.listTabs(storeId, statuses);
+    return this.pos.listTabs(storeId, statuses, attendedBy, ctx.memberId);
   }
 
   @Post('tabs')
   async createTab(
     @Query('storeId') storeId: string,
     @Body() body: { label?: string },
+    @Headers('authorization') auth?: string,
+    @Query('token') token?: string
+  ) {
+    const ctx = await this.guardPos(
+      storeId,
+      auth,
+      token,
+      StoreMemberRole.ADMIN,
+      StoreMemberRole.CAJA
+    );
+    return this.pos.createTab(storeId, body?.label, ctx.memberId);
+  }
+
+  @Post('tabs/:tabId/assign')
+  async assignTab(
+    @Param('tabId') tabId: string,
+    @Query('storeId') storeId: string,
+    @Body() body: { memberId?: string | null },
+    @Headers('authorization') auth?: string,
+    @Query('token') token?: string
+  ) {
+    const ctx = await this.guardPos(
+      storeId,
+      auth,
+      token,
+      StoreMemberRole.ADMIN,
+      StoreMemberRole.CAJA
+    );
+    if (ctx.viaCajaToken) {
+      throw new ForbiddenException('Inicia sesión de miembro para asignar');
+    }
+    return this.pos.assignTab(storeId, tabId, body.memberId ?? null, {
+      memberId: ctx.memberId,
+      role: ctx.role,
+    });
+  }
+
+  @Get('stores/:storeId/attendants')
+  async listAttendants(
+    @Param('storeId') storeId: string,
     @Headers('authorization') auth?: string,
     @Query('token') token?: string
   ) {
@@ -244,7 +287,29 @@ export class PosController {
       StoreMemberRole.ADMIN,
       StoreMemberRole.CAJA
     );
-    return this.pos.createTab(storeId, body?.label);
+    return this.pos.listAttendants(storeId);
+  }
+
+  @Get('stores/:storeId/me')
+  async me(
+    @Param('storeId') storeId: string,
+    @Headers('authorization') auth?: string,
+    @Query('token') token?: string
+  ) {
+    const ctx = await this.guardPos(
+      storeId,
+      auth,
+      token,
+      StoreMemberRole.ADMIN,
+      StoreMemberRole.CAJA
+    );
+    if (ctx.viaCajaToken || !ctx.memberId) {
+      throw new ForbiddenException('Inicia sesión con tu cuenta de miembro');
+    }
+    const attendants = await this.pos.listAttendants(storeId);
+    const me = attendants.find((a) => a.id === ctx.memberId);
+    if (!me) throw new ForbiddenException('Miembro no activo');
+    return me;
   }
 
   @Post('tabs/:tabId/lines')

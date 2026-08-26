@@ -57,6 +57,21 @@ export class PosService {
     });
   }
 
+  private tabInclude() {
+    return {
+      lines: {
+        include: {
+          item: true,
+          addons: { orderBy: { name: 'asc' as const } },
+        },
+        orderBy: { id: 'asc' as const },
+      },
+      pass: { include: { user: { select: { name: true, phone: true } } } },
+      openedByMember: { select: { id: true, name: true } },
+      attendedByMember: { select: { id: true, name: true } },
+    };
+  }
+
   private serializeTab(
     tab: Awaited<ReturnType<typeof this.fetchTab>>
   ) {
@@ -94,22 +109,16 @@ export class PosService {
       subtotal,
       total: subtotal,
       customerName,
+      openedByMemberId: tab.openedByMemberId ?? null,
+      attendedByMemberId: tab.attendedByMemberId ?? null,
+      attendedByName: tab.attendedByMember?.name ?? null,
     };
   }
 
   private async fetchTab(tabId: string) {
     const tab = await this.prisma.posTab.findUnique({
       where: { id: tabId },
-      include: {
-        lines: {
-          include: {
-            item: true,
-            addons: { orderBy: { name: 'asc' } },
-          },
-          orderBy: { id: 'asc' },
-        },
-        pass: { include: { user: { select: { name: true, phone: true } } } },
-      },
+      include: this.tabInclude(),
     });
     if (!tab) throw new NotFoundException('Cuenta no encontrada');
     return tab;
@@ -523,22 +532,40 @@ export class PosService {
     return this.listPaymentMethods(storeId);
   }
 
-  async listTabs(storeId: string, statuses?: PosTabStatus[]) {
+  async listTabs(
+    storeId: string,
+    statuses?: PosTabStatus[],
+    attendedBy?: string | null,
+    viewerMemberId?: string | null
+  ) {
+    let attendedFilter: { attendedByMemberId?: string | null } | undefined;
+    if (attendedBy && attendedBy !== 'all') {
+      if (attendedBy === 'me') {
+        if (!viewerMemberId) return [];
+        attendedFilter = { attendedByMemberId: viewerMemberId };
+      } else if (attendedBy === 'unassigned') {
+        attendedFilter = { attendedByMemberId: null };
+      } else {
+        attendedFilter = { attendedByMemberId: attendedBy };
+      }
+    }
     const tabs = await this.prisma.posTab.findMany({
       where: {
         storeId,
         status: statuses?.length ? { in: statuses } : undefined,
+        ...attendedFilter,
       },
-      include: {
-        lines: { include: { item: true } },
-        pass: { include: { user: { select: { name: true } } } },
-      },
+      include: this.tabInclude(),
       orderBy: { openedAt: 'desc' },
     });
     return tabs.map((t) => this.serializeTab(t as any));
   }
 
-  async createTab(storeId: string, label?: string) {
+  async createTab(
+    storeId: string,
+    label?: string,
+    memberId?: string | null
+  ) {
     const count = await this.prisma.posTab.count({
       where: { storeId, status: { in: ['OPEN', 'CHECKOUT'] } },
     });
@@ -546,15 +573,74 @@ export class PosService {
       data: {
         storeId,
         label: label?.trim() || `Cuenta #${count + 1}`,
+        openedByMemberId: memberId || null,
+        attendedByMemberId: memberId || null,
       },
-      include: {
-        lines: { include: { item: true } },
-        pass: { include: { user: { select: { name: true } } } },
-      },
+      include: this.tabInclude(),
     });
     const serialized = this.serializeTab(tab as any);
     this.emitTab(storeId, 'tab_created', tab.id);
     return serialized;
+  }
+
+  async assignTab(
+    storeId: string,
+    tabId: string,
+    memberId: string | null,
+    actor: { memberId: string | null; role: StoreMemberRole | null }
+  ) {
+    const tab = await this.fetchTab(tabId);
+    if (tab.storeId !== storeId) throw new ForbiddenException();
+    if (tab.status !== PosTabStatus.OPEN && tab.status !== PosTabStatus.CHECKOUT) {
+      throw new BadRequestException('Solo se pueden asignar cuentas abiertas');
+    }
+
+    if (memberId) {
+      const target = await this.prisma.storeMember.findFirst({
+        where: {
+          id: memberId,
+          storeId,
+          status: 'ACTIVE',
+        },
+      });
+      if (!target) throw new BadRequestException('Miembro no encontrado');
+    }
+
+    const isAdmin = actor.role === StoreMemberRole.ADMIN;
+    const isSelf = Boolean(actor.memberId && memberId === actor.memberId);
+    const isClearingSelf =
+      memberId === null &&
+      Boolean(actor.memberId) &&
+      tab.attendedByMemberId === actor.memberId;
+
+    if (!isAdmin && !isSelf && !isClearingSelf) {
+      throw new ForbiddenException(
+        'Solo puedes asignarte a ti o liberar una cuenta que atiendes'
+      );
+    }
+
+    const updated = await this.prisma.posTab.update({
+      where: { id: tabId },
+      data: { attendedByMemberId: memberId },
+      include: this.tabInclude(),
+    });
+    const serialized = this.serializeTab(updated as any);
+    this.emitTab(storeId, 'tab_updated', tabId);
+    return serialized;
+  }
+
+  async listAttendants(storeId: string) {
+    const members = await this.prisma.storeMember.findMany({
+      where: { storeId, status: 'ACTIVE' },
+      select: { id: true, name: true, email: true, role: true },
+      orderBy: [{ role: 'asc' }, { name: 'asc' }],
+    });
+    return members.map((m) => ({
+      id: m.id,
+      name: m.name,
+      email: m.email,
+      role: m.role as 'ADMIN' | 'CAJA',
+    }));
   }
 
   async updateTabLines(

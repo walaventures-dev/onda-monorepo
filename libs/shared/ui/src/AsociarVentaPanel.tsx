@@ -9,10 +9,16 @@ import { PlusCircleIcon as PlusCircle } from '@phosphor-icons/react/dist/csr/Plu
 import { QrCodeIcon as QrCode } from '@phosphor-icons/react/dist/csr/QrCode';
 import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
 import { UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
+import { CurrencyDollarIcon as CurrencyDollar } from '@phosphor-icons/react/dist/csr/CurrencyDollar';
 import { api } from './api';
 import { CajaScanClient } from './CajaScanClient';
 import { PhoneInput } from './PhoneInput';
+import { PasswordInput } from './PasswordInput';
 import { OndaWordmark, OndaHandMark } from './brand';
+import {
+  PosVenderCore,
+  type PosVenderMemberSession,
+} from './PosVenderCore';
 import {
   formatCop,
   isCompletePhoneMask,
@@ -160,7 +166,7 @@ export function AsociarVentaList({
           Sin cuentas
         </p>
         <p className="max-w-[16rem] text-sm text-[var(--onda-muted)]">
-          Ábrelas en Vender desde el panel del comercio.
+          Ábrelas en Vender (caja o panel del comercio).
         </p>
       </div>
     );
@@ -440,6 +446,10 @@ export function CajaOperationsPanel({
   token,
   storeName,
   ondaValue,
+  signInMember,
+  restoreCajaAuth,
+  activateMemberAuth,
+  resumeMemberSession,
 }: {
   storeId: string;
   defaultMode?: 'acumular' | 'asociar';
@@ -447,15 +457,83 @@ export function CajaOperationsPanel({
   token?: string;
   storeName?: string;
   ondaValue?: number | null;
+  /** Firebase login for Vender; returns active member for this store. */
+  signInMember?: (
+    email: string,
+    password: string,
+  ) => Promise<PosVenderMemberSession>;
+  /** Restore CajaLink bearer after leaving Vender (keeps Firebase signed in). */
+  restoreCajaAuth?: () => void;
+  /** Re-attach Firebase bearer when re-entering Vender with an existing session. */
+  activateMemberAuth?: () => Promise<void>;
+  /** Silent resume if Firebase already has a user for this device. */
+  resumeMemberSession?: () => Promise<PosVenderMemberSession | null>;
 }) {
-  const [mode, setMode] = useState<'home' | 'acumular' | 'asociar'>(() =>
-    posEnabled ? (defaultMode === 'asociar' ? 'asociar' : 'home') : 'acumular'
+  const [mode, setMode] = useState<
+    'home' | 'acumular' | 'asociar' | 'vender' | 'vender-login'
+  >(() =>
+    posEnabled ? (defaultMode === 'asociar' ? 'asociar' : 'home') : 'acumular',
   );
   const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
+  const [memberSession, setMemberSession] =
+    useState<PosVenderMemberSession | null>(null);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [openingVender, setOpeningVender] = useState(false);
 
   useEffect(() => {
     if (!posEnabled) setMode('acumular');
   }, [posEnabled]);
+
+  function leaveVender() {
+    restoreCajaAuth?.();
+    setMode('home');
+  }
+
+  async function openVender() {
+    setOpeningVender(true);
+    setLoginError('');
+    try {
+      if (memberSession) {
+        await activateMemberAuth?.();
+        setMode('vender');
+        return;
+      }
+      const resumed = (await resumeMemberSession?.()) ?? null;
+      if (resumed) {
+        setMemberSession(resumed);
+        setMode('vender');
+        return;
+      }
+      setMode('vender-login');
+    } catch {
+      setMemberSession(null);
+      setMode('vender-login');
+    } finally {
+      setOpeningVender(false);
+    }
+  }
+
+  async function submitVenderLogin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!signInMember) return;
+    setLoginBusy(true);
+    setLoginError('');
+    try {
+      const member = await signInMember(loginEmail.trim(), loginPassword);
+      setMemberSession(member);
+      setLoginPassword('');
+      setMode('vender');
+    } catch (err) {
+      setLoginError(
+        err instanceof Error ? err.message : 'No se pudo iniciar sesión',
+      );
+    } finally {
+      setLoginBusy(false);
+    }
+  }
 
   if (selectedTabId) {
     return (
@@ -469,6 +547,87 @@ export function CajaOperationsPanel({
           onBack={() => setSelectedTabId(null)}
         />
       </div>
+    );
+  }
+
+  if (mode === 'vender-login') {
+    return (
+      <div className="flex min-h-[70dvh] flex-col gap-4">
+        <CajaIdentityBar storeName={storeName} />
+        {!signInMember ? (
+          <p className="text-center text-sm text-[var(--onda-danger)]">
+            Esta caja no tiene login de miembro configurado.
+          </p>
+        ) : (
+        <div className="mx-auto w-full max-w-sm space-y-4 rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] p-5 shadow-[0_12px_28px_rgba(26,27,46,0.08)]">
+          <div className="text-center">
+            <CurrencyDollar
+              className="mx-auto h-8 w-8 text-[var(--onda-primary-500)]"
+              weight="regular"
+              aria-hidden
+            />
+            <h2 className="mt-2 font-display text-lg font-semibold">
+              Entrar a Vender
+            </h2>
+            <p className="mt-1 text-sm text-[var(--onda-muted)]">
+              Usa tu email y contraseña de miembro Onda.
+            </p>
+          </div>
+          <form onSubmit={submitVenderLogin} className="space-y-3">
+            <label className="block space-y-1 text-sm">
+              <span className="text-[var(--onda-muted)]">Email</span>
+              <input
+                className="onda-input w-full"
+                type="email"
+                autoComplete="username"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                required
+              />
+            </label>
+            <label className="block space-y-1 text-sm">
+              <span className="text-[var(--onda-muted)]">Contraseña</span>
+              <PasswordInput
+                className="rounded-xl"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </label>
+            {loginError ? (
+              <p className="text-sm text-[var(--onda-danger)]">{loginError}</p>
+            ) : null}
+            <Button type="submit" className="w-full" isDisabled={loginBusy}>
+              {loginBusy ? 'Entrando…' : 'Continuar'}
+            </Button>
+          </form>
+        </div>
+        )}
+        <div className="flex justify-center pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+          <button
+            type="button"
+            onClick={() => setMode('home')}
+            className="inline-flex min-h-12 min-w-[12rem] cursor-pointer items-center justify-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 text-sm font-semibold text-[var(--onda-ink)]"
+          >
+            <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
+            Inicio
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'vender' && memberSession) {
+    return (
+      <PosVenderCore
+        storeId={storeId}
+        ondaValue={ondaValue}
+        variant="kiosk"
+        memberSession={memberSession}
+        headerExtra={<CajaIdentityBar storeName={storeName} />}
+        onLeave={leaveVender}
+      />
     );
   }
 
@@ -545,7 +704,7 @@ export function CajaOperationsPanel({
     );
   }
 
-  /* Home: dos acciones grandes */
+  /* Home: acciones grandes */
   return (
     <div className="flex min-h-[70dvh] flex-col">
       <div className="mb-8">
@@ -556,12 +715,12 @@ export function CajaOperationsPanel({
         <button
           type="button"
           onClick={() => setMode('acumular')}
-          className="flex flex-col items-center gap-3 rounded-[1.5rem] bg-[var(--onda-sky)] px-6 py-10 text-[var(--onda-ink)] shadow-[0_16px_40px_rgba(61,185,232,0.35)] transition duration-150 hover:-translate-y-0.5 hover:shadow-[0_20px_48px_rgba(61,185,232,0.45)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-sky)] focus-visible:ring-offset-2"
+          className="flex flex-col items-center gap-3 rounded-[1.5rem] bg-[var(--onda-sky)] px-6 py-8 text-[var(--onda-ink)] shadow-[0_16px_40px_rgba(61,185,232,0.35)] transition duration-150 hover:-translate-y-0.5 hover:shadow-[0_20px_48px_rgba(61,185,232,0.45)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-sky)] focus-visible:ring-offset-2"
         >
-          <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-white/55 text-[var(--onda-ink)]">
-            <QrCode className="h-9 w-9" weight="regular" aria-hidden />
+          <span className="flex h-14 w-14 items-center justify-center rounded-3xl bg-white/55 text-[var(--onda-ink)]">
+            <QrCode className="h-8 w-8" weight="regular" aria-hidden />
           </span>
-          <span className="font-display text-2xl font-bold tracking-tight">
+          <span className="font-display text-xl font-bold tracking-tight">
             Acumular
           </span>
           <span className="text-sm font-medium text-[var(--onda-ink)]/70">
@@ -571,13 +730,34 @@ export function CajaOperationsPanel({
 
         <button
           type="button"
-          onClick={() => setMode('asociar')}
-          className="flex flex-col items-center gap-3 rounded-[1.5rem] border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 py-10 text-[var(--onda-ink)] shadow-[0_12px_28px_rgba(26,27,46,0.08)] transition duration-150 hover:-translate-y-0.5 hover:border-[var(--onda-primary-500)]/30 hover:shadow-[0_16px_36px_rgba(26,27,46,0.12)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary-500)]/35 focus-visible:ring-offset-2"
+          onClick={() => void openVender()}
+          disabled={openingVender}
+          className="flex flex-col items-center gap-3 rounded-[1.5rem] bg-[var(--onda-primary-500)] px-6 py-8 text-white shadow-[0_16px_40px_rgba(5,45,222,0.28)] transition duration-150 hover:-translate-y-0.5 hover:bg-[var(--onda-primary-600)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary-500)] focus-visible:ring-offset-2 disabled:opacity-70"
         >
-          <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--onda-primary-100)] text-[var(--onda-primary-500)]">
-            <Receipt className="h-9 w-9" weight="regular" aria-hidden />
+          <span className="flex h-14 w-14 items-center justify-center rounded-3xl bg-white/15">
+            <CurrencyDollar className="h-8 w-8" weight="regular" aria-hidden />
           </span>
-          <span className="font-display text-2xl font-bold tracking-tight">
+          <span className="font-display text-xl font-bold tracking-tight">
+            Vender
+          </span>
+          <span className="text-sm font-medium text-white/80">
+            {memberSession
+              ? `Como ${memberSession.name}`
+              : openingVender
+                ? 'Abriendo…'
+                : 'Cuentas, cobro y catálogo'}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMode('asociar')}
+          className="flex flex-col items-center gap-3 rounded-[1.5rem] border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 py-8 text-[var(--onda-ink)] shadow-[0_12px_28px_rgba(26,27,46,0.08)] transition duration-150 hover:-translate-y-0.5 hover:border-[var(--onda-primary-500)]/30 hover:shadow-[0_16px_36px_rgba(26,27,46,0.12)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary-500)]/35 focus-visible:ring-offset-2"
+        >
+          <span className="flex h-14 w-14 items-center justify-center rounded-3xl bg-[var(--onda-primary-100)] text-[var(--onda-primary-500)]">
+            <Receipt className="h-8 w-8" weight="regular" aria-hidden />
+          </span>
+          <span className="font-display text-xl font-bold tracking-tight">
             Cuentas
           </span>
           <span className="text-sm font-medium text-[var(--onda-muted)]">

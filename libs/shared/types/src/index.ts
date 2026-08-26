@@ -573,6 +573,16 @@ export interface PosTabDto {
   subtotal: number;
   total: number;
   customerName?: string | null;
+  openedByMemberId?: string | null;
+  attendedByMemberId?: string | null;
+  attendedByName?: string | null;
+}
+
+export interface PosAttendantDto {
+  id: string;
+  name: string;
+  email: string;
+  role: 'ADMIN' | 'CAJA';
 }
 
 export interface PosPaymentDto {

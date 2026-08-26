@@ -92,6 +92,11 @@ export {
   AsociarVentaDetail,
 } from './AsociarVentaPanel';
 export {
+  PosVenderCore,
+  type PosVenderMemberSession,
+  type AttendFilter,
+} from './PosVenderCore';
+export {
   Skeleton,
   SkeletonText,
   SkeletonKpiRow,
@@ -574,7 +579,8 @@ export function AppShell({
   nav,
   navClusters,
   children,
-  userName = 'Usuario',
+  userName,
+  brand,
   toolbar,
   linkComponent,
   onLogout,
@@ -583,7 +589,10 @@ export function AppShell({
   nav?: NavItem[];
   navClusters?: NavCluster[];
   children: React.ReactNode;
+  /** Si se define, muestra el avatar con la inicial a la derecha del topbar */
   userName?: string;
+  /** Logo + nombre del negocio entre el wordmark Onda y la navegación */
+  brand?: { name: string; logoUrl?: string | null };
   toolbar?: React.ReactNode;
   /** p.ej. next/link para SPA navigation */
   linkComponent?: React.ElementType;
@@ -653,7 +662,7 @@ export function AppShell({
       href={item.href}
       className={`onda-nav-link${item.active ? ' is-active' : ''}`}
       onClick={closeNav}
-      title={collapsed ? item.label : undefined}
+      aria-label={collapsed ? item.label : undefined}
     >
       <span className="onda-nav-icon" aria-hidden>
         {item.icon || OndaIcons.all}
@@ -688,6 +697,22 @@ export function AppShell({
             compact={collapsed}
           />
         </div>
+        {brand?.name ? (
+          <div className="onda-sidebar-brand" title={brand.name}>
+            {brand.logoUrl ? (
+              <img
+                src={brand.logoUrl}
+                alt=""
+                className="onda-sidebar-brand-logo"
+              />
+            ) : (
+              <span className="onda-sidebar-brand-fallback" aria-hidden>
+                {brand.name.slice(0, 1).toUpperCase()}
+              </span>
+            )}
+            <span className="onda-sidebar-brand-name">{brand.name}</span>
+          </div>
+        ) : null}
         <nav className="onda-sidebar-nav" aria-label="Principal">
           {clusters.map((cluster) => (
             <div
@@ -776,7 +801,11 @@ export function AppShell({
           </div>
           <div className="onda-topbar-actions">
             {toolbar}
-            <div className="onda-avatar">{userName.slice(0, 1).toUpperCase()}</div>
+            {userName ? (
+              <div className="onda-avatar">
+                {userName.slice(0, 1).toUpperCase()}
+              </div>
+            ) : null}
           </div>
         </header>
         <main className="onda-content">{children}</main>

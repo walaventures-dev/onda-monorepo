@@ -612,6 +612,8 @@ model StoreMember {
   acceptedAt  DateTime?
   revokedAt   DateTime?
   firebaseUid String?
+  tabsOpened    PosTab[] @relation("PosTabOpenedBy")
+  tabsAttending PosTab[] @relation("PosTabAttendedBy")
 
   @@unique([storeId, email])
   @@index([email, status])
@@ -691,12 +693,17 @@ model PosTab {
   userId     String?
   passId     String?
   pass       Pass?        @relation(fields: [passId], references: [id])
+  openedByMemberId    String?
+  openedByMember      StoreMember? @relation("PosTabOpenedBy", fields: [openedByMemberId], references: [id], onDelete: SetNull)
+  attendedByMemberId  String?
+  attendedByMember    StoreMember? @relation("PosTabAttendedBy", fields: [attendedByMemberId], references: [id], onDelete: SetNull)
   openedAt   DateTime     @default(now())
   checkoutAt DateTime?
   lines      PosTabLine[]
   sale       PosSale?
 
   @@index([storeId, status])
+  @@index([storeId, status, attendedByMemberId])
 }
 
 model PosTabLine {

@@ -13,6 +13,7 @@ export type StoreAccessContext = {
   storeId: string;
   email: string | null;
   role: StoreMemberRole | null;
+  memberId: string | null;
   viaCajaToken: boolean;
 };
 
@@ -60,13 +61,20 @@ export class StoreAccessService {
           storeId,
           email: null,
           role: null,
+          memberId: null,
           viaCajaToken: true,
         };
       }
     }
 
     if (!this.firebase.isConfigured) {
-      return { storeId, email: null, role: StoreMemberRole.ADMIN, viaCajaToken: false };
+      return {
+        storeId,
+        email: null,
+        role: StoreMemberRole.ADMIN,
+        memberId: null,
+        viaCajaToken: false,
+      };
     }
 
     const header =
@@ -83,6 +91,7 @@ export class StoreAccessService {
       storeId,
       email,
       role: member.role,
+      memberId: member.id,
       viaCajaToken: false,
     };
   }

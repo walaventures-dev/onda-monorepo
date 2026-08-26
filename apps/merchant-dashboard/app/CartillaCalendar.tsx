@@ -240,14 +240,14 @@ export function CartillaCalendar({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm"
+            className="cursor-pointer rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm"
             onClick={() => setYear((y) => y - 1)}
           >
             ←
           </button>
           <button
             type="button"
-            className="rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm"
+            className="cursor-pointer rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm"
             onClick={() => setYear((y) => y + 1)}
           >
             →

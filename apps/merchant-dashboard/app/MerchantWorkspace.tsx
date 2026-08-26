@@ -1087,6 +1087,13 @@ export function MerchantWorkspace() {
     return clusters;
   }, [tab, stores, storeId, showSetupNav, admin, pathname]);
 
+  const viewTitle = useMemo(() => {
+    const active = navClusters
+      .flatMap((c) => c.items)
+      .find((item) => item.active);
+    return active?.label || storeName || "Panel";
+  }, [navClusters, storeName]);
+
   const isPosArea =
     pathname.startsWith("/pos") || pathname.startsWith("/caja");
   const isPosSummary = pathname === "/pos" || pathname === "/pos/";
@@ -1900,28 +1907,20 @@ export function MerchantWorkspace() {
   return (
     <div className="onda-merchant-caja-layout">
       <AppShell
-        title={storeName}
+        title={viewTitle}
         navClusters={navClusters}
-        userName={storeName || "O"}
+        brand={
+          storeName
+            ? {
+                name: storeName,
+                logoUrl: store?.passDesign?.logoUrl || storeLogoUrl || null,
+              }
+            : undefined
+        }
         linkComponent={Link}
         onLogout={firebaseEnabled ? () => void logout() : undefined}
         toolbar={
           <div className="onda-toolbar">
-            <OndaSelect
-              aria-label="Sede"
-              value={storeId}
-              onChange={(id) => {
-                setStoreId(id);
-                try {
-                  localStorage.setItem("onda-merchant-store-id", id);
-                } catch {
-                  /* ignore */
-                }
-              }}
-              placeholder="Sede"
-              compact
-              options={stores.map((s) => ({ id: s.id, label: s.name }))}
-            />
             {store?.slug ? (
               <button
                 type="button"
