@@ -788,13 +788,42 @@ export class PosService {
   ) {
     const tab = await this.fetchTab(tabId);
     if (tab.storeId !== storeId) throw new ForbiddenException();
-    const phone = body.phone.replace(/\D/g, '');
-    if (!phone) throw new BadRequestException('Teléfono inválido');
+    if (tab.status === PosTabStatus.PAID || tab.status === PosTabStatus.VOID) {
+      throw new BadRequestException('Cuenta cerrada');
+    }
 
-    let user = await this.prisma.user.findUnique({ where: { phone } });
+    const digits = body.phone.replace(/\D/g, '');
+    let phoneE164 = body.phone.trim();
+    if (digits.startsWith('57') && digits.length >= 12) {
+      phoneE164 = `+${digits}`;
+    } else if (digits.startsWith('3') && digits.length === 10) {
+      phoneE164 = `+57${digits}`;
+    } else if (!phoneE164.startsWith('+') && digits.length >= 10) {
+      phoneE164 = `+${digits}`;
+    }
+    if (digits.length < 10) {
+      throw new BadRequestException('Teléfono inválido');
+    }
+
+    let user =
+      (await this.prisma.user.findUnique({ where: { phone: phoneE164 } })) ||
+      (await this.prisma.user.findUnique({ where: { phone: digits } })) ||
+      (digits.startsWith('57')
+        ? await this.prisma.user.findUnique({
+            where: { phone: `+${digits}` },
+          })
+        : null);
+
     if (!user) {
       const name = body.guestName?.trim() || 'Cliente';
-      user = await this.prisma.user.create({ data: { phone, name } });
+      user = await this.prisma.user.create({
+        data: { phone: phoneE164, name },
+      });
+    } else if (body.guestName?.trim() && !user.name?.trim()) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { name: body.guestName.trim() },
+      });
     }
 
     let pass = await this.prisma.pass.findFirst({
@@ -816,11 +845,13 @@ export class PosService {
       data: {
         passId: pass.id,
         userId: user.id,
-        guestName: user.name,
+        guestName: user.name || body.guestName?.trim() || 'Cliente',
       },
     });
     const updated = await this.fetchTab(tabId);
-    return this.serializeTab(updated);
+    const serialized = this.serializeTab(updated);
+    this.emitTab(storeId, 'tab_updated', tabId);
+    return serialized;
   }
 
   async payTab(
@@ -1133,16 +1164,27 @@ export class PosService {
     });
   }
 
-  async getSummary(storeId: string, from?: string, to?: string) {
+  async getSummary(
+    storeId: string,
+    from?: string,
+    to?: string,
+    methodKeys?: string[]
+  ) {
     const fromDate = from ? new Date(from) : new Date(Date.now() - 30 * 86400000);
     const toDate = to ? new Date(to) : new Date();
     toDate.setHours(23, 59, 59, 999);
+
+    const methods =
+      methodKeys?.map((k) => k.trim()).filter(Boolean) ?? [];
 
     const sales = await this.prisma.posSale.findMany({
       where: {
         storeId,
         status: PosSaleStatus.COMPLETED,
         completedAt: { gte: fromDate, lte: toDate },
+        ...(methods.length
+          ? { payments: { some: { methodKey: { in: methods } } } }
+          : {}),
       },
       include: { payments: true, lines: { include: { item: true } }, tab: true },
     });

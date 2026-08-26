@@ -395,6 +395,59 @@ button.onda-gradient:focus-visible:not(:disabled) {
   overflow-y: auto;
 }
 
+.onda-nav-cluster {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.onda-nav-cluster-sep {
+  display: none;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.4rem 0.1rem 0.3rem;
+}
+
+.onda-nav-cluster-sep-line {
+  flex: 1;
+  height: 1px;
+  background: var(--onda-border);
+}
+
+.onda-nav-cluster-sep-text {
+  flex-shrink: 0;
+  font-family: "Sora", "Manrope", system-ui, sans-serif;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  color: var(--onda-muted);
+}
+
+.onda-nav-cluster.is-pos .onda-nav-cluster-sep-text {
+  color: var(--onda-primary);
+}
+
+.onda-nav-cluster.is-pos .onda-nav-cluster-sep-line {
+  background: color-mix(in srgb, var(--onda-primary) 28%, var(--onda-border));
+}
+
+.onda-nav-cluster.is-pos > .onda-nav-cluster-label {
+  color: var(--onda-primary);
+}
+
+.onda-sidebar.is-collapsed .onda-nav-cluster + .onda-nav-cluster {
+  margin-top: 0.35rem;
+}
+
+.onda-sidebar.is-collapsed .onda-nav-cluster-label {
+  display: none;
+}
+
+.onda-sidebar.is-collapsed .onda-nav-cluster-sep {
+  display: flex;
+}
+
 .onda-nav-link {
   position: relative;
   display: flex;
@@ -572,6 +625,18 @@ button.onda-gradient:focus-visible:not(:disabled) {
     overflow: visible;
     clip: auto;
     white-space: nowrap;
+  }
+
+  .onda-sidebar.is-collapsed .onda-nav-cluster-label {
+    display: block;
+  }
+
+  .onda-sidebar.is-collapsed .onda-nav-cluster-sep {
+    display: none;
+  }
+
+  .onda-sidebar.is-collapsed .onda-nav-cluster + .onda-nav-cluster {
+    margin-top: 0;
   }
 
   .onda-sidebar.is-open {
@@ -1356,19 +1421,20 @@ button.onda-gradient:focus-visible:not(:disabled) {
 
 .onda-caja-dock-toggle {
   position: fixed;
-  top: 4.85rem;
-  right: 0.75rem;
+  top: auto;
+  right: max(0.85rem, env(safe-area-inset-right, 0px));
+  bottom: max(1.15rem, env(safe-area-inset-bottom, 0px));
   z-index: 36;
   display: inline-flex;
-  height: 2.5rem;
-  min-width: 2.5rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--onda-border);
   border-radius: 999px;
   background: var(--onda-card);
   color: var(--onda-ink);
-  box-shadow: 0 8px 24px rgba(26, 27, 46, 0.08);
+  box-shadow: 0 8px 24px rgba(26, 27, 46, 0.12);
   cursor: pointer;
 }
 
@@ -1377,7 +1443,8 @@ button.onda-gradient:focus-visible:not(:disabled) {
 }
 
 .onda-caja-dock-toggle.is-open {
-  right: 18.75rem;
+  right: calc(18rem + 0.75rem);
+  bottom: max(1.15rem, env(safe-area-inset-bottom, 0px));
 }
 
 .onda-caja-dock-badge {

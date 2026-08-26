@@ -3,9 +3,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserQRCodeReader } from '@zxing/browser';
 import { Button } from '@heroui/react';
+import { CaretLeftIcon as CaretLeft } from '@phosphor-icons/react/dist/csr/CaretLeft';
+import { PhoneIcon as Phone } from '@phosphor-icons/react/dist/csr/Phone';
+import { PlusCircleIcon as PlusCircle } from '@phosphor-icons/react/dist/csr/PlusCircle';
+import { QrCodeIcon as QrCode } from '@phosphor-icons/react/dist/csr/QrCode';
+import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
+import { UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
+import { WavesIcon as Waves } from '@phosphor-icons/react/dist/csr/Waves';
 import { api } from './api';
 import { CajaScanClient } from './CajaScanClient';
-import { formatCop } from '@onda/shared-utils';
+import { PhoneInput } from './PhoneInput';
+import {
+  formatCop,
+  isCompletePhoneMask,
+  ondasFromPayment,
+  toE164Colombia,
+} from '@onda/shared-utils';
 import type { PosTabDto } from '@onda/shared-types';
 
 function QrLinkScanner({
@@ -53,60 +66,118 @@ function QrLinkScanner({
   }, [disabled, onScan]);
 
   return (
-    <div className="onda-caja-scan mt-2 min-h-[14rem] rounded-xl overflow-hidden">
-      <video ref={videoRef} className="h-full w-full object-cover" muted playsInline />
+    <div className="onda-caja-scan relative mt-2 min-h-[16rem] overflow-hidden rounded-2xl">
+      <video
+        ref={videoRef}
+        className="h-full w-full object-cover"
+        muted
+        playsInline
+      />
       <div className="onda-caja-scan-frame" />
     </div>
+  );
+}
+
+function BackButton({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--onda-primary)]"
+    >
+      <CaretLeft className="h-4 w-4" weight="bold" aria-hidden />
+      {label}
+    </button>
   );
 }
 
 export function AsociarVentaList({
   storeId,
   onSelect,
+  token,
 }: {
   storeId: string;
   onSelect: (tabId: string) => void;
+  token?: string;
 }) {
   const [tabs, setTabs] = useState<PosTabDto[]>([]);
 
   const loadTabs = useCallback(async () => {
-    const rows = await api<PosTabDto[]>(
-      `/pos/tabs?storeId=${storeId}&status=OPEN,CHECKOUT`
-    );
+    const qs = new URLSearchParams({
+      storeId,
+      status: 'OPEN,CHECKOUT',
+    });
+    if (token) qs.set('token', token);
+    const rows = await api<PosTabDto[]>(`/pos/tabs?${qs.toString()}`);
     setTabs(rows);
-  }, [storeId]);
+  }, [storeId, token]);
 
   useEffect(() => {
     void loadTabs();
-    const es = new EventSource(`/api/pos/stream?storeId=${storeId}`);
+    const qs = new URLSearchParams({ storeId });
+    if (token) qs.set('token', token);
+    const es = new EventSource(`/api/pos/stream?${qs.toString()}`);
     es.onmessage = () => void loadTabs();
     return () => es.close();
-  }, [storeId, loadTabs]);
+  }, [storeId, token, loadTabs]);
+
+  if (tabs.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-14 text-center">
+        <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--onda-bg)] text-[var(--onda-muted)]">
+          <Receipt className="h-8 w-8" weight="duotone" aria-hidden />
+        </span>
+        <p className="font-display text-lg font-semibold text-[var(--onda-ink)]">
+          Sin cuentas
+        </p>
+        <p className="max-w-[16rem] text-sm text-[var(--onda-muted)]">
+          Ábrelas en Vender desde el panel del comercio.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <ul className="space-y-3">
-      {tabs.map((tab) => (
-        <li key={tab.id}>
-          <button
-            type="button"
-            className="onda-card w-full p-4 text-left transition hover:border-[var(--onda-primary-500)]/40"
-            onClick={() => onSelect(tab.id)}
-          >
-            <div className="flex justify-between gap-2">
-              <span className="font-semibold text-[var(--onda-ink)]">{tab.label}</span>
-              <span className="tabular-nums text-[var(--onda-ink)]">{formatCop(tab.total)}</span>
-            </div>
-            <p className="mt-1 text-sm text-[var(--onda-muted)]">
-              {tab.passId ? tab.customerName || 'Cliente vinculado' : 'Anónimo'} · {tab.status}
-            </p>
-          </button>
-        </li>
-      ))}
-      {tabs.length === 0 ? (
-        <li className="py-8 text-center text-sm text-[var(--onda-muted)]">
-          No hay ventas abiertas en este momento.
-        </li>
-      ) : null}
+      {tabs.map((tab) => {
+        const linked = Boolean(tab.passId);
+        return (
+          <li key={tab.id}>
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] p-4 text-left shadow-[0_8px_24px_rgba(26,27,46,0.06)] transition active:scale-[0.98]"
+              onClick={() => onSelect(tab.id)}
+            >
+              <span
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
+                  linked
+                    ? 'bg-[var(--onda-success)]/15 text-[var(--onda-success)]'
+                    : 'bg-[var(--onda-sky-soft)] text-[var(--onda-sky)]'
+                }`}
+              >
+                {linked ? (
+                  <UserCircle className="h-7 w-7" weight="duotone" aria-hidden />
+                ) : (
+                  <Receipt className="h-7 w-7" weight="duotone" aria-hidden />
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-display text-base font-semibold text-[var(--onda-ink)]">
+                  {tab.label}
+                </p>
+                <p className="truncate text-sm text-[var(--onda-muted)]">
+                  {linked
+                    ? tab.customerName || 'Cliente listo'
+                    : 'Toca para asociar'}
+                </p>
+              </div>
+              <p className="shrink-0 font-display text-lg font-bold tabular-nums text-[var(--onda-ink)]">
+                {formatCop(tab.total)}
+              </p>
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -115,50 +186,59 @@ export function AsociarVentaDetail({
   storeId,
   tabId,
   onBack,
+  token,
+  ondaValue,
 }: {
   storeId: string;
   tabId: string;
   onBack: () => void;
+  token?: string;
+  ondaValue?: number | null;
 }) {
   const [tab, setTab] = useState<PosTabDto | null>(null);
   const [phone, setPhone] = useState('');
-  const [guestName, setGuestName] = useState('');
   const [linking, setLinking] = useState(false);
-  const [message, setMessage] = useState<{ tone: 'ok' | 'err'; text: string } | null>(
-    null
-  );
-  const [mode, setMode] = useState<'phone' | 'qr'>('qr');
+  const [message, setMessage] = useState<{
+    tone: 'ok' | 'err';
+    text: string;
+  } | null>(null);
+  const [mode, setMode] = useState<'qr' | 'phone'>('qr');
 
   const reload = useCallback(async () => {
-    const tabs = await api<PosTabDto[]>(
-      `/pos/tabs?storeId=${storeId}&status=OPEN,CHECKOUT`
-    );
+    const qs = new URLSearchParams({
+      storeId,
+      status: 'OPEN,CHECKOUT',
+    });
+    if (token) qs.set('token', token);
+    const tabs = await api<PosTabDto[]>(`/pos/tabs?${qs.toString()}`);
     setTab(tabs.find((t) => t.id === tabId) ?? null);
-  }, [storeId, tabId]);
+  }, [storeId, tabId, token]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
   async function linkPhone() {
+    if (!isCompletePhoneMask(phone)) return;
     setLinking(true);
     setMessage(null);
     try {
-      const updated = await api<PosTabDto>(`/pos/tabs/${tabId}/link-phone?storeId=${storeId}`, {
-        method: 'POST',
-        body: JSON.stringify({
-          phone: phone.replace(/\D/g, ''),
-          guestName: guestName.trim() || undefined,
-        }),
-      });
+      const qs = new URLSearchParams({ storeId });
+      if (token) qs.set('token', token);
+      const updated = await api<PosTabDto>(
+        `/pos/tabs/${tabId}/link-phone?${qs.toString()}`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ phone: toE164Colombia(phone) }),
+        }
+      );
       setTab(updated);
       setPhone('');
-      setGuestName('');
-      setMessage({ tone: 'ok', text: 'Cliente vinculado por teléfono.' });
+      setMessage({ tone: 'ok', text: 'Cliente asociado' });
     } catch (err) {
       setMessage({
         tone: 'err',
-        text: err instanceof Error ? err.message : 'No se pudo vincular',
+        text: err instanceof Error ? err.message : 'No se pudo asociar',
       });
     } finally {
       setLinking(false);
@@ -170,74 +250,72 @@ export function AsociarVentaDetail({
       setLinking(true);
       setMessage(null);
       try {
+        const qs = new URLSearchParams({ storeId });
+        if (token) qs.set('token', token);
         const updated = await api<PosTabDto>(
-          `/pos/tabs/${tabId}/link-pass?storeId=${storeId}`,
+          `/pos/tabs/${tabId}/link-pass?${qs.toString()}`,
           {
             method: 'POST',
             body: JSON.stringify({ payload: payload.trim() }),
           }
         );
         setTab(updated);
-        setMessage({ tone: 'ok', text: 'Pase vinculado. Ondas al cerrar la venta.' });
+        setMessage({ tone: 'ok', text: 'Cliente asociado' });
       } catch (err) {
         setMessage({
           tone: 'err',
-          text: err instanceof Error ? err.message : 'No se pudo vincular el pase',
+          text: err instanceof Error ? err.message : 'No se pudo asociar',
         });
       } finally {
         setLinking(false);
       }
     },
-    [storeId, tabId]
+    [storeId, tabId, token]
   );
 
   if (!tab) {
-    return <p className="text-sm text-[var(--onda-muted)]">Cargando venta…</p>;
+    return (
+      <p className="py-10 text-center text-sm text-[var(--onda-muted)]">
+        Cargando…
+      </p>
+    );
   }
 
   if (tab.status !== 'OPEN' && tab.status !== 'CHECKOUT') {
     return (
-      <div className="text-sm text-[var(--onda-muted)]">
-        <p>Esta venta ya no está activa.</p>
-        <button type="button" className="mt-3 text-[var(--onda-primary)]" onClick={onBack}>
-          Volver
-        </button>
+      <div className="space-y-4 py-6 text-center">
+        <p className="text-sm text-[var(--onda-muted)]">Esta cuenta ya cerró.</p>
+        <BackButton onClick={onBack} label="Volver" />
       </div>
     );
   }
 
+  const value =
+    ondaValue != null && Number(ondaValue) > 0 ? Number(ondaValue) : null;
+  const previewOndas =
+    tab.passId && value != null
+      ? ondasFromPayment(tab.total, value)
+      : null;
+
   return (
     <div className="space-y-4">
-      <button
-        type="button"
-        className="text-sm font-medium text-[var(--onda-primary)]"
-        onClick={onBack}
-      >
-        ← Ventas activas
-      </button>
-      <div>
-        <h3 className="font-display text-lg font-semibold text-[var(--onda-ink)]">
+      <BackButton onClick={onBack} label="Cuentas" />
+
+      <div className="rounded-2xl bg-[var(--onda-primary-50)] px-4 py-4 text-center">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--onda-primary-700)]">
           {tab.label}
-        </h3>
-        <p className="text-sm text-[var(--onda-muted)]">
-          {formatCop(tab.total)} · {tab.status}
+        </p>
+        <p className="mt-1 font-display text-3xl font-bold tabular-nums text-[var(--onda-ink)]">
+          {formatCop(tab.total)}
+        </p>
+        <p className="mt-1 text-sm text-[var(--onda-muted)]">
+          {tab.lines.length} producto{tab.lines.length === 1 ? '' : 's'}
         </p>
       </div>
 
-      <ul className="divide-y divide-[var(--onda-border)] text-sm">
-        {tab.lines.map((l) => (
-          <li key={l.id} className="flex justify-between py-2">
-            <span className="text-[var(--onda-ink)]">
-              {l.quantity}× {l.item?.name ?? l.itemId}
-            </span>
-            <span className="tabular-nums">{formatCop(l.unitPrice * l.quantity)}</span>
-          </li>
-        ))}
-      </ul>
-
       {message ? (
         <p
-          className={`rounded-xl px-3 py-2 text-sm ${
+          className={`rounded-2xl px-4 py-3 text-center text-sm font-medium ${
             message.tone === 'ok'
               ? 'bg-[var(--onda-success)]/10 text-[var(--onda-success)]'
               : 'bg-[var(--onda-danger)]/10 text-[var(--onda-danger)]'
@@ -248,66 +326,79 @@ export function AsociarVentaDetail({
       ) : null}
 
       {tab.passId ? (
-        <div className="onda-card p-4">
-          <p className="font-medium text-[var(--onda-ink)]">
-            {tab.customerName || 'Cliente vinculado'}
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-[var(--onda-success)]/25 bg-[var(--onda-success)]/10 px-4 py-8 text-center">
+          <UserCircle
+            className="h-14 w-14 text-[var(--onda-success)]"
+            weight="duotone"
+            aria-hidden
+          />
+          <p className="font-display text-xl font-semibold text-[var(--onda-ink)]">
+            {tab.customerName || 'Cliente listo'}
           </p>
-          <p className="mt-1 text-sm text-[var(--onda-muted)]">
-            Al cobrar en el POS se otorgan ondas automáticamente.
+          <p className="text-sm text-[var(--onda-muted)]">
+            {previewOndas == null
+              ? 'Ondas al cobrar en el POS'
+              : previewOndas > 0
+                ? `+${previewOndas} onda${previewOndas === 1 ? '' : 's'} al cobrar`
+                : 'El monto no alcanza para 1 onda'}
           </p>
+          <Button className="mt-2" onPress={onBack}>
+            Listo
+          </Button>
         </div>
       ) : (
-        <div className="space-y-4">
-          <p className="text-sm font-medium text-[var(--onda-ink)]">Vincular cliente</p>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant={mode === 'qr' ? 'primary' : 'ghost'}
-              onPress={() => setMode('qr')}
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setMode('qr')}
+              className={`flex flex-col items-center gap-1.5 rounded-2xl border px-3 py-3 text-sm font-semibold transition ${
+                mode === 'qr'
+                  ? 'border-[var(--onda-primary)] bg-[var(--onda-primary-50)] text-[var(--onda-primary)]'
+                  : 'border-[var(--onda-border)] text-[var(--onda-muted)]'
+              }`}
             >
-              Escanear QR
-            </Button>
-            <Button
-              size="sm"
-              variant={mode === 'phone' ? 'primary' : 'ghost'}
-              onPress={() => setMode('phone')}
+              <QrCode className="h-6 w-6" weight="duotone" aria-hidden />
+              Escanear
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('phone')}
+              className={`flex flex-col items-center gap-1.5 rounded-2xl border px-3 py-3 text-sm font-semibold transition ${
+                mode === 'phone'
+                  ? 'border-[var(--onda-primary)] bg-[var(--onda-primary-50)] text-[var(--onda-primary)]'
+                  : 'border-[var(--onda-border)] text-[var(--onda-muted)]'
+              }`}
             >
-              Teléfono
-            </Button>
+              <Phone className="h-6 w-6" weight="duotone" aria-hidden />
+              Celular
+            </button>
           </div>
 
           {mode === 'qr' ? (
             <div>
-              <p className="mb-2 text-sm text-[var(--onda-muted)]">
-                Apunta la cámara al QR del pase del cliente.
+              <p className="mb-1 text-center text-sm text-[var(--onda-muted)]">
+                Apunta al QR del pase
               </p>
-              <QrLinkScanner onScan={(p) => void linkPass(p)} disabled={linking} />
+              <QrLinkScanner
+                onScan={(p) => void linkPass(p)}
+                disabled={linking}
+              />
             </div>
           ) : (
-            <div className="space-y-3">
-              <label className="block space-y-1 text-sm">
-                <span className="text-[var(--onda-muted)]">Teléfono</span>
-                <input
-                  className="onda-input w-full"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-              </label>
-              <label className="block space-y-1 text-sm">
-                <span className="text-[var(--onda-muted)]">Nombre (si es nuevo)</span>
-                <input
-                  className="onda-input w-full"
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                />
-              </label>
+            <div className="space-y-3 rounded-2xl border border-[var(--onda-border)] p-4">
+              <PhoneInput
+                value={phone}
+                onChange={setPhone}
+                className="onda-input w-full text-center text-lg"
+                disabled={linking}
+              />
               <Button
                 className="w-full"
                 onPress={() => void linkPhone()}
-                isDisabled={linking || !phone.replace(/\D/g, '')}
+                isDisabled={linking || !isCompletePhoneMask(phone)}
               >
-                Vincular
+                {linking ? 'Asociando…' : 'Asociar'}
               </Button>
             </div>
           )}
@@ -321,13 +412,19 @@ export function CajaOperationsPanel({
   storeId,
   defaultMode = 'acumular',
   posEnabled = false,
+  token,
+  storeName,
+  ondaValue,
 }: {
   storeId: string;
   defaultMode?: 'acumular' | 'asociar';
   posEnabled?: boolean;
+  token?: string;
+  storeName?: string;
+  ondaValue?: number | null;
 }) {
-  const [mode, setMode] = useState<'acumular' | 'asociar'>(
-    posEnabled ? defaultMode : 'acumular'
+  const [mode, setMode] = useState<'home' | 'acumular' | 'asociar'>(() =>
+    posEnabled ? (defaultMode === 'asociar' ? 'asociar' : 'home') : 'acumular'
   );
   const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
 
@@ -340,44 +437,105 @@ export function CajaOperationsPanel({
       <AsociarVentaDetail
         storeId={storeId}
         tabId={selectedTabId}
+        token={token}
+        ondaValue={ondaValue}
         onBack={() => setSelectedTabId(null)}
       />
     );
   }
 
-  return (
-    <div className="space-y-4">
-      {posEnabled ? (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant={mode === 'acumular' ? 'primary' : 'ghost'}
-            onPress={() => setMode('acumular')}
-          >
-            Acumular / Redimir
-          </Button>
-          <Button
-            size="sm"
-            variant={mode === 'asociar' ? 'primary' : 'ghost'}
-            onPress={() => setMode('asociar')}
-          >
-            Asociar venta activa
-          </Button>
-        </div>
-      ) : null}
-
-      {mode === 'acumular' || !posEnabled ? (
-        <div className="onda-card overflow-hidden p-0">
-          <CajaScanClient storeId={storeId} embedded hideHeader posEnabled={posEnabled} />
-        </div>
-      ) : (
-        <div>
-          <p className="mb-3 text-sm text-[var(--onda-muted)]">
-            Elige una cuenta abierta para vincularla con teléfono o QR del pase.
+  if (mode === 'acumular') {
+    return (
+      <div className="space-y-3">
+        {posEnabled ? (
+          <BackButton onClick={() => setMode('home')} label="Inicio" />
+        ) : storeName ? (
+          <h1 className="font-display text-center text-xl font-semibold">
+            {storeName}
+          </h1>
+        ) : null}
+        <div className="flex items-center justify-center gap-2 text-[var(--onda-primary)]">
+          <Waves className="h-5 w-5" weight="duotone" aria-hidden />
+          <p className="font-display text-lg font-semibold text-[var(--onda-ink)]">
+            Acumular
           </p>
-          <AsociarVentaList storeId={storeId} onSelect={setSelectedTabId} />
         </div>
-      )}
+        <p className="text-center text-sm text-[var(--onda-muted)]">
+          Escanea el pase del cliente
+        </p>
+        <div className="overflow-hidden rounded-2xl">
+          <CajaScanClient
+            storeId={storeId}
+            token={token}
+            embedded
+            hideHeader
+            posEnabled={posEnabled}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'asociar') {
+    return (
+      <div className="space-y-4">
+        <BackButton onClick={() => setMode('home')} label="Inicio" />
+        <div className="flex items-center justify-center gap-2">
+          <PlusCircle
+            className="h-5 w-5 text-[var(--onda-sky)]"
+            weight="duotone"
+            aria-hidden
+          />
+          <h2 className="font-display text-lg font-semibold">Cuentas</h2>
+        </div>
+        <AsociarVentaList
+          storeId={storeId}
+          token={token}
+          onSelect={setSelectedTabId}
+        />
+      </div>
+    );
+  }
+
+  /* Home: dos acciones grandes */
+  return (
+    <div className="flex min-h-[70dvh] flex-col">
+      <div className="mb-8 text-center">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--onda-muted)]">
+          Caja
+        </p>
+        <h1 className="mt-1 font-display text-2xl font-bold text-[var(--onda-ink)]">
+          {storeName || 'Onda'}
+        </h1>
+      </div>
+
+      <div className="grid flex-1 content-center gap-4">
+        <button
+          type="button"
+          onClick={() => setMode('acumular')}
+          className="flex flex-col items-center gap-3 rounded-[1.5rem] bg-[var(--onda-primary)] px-6 py-10 text-white shadow-[0_16px_40px_rgba(5,45,222,0.28)] transition active:scale-[0.98]"
+        >
+          <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-white/15">
+            <QrCode className="h-9 w-9" weight="duotone" aria-hidden />
+          </span>
+          <span className="font-display text-2xl font-bold">Acumular</span>
+          <span className="text-sm text-white/80">Escanear pase</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMode('asociar')}
+          className="flex flex-col items-center gap-3 rounded-[1.5rem] border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 py-10 text-[var(--onda-ink)] shadow-[0_12px_28px_rgba(26,27,46,0.08)] transition active:scale-[0.98]"
+        >
+          <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--onda-sky-soft)] text-[var(--onda-sky)]">
+            <Receipt className="h-9 w-9" weight="duotone" aria-hidden />
+          </span>
+          <span className="font-display text-2xl font-bold">Cuentas</span>
+          <span className="text-sm text-[var(--onda-muted)]">
+            Asociar cliente a venta
+          </span>
+        </button>
+      </div>
     </div>
   );
 }

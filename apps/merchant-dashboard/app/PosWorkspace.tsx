@@ -17,18 +17,23 @@ export function PosWorkspace({
   memberRole,
   filters,
   posEnabled,
+  paymentMethods = [],
+  ondaValue,
 }: {
   storeId: string;
   memberRole: StoreMemberRole;
   filters: AnalyticsFiltersValue;
   posEnabled: boolean;
+  /** Medio de pago activo en resumen (vacío = todos). */
+  paymentMethods?: string[];
+  ondaValue?: number | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const admin = isAdmin(memberRole);
 
   useEffect(() => {
-    if (pathname.startsWith('/operacion')) {
+    if (pathname.startsWith('/operacion') || pathname.startsWith('/pos/caja')) {
       router.replace(posEnabled ? '/pos/vender' : '/caja');
     }
   }, [pathname, router, posEnabled]);
@@ -39,12 +44,12 @@ export function PosWorkspace({
     }
   }, [posEnabled, pathname, router]);
 
-  if (pathname.startsWith('/operacion')) {
+  if (pathname.startsWith('/operacion') || pathname.startsWith('/pos/caja')) {
     return null;
   }
 
   if (pathname.startsWith('/caja')) {
-    return <MerchantCajaPanel storeId={storeId} posEnabled={posEnabled} />;
+    return <MerchantCajaPanel storeId={storeId} />;
   }
 
   if (!posEnabled) {
@@ -67,16 +72,19 @@ export function PosWorkspace({
   }
 
   if (pathname.startsWith('/pos/vender')) {
-    return <PosVenderPanel storeId={storeId} />;
-  }
-
-  if (pathname.startsWith('/pos/caja')) {
-    return <MerchantCajaPanel storeId={storeId} posEnabled={posEnabled} />;
+    return <PosVenderPanel storeId={storeId} ondaValue={ondaValue} />;
   }
 
   if (pathname === '/pos' || pathname.startsWith('/pos/')) {
-    if (admin) return <PosSummaryPanel storeId={storeId} filters={filters} />;
-    return <PosVenderPanel storeId={storeId} />;
+    if (admin)
+      return (
+        <PosSummaryPanel
+          storeId={storeId}
+          filters={filters}
+          paymentMethods={paymentMethods}
+        />
+      );
+    return <PosVenderPanel storeId={storeId} ondaValue={ondaValue} />;
   }
 
   return null;

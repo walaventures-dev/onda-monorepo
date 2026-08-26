@@ -2,10 +2,80 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CajaOperationsPanel, PasswordInput, Button } from '@onda/shared-ui';
+import {
+  CajaOperationsPanel,
+  PasswordInput,
+  Button,
+  api,
+  setApiAuthTokenGetter,
+} from '@onda/shared-ui';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getMerchantAuth } from '../lib/firebase';
 import { loadDefaultStoreId, useCajaAuth } from '../lib/useCajaAuth';
+
+type CajaSession = {
+  storeId: string;
+  storeName: string;
+  posEnabled?: boolean;
+  ondaValue?: number | null;
+};
+
+/** App única de caja (kiosk): acumular + cuentas abiertas / asociar. */
+export function CajaKioskClient({ token }: { token: string }) {
+  const [session, setSession] = useState<CajaSession | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setApiAuthTokenGetter(async () => token);
+    let cancelled = false;
+    void api<CajaSession>(`/caja/session?token=${encodeURIComponent(token)}`)
+      .then((s) => {
+        if (!cancelled) setSession(s);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : 'Enlace de caja inválido',
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+      setApiAuthTokenGetter(null);
+    };
+  }, [token]);
+
+  if (error) {
+    return (
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-2 p-6 text-center">
+        <p className="text-sm font-medium text-[var(--onda-danger)]">{error}</p>
+        <p className="text-xs text-[var(--onda-muted)]">
+          Genera un enlace nuevo con «Abrir caja» en el panel del comercio.
+        </p>
+      </main>
+    );
+  }
+
+  if (!session) {
+    return (
+      <main className="flex min-h-dvh items-center justify-center text-sm text-[var(--onda-muted)]">
+        Abriendo caja…
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto min-h-dvh max-w-lg p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <CajaOperationsPanel
+        storeId={session.storeId}
+        storeName={session.storeName}
+        posEnabled={Boolean(session.posEnabled)}
+        ondaValue={session.ondaValue}
+        token={token}
+      />
+    </main>
+  );
+}
 
 export function CajaLoginClient() {
   const router = useRouter();
@@ -22,7 +92,11 @@ export function CajaLoginClient() {
     e.preventDefault();
     setError('');
     try {
-      await signInWithEmailAndPassword(getMerchantAuth(), email.trim(), password);
+      await signInWithEmailAndPassword(
+        getMerchantAuth(),
+        email.trim(),
+        password,
+      );
       router.replace('/');
     } catch {
       setError('Email o contraseña incorrectos');
@@ -31,8 +105,8 @@ export function CajaLoginClient() {
 
   if (!firebaseEnabled) {
     return (
-      <p className="p-6 text-center text-sm">
-        Usa el enlace kiosk /c/token para caja sin login.
+      <p className="p-6 text-center text-sm text-[var(--onda-muted)]">
+        Usa «Abrir caja» en el panel del comercio para el enlace kiosk.
       </p>
     );
   }
@@ -42,7 +116,9 @@ export function CajaLoginClient() {
       onSubmit={submit}
       className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-3 p-6"
     >
-      <h1 className="font-display text-center text-2xl font-semibold">Caja Onda</h1>
+      <h1 className="font-display text-center text-2xl font-semibold">
+        Caja Onda
+      </h1>
       <label className="block space-y-1 text-sm">
         <span>Email</span>
         <input
@@ -66,10 +142,15 @@ export function CajaLoginClient() {
   );
 }
 
+/** Hub con login Firebase: misma app unificada (útil en desarrollo). */
 export function CajaHubClient() {
   const router = useRouter();
   const { ready, user, firebaseEnabled } = useCajaAuth();
   const [storeId, setStoreId] = useState('');
+  const [posEnabled, setPosEnabled] = useState(false);
+  const [storeName, setStoreName] = useState('');
+  const [ondaValue, setOndaValue] = useState<number | null>(null);
+  const [cajaToken, setCajaToken] = useState<string | undefined>();
 
   useEffect(() => {
     if (!ready) return;
@@ -77,16 +158,50 @@ export function CajaHubClient() {
       router.replace('/login');
       return;
     }
-    void loadDefaultStoreId().then(setStoreId);
+    void (async () => {
+      const id = await loadDefaultStoreId();
+      if (!id) return;
+      setStoreId(id);
+      try {
+        const link = await api<{ token: string; url: string }>('/caja/link', {
+          method: 'POST',
+          body: JSON.stringify({ storeId: id }),
+        });
+        setCajaToken(link.token);
+        setApiAuthTokenGetter(async () => link.token);
+        const session = await api<CajaSession>(
+          `/caja/session?token=${encodeURIComponent(link.token)}`,
+        );
+        setPosEnabled(Boolean(session.posEnabled));
+        setStoreName(session.storeName);
+        setOndaValue(
+          session.ondaValue != null && Number(session.ondaValue) > 0
+            ? Number(session.ondaValue)
+            : null,
+        );
+      } catch {
+        setPosEnabled(false);
+      }
+    })();
   }, [ready, user, firebaseEnabled, router]);
 
   if (!storeId) {
-    return <p className="p-6 text-center text-sm">Cargando sede…</p>;
+    return (
+      <p className="p-6 text-center text-sm text-[var(--onda-muted)]">
+        Cargando sede…
+      </p>
+    );
   }
 
   return (
-    <div className="min-h-dvh p-4">
-      <CajaOperationsPanel storeId={storeId} />
-    </div>
+    <main className="mx-auto min-h-dvh max-w-lg p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <CajaOperationsPanel
+        storeId={storeId}
+        storeName={storeName || undefined}
+        posEnabled={posEnabled}
+        ondaValue={ondaValue}
+        token={cajaToken}
+      />
+    </main>
   );
 }

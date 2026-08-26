@@ -114,6 +114,8 @@ export function KpiCard({
   delta,
   positive,
   hint,
+  icon,
+  tone = 'sky',
   children,
 }: {
   label: string;
@@ -121,8 +123,65 @@ export function KpiCard({
   delta?: string;
   positive?: boolean;
   hint?: string;
+  /** Icono a la izquierda (estilo resumen POS / lealtad). */
+  icon?: React.ReactNode;
+  tone?: 'sky' | 'primary' | 'success' | 'amber';
   children?: React.ReactNode;
 }) {
+  const tones = {
+    sky: {
+      wrap: 'border-[var(--onda-sky)]/20 bg-[linear-gradient(160deg,var(--onda-sky-soft)_0%,white_55%)]',
+      icon: 'bg-[var(--onda-sky-soft)] text-[var(--onda-sky)]',
+    },
+    primary: {
+      wrap: 'border-[var(--onda-primary)]/15 bg-[linear-gradient(160deg,var(--onda-primary-50)_0%,white_55%)]',
+      icon: 'bg-[var(--onda-violet-soft)] text-[var(--onda-primary)]',
+    },
+    success: {
+      wrap: 'border-[var(--onda-success)]/20 bg-[linear-gradient(160deg,#E8F8F0_0%,white_55%)]',
+      icon: 'bg-[var(--onda-success)]/10 text-[var(--onda-success)]',
+    },
+    amber: {
+      wrap: 'border-[#F5A524]/25 bg-[linear-gradient(160deg,#FFF6E5_0%,white_55%)]',
+      icon: 'bg-[#FFF6E5] text-[#D97706]',
+    },
+  }[tone];
+
+  if (icon) {
+    return (
+      <div
+        className={`onda-card flex h-full w-full items-start gap-3 border p-4 ${tones.wrap}`}
+      >
+        <span
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tones.icon}`}
+        >
+          {icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1 text-xs font-medium text-[var(--onda-muted)]">
+            {label}
+            {hint ? <InfoTooltip text={hint} /> : null}
+          </p>
+          <p className="mt-0.5 truncate font-display text-2xl font-semibold tabular-nums text-[var(--onda-ink)]">
+            {value}
+          </p>
+          {delta ? (
+            <p
+              className={`mt-0.5 text-xs font-medium ${
+                positive
+                  ? 'text-[var(--onda-success)]'
+                  : 'text-[var(--onda-danger)]'
+              }`}
+            >
+              {delta}
+            </p>
+          ) : null}
+        </div>
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div className="onda-card flex h-full w-full flex-col px-4 py-3.5">
       <p className="flex items-center gap-1 text-xs text-[var(--onda-muted)]">
@@ -148,6 +207,46 @@ export function KpiCard({
         </div>
         {children}
       </div>
+    </div>
+  );
+}
+
+export function AnalyticsSectionHeader({
+  icon,
+  title,
+  subtitle,
+  tone = 'sky',
+  trailing,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  tone?: 'sky' | 'primary' | 'success' | 'amber';
+  trailing?: React.ReactNode;
+}) {
+  const toneCls = {
+    sky: 'bg-[var(--onda-sky-soft)] text-[var(--onda-sky)]',
+    primary: 'bg-[var(--onda-violet-soft)] text-[var(--onda-primary)]',
+    success: 'bg-[var(--onda-success)]/10 text-[var(--onda-success)]',
+    amber: 'bg-[#FFF6E5] text-[#D97706]',
+  }[tone];
+
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-2">
+      <div className="flex items-start gap-2.5">
+        <span
+          className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${toneCls}`}
+        >
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <h3 className="font-display text-sm font-semibold">{title}</h3>
+          {subtitle ? (
+            <p className="text-xs text-[var(--onda-muted)]">{subtitle}</p>
+          ) : null}
+        </div>
+      </div>
+      {trailing}
     </div>
   );
 }
@@ -579,11 +678,32 @@ export function AppShell({
         </div>
         <nav className="onda-sidebar-nav" aria-label="Principal">
           {clusters.map((cluster) => (
-            <div key={cluster.id} className="onda-nav-cluster">
-              {cluster.label && !collapsed ? (
-                <p className="onda-nav-cluster-label px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
-                  {cluster.label}
-                </p>
+            <div
+              key={cluster.id}
+              className={`onda-nav-cluster${
+                cluster.id === 'pos' ? ' is-pos' : ''
+              }`}
+            >
+              {cluster.label ? (
+                <>
+                  <p className="onda-nav-cluster-label px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+                    {cluster.label}
+                  </p>
+                  <div
+                    className="onda-nav-cluster-sep"
+                    role="separator"
+                    aria-hidden
+                    title={cluster.label}
+                  >
+                    <span className="onda-nav-cluster-sep-line" />
+                    <span className="onda-nav-cluster-sep-text">
+                      {cluster.label.length <= 4
+                        ? cluster.label.toUpperCase()
+                        : cluster.label.slice(0, 3).toUpperCase()}
+                    </span>
+                    <span className="onda-nav-cluster-sep-line" />
+                  </div>
+                </>
               ) : null}
               {cluster.items.filter((i) => !i.footer).map(renderLink)}
             </div>

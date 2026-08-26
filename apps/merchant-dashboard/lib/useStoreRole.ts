@@ -18,11 +18,10 @@ export function isCaja(role: StoreMemberRole) {
   return role === 'CAJA' || role === 'ADMIN';
 }
 
-/** Rutas del merchant-dashboard permitidas para rol CAJA (sin login en pwa-caja). */
+/** Rutas del merchant-dashboard permitidas para rol CAJA. */
 export function cajaAllowedMerchantPath(pathname: string): boolean {
   if (pathname.startsWith('/caja')) return true;
   if (pathname.startsWith('/pos/vender')) return true;
-  if (pathname.startsWith('/pos/caja')) return true;
   if (pathname.startsWith('/pos/ventas')) return true;
   const first = pathname.split('/').filter(Boolean)[0];
   const loyaltyOnly = [

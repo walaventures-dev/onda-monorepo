@@ -16,6 +16,7 @@ import {
   AppShell,
   type NavCluster,
   KpiCard,
+  AnalyticsSectionHeader,
   ActivityTimeline,
   GradientButton,
   OndaSelect,
@@ -56,6 +57,17 @@ import {
   Line,
   CartesianGrid,
 } from "recharts";
+import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/dist/csr/ChartBar";
+import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/dist/csr/ChartLineUp";
+import { CurrencyCircleDollarIcon as CurrencyCircleDollar } from "@phosphor-icons/react/dist/csr/CurrencyCircleDollar";
+import { GiftIcon as Gift } from "@phosphor-icons/react/dist/csr/Gift";
+import { PercentIcon as Percent } from "@phosphor-icons/react/dist/csr/Percent";
+import { ReceiptIcon as Receipt } from "@phosphor-icons/react/dist/csr/Receipt";
+import { TagIcon as Tag } from "@phosphor-icons/react/dist/csr/Tag";
+import { TargetIcon as Target } from "@phosphor-icons/react/dist/csr/Target";
+import { TrendUpIcon as TrendUp } from "@phosphor-icons/react/dist/csr/TrendUp";
+import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/dist/csr/UsersThree";
+import { WavesIcon as Waves } from "@phosphor-icons/react/dist/csr/Waves";
 import { PromoDetail } from "./PromoDetail";
 import { CreatePromo } from "./CreatePromo";
 import { CartillaEditor } from "./CartillaEditor";
@@ -115,10 +127,10 @@ const SECTIONS: Tab[] = [
 ];
 
 const TYPE_COLORS: Record<string, string> = {
-  PERCENT_OFF: "#6E5AE6",
+  PERCENT_OFF: "#052DDE",
   AMOUNT_OFF: "#3DB9E8",
-  BUY_GET: "#22C55E",
-  PRODUCT: "#F59E0B",
+  BUY_GET: "#2BB673",
+  PRODUCT: "#F5A524",
   OTHER: "#94A3B8",
 };
 
@@ -161,14 +173,14 @@ function MoneyChartTooltip({ active, payload, label }: any) {
       <ul className="space-y-1.5">
         <li className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-1.5 text-[var(--onda-muted)]">
-            <span className="h-2 w-2 rounded-full bg-[#3DB9E8]" />
+            <span className="h-2 w-2 rounded-full bg-[var(--onda-sky)]" />
             Ventas
           </span>
           <span className="font-medium tabular-nums">{formatCop(ventas)}</span>
         </li>
         <li className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-1.5 text-[var(--onda-muted)]">
-            <span className="h-2 w-2 rounded-full bg-[#6E5AE6]" />
+            <span className="h-2 w-2 rounded-full bg-[var(--onda-primary)]" />
             Beneficio otorgado
           </span>
           <span className="font-medium tabular-nums">{formatCop(beneficio)}</span>
@@ -806,6 +818,12 @@ function parseRoute(pathname: string): {
   return { tab, promoId, customerPassId, cartillaId, campaignNew };
 }
 
+const POS_METHOD_OPTIONS = [
+  { id: "cash", label: "Efectivo" },
+  { id: "card", label: "Tarjeta" },
+  { id: "transfer", label: "Transferencia" },
+] as const;
+
 export function MerchantWorkspace() {
   const pathname = usePathname();
   const router = useRouter();
@@ -892,6 +910,7 @@ export function MerchantWorkspace() {
     to: initialRange.to,
     promoTypes: [],
   });
+  const [posPaymentMethods, setPosPaymentMethods] = useState<string[]>([]);
 
   const store = stores.find((s) => s.id === storeId);
   const storeName =
@@ -999,12 +1018,6 @@ export function MerchantWorkspace() {
             icon: OndaIcons.users,
             active: tab === "referidos",
           },
-          {
-            href: "/caja",
-            label: "Caja",
-            icon: OndaIcons.qr,
-            active: tab === "caja" || pathname.startsWith("/caja"),
-          },
         ]
       : [];
 
@@ -1066,20 +1079,6 @@ export function MerchantWorkspace() {
     if (posItems.length) {
       clusters.push({ id: "pos", label: "POS", items: posItems });
     }
-    if (!admin) {
-      clusters.push({
-        id: "loyalty-op",
-        label: "Lealtad",
-        items: [
-          {
-            href: "/caja",
-            label: "Caja",
-            icon: OndaIcons.qr,
-            active: tab === "caja" || pathname.startsWith("/caja"),
-          },
-        ],
-      });
-    }
     if (footerItems.length) {
       clusters.push({ id: "footer", items: footerItems });
     }
@@ -1088,7 +1087,14 @@ export function MerchantWorkspace() {
 
   const isPosArea =
     pathname.startsWith("/pos") || pathname.startsWith("/caja");
+  const isPosSummary = pathname === "/pos" || pathname === "/pos/";
   const posEnabled = Boolean(store?.posEnabled);
+
+  function togglePosPaymentMethod(key: string) {
+    setPosPaymentMethods((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+    );
+  }
 
   const overviewQuery = useMemo(() => {
     const params = new URLSearchParams({
@@ -2040,12 +2046,19 @@ export function MerchantWorkspace() {
 
         {stores.length > 0 &&
         ((setup.complete &&
-          ["resumen", "comparativa", "clientes"].includes(tab)) ||
+          (["resumen", "comparativa", "clientes"].includes(tab) ||
+            isPosSummary)) ||
           (tab === "promos" && !selectedPromoId && !selectedCartillaId)) ? (
           <AnalyticsFiltersBar
             value={filters}
             onChange={setFilters}
-            showPromoTypes={!(selectedCustomerPassId || tab === "comparativa")}
+            showPromoTypes={
+              !(
+                selectedCustomerPassId ||
+                tab === "comparativa" ||
+                isPosSummary
+              )
+            }
             headerActions={
               tab === "resumen" ? (
                 <FilterChip
@@ -2058,47 +2071,86 @@ export function MerchantWorkspace() {
               ) : undefined
             }
             extraGroups={
-              selectedCustomerPassId ||
-              tab === "comparativa" ||
-              tab !== "promos"
-                ? undefined
-                : [
+              isPosSummary
+                ? [
                     {
-                      id: "promo-status",
-                      label: "Estado",
+                      id: "pos-method",
+                      label: "Medio de pago",
                       summary:
-                        promoStatusFilter === "active"
-                          ? "Activas"
-                          : promoStatusFilter === "inactive"
-                            ? "Inactivas"
-                            : "Todas",
-                      summaryActive: promoStatusFilter !== "active",
+                        posPaymentMethods.length === 0
+                          ? "Todos"
+                          : posPaymentMethods
+                              .map(
+                                (k) =>
+                                  POS_METHOD_OPTIONS.find((o) => o.id === k)
+                                    ?.label || k,
+                              )
+                              .join(", "),
+                      summaryActive: posPaymentMethods.length > 0,
                       children: (
-                        <SegmentedControl
-                          aria-label="Estado de promoción"
-                          value={promoStatusFilter}
-                          onChange={setPromoStatusFilter}
-                          options={[
-                            {
-                              id: "active",
-                              label: "Activas",
-                              icon: OndaIcons.check,
-                            },
-                            {
-                              id: "inactive",
-                              label: "Inactivas",
-                              icon: OndaIcons.close,
-                            },
-                            {
-                              id: "all",
-                              label: "Todas",
-                              icon: OndaIcons.all,
-                            },
-                          ]}
-                        />
+                        <div className="flex flex-wrap gap-1.5">
+                          {POS_METHOD_OPTIONS.map((opt) => (
+                            <FilterChip
+                              key={opt.id}
+                              selected={posPaymentMethods.includes(opt.id)}
+                              onClick={() => togglePosPaymentMethod(opt.id)}
+                            >
+                              {opt.label}
+                            </FilterChip>
+                          ))}
+                          {posPaymentMethods.length > 0 ? (
+                            <FilterChip
+                              selected={false}
+                              onClick={() => setPosPaymentMethods([])}
+                            >
+                              Limpiar
+                            </FilterChip>
+                          ) : null}
+                        </div>
                       ),
                     },
                   ]
+                : selectedCustomerPassId ||
+                    tab === "comparativa" ||
+                    tab !== "promos"
+                  ? undefined
+                  : [
+                      {
+                        id: "promo-status",
+                        label: "Estado",
+                        summary:
+                          promoStatusFilter === "active"
+                            ? "Activas"
+                            : promoStatusFilter === "inactive"
+                              ? "Inactivas"
+                              : "Todas",
+                        summaryActive: promoStatusFilter !== "active",
+                        children: (
+                          <SegmentedControl
+                            aria-label="Estado de promoción"
+                            value={promoStatusFilter}
+                            onChange={setPromoStatusFilter}
+                            options={[
+                              {
+                                id: "active",
+                                label: "Activas",
+                                icon: OndaIcons.check,
+                              },
+                              {
+                                id: "inactive",
+                                label: "Inactivas",
+                                icon: OndaIcons.close,
+                              },
+                              {
+                                id: "all",
+                                label: "Todas",
+                                icon: OndaIcons.all,
+                              },
+                            ]}
+                          />
+                        ),
+                      },
+                    ]
             }
           />
         ) : null}
@@ -2109,6 +2161,8 @@ export function MerchantWorkspace() {
             memberRole={memberRole}
             filters={filters}
             posEnabled={posEnabled}
+            paymentMethods={posPaymentMethods}
+            ondaValue={store?.ondaValue}
           />
         ) : null}
 
@@ -2147,6 +2201,14 @@ export function MerchantWorkspace() {
                   value={formatCop(kpis?.ventas ?? 0)}
                   delta={deltaLabel(kpis?.ventasDelta)}
                   positive={(kpis?.ventasDelta ?? 0) >= 0}
+                  tone="sky"
+                  icon={
+                    <CurrencyCircleDollar
+                      className="h-5 w-5"
+                      weight="duotone"
+                      aria-hidden
+                    />
+                  }
                 />
                 {(kpis?.ventasPOS ?? 0) > 0 ? (
                   <KpiCard
@@ -2155,6 +2217,14 @@ export function MerchantWorkspace() {
                     value={formatCop(kpis?.ventasPOS ?? 0)}
                     delta={deltaLabel(kpis?.ventasPOSDelta)}
                     positive={(kpis?.ventasPOSDelta ?? 0) >= 0}
+                    tone="primary"
+                    icon={
+                      <Receipt
+                        className="h-5 w-5"
+                        weight="duotone"
+                        aria-hidden
+                      />
+                    }
                   />
                 ) : null}
                 <KpiCard
@@ -2163,52 +2233,70 @@ export function MerchantWorkspace() {
                   value={formatCop(kpis?.beneficioOtorgado ?? 0)}
                   delta={deltaLabel(kpis?.beneficioDelta)}
                   positive={(kpis?.beneficioDelta ?? 0) <= 0}
+                  tone="amber"
+                  icon={
+                    <Gift className="h-5 w-5" weight="duotone" aria-hidden />
+                  }
                 />
                 <KpiCard
                   label="ROI"
                   hint="Ventas ÷ beneficio otorgado."
                   value={formatRoi(kpis?.roi)}
+                  tone="success"
+                  icon={
+                    <TrendUp className="h-5 w-5" weight="duotone" aria-hidden />
+                  }
                 />
               </div>
             ) : null}
 
             {overview ? (
               <div className="onda-card flex min-h-[22rem] flex-col overflow-hidden p-4">
-                <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-display text-sm font-semibold">
-                      Flujo de ingresos vs. costo en canjes
-                    </h3>
-                    <p className="mt-0.5 text-xs text-[var(--onda-muted)]">
-                      Ventas registradas en caja menos el beneficio otorgado por
-                      promo.
-                    </p>
-                  </div>
-                  {!emptyMoneyRange ? (
-                    <div className="flex flex-wrap gap-2 text-[11px]">
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--onda-sky-soft)] px-2.5 py-1 font-medium text-[var(--onda-ink)]">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#3DB9E8]" />
-                        Ventas {formatCop(kpis?.ventas ?? 0)}
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--onda-violet-soft)] px-2.5 py-1 font-medium text-[var(--onda-ink)]">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#6E5AE6]" />
-                        Beneficio {formatCop(kpis?.beneficioOtorgado ?? 0)}
-                      </span>
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold ${
-                          moneyNeto >= 0
-                            ? "bg-[var(--onda-success)]/10 text-[var(--onda-success)]"
-                            : "bg-[var(--onda-danger)]/10 text-[var(--onda-danger)]"
-                        }`}
-                      >
-                        Neto {formatCop(moneyNeto)}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
+                <AnalyticsSectionHeader
+                  icon={
+                    <ChartLineUp
+                      className="h-4 w-4"
+                      weight="duotone"
+                      aria-hidden
+                    />
+                  }
+                  title="Flujo de ingresos vs. costo en canjes"
+                  subtitle="Ventas registradas en caja menos el beneficio otorgado por promo."
+                  tone="sky"
+                  trailing={
+                    !emptyMoneyRange ? (
+                      <div className="flex flex-wrap gap-2 text-[11px]">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--onda-sky-soft)] px-2.5 py-1 font-medium text-[var(--onda-ink)]">
+                          <span className="h-1.5 w-1.5 rounded-full bg-[var(--onda-sky)]" />
+                          Ventas {formatCop(kpis?.ventas ?? 0)}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--onda-violet-soft)] px-2.5 py-1 font-medium text-[var(--onda-ink)]">
+                          <span className="h-1.5 w-1.5 rounded-full bg-[var(--onda-primary)]" />
+                          Beneficio {formatCop(kpis?.beneficioOtorgado ?? 0)}
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold ${
+                            moneyNeto >= 0
+                              ? "bg-[var(--onda-success)]/10 text-[var(--onda-success)]"
+                              : "bg-[var(--onda-danger)]/10 text-[var(--onda-danger)]"
+                          }`}
+                        >
+                          Neto {formatCop(moneyNeto)}
+                        </span>
+                      </div>
+                    ) : null
+                  }
+                />
                 <div className="relative mt-3 min-h-[16rem] flex-1">
                   {emptyMoneyRange ? (
                     <div className="flex h-full min-h-[16rem] flex-col items-center justify-center gap-2 px-4 text-center">
+                      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--onda-bg)] text-[var(--onda-muted)]">
+                        <ChartLineUp
+                          className="h-6 w-6"
+                          weight="duotone"
+                          aria-hidden
+                        />
+                      </span>
                       <p className="text-sm text-[var(--onda-muted)]">
                         Aún no hay montos registrados en este periodo.
                       </p>
@@ -2284,7 +2372,7 @@ export function MerchantWorkspace() {
                             type="monotone"
                             dataKey="beneficio"
                             name="Beneficio otorgado"
-                            stroke="#6E5AE6"
+                            stroke="#052DDE"
                             strokeWidth={2}
                             strokeDasharray="5 4"
                             dot={false}
@@ -2294,7 +2382,7 @@ export function MerchantWorkspace() {
                             type="monotone"
                             dataKey="neto"
                             name="Neto (ventas − beneficio)"
-                            stroke="#22C55E"
+                            stroke="#2BB673"
                             strokeWidth={2.5}
                             dot={false}
                             activeDot={{ r: 4, strokeWidth: 0 }}
@@ -2321,18 +2409,34 @@ export function MerchantWorkspace() {
                   value={kpis?.ondas ?? 0}
                   delta={deltaLabel(kpis?.ondasDelta)}
                   positive={(kpis?.ondasDelta ?? 0) >= 0}
+                  tone="sky"
+                  icon={
+                    <Waves className="h-5 w-5" weight="duotone" aria-hidden />
+                  }
                 />
                 <KpiCard
                   label="Redenciones"
                   value={kpis?.redenciones ?? 0}
                   delta={deltaLabel(kpis?.redencionesDelta)}
                   positive={(kpis?.redencionesDelta ?? 0) >= 0}
+                  tone="primary"
+                  icon={
+                    <Gift className="h-5 w-5" weight="duotone" aria-hidden />
+                  }
                 />
                 <KpiCard
                   label="Clientes nuevos"
                   value={kpis?.clientesNuevos ?? 0}
                   delta={deltaLabel(kpis?.clientesNuevosDelta)}
                   positive={(kpis?.clientesNuevosDelta ?? 0) >= 0}
+                  tone="success"
+                  icon={
+                    <UsersThree
+                      className="h-5 w-5"
+                      weight="duotone"
+                      aria-hidden
+                    />
+                  }
                 />
                 <KpiCard
                   label="Tasa redención"
@@ -2344,6 +2448,10 @@ export function MerchantWorkspace() {
                       : undefined
                   }
                   positive={(kpis?.tasaRedencionDelta ?? 0) >= 0}
+                  tone="amber"
+                  icon={
+                    <Percent className="h-5 w-5" weight="duotone" aria-hidden />
+                  }
                 />
                 {mode === "event" && overview?.eventMeta ? (
                   <KpiCard
@@ -2355,6 +2463,14 @@ export function MerchantWorkspace() {
                         : undefined
                     }
                     positive
+                    tone="primary"
+                    icon={
+                      <Target
+                        className="h-5 w-5"
+                        weight="duotone"
+                        aria-hidden
+                      />
+                    }
                   />
                 ) : null}
               </div>
@@ -2376,10 +2492,15 @@ export function MerchantWorkspace() {
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:[grid-auto-rows:20rem]">
               <div className="onda-card flex h-[20rem] min-h-0 flex-col overflow-hidden p-4 lg:col-span-2 lg:h-full">
-                <h3 className="font-display shrink-0 text-sm font-semibold">
-                  Ondas y canjes por día
-                </h3>
-                <div className="relative mt-2 min-h-0 flex-1">
+                <AnalyticsSectionHeader
+                  icon={
+                    <ChartBar className="h-4 w-4" weight="duotone" aria-hidden />
+                  }
+                  title="Ondas y canjes por día"
+                  subtitle="Acumulaciones y redenciones en el periodo"
+                  tone="sky"
+                />
+                <div className="relative mt-3 min-h-0 flex-1">
                   <div className="absolute inset-0">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
@@ -2408,7 +2529,7 @@ export function MerchantWorkspace() {
                         <Bar
                           dataKey="canjes"
                           name="Canjes"
-                          fill="#6E5AE6"
+                          fill="#052DDE"
                           radius={[4, 4, 0, 0]}
                         />
                       </BarChart>
@@ -2433,9 +2554,12 @@ export function MerchantWorkspace() {
             </div>
 
             <div className="onda-card p-5">
-              <h3 className="font-display font-semibold">
-                Canjes por tipo de promo
-              </h3>
+              <AnalyticsSectionHeader
+                icon={<Tag className="h-4 w-4" weight="duotone" aria-hidden />}
+                title="Canjes por tipo de promo"
+                subtitle="Distribución de redenciones"
+                tone="primary"
+              />
               <div className="mt-4 h-56">
                 {(overview?.redemptionsByType || []).length ? (
                   <ResponsiveContainer width="100%" height="100%">

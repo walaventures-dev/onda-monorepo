@@ -16,10 +16,23 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { api } from '@onda/shared-ui';
+import { ChartLineUpIcon as ChartLineUp } from '@phosphor-icons/react/dist/csr/ChartLineUp';
+import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/CreditCard';
+import { CurrencyCircleDollarIcon as CurrencyCircleDollar } from '@phosphor-icons/react/dist/csr/CurrencyCircleDollar';
+import { LightbulbIcon as Lightbulb } from '@phosphor-icons/react/dist/csr/Lightbulb';
+import { PackageIcon as Package } from '@phosphor-icons/react/dist/csr/Package';
+import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
+import { TicketIcon as Ticket } from '@phosphor-icons/react/dist/csr/Ticket';
+import { UsersThreeIcon as UsersThree } from '@phosphor-icons/react/dist/csr/UsersThree';
+import { WavesIcon as Waves } from '@phosphor-icons/react/dist/csr/Waves';
+import {
+  AnalyticsSectionHeader,
+  KpiCard,
+  api,
+  type AnalyticsFiltersValue,
+} from '@onda/shared-ui';
 import { formatCop } from '@onda/shared-utils';
 import type { PosSummaryDto } from '@onda/shared-types';
-import type { AnalyticsFiltersValue } from '@onda/shared-ui';
 
 const METHOD_LABELS: Record<string, string> = {
   cash: 'Efectivo',
@@ -28,12 +41,12 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 const METHOD_COLORS: Record<string, string> = {
-  cash: '#22C55E',
+  cash: '#2BB673',
   card: '#3DB9E8',
-  transfer: '#6E5AE6',
+  transfer: '#052DDE',
 };
 
-const ITEM_BAR_COLORS = ['#3DB9E8', '#6E5AE6', '#22C55E', '#F59E0B', '#EC4899'];
+const ITEM_BAR_COLORS = ['#3DB9E8', '#052DDE', '#2BB673', '#F5A524', '#EC4899'];
 
 function formatMoneyAxis(v: number) {
   const n = Math.abs(Number(v));
@@ -61,7 +74,7 @@ function SalesTooltip({ active, payload, label }: any) {
       <ul className="space-y-1.5">
         <li className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-1.5 text-[var(--onda-muted)]">
-            <span className="h-2 w-2 rounded-full bg-[#3DB9E8]" />
+            <span className="h-2 w-2 rounded-full bg-[var(--onda-sky)]" />
             Ventas
           </span>
           <span className="font-medium tabular-nums">
@@ -70,7 +83,7 @@ function SalesTooltip({ active, payload, label }: any) {
         </li>
         <li className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-1.5 text-[var(--onda-muted)]">
-            <span className="h-2 w-2 rounded-full bg-[#6E5AE6]" />
+            <span className="h-2 w-2 rounded-full bg-[var(--onda-primary)]" />
             Transacciones
           </span>
           <span className="font-medium tabular-nums">
@@ -79,7 +92,7 @@ function SalesTooltip({ active, payload, label }: any) {
         </li>
         <li className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-1.5 text-[var(--onda-muted)]">
-            <span className="h-2 w-2 rounded-full bg-[#22C55E]" />
+            <span className="h-2 w-2 rounded-full bg-[var(--onda-success)]" />
             Ondas
           </span>
           <span className="font-medium tabular-nums">{row?.ondas ?? 0}</span>
@@ -92,19 +105,24 @@ function SalesTooltip({ active, payload, label }: any) {
 export function PosSummaryPanel({
   storeId,
   filters,
+  paymentMethods = [],
 }: {
   storeId: string;
   filters: AnalyticsFiltersValue;
+  paymentMethods?: string[];
 }) {
   const [summary, setSummary] = useState<PosSummaryDto | null>(null);
+  const methodsKey = paymentMethods.slice().sort().join(',');
 
   useEffect(() => {
     if (!storeId) return;
     const q = new URLSearchParams({ from: filters.from, to: filters.to });
+    if (methodsKey) q.set('methods', methodsKey);
+    setSummary(null);
     void api<PosSummaryDto>(`/pos/stores/${storeId}/summary?${q}`).then(
       setSummary,
     );
-  }, [storeId, filters.from, filters.to]);
+  }, [storeId, filters.from, filters.to, methodsKey]);
 
   if (!summary) {
     return (
@@ -119,8 +137,7 @@ export function PosSummaryPanel({
     label: methodLabel(m.methodKey),
   }));
   const topItemsChart = (summary.topItems ?? []).slice(0, 8).map((item) => ({
-    name:
-      item.name.length > 18 ? `${item.name.slice(0, 16)}…` : item.name,
+    name: item.name.length > 18 ? `${item.name.slice(0, 16)}…` : item.name,
     fullName: item.name,
     quantity: item.quantity,
   }));
@@ -128,65 +145,78 @@ export function PosSummaryPanel({
   return (
     <div className="space-y-6">
       <div>
+        <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-[var(--onda-primary-50)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--onda-primary-700)]">
+          <ChartLineUp className="h-3.5 w-3.5" weight="bold" aria-hidden />
+          Ventas
+        </div>
         <h2 className="font-display text-xl font-semibold">Resumen POS</h2>
         <p className="text-sm text-[var(--onda-muted)]">
-          Ventas del periodo seleccionado
+          Rendimiento del punto de venta en el periodo
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="onda-card p-4">
-          <p className="text-xs text-[var(--onda-muted)]">Ventas</p>
-          <p className="font-display text-2xl font-semibold tabular-nums">
-            {formatCop(summary.totalSales)}
-          </p>
-        </div>
-        <div className="onda-card p-4">
-          <p className="text-xs text-[var(--onda-muted)]">Transacciones</p>
-          <p className="font-display text-2xl font-semibold tabular-nums">
-            {summary.transactionCount}
-          </p>
-        </div>
-        <div className="onda-card p-4">
-          <p className="text-xs text-[var(--onda-muted)]">Ticket promedio</p>
-          <p className="font-display text-2xl font-semibold tabular-nums">
-            {formatCop(summary.averageTicket)}
-          </p>
-        </div>
-        <div className="onda-card p-4">
-          <p className="text-xs text-[var(--onda-muted)]">Ondas POS</p>
-          <p className="font-display text-2xl font-semibold tabular-nums">
-            {summary.ondasGranted}
-          </p>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          label="Ventas"
+          value={formatCop(summary.totalSales)}
+          tone="sky"
+          icon={
+            <CurrencyCircleDollar
+              className="h-5 w-5"
+              weight="duotone"
+              aria-hidden
+            />
+          }
+        />
+        <KpiCard
+          label="Transacciones"
+          value={summary.transactionCount}
+          tone="primary"
+          icon={<Receipt className="h-5 w-5" weight="duotone" aria-hidden />}
+        />
+        <KpiCard
+          label="Ticket promedio"
+          value={formatCop(summary.averageTicket)}
+          tone="amber"
+          icon={<Ticket className="h-5 w-5" weight="duotone" aria-hidden />}
+        />
+        <KpiCard
+          label="Ondas POS"
+          value={summary.ondasGranted}
+          tone="success"
+          icon={<Waves className="h-5 w-5" weight="duotone" aria-hidden />}
+        />
       </div>
 
       <div className="onda-card flex min-h-[18rem] flex-col overflow-hidden p-4">
-        <div className="mb-1 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h3 className="font-display text-sm font-semibold">
-              Ventas por día
-            </h3>
-            <p className="text-xs text-[var(--onda-muted)]">
-              Monto cobrado, transacciones y ondas del periodo
-            </p>
-          </div>
-          {hasSales ? (
-            <div className="flex flex-wrap gap-2 text-[11px]">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--onda-sky-soft)] px-2.5 py-1 font-medium text-[var(--onda-ink)]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#3DB9E8]" />
-                Ventas {formatCop(summary.totalSales)}
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--onda-violet-soft)] px-2.5 py-1 font-medium text-[var(--onda-ink)]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#6E5AE6]" />
-                {summary.transactionCount} tx
-              </span>
-            </div>
-          ) : null}
-        </div>
-        <div className="relative mt-2 min-h-[14rem] flex-1">
+        <AnalyticsSectionHeader
+          icon={
+            <ChartLineUp className="h-4 w-4" weight="duotone" aria-hidden />
+          }
+          title="Ventas por día"
+          subtitle="Monto cobrado y transacciones del periodo"
+          tone="sky"
+          trailing={
+            hasSales ? (
+              <div className="flex flex-wrap gap-2 text-[11px]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--onda-sky-soft)] px-2.5 py-1 font-medium text-[var(--onda-ink)]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--onda-sky)]" />
+                  Ventas {formatCop(summary.totalSales)}
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--onda-violet-soft)] px-2.5 py-1 font-medium text-[var(--onda-ink)]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--onda-primary)]" />
+                  {summary.transactionCount} tx
+                </span>
+              </div>
+            ) : null
+          }
+        />
+        <div className="relative mt-3 min-h-[14rem] flex-1">
           {!hasSales ? (
             <div className="flex h-full min-h-[14rem] flex-col items-center justify-center gap-2 px-4 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--onda-bg)] text-[var(--onda-muted)]">
+                <ChartLineUp className="h-6 w-6" weight="duotone" aria-hidden />
+              </span>
               <p className="text-sm text-[var(--onda-muted)]">
                 Aún no hay ventas POS en este periodo.
               </p>
@@ -268,7 +298,7 @@ export function PosSummaryPanel({
                     yAxisId="count"
                     dataKey="transacciones"
                     name="Transacciones"
-                    fill="#6E5AE6"
+                    fill="#052DDE"
                     radius={[3, 3, 0, 0]}
                     maxBarSize={28}
                     opacity={0.85}
@@ -282,10 +312,15 @@ export function PosSummaryPanel({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:[grid-auto-rows:18rem]">
         <div className="onda-card flex h-[18rem] min-h-0 flex-col overflow-hidden p-4">
-          <h3 className="font-display shrink-0 text-sm font-semibold">
-            Por medio de pago
-          </h3>
-          <div className="relative mt-2 min-h-0 flex-1">
+          <AnalyticsSectionHeader
+            icon={
+              <CreditCard className="h-4 w-4" weight="duotone" aria-hidden />
+            }
+            title="Por medio de pago"
+            subtitle="Distribución del cobro"
+            tone="primary"
+          />
+          <div className="relative mt-3 min-h-0 flex-1">
             {paymentData.length ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
@@ -303,9 +338,7 @@ export function PosSummaryPanel({
                       {paymentData.map((row) => (
                         <Cell
                           key={row.methodKey}
-                          fill={
-                            METHOD_COLORS[row.methodKey] || '#94A3B8'
-                          }
+                          fill={METHOD_COLORS[row.methodKey] || '#94A3B8'}
                         />
                       ))}
                     </Pie>
@@ -315,10 +348,7 @@ export function PosSummaryPanel({
                         methodLabel(p?.payload?.methodKey),
                       ]}
                     />
-                    <Legend
-                      wrapperStyle={{ fontSize: 12 }}
-                      iconSize={10}
-                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} iconSize={10} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -333,10 +363,13 @@ export function PosSummaryPanel({
         </div>
 
         <div className="onda-card flex h-[18rem] min-h-0 flex-col overflow-hidden p-4">
-          <h3 className="font-display shrink-0 text-sm font-semibold">
-            Ítems más vendidos
-          </h3>
-          <div className="relative mt-2 min-h-0 flex-1">
+          <AnalyticsSectionHeader
+            icon={<Package className="h-4 w-4" weight="duotone" aria-hidden />}
+            title="Ítems más vendidos"
+            subtitle="Cantidad despachada"
+            tone="sky"
+          />
+          <div className="relative mt-3 min-h-0 flex-1">
             {topItemsChart.length ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
@@ -390,11 +423,23 @@ export function PosSummaryPanel({
       </div>
 
       {summary.insights.length > 0 ? (
-        <div className="onda-card space-y-2 p-4">
-          <h3 className="text-sm font-semibold">Recomendaciones</h3>
-          <ul className="list-disc space-y-1 pl-4 text-sm text-[var(--onda-muted)]">
+        <div className="onda-card space-y-3 border-l-4 border-l-[#F5A524] p-4">
+          <AnalyticsSectionHeader
+            icon={
+              <Lightbulb className="h-4 w-4" weight="duotone" aria-hidden />
+            }
+            title="Recomendaciones"
+            tone="amber"
+          />
+          <ul className="mt-3 space-y-2 pl-1">
             {summary.insights.map((line) => (
-              <li key={line}>{line}</li>
+              <li
+                key={line}
+                className="flex gap-2 text-sm text-[var(--onda-muted)]"
+              >
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#F5A524]" />
+                <span>{line}</span>
+              </li>
             ))}
           </ul>
         </div>
@@ -402,12 +447,29 @@ export function PosSummaryPanel({
 
       {summary.topCustomers.length > 0 ? (
         <div className="onda-card p-4">
-          <h3 className="mb-3 text-sm font-semibold">Mejores clientes POS</h3>
-          <ul className="space-y-2 text-sm">
-            {summary.topCustomers.slice(0, 5).map((c) => (
-              <li key={c.passId || c.name} className="flex justify-between">
-                <span>{c.name}</span>
-                <span className="tabular-nums">{formatCop(c.total)}</span>
+          <AnalyticsSectionHeader
+            icon={
+              <UsersThree className="h-4 w-4" weight="duotone" aria-hidden />
+            }
+            title="Mejores clientes POS"
+            subtitle="Por monto acumulado en el periodo"
+            tone="primary"
+          />
+          <ul className="mt-3 space-y-2">
+            {summary.topCustomers.slice(0, 5).map((c, i) => (
+              <li
+                key={c.passId || c.name}
+                className="flex items-center justify-between gap-3 rounded-xl bg-[var(--onda-bg)]/70 px-3 py-2.5"
+              >
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--onda-violet-soft)] font-display text-xs font-semibold text-[var(--onda-primary-700)]">
+                    {i + 1}
+                  </span>
+                  <span className="truncate text-sm font-medium">{c.name}</span>
+                </div>
+                <span className="shrink-0 font-display text-sm font-semibold tabular-nums">
+                  {formatCop(c.total)}
+                </span>
               </li>
             ))}
           </ul>

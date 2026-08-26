@@ -1,16 +1,13 @@
-import { Suspense } from 'react';
-import { CajaClient } from '../../CajaClient';
+'use client';
 
-export default function CajaTokenPage() {
-  return (
-    <Suspense
-      fallback={
-        <main className="flex min-h-dvh items-center justify-center text-sm text-[var(--onda-muted)]">
-          Abriendo caja…
-        </main>
-      }
-    >
-      <CajaClient />
-    </Suspense>
-  );
+import { use } from 'react';
+import { CajaKioskClient } from '../../CajaApp';
+
+export default function CajaTokenPage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  const { token } = use(params);
+  return <CajaKioskClient token={token} />;
 }

@@ -1,8 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, api, toast } from '@onda/shared-ui';
-import { formatCop, formatMoneyInput, parseMoneyInput } from '@onda/shared-utils';
+import { Button, PhoneInput, api, toast } from '@onda/shared-ui';
+import {
+  formatCop,
+  formatMoneyInput,
+  isCompletePhoneMask,
+  ondasFromPayment,
+  parseMoneyInput,
+  toE164Colombia,
+} from '@onda/shared-utils';
 import type {
   PosItemDto,
   PosPaymentMethodDto,
@@ -11,6 +18,8 @@ import type {
 import { MoneyIcon as Money } from '@phosphor-icons/react/dist/csr/Money';
 import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/CreditCard';
 import { BankIcon as Bank } from '@phosphor-icons/react/dist/csr/Bank';
+import { UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
+import { PhoneIcon as Phone } from '@phosphor-icons/react/dist/csr/Phone';
 import type { ReactNode } from 'react';
 
 function patchTabLineQty(tab: PosTabDto, lineId: string, quantity: number): PosTabDto {
@@ -186,7 +195,14 @@ function ItemPickerModal({
   );
 }
 
-export function PosVenderPanel({ storeId }: { storeId: string }) {
+export function PosVenderPanel({
+  storeId,
+  ondaValue,
+}: {
+  storeId: string;
+  /** Valor en COP de 1 onda; si falta, no se puede previsualizar. */
+  ondaValue?: number | null;
+}) {
   const [items, setItems] = useState<PosItemDto[]>([]);
   const [tabs, setTabs] = useState<PosTabDto[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PosPaymentMethodDto[]>(
@@ -200,12 +216,24 @@ export function PosVenderPanel({ storeId }: { storeId: string }) {
   const [methodKey, setMethodKey] = useState('cash');
   const [cashReceived, setCashReceived] = useState('');
   const [pickerItem, setPickerItem] = useState<PosItemDto | null>(null);
+  const [linkPhone, setLinkPhone] = useState('');
+  const [linkName, setLinkName] = useState('');
+  const [linkingCustomer, setLinkingCustomer] = useState(false);
+  const [showLinkForm, setShowLinkForm] = useState(false);
   const skipRemoteSyncUntil = useRef(0);
 
   const selectedTab = useMemo(
     () => tabs.find((t) => t.id === selectedTabId) ?? null,
     [tabs, selectedTabId],
   );
+
+  const previewOndas = useMemo(() => {
+    if (!selectedTab?.passId) return null;
+    const value =
+      ondaValue != null && Number(ondaValue) > 0 ? Number(ondaValue) : null;
+    if (value == null) return null;
+    return ondasFromPayment(selectedTab.total, value);
+  }, [selectedTab, ondaValue]);
 
   const activeItems = useMemo(
     () =>
@@ -419,6 +447,52 @@ export function PosVenderPanel({ storeId }: { storeId: string }) {
     }
   }
 
+  async function linkCustomer() {
+    if (!selectedTab || linkingCustomer || busy) return;
+    if (!isCompletePhoneMask(linkPhone)) {
+      toast.danger('Teléfono incompleto', {
+        description: 'Ingresa un celular de 10 dígitos.',
+      });
+      return;
+    }
+    setLinkingCustomer(true);
+    markLocalMutation();
+    try {
+      const updated = await api<PosTabDto>(
+        `/pos/tabs/${selectedTab.id}/link-phone?storeId=${storeId}`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            phone: toE164Colombia(linkPhone),
+            guestName: linkName.trim() || undefined,
+          }),
+        },
+      );
+      upsertTab(updated);
+      setLinkPhone('');
+      setLinkName('');
+      setShowLinkForm(false);
+      toast.success('Cliente asociado', {
+        description: updated.customerName
+          ? `${updated.customerName} quedará con ondas al cobrar.`
+          : 'Al cobrar se otorgan ondas automáticamente.',
+      });
+    } catch (e) {
+      toast.danger('Error', {
+        description:
+          e instanceof Error ? e.message : 'No se pudo asociar el cliente',
+      });
+    } finally {
+      setLinkingCustomer(false);
+    }
+  }
+
+  useEffect(() => {
+    setLinkPhone('');
+    setLinkName('');
+    setShowLinkForm(false);
+  }, [selectedTabId]);
+
   async function pay() {
     if (!selectedTab || selectedTab.status !== 'CHECKOUT' || busy) return;
     setBusy(true);
@@ -515,9 +589,11 @@ export function PosVenderPanel({ storeId }: { storeId: string }) {
                     </div>
                     <p className="mt-0.5 text-xs text-[var(--onda-muted)]">
                       {tabStatusLabel(tab.status)}
-                      {tab.lines.length
-                        ? ` · ${tab.lines.length} ítem${tab.lines.length === 1 ? '' : 's'}`
-                        : ''}
+                      {tab.customerName
+                        ? ` · ${tab.customerName}`
+                        : tab.lines.length
+                          ? ` · ${tab.lines.length} ítem${tab.lines.length === 1 ? '' : 's'}`
+                          : ''}
                     </p>
                   </button>
                 </li>
@@ -587,21 +663,110 @@ export function PosVenderPanel({ storeId }: { storeId: string }) {
             <>
               <div className="border-b border-[var(--onda-border)] px-4 py-3">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
+                  <div className="min-w-0">
                     <h3 className="font-semibold text-[var(--onda-ink)]">
                       {selectedTab.label}
                     </h3>
                     <p className="text-xs text-[var(--onda-muted)]">
                       {tabStatusLabel(selectedTab.status)}
-                      {selectedTab.customerName
-                        ? ` · ${selectedTab.customerName}`
-                        : ''}
                     </p>
                   </div>
                   <span className="text-lg font-semibold tabular-nums">
                     {formatCop(selectedTab.total)}
                   </span>
                 </div>
+
+                {selectedTab.passId ? (
+                  <div className="mt-3 flex items-center gap-2 rounded-xl bg-[var(--onda-success)]/10 px-3 py-2">
+                    <UserCircle
+                      className="h-5 w-5 shrink-0 text-[var(--onda-success)]"
+                      weight="duotone"
+                      aria-hidden
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-[var(--onda-ink)]">
+                        {selectedTab.customerName || 'Cliente vinculado'}
+                      </p>
+                      <p className="text-[11px] text-[var(--onda-muted)]">
+                        {previewOndas == null
+                          ? 'Ondas al cobrar esta venta'
+                          : previewOndas > 0
+                            ? `+${previewOndas} onda${previewOndas === 1 ? '' : 's'} al cobrar`
+                            : 'El monto no alcanza para 1 onda'}
+                      </p>
+                    </div>
+                  </div>
+                ) : selectedTab.status === 'OPEN' ||
+                  selectedTab.status === 'CHECKOUT' ? (
+                  <div className="mt-3 space-y-2">
+                    {!showLinkForm ? (
+                      <button
+                        type="button"
+                        className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed border-[var(--onda-border)] px-3 py-2 text-xs font-medium text-[var(--onda-muted)] transition hover:border-[var(--onda-primary)]/40 hover:bg-[var(--onda-primary-50)] hover:text-[var(--onda-primary)]"
+                        onClick={() => setShowLinkForm(true)}
+                        disabled={busy || linkingCustomer}
+                      >
+                        <Phone className="h-3.5 w-3.5" weight="bold" aria-hidden />
+                        Asociar cliente por teléfono
+                      </button>
+                    ) : (
+                      <div className="space-y-2 rounded-xl border border-[var(--onda-border)] bg-[var(--onda-bg)]/50 p-3">
+                        <p className="text-xs font-semibold text-[var(--onda-ink)]">
+                          Asociar cliente
+                        </p>
+                        <label className="block space-y-1 text-sm">
+                          <span className="text-xs text-[var(--onda-muted)]">
+                            Celular
+                          </span>
+                          <PhoneInput
+                            value={linkPhone}
+                            onChange={setLinkPhone}
+                            className="onda-input w-full"
+                            disabled={linkingCustomer}
+                          />
+                        </label>
+                        <label className="block space-y-1 text-sm">
+                          <span className="text-xs text-[var(--onda-muted)]">
+                            Nombre (si es nuevo)
+                          </span>
+                          <input
+                            className="onda-input w-full"
+                            value={linkName}
+                            onChange={(e) => setLinkName(e.target.value)}
+                            placeholder="Opcional"
+                            disabled={linkingCustomer}
+                          />
+                        </label>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            className="flex-1"
+                            size="sm"
+                            isDisabled={
+                              linkingCustomer || !isCompletePhoneMask(linkPhone)
+                            }
+                            onClick={() => void linkCustomer()}
+                          >
+                            {linkingCustomer ? 'Asociando…' : 'Asociar'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            isDisabled={linkingCustomer}
+                            onClick={() => {
+                              setShowLinkForm(false);
+                              setLinkPhone('');
+                              setLinkName('');
+                            }}
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
 
               <ul className="flex-1 space-y-2 overflow-y-auto p-3">

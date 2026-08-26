@@ -1,37 +1,29 @@
 'use client';
 
-import Link from 'next/link';
-import { CajaOperationsPanel } from '@onda/shared-ui';
+import { OndaIcons } from '@onda/shared-ui';
 import { CajaOpenButton } from './PendingRequestsPanel';
 
-export function MerchantCajaPanel({
-  storeId,
-  posEnabled = false,
-}: {
-  storeId: string;
-  posEnabled?: boolean;
-}) {
+/**
+ * Pantalla mínima en el merchant: la operación de caja vive en la PWA kiosk.
+ * «Abrir caja» en el navbar (y aquí) abre esa única app.
+ */
+export function MerchantCajaPanel({ storeId }: { storeId: string }) {
   return (
-    <div className="space-y-6">
-      <CajaOperationsPanel storeId={storeId} posEnabled={posEnabled} />
-      <div className="onda-card space-y-3 p-4">
-        <h3 className="text-sm font-semibold text-[var(--onda-ink)]">Dispositivo dedicado</h3>
-        <p className="text-sm text-[var(--onda-muted)]">
-          Genera un enlace kiosk para un celular o tablet fijo en mostrador, o abre la PWA de caja
-          en otra pestaña.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <CajaOpenButton storeId={storeId} />
-          <Link
-            href={(process.env.NEXT_PUBLIC_CAJA_URL || 'http://localhost:4204') + '/'}
-            className="inline-flex items-center rounded-full border border-[var(--onda-border)] px-4 py-2 text-sm font-medium"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Abrir PWA caja
-          </Link>
-        </div>
+    <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-16 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--onda-primary-50)] text-[var(--onda-primary)] [&>svg]:h-7 [&>svg]:w-7">
+        {OndaIcons.qr}
       </div>
+      <div className="space-y-2">
+        <h2 className="font-display text-xl font-semibold">Caja en dispositivo</h2>
+        <p className="text-sm leading-relaxed text-[var(--onda-muted)]">
+          Acumular ondas, ver cuentas abiertas y asociar clientes se hace en la
+          app de caja (celular o tablet del mostrador).
+        </p>
+      </div>
+      <CajaOpenButton storeId={storeId} />
+      <p className="text-xs text-[var(--onda-muted)]">
+        También puedes usar el botón «Abrir caja» arriba en cualquier momento.
+      </p>
     </div>
   );
 }

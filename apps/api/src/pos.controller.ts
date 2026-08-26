@@ -194,7 +194,8 @@ export class PosController {
     @Param('storeId') storeId: string,
     @Headers('authorization') auth: string | undefined,
     @Query('from') from?: string,
-    @Query('to') to?: string
+    @Query('to') to?: string,
+    @Query('methods') methods?: string
   ) {
     await this.guardPos(
       storeId,
@@ -203,7 +204,10 @@ export class PosController {
       StoreMemberRole.ADMIN,
       StoreMemberRole.CAJA
     );
-    return this.pos.getSummary(storeId, from, to);
+    const methodKeys = methods
+      ? methods.split(',').map((m) => m.trim()).filter(Boolean)
+      : undefined;
+    return this.pos.getSummary(storeId, from, to, methodKeys);
   }
 
   @Get('tabs')
