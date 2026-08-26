@@ -1,0 +1,40 @@
+# One-shot: desbloquea P3009 de la migración POS fallida en Neon y reaplica.
+name: Resolve failed POS migration
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  resolve-and-deploy:
+    name: Resolve + migrate deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Mark failed POS migration as rolled-back
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: >
+          pnpm exec prisma migrate resolve
+          --rolled-back 20260826151500_add_pos_enabled_and_tables
+          --schema=libs/database/prisma/schema.prisma
+
+      - name: prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: pnpm exec prisma migrate deploy --schema=libs/database/prisma/schema.prisma
