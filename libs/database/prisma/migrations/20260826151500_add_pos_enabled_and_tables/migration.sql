@@ -1,13 +1,46 @@
--- CreateEnum (idempotent: prod may have received partial db:push)
+-- CreateEnum
+DO $$ BEGIN CREATE TYPE "StoreMemberRole" AS ENUM ('ADMIN', 'CAJA'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- CreateEnum
+DO $$ BEGIN CREATE TYPE "StoreMemberStatus" AS ENUM ('PENDING', 'ACTIVE', 'REVOKED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- CreateEnum
 DO $$ BEGIN CREATE TYPE "PosItemKind" AS ENUM ('PRODUCT', 'SERVICE'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- CreateEnum
 DO $$ BEGIN CREATE TYPE "PosTabStatus" AS ENUM ('OPEN', 'CHECKOUT', 'PAID', 'VOID'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- CreateEnum
 DO $$ BEGIN CREATE TYPE "PosSaleStatus" AS ENUM ('COMPLETED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'VOID'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- CreateEnum
 DO $$ BEGIN CREATE TYPE "PosRefundKind" AS ENUM ('FULL', 'PARTIAL', 'VOID_BEFORE_PAY'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- CreateEnum
 DO $$ BEGIN CREATE TYPE "AccountingProvider" AS ENUM ('NONE', 'ALEGRA', 'SIIGO'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- CreateEnum
 DO $$ BEGIN CREATE TYPE "AccountingSyncStatus" AS ENUM ('PENDING', 'SUCCESS', 'FAILED', 'SKIPPED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AlterTable
 ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "posEnabled" BOOLEAN NOT NULL DEFAULT false;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "StoreMember" (
+    "id" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "role" "StoreMemberRole" NOT NULL,
+    "status" "StoreMemberStatus" NOT NULL DEFAULT 'PENDING',
+    "inviteToken" TEXT,
+    "invitedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "acceptedAt" TIMESTAMP(3),
+    "revokedAt" TIMESTAMP(3),
+    "firebaseUid" TEXT,
+
+    CONSTRAINT "StoreMember_pkey" PRIMARY KEY ("id")
+);
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "PosItem" (
@@ -220,6 +253,15 @@ CREATE TABLE IF NOT EXISTS "PosAccountingSync" (
 );
 
 -- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "StoreMember_inviteToken_key" ON "StoreMember"("inviteToken");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "StoreMember_email_status_idx" ON "StoreMember"("email", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "StoreMember_storeId_email_key" ON "StoreMember"("storeId", "email");
+
+-- CreateIndex
 CREATE INDEX IF NOT EXISTS "PosItem_storeId_isActive_idx" ON "PosItem"("storeId", "isActive");
 
 -- CreateIndex
@@ -283,74 +325,144 @@ CREATE INDEX IF NOT EXISTS "PosRefundLine_refundId_idx" ON "PosRefundLine"("refu
 CREATE UNIQUE INDEX IF NOT EXISTS "PosAccountingSync_saleId_key" ON "PosAccountingSync"("saleId");
 
 -- AddForeignKey
-ALTER TABLE "PosItem" ADD CONSTRAINT "PosItem_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "StoreMember" ADD CONSTRAINT "StoreMember_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosAddon" ADD CONSTRAINT "PosAddon_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosItem" ADD CONSTRAINT "PosItem_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosItemAddon" ADD CONSTRAINT "PosItemAddon_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "PosItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosAddon" ADD CONSTRAINT "PosAddon_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosItemAddon" ADD CONSTRAINT "PosItemAddon_addonId_fkey" FOREIGN KEY ("addonId") REFERENCES "PosAddon"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosItemAddon" ADD CONSTRAINT "PosItemAddon_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "PosItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosItemVariant" ADD CONSTRAINT "PosItemVariant_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "PosItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosItemAddon" ADD CONSTRAINT "PosItemAddon_addonId_fkey" FOREIGN KEY ("addonId") REFERENCES "PosAddon"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosTab" ADD CONSTRAINT "PosTab_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosItemVariant" ADD CONSTRAINT "PosItemVariant_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "PosItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosTab" ADD CONSTRAINT "PosTab_passId_fkey" FOREIGN KEY ("passId") REFERENCES "Pass"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosTab" ADD CONSTRAINT "PosTab_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosTab" ADD CONSTRAINT "PosTab_openedByMemberId_fkey" FOREIGN KEY ("openedByMemberId") REFERENCES "StoreMember"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosTab" ADD CONSTRAINT "PosTab_passId_fkey" FOREIGN KEY ("passId") REFERENCES "Pass"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosTab" ADD CONSTRAINT "PosTab_attendedByMemberId_fkey" FOREIGN KEY ("attendedByMemberId") REFERENCES "StoreMember"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosTab" ADD CONSTRAINT "PosTab_openedByMemberId_fkey" FOREIGN KEY ("openedByMemberId") REFERENCES "StoreMember"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosTabLine" ADD CONSTRAINT "PosTabLine_tabId_fkey" FOREIGN KEY ("tabId") REFERENCES "PosTab"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosTab" ADD CONSTRAINT "PosTab_attendedByMemberId_fkey" FOREIGN KEY ("attendedByMemberId") REFERENCES "StoreMember"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosTabLine" ADD CONSTRAINT "PosTabLine_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "PosItem"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosTabLine" ADD CONSTRAINT "PosTabLine_tabId_fkey" FOREIGN KEY ("tabId") REFERENCES "PosTab"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosTabLineAddon" ADD CONSTRAINT "PosTabLineAddon_lineId_fkey" FOREIGN KEY ("lineId") REFERENCES "PosTabLine"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosTabLine" ADD CONSTRAINT "PosTabLine_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "PosItem"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosTabLineAddon" ADD CONSTRAINT "PosTabLineAddon_addonId_fkey" FOREIGN KEY ("addonId") REFERENCES "PosAddon"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosTabLineAddon" ADD CONSTRAINT "PosTabLineAddon_lineId_fkey" FOREIGN KEY ("lineId") REFERENCES "PosTabLine"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosSale" ADD CONSTRAINT "PosSale_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosTabLineAddon" ADD CONSTRAINT "PosTabLineAddon_addonId_fkey" FOREIGN KEY ("addonId") REFERENCES "PosAddon"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosSale" ADD CONSTRAINT "PosSale_tabId_fkey" FOREIGN KEY ("tabId") REFERENCES "PosTab"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosSale" ADD CONSTRAINT "PosSale_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosSaleLine" ADD CONSTRAINT "PosSaleLine_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "PosSale"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosSale" ADD CONSTRAINT "PosSale_tabId_fkey" FOREIGN KEY ("tabId") REFERENCES "PosTab"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosSaleLine" ADD CONSTRAINT "PosSaleLine_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "PosItem"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosSaleLine" ADD CONSTRAINT "PosSaleLine_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "PosSale"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosSaleLineAddon" ADD CONSTRAINT "PosSaleLineAddon_lineId_fkey" FOREIGN KEY ("lineId") REFERENCES "PosSaleLine"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosSaleLine" ADD CONSTRAINT "PosSaleLine_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "PosItem"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosPayment" ADD CONSTRAINT "PosPayment_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "PosSale"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosSaleLineAddon" ADD CONSTRAINT "PosSaleLineAddon_lineId_fkey" FOREIGN KEY ("lineId") REFERENCES "PosSaleLine"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosPaymentMethodConfig" ADD CONSTRAINT "PosPaymentMethodConfig_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosPayment" ADD CONSTRAINT "PosPayment_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "PosSale"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosRefund" ADD CONSTRAINT "PosRefund_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "PosSale"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosPaymentMethodConfig" ADD CONSTRAINT "PosPaymentMethodConfig_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosRefundLine" ADD CONSTRAINT "PosRefundLine_refundId_fkey" FOREIGN KEY ("refundId") REFERENCES "PosRefund"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosRefund" ADD CONSTRAINT "PosRefund_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "PosSale"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "StoreAccountingConfig" ADD CONSTRAINT "StoreAccountingConfig_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PosRefundLine" ADD CONSTRAINT "PosRefundLine_refundId_fkey" FOREIGN KEY ("refundId") REFERENCES "PosRefund"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "PosAccountingSync" ADD CONSTRAINT "PosAccountingSync_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "PosSale"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "StoreAccountingConfig" ADD CONSTRAINT "StoreAccountingConfig_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+-- AddForeignKey
+DO $$ BEGIN
+  ALTER TABLE "PosAccountingSync" ADD CONSTRAINT "PosAccountingSync_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "PosSale"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Backfill admins desde ownerEmail
+INSERT INTO "StoreMember" ("id", "storeId", "email", "name", "role", "status", "invitedAt", "acceptedAt")
+SELECT gen_random_uuid()::text,
+       s."id",
+       lower(s."ownerEmail"),
+       s."ownerName",
+       'ADMIN'::"StoreMemberRole",
+       'ACTIVE'::"StoreMemberStatus",
+       CURRENT_TIMESTAMP,
+       CURRENT_TIMESTAMP
+FROM "Store" s
+WHERE s."ownerEmail" IS NOT NULL
+  AND length(trim(s."ownerEmail")) > 0
+  AND NOT EXISTS (
+    SELECT 1 FROM "StoreMember" m
+    WHERE m."storeId" = s."id" AND lower(m."email") = lower(s."ownerEmail")
+  );
