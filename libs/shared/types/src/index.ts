@@ -476,3 +476,171 @@ export const CAMPAIGN_PACK_SIZE = 3;
 
 /** Descuento del paquete de 3 (15%). */
 export const CAMPAIGN_PACK_DISCOUNT = 0.15;
+
+export type StoreMemberRole = 'ADMIN' | 'CAJA';
+export type StoreMemberStatus = 'PENDING' | 'ACTIVE' | 'REVOKED';
+export type PosItemKind = 'PRODUCT' | 'SERVICE';
+export type PosTabStatus = 'OPEN' | 'CHECKOUT' | 'PAID' | 'VOID';
+export type PosSaleStatus =
+  | 'COMPLETED'
+  | 'REFUNDED'
+  | 'PARTIALLY_REFUNDED'
+  | 'VOID';
+export type AccountingProvider = 'NONE' | 'ALEGRA' | 'SIIGO';
+
+export interface StoreMemberDto {
+  id: string;
+  storeId: string;
+  email: string;
+  name: string;
+  role: StoreMemberRole;
+  status: StoreMemberStatus;
+  invitedAt: string;
+  acceptedAt?: string | null;
+}
+
+export interface TeamQuotaDto {
+  planType: PlanType;
+  cajaUsed: number;
+  cajaMax: number;
+  adminUsed: number;
+  adminMax: number;
+}
+
+export interface PosAddonDto {
+  id: string;
+  storeId: string;
+  name: string;
+  price: number;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface PosItemVariantDto {
+  id: string;
+  itemId: string;
+  name: string;
+  price: number;
+  isDefault: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface PosItemDto {
+  id: string;
+  storeId: string;
+  kind: PosItemKind;
+  name: string;
+  price: number;
+  trackStock: boolean;
+  stockQty: number | null;
+  isActive: boolean;
+  sortOrder: number;
+  imageUrl?: string | null;
+  variants?: PosItemVariantDto[];
+  addons?: PosAddonDto[];
+}
+
+export interface PosTabLineAddonDto {
+  id: string;
+  addonId?: string | null;
+  name: string;
+  price: number;
+}
+
+export interface PosTabLineDto {
+  id: string;
+  itemId: string;
+  quantity: number;
+  unitPrice: number;
+  variantId?: string | null;
+  variantName?: string | null;
+  addons?: PosTabLineAddonDto[];
+  item?: PosItemDto;
+}
+
+export interface PosTabDto {
+  id: string;
+  storeId: string;
+  label: string;
+  status: PosTabStatus;
+  guestName?: string | null;
+  userId?: string | null;
+  passId?: string | null;
+  openedAt: string;
+  checkoutAt?: string | null;
+  lines: PosTabLineDto[];
+  subtotal: number;
+  total: number;
+  customerName?: string | null;
+}
+
+export interface PosPaymentDto {
+  id: string;
+  methodKey: string;
+  amount: number;
+  cashReceived?: number | null;
+  changeGiven?: number | null;
+}
+
+export interface PosSaleLineDto {
+  id: string;
+  itemId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  variantName?: string | null;
+  addons?: Array<{ id: string; name: string; price: number }>;
+}
+
+export interface PosSaleDto {
+  id: string;
+  storeId: string;
+  tabId: string;
+  passId?: string | null;
+  subtotal: number;
+  total: number;
+  status: PosSaleStatus;
+  completedAt: string;
+  ondasGranted: number;
+  payments: PosPaymentDto[];
+  lines: PosSaleLineDto[];
+}
+
+export interface PosPaymentMethodDto {
+  id: string;
+  key: string;
+  label: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface PosSummaryDto {
+  totalSales: number;
+  transactionCount: number;
+  averageTicket: number;
+  byPaymentMethod: Array<{ methodKey: string; total: number }>;
+  topItems: Array<{ itemId: string; name: string; quantity: number }>;
+  topCustomers: Array<{
+    passId: string | null;
+    name: string;
+    total: number;
+    visits: number;
+  }>;
+  series: Array<{
+    date: string;
+    ventas: number;
+    transacciones: number;
+    ondas: number;
+  }>;
+  refundsTotal: number;
+  ondasGranted: number;
+  insights: string[];
+}
+
+export interface MerchantStoreAccess {
+  id: string;
+  name: string;
+  role: StoreMemberRole;
+  memberName: string;
+}

@@ -1,5 +1,7 @@
 export type StoreSetupFields = {
   id?: string;
+  memberRole?: 'ADMIN' | 'CAJA';
+  posEnabled?: boolean;
   passDesign?: { logoUrl?: string | null } | null;
   _count?: { promotions?: number } | null;
   promotions?: unknown[] | null;
@@ -73,5 +75,9 @@ export function merchantHomePath(stores: StoreSetupFields[]): string {
   const store = pickPreferredStore(
     stores.filter((s): s is StoreSetupFields & { id: string } => Boolean(s.id)),
   );
-  return storeSetupStatus(store).complete ? "/resumen" : "/completar";
+  if (!storeSetupStatus(store).complete) return "/completar";
+  if (store?.memberRole === "CAJA") {
+    return store.posEnabled ? "/pos/vender" : "/caja";
+  }
+  return "/resumen";
 }

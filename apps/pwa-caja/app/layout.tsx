@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Onda Caja',
-  description: 'Confirma acumulaciones y lee el QR del cliente',
+  description: 'Acumula ondas y vincula ventas activas con el pase del cliente',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,

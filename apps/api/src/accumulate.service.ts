@@ -349,4 +349,56 @@ export class AccumulateService {
       message,
     };
   }
+
+  async reverseOndas(input: {
+    storeId: string;
+    passId: string;
+    ondasToReverse: number;
+    paymentAmount?: number;
+  }) {
+    const delta = Math.max(0, Math.round(input.ondasToReverse));
+    if (delta === 0) return 0;
+
+    const pass = await this.prisma.pass.findFirst({
+      where: { id: input.passId, storeId: input.storeId },
+      include: { user: true },
+    });
+    if (!pass) return 0;
+
+    const actual = Math.min(delta, pass.points);
+    if (actual === 0) return 0;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.pass.update({
+        where: { id: pass.id },
+        data: { points: { decrement: actual } },
+      });
+      await tx.transaction.create({
+        data: {
+          passId: pass.id,
+          storeId: input.storeId,
+          type: 'ACCUMULATE',
+          points: -actual,
+          paymentAmount:
+            input.paymentAmount != null ? -input.paymentAmount : undefined,
+        },
+      });
+    });
+
+    const updated = await this.prisma.pass.findUniqueOrThrow({
+      where: { id: pass.id },
+    });
+    if (updated.walletRef) {
+      try {
+        await this.wallet.updatePoints(
+          updated.walletRef,
+          updated.points,
+          `Ajuste: -${actual} ondas`
+        );
+      } catch {
+        /* ignore */
+      }
+    }
+    return actual;
+  }
 }

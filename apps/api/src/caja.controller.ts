@@ -51,6 +51,7 @@ export class CajaController {
       currency: link.store.currency || 'COP',
       ondaValue: link.store.ondaValue ?? null,
       maxStamps: link.store.maxStamps,
+      posEnabled: Boolean(link.store.posEnabled),
     };
   }
 

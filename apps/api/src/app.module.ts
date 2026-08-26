@@ -30,6 +30,8 @@ import { CustomerAuthService } from './customer-auth.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
 import { PendingRequestsController } from './pending-requests.controller';
 import { CajaController } from './caja.controller';
+import { PosController } from './pos.controller';
+import { MembersController } from './members.controller';
 import { AccumulateService } from './accumulate.service';
 import { RedeemService } from './redeem.service';
 import { StoreAccessService } from './store-access.service';
@@ -45,6 +47,9 @@ import { MerchantPasswordResetService } from './merchant-password-reset.service'
 import { WompiService } from './wompi.service';
 import { CartillaService } from './cartilla.service';
 import { CampaignsService } from './campaigns.service';
+import { PosService } from './pos.service';
+import { PosSseService } from './pos-sse.service';
+import { MerchantInviteService } from './merchant-invite.service';
 
 @Module({
   imports: [
@@ -77,6 +82,8 @@ import { CampaignsService } from './campaigns.service';
     UploadsController,
     PendingRequestsController,
     CajaController,
+    PosController,
+    MembersController,
     ReferralsController,
     DemoOndaSpaController,
     CampaignsController,
@@ -100,6 +107,9 @@ import { CampaignsService } from './campaigns.service';
     WompiService,
     CartillaService,
     CampaignsService,
+    PosService,
+    PosSseService,
+    MerchantInviteService,
   ],
 })
 export class AppModule {}

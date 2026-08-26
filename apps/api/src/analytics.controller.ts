@@ -12,7 +12,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { PlanType, PromotionType, Prisma } from '@prisma/client';
+import { PlanType, PromotionType, Prisma, PosSaleStatus } from '@prisma/client';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 import { PrismaService } from './prisma.service';
@@ -181,6 +181,8 @@ export class AnalyticsController {
       passes,
       event,
       memberships,
+      posSales,
+      prevPosSales,
     ] = await Promise.all([
       this.prisma.transaction.aggregate({
         where: { ...baseTx(from, to), type: 'ACCUMULATE' },
@@ -255,12 +257,34 @@ export class AnalyticsController {
             include: { store: true },
           })
         : Promise.resolve([]),
+      this.prisma.posSale.aggregate({
+        where: {
+          storeId,
+          status: PosSaleStatus.COMPLETED,
+          completedAt: { gte: from, lte: to },
+        },
+        _sum: { total: true },
+        _count: true,
+      }),
+      this.prisma.posSale.aggregate({
+        where: {
+          storeId,
+          status: PosSaleStatus.COMPLETED,
+          completedAt: { gte: prevFrom, lte: prevTo },
+        },
+        _sum: { total: true },
+        _count: true,
+      }),
     ]);
 
     const ondasVal = ondas._sum.points ?? 0;
     const prevOndasVal = prevOndas._sum.points ?? 0;
-    const ventasVal = ondas._sum.paymentAmount ?? 0;
-    const prevVentasVal = prevOndas._sum.paymentAmount ?? 0;
+    const ventasLealtadVal = ondas._sum.paymentAmount ?? 0;
+    const prevVentasLealtadVal = prevOndas._sum.paymentAmount ?? 0;
+    const ventasPOSVal = posSales._sum.total ?? 0;
+    const prevVentasPOSVal = prevPosSales._sum.total ?? 0;
+    const ventasVal = ventasLealtadVal + ventasPOSVal;
+    const prevVentasVal = prevVentasLealtadVal + prevVentasPOSVal;
     const beneficioVal = beneficio._sum.benefitAmount ?? 0;
     const prevBeneficioVal = prevBeneficio._sum.benefitAmount ?? 0;
     const redeemRate =
@@ -516,6 +540,21 @@ export class AnalyticsController {
       }
     }
 
+    if (ventasPOSVal > 0 && posSales._count > 0) {
+      insights.push({
+        id: 'pos-sales',
+        tone: 'accent',
+        title: `${posSales._count} venta${posSales._count === 1 ? '' : 's'} POS en el periodo`,
+        message: `Total POS ${Math.round(ventasPOSVal).toLocaleString('es-CO')} COP${
+          ventasLealtadVal > 0
+            ? ` · Lealtad ${Math.round(ventasLealtadVal).toLocaleString('es-CO')} COP`
+            : ''
+        }.`,
+        action: 'Ver ventas POS',
+        stat: String(posSales._count),
+      });
+    }
+
     if (redeemDelta <= -25 && ondasDelta >= -10) {
       insights.push({
         id: 'redeem-drop',
@@ -630,7 +669,11 @@ export class AnalyticsController {
         tasaRedencion: redeemRate,
         tasaRedencionDelta: redeemRate - prevRedeemRate,
         ventas: ventasVal,
+        ventasLealtad: ventasLealtadVal,
+        ventasPOS: ventasPOSVal,
         ventasDelta: pctDelta(ventasVal, prevVentasVal),
+        ventasPOSDelta: pctDelta(ventasPOSVal, prevVentasPOSVal),
+        posTransactionCount: posSales._count,
         beneficioOtorgado: beneficioVal,
         beneficioDelta: pctDelta(beneficioVal, prevBeneficioVal),
         roi: computeRoi(ventasVal, beneficioVal),

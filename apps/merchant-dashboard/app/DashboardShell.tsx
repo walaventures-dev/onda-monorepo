@@ -7,6 +7,7 @@ import { MerchantWorkspace } from "./MerchantWorkspace";
 import { MerchantOnboarding } from "./MerchantOnboarding";
 import { MerchantLogin } from "./MerchantLogin";
 import { MerchantChangePassword } from "./MerchantChangePassword";
+import { MerchantInviteAccept } from "./MerchantInviteAccept";
 import { MerchantAuthProvider, useMerchantAuth } from "../lib/MerchantAuth";
 import {
   isSetupAllowedPath,
@@ -24,6 +25,13 @@ function LoadingScreen() {
 
 function isLoginPath(pathname: string) {
   return pathname === "/login" || pathname.startsWith("/login/");
+}
+
+function isInvitePath(pathname: string) {
+  return (
+    pathname === '/login/invitacion' ||
+    pathname.startsWith('/login/invitacion/')
+  );
 }
 
 function isChangePasswordPath(pathname: string) {
@@ -60,13 +68,14 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const isOnboarding = isOnboardingPath(pathname);
   const isLogin = isLoginPath(pathname);
   const isChangePassword = isChangePasswordPath(pathname);
+  const isInvite = isInvitePath(pathname);
   const { ready, firebaseEnabled, user } = useMerchantAuth();
 
   useEffect(() => {
     if (!ready) return;
 
     // Cambio de contraseña: sesión = oobCode en el URL; no redirigir.
-    if (isChangePassword) return;
+    if (isChangePassword || isInvite) return;
 
     if (firebaseEnabled && !user) {
       if (!isOnboarding && !isLogin) {
@@ -143,6 +152,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     screen = (
       <Suspense fallback={<LoadingScreen />}>
         <MerchantChangePassword />
+      </Suspense>
+    );
+  } else if (isInvite) {
+    screen = (
+      <Suspense fallback={<LoadingScreen />}>
+        <MerchantInviteAccept />
       </Suspense>
     );
   } else if (firebaseEnabled && !user && !isOnboarding) {

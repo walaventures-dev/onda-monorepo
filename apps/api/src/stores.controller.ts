@@ -15,6 +15,7 @@ import {
 import { PrismaService } from './prisma.service';
 import { JobsService } from './jobs.service';
 import { CartillaService } from './cartilla.service';
+import { PosService } from './pos.service';
 import {
   generateReferralCode,
   defaultSegmentFor,
@@ -62,7 +63,8 @@ export class StoresController {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(JobsService) private jobs: JobsService,
-    @Inject(CartillaService) private cartillas: CartillaService
+    @Inject(CartillaService) private cartillas: CartillaService,
+    @Inject(PosService) private pos: PosService
   ) {}
 
   @Get()
@@ -213,10 +215,24 @@ export class StoresController {
         });
       }
 
+      if (created.ownerEmail) {
+        await tx.storeMember.create({
+          data: {
+            storeId: created.id,
+            email: created.ownerEmail.trim(),
+            name: created.ownerName,
+            role: 'ADMIN',
+            status: 'ACTIVE',
+            acceptedAt: new Date(),
+          },
+        });
+      }
+
       return created;
     });
 
     await this.cartillas.ensureDefaultCartilla(store.id);
+    await this.pos.bootstrapStore(store.id);
 
     if (store.ownerEmail) {
       try {
@@ -262,6 +278,7 @@ export class StoresController {
       maxStamps: number;
       currency: string;
       ondaValue: number | null;
+      posEnabled: boolean;
       ownerName: string;
     }>
   ) {
@@ -292,9 +309,13 @@ export class StoresController {
         }
       }
     }
+    let posEnabled: boolean | undefined;
+    if ('posEnabled' in body && body.posEnabled != null) {
+      posEnabled = Boolean(body.posEnabled);
+    }
     return this.prisma.store.update({
       where: { id },
-      data: { ...body, maxStamps, currency, ondaValue },
+      data: { ...body, maxStamps, currency, ondaValue, posEnabled },
     });
   }
 

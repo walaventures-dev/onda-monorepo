@@ -22,12 +22,14 @@ import type {
   JobPayloadMap,
   JobType,
   JobsEnqueueOptions,
+  PosAccountingSyncPayload,
   WalletNotifyJobPayload,
   WhatsappJobPayload,
   WompiRenewJobPayload,
 } from './jobs.types';
 import { CartillaService } from './cartilla.service';
 import { CampaignsService } from './campaigns.service';
+import { PosService } from './pos.service';
 
 const QUEUE_NAME = 'onda-jobs';
 const MS_30_DAYS = 30 * 24 * 60 * 60 * 1000;
@@ -46,7 +48,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     @Inject(WalletService) private wallet: WalletService,
     @Inject(WompiService) private wompi: WompiService,
     @Inject(forwardRef(() => CartillaService)) private cartillas: CartillaService,
-    @Inject(forwardRef(() => CampaignsService)) private campaigns: CampaignsService
+    @Inject(forwardRef(() => CampaignsService)) private campaigns: CampaignsService,
+    @Inject(forwardRef(() => PosService)) private pos: PosService
   ) {}
 
   get usesCloudTasks(): boolean {
@@ -159,6 +162,11 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       case 'campaign-pack-renew':
         await this.campaigns.renewPackSubscription(
           (payload as CampaignPackRenewPayload).storeId
+        );
+        return;
+      case 'pos-accounting-sync':
+        await this.pos.syncSaleAccounting(
+          (payload as PosAccountingSyncPayload).saleId
         );
         return;
       default:

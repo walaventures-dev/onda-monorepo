@@ -271,6 +271,14 @@ export {
 export { ONDA_CLAIM_QR_PREFIX, claimQrPayload, parseCajaQr } from './caja-qr';
 
 export {
+  calcChange,
+  posLineSubtotal,
+  TEAM_LIMITS,
+  maxCajaSeats,
+  DEFAULT_PAYMENT_METHODS,
+} from './pos';
+
+export {
   type PlanId,
   type BillingPeriod,
   type TimelineMonthKind,

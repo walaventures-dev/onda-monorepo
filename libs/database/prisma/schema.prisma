@@ -107,6 +107,55 @@ enum PendingRequestStatus {
   REJECTED
 }
 
+enum StoreMemberRole {
+  ADMIN
+  CAJA
+}
+
+enum StoreMemberStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+}
+
+enum PosItemKind {
+  PRODUCT
+  SERVICE
+}
+
+enum PosTabStatus {
+  OPEN
+  CHECKOUT
+  PAID
+  VOID
+}
+
+enum PosSaleStatus {
+  COMPLETED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  VOID
+}
+
+enum PosRefundKind {
+  FULL
+  PARTIAL
+  VOID_BEFORE_PAY
+}
+
+enum AccountingProvider {
+  NONE
+  ALEGRA
+  SIIGO
+}
+
+enum AccountingSyncStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
 enum StoreCategory {
   RESTAURANT
   SERVICE
@@ -202,6 +251,7 @@ model Store {
   maxStamps         Int                    @default(12)
   currency          String                 @default("COP")
   ondaValue         Float?
+  posEnabled        Boolean                @default(false)
   lat               Float?
   lng               Float?
   ownerName         String
@@ -227,6 +277,13 @@ model Store {
   campaignCredits   Int                    @default(0)
   campaignPackSubscribed Boolean           @default(false)
   createdAt         DateTime               @default(now())
+  members           StoreMember[]
+  posItems          PosItem[]
+  posAddons         PosAddon[]
+  posTabs           PosTab[]
+  posSales          PosSale[]
+  posPaymentMethods PosPaymentMethodConfig[]
+  accountingConfig  StoreAccountingConfig?
 
   @@index([ownerEmail])
 }
@@ -325,6 +382,7 @@ model Pass {
   transactions Transaction[]
   pendingRequests PendingRequest[]
   promoAssignments PassPromoAssignment[]
+  posTabs       PosTab[]
 
   @@index([userId, storeId])
   @@index([userId, eventId])
@@ -539,4 +597,251 @@ model PendingRequest {
 
   @@index([storeId, status])
   @@index([passId, status])
+}
+
+model StoreMember {
+  id          String            @id @default(uuid())
+  storeId     String
+  store       Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  email       String
+  name        String
+  role        StoreMemberRole
+  status      StoreMemberStatus @default(PENDING)
+  inviteToken String?           @unique
+  invitedAt   DateTime          @default(now())
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  firebaseUid String?
+
+  @@unique([storeId, email])
+  @@index([email, status])
+}
+
+model PosItem {
+  id          String           @id @default(uuid())
+  storeId     String
+  store       Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  kind        PosItemKind
+  name        String
+  price       Int
+  trackStock  Boolean          @default(false)
+  stockQty    Int?
+  isActive    Boolean          @default(true)
+  sortOrder   Int              @default(0)
+  externalSku String?
+  imageUrl    String?          @db.Text
+  variants    PosItemVariant[]
+  addons      PosItemAddon[]
+  tabLines    PosTabLine[]
+  saleLines   PosSaleLine[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([storeId, isActive])
+}
+
+model PosAddon {
+  id        String         @id @default(uuid())
+  storeId   String
+  store     Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name      String
+  price     Int            @default(0)
+  isActive  Boolean        @default(true)
+  sortOrder Int            @default(0)
+  items     PosItemAddon[]
+  tabLines  PosTabLineAddon[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([storeId, isActive])
+}
+
+model PosItemAddon {
+  id        String   @id @default(uuid())
+  itemId    String
+  item      PosItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  addonId   String
+  addon     PosAddon @relation(fields: [addonId], references: [id], onDelete: Cascade)
+  sortOrder Int      @default(0)
+
+  @@unique([itemId, addonId])
+  @@index([addonId])
+}
+
+model PosItemVariant {
+  id        String  @id @default(uuid())
+  itemId    String
+  item      PosItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  name      String
+  price     Int
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  @@index([itemId])
+}
+
+model PosTab {
+  id         String       @id @default(uuid())
+  storeId    String
+  store      Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  label      String
+  status     PosTabStatus @default(OPEN)
+  guestName  String?
+  userId     String?
+  passId     String?
+  pass       Pass?        @relation(fields: [passId], references: [id])
+  openedAt   DateTime     @default(now())
+  checkoutAt DateTime?
+  lines      PosTabLine[]
+  sale       PosSale?
+
+  @@index([storeId, status])
+}
+
+model PosTabLine {
+  id          String            @id @default(uuid())
+  tabId       String
+  tab         PosTab            @relation(fields: [tabId], references: [id], onDelete: Cascade)
+  itemId      String
+  item        PosItem           @relation(fields: [itemId], references: [id])
+  quantity    Int
+  unitPrice   Int
+  variantId   String?
+  variantName String?
+  addons      PosTabLineAddon[]
+
+  @@index([tabId])
+  @@index([itemId])
+}
+
+model PosTabLineAddon {
+  id      String     @id @default(uuid())
+  lineId  String
+  line    PosTabLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  addonId String?
+  addon   PosAddon?  @relation(fields: [addonId], references: [id], onDelete: SetNull)
+  name    String
+  price   Int        @default(0)
+
+  @@index([lineId])
+}
+
+model PosSale {
+  id            String            @id @default(uuid())
+  storeId       String
+  store         Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tabId         String            @unique
+  tab           PosTab            @relation(fields: [tabId], references: [id])
+  passId        String?
+  subtotal      Int
+  total         Int
+  status        PosSaleStatus     @default(COMPLETED)
+  completedAt   DateTime          @default(now())
+  ondasGranted  Int               @default(0)
+  loyaltyTxId   String?
+  payments      PosPayment[]
+  lines         PosSaleLine[]
+  refunds       PosRefund[]
+  accountingSync PosAccountingSync?
+
+  @@index([storeId, completedAt])
+  @@index([passId])
+}
+
+model PosSaleLine {
+  id          String             @id @default(uuid())
+  saleId      String
+  sale        PosSale            @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  itemId      String
+  item        PosItem            @relation(fields: [itemId], references: [id])
+  name        String
+  quantity    Int
+  unitPrice   Int
+  variantName String?
+  addons      PosSaleLineAddon[]
+
+  @@index([saleId])
+  @@index([itemId])
+}
+
+model PosSaleLineAddon {
+  id     String      @id @default(uuid())
+  lineId String
+  line   PosSaleLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  name   String
+  price  Int         @default(0)
+
+  @@index([lineId])
+}
+
+model PosPayment {
+  id           String  @id @default(uuid())
+  saleId       String
+  sale         PosSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  methodKey    String
+  amount       Int
+  cashReceived Int?
+  changeGiven  Int?
+
+  @@index([saleId])
+}
+
+model PosPaymentMethodConfig {
+  id        String  @id @default(uuid())
+  storeId   String
+  store     Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  key       String
+  label     String
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  @@unique([storeId, key])
+}
+
+model PosRefund {
+  id            String          @id @default(uuid())
+  saleId        String
+  sale          PosSale         @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  kind          PosRefundKind
+  reason        String?
+  amount        Int
+  ondasReversed Int             @default(0)
+  lines         PosRefundLine[]
+  createdAt     DateTime        @default(now())
+
+  @@index([saleId])
+}
+
+model PosRefundLine {
+  id        String    @id @default(uuid())
+  refundId  String
+  refund    PosRefund @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  itemId    String
+  quantity  Int
+  unitPrice Int
+
+  @@index([refundId])
+}
+
+model StoreAccountingConfig {
+  storeId     String             @id
+  store       Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  provider    AccountingProvider @default(NONE)
+  credentials Json?
+  autoSync    Boolean            @default(false)
+  updatedAt   DateTime           @updatedAt
+}
+
+model PosAccountingSync {
+  id         String               @id @default(uuid())
+  saleId     String               @unique
+  sale       PosSale              @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  provider   AccountingProvider
+  status     AccountingSyncStatus @default(PENDING)
+  externalId String?
+  lastError  String?
+  payload    Json?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
 }

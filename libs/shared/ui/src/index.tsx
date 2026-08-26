@@ -85,6 +85,12 @@ export {
   promoTypeIcon,
 } from './TxActivity';
 export type { TxActivityItem, TxKind } from './TxActivity';
+export { CajaScanClient } from './CajaScanClient';
+export {
+  CajaOperationsPanel,
+  AsociarVentaList,
+  AsociarVentaDetail,
+} from './AsociarVentaPanel';
 
 export function InfoTooltip({ text }: { text: string }) {
   return (
@@ -417,6 +423,12 @@ export type NavItem = {
   footer?: boolean;
 };
 
+export type NavCluster = {
+  id: string;
+  label?: string;
+  items: NavItem[];
+};
+
 function MenuIcon({ open }: { open: boolean }) {
   return (
     <svg
@@ -449,6 +461,7 @@ function MenuIcon({ open }: { open: boolean }) {
 export function AppShell({
   title,
   nav,
+  navClusters,
   children,
   userName = 'Usuario',
   toolbar,
@@ -456,7 +469,8 @@ export function AppShell({
   onLogout,
 }: {
   title: string;
-  nav: NavItem[];
+  nav?: NavItem[];
+  navClusters?: NavCluster[];
   children: React.ReactNode;
   userName?: string;
   toolbar?: React.ReactNode;
@@ -514,8 +528,13 @@ export function AppShell({
   const closeNav = () => setNavOpen(false);
   const toggleCollapsed = () => setCollapsed((v) => !v);
 
-  const mainNav = nav.filter((item) => !item.footer);
-  const footerNav = nav.filter((item) => item.footer);
+  const clusters: NavCluster[] =
+    navClusters ??
+    (nav ? [{ id: 'main', items: nav.filter((item) => !item.footer) }] : []);
+  const footerNav =
+    nav?.filter((item) => item.footer) ??
+    navClusters?.flatMap((c) => c.items.filter((i) => i.footer)) ??
+    [];
 
   const renderLink = (item: NavItem) => (
     <Link
@@ -559,7 +578,16 @@ export function AppShell({
           />
         </div>
         <nav className="onda-sidebar-nav" aria-label="Principal">
-          {mainNav.map(renderLink)}
+          {clusters.map((cluster) => (
+            <div key={cluster.id} className="onda-nav-cluster">
+              {cluster.label && !collapsed ? (
+                <p className="onda-nav-cluster-label px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+                  {cluster.label}
+                </p>
+              ) : null}
+              {cluster.items.filter((i) => !i.footer).map(renderLink)}
+            </div>
+          ))}
         </nav>
         <div className="onda-sidebar-footer">
           {footerNav.length > 0 ? (
