@@ -123,7 +123,7 @@ export function OndaLogo({
 }: {
   className?: string;
   compact?: boolean;
-  variant?: OndaBrandVariant;
+  variant?: Exclude<OndaBrandVariant, 'current'>;
 }) {
   if (compact) {
     return (
