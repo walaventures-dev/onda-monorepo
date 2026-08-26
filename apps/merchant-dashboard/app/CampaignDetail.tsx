@@ -1,16 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Bar,
   BarChart,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
-import { api, SkeletonDetail, toast } from '@onda/shared-ui';
+import { UsersThreeIcon as UsersThree } from '@phosphor-icons/react/dist/csr/UsersThree';
+import { ChartLineUpIcon as ChartLineUp } from '@phosphor-icons/react/dist/csr/ChartLineUp';
+import { CurrencyCircleDollarIcon as CurrencyCircleDollar } from '@phosphor-icons/react/dist/csr/CurrencyCircleDollar';
+import { TrendUpIcon as TrendUp } from '@phosphor-icons/react/dist/csr/TrendUp';
+import { api, KpiCard, SkeletonDetail, toast } from '@onda/shared-ui';
 import {
   formatCampaignRoi,
   formatCop,
@@ -77,6 +82,7 @@ export function CampaignDetail({
   const router = useRouter();
   const [data, setData] = useState<CampaignResults | null>(null);
   const [loading, setLoading] = useState(true);
+  const [configOpen, setConfigOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -89,6 +95,20 @@ export function CampaignDetail({
       .finally(() => setLoading(false));
   }, [campaignId, router]);
 
+  const funnelChart = useMemo(() => {
+    if (!data?.metrics || data.metrics.reachCount <= 0) return [];
+    const m = data.metrics;
+    return [
+      { etapa: 'Alcance', valor: m.reachCount, fill: '#3DB9E8' },
+      { etapa: 'Éxito', valor: m.successCount, fill: '#052DDE' },
+      {
+        etapa: 'Con venta',
+        valor: m.attributedSalesCop > 0 ? m.successCount : 0,
+        fill: '#2BB673',
+      },
+    ];
+  }, [data?.metrics]);
+
   if (loading || !data) {
     return <SkeletonDetail />;
   }
@@ -98,26 +118,15 @@ export function CampaignDetail({
     metrics && metrics.paidReachCount && metrics.paidReachCount > 0
       ? Math.round(metrics.costCop / metrics.paidReachCount)
       : 200;
-  const reachDelta =
-    campaign.audienceCount != null &&
-    campaign.reachCount != null &&
-    campaign.reachCount < campaign.audienceCount;
-
-  const funnelChart =
-    metrics && metrics.reachCount > 0
-      ? [
-          { etapa: 'Alcance', valor: metrics.reachCount },
-          { etapa: 'Éxito', valor: metrics.successCount },
-          {
-            etapa: 'Ventas',
-            valor: metrics.attributedSalesCop > 0 ? metrics.successCount : 0,
-          },
-        ]
-      : [];
+  const freeApplied = metrics?.freeReachApplied ?? 0;
+  const paidCount = metrics?.paidReachCount ?? 0;
+  const reachExpected = metrics?.audienceCount ?? campaign.audienceCount ?? 0;
+  const reachActual = metrics?.reachCount ?? 0;
+  const successPct = metrics ? Math.round(metrics.successRate * 100) : 0;
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <button
           type="button"
           onClick={onBack}
@@ -126,7 +135,20 @@ export function CampaignDetail({
           ← Campañas
         </button>
         <div className="text-right">
-          <h2 className="font-display text-2xl font-semibold">{campaign.title}</h2>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {metrics ? (
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                  metrics.worked
+                    ? 'bg-[var(--onda-success)]/15 text-[var(--onda-success)]'
+                    : 'bg-[var(--onda-muted)]/15 text-[var(--onda-muted)]'
+                }`}
+              >
+                {metrics.worked ? '✓ Funcionó' : 'En evaluación'}
+              </span>
+            ) : null}
+          </div>
+          <h2 className="mt-1 font-display text-2xl font-semibold">{campaign.title}</h2>
           <p className="mt-1 text-sm text-[var(--onda-muted)]">
             {OBJECTIVE_TITLES[configuration.objective]}
             {campaign.sentAt
@@ -139,159 +161,168 @@ export function CampaignDetail({
         </div>
       </header>
 
-      <section className="onda-card space-y-4 p-5">
-        <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
-          Configuración de la campaña
-        </h3>
-        <dl className="grid gap-3 sm:grid-cols-2 text-sm">
-          <div>
-            <dt className="text-[var(--onda-muted)]">Objetivo</dt>
-            <dd className="font-medium">{configuration.objectiveLabel}</dd>
-          </div>
-          <div>
-            <dt className="text-[var(--onda-muted)]">Programación</dt>
-            <dd>
-              {campaign.sentAt
-                ? 'Enviada'
-                : campaign.scheduledAt
-                  ? new Date(campaign.scheduledAt).toLocaleString('es-CO')
-                  : 'Ahora'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[var(--onda-muted)]">Canales</dt>
-            <dd>
-              {[configuration.sendWallet && 'Wallet', configuration.sendSms && 'SMS']
-                .filter(Boolean)
-                .join(' · ') || '—'}
-            </dd>
-          </div>
-        </dl>
-        {configuration.smsBody || configuration.walletBody ? (
-          <ul className="space-y-2 border-t border-[var(--onda-border)] pt-4">
-            {configuration.walletBody ? (
-              <li className="rounded-xl bg-[var(--onda-bg)] px-3 py-2 text-sm">
-                <span className="text-[10px] font-semibold uppercase text-[var(--onda-muted)]">
-                  Wallet
-                </span>
-                <p className="mt-1">{configuration.walletBody}</p>
-              </li>
-            ) : null}
-            {configuration.smsBody ? (
-              <li className="rounded-xl bg-[var(--onda-bg)] px-3 py-2 text-sm">
-                <span className="text-[10px] font-semibold uppercase text-[var(--onda-muted)]">
-                  SMS
-                </span>
-                <p className="mt-1">{configuration.smsBody}</p>
-              </li>
-            ) : null}
-          </ul>
-        ) : null}
-      </section>
-
       {metrics ? (
         <>
-          <section className="onda-card space-y-4 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-display text-sm font-semibold">Esperado vs real</h3>
-              {reachDelta ? (
-                <span className="rounded-full bg-[var(--onda-warning)]/15 px-2.5 py-1 text-xs font-medium text-[var(--onda-ink)]">
-                  Alcance menor al estimado
-                </span>
-              ) : null}
-              <span
-                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                  metrics.worked
-                    ? 'bg-[var(--onda-success)]/15 text-[var(--onda-success)]'
-                    : 'bg-[var(--onda-muted)]/15 text-[var(--onda-muted)]'
-                }`}
-              >
-                {metrics.worked ? '✓ Funcionó' : '✗ Por debajo del umbral'}
-              </span>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <MetricCompare
-                label="Alcance"
-                expected={campaign.audienceCount}
-                actual={metrics.reachCount}
-              />
-              <div className="rounded-xl border border-[var(--onda-border)] p-3">
-                <p className="text-xs text-[var(--onda-muted)]">{metrics.successLabel}</p>
-                <p className="mt-1 font-display text-2xl font-bold">
-                  {metrics.successCount}
-                </p>
-                <p className="text-xs text-[var(--onda-muted)]">
-                  {Math.round(metrics.successRate * 100)}% del alcance
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard
+              label="Personas alcanzadas"
+              value={reachActual}
+              hint={
+                reachExpected > 0
+                  ? `Estimaste ${reachExpected}`
+                  : undefined
+              }
+              icon={<UsersThree weight="duotone" />}
+              tone="sky"
+            />
+            <KpiCard
+              label={metrics.successLabel}
+              value={metrics.successCount}
+              hint={`${successPct}% del alcance`}
+              icon={<ChartLineUp weight="duotone" />}
+              tone="primary"
+            />
+            <KpiCard
+              label="Costo de alcance"
+              value={formatCop(metrics.costCop)}
+              hint={
+                paidCount > 0
+                  ? `${paidCount} de pago · ${freeApplied} gratis`
+                  : freeApplied > 0
+                    ? '100% cupo gratis'
+                    : 'Sin costo'
+              }
+              icon={<CurrencyCircleDollar weight="duotone" />}
+              tone="amber"
+            />
+            <KpiCard
+              label="ROI"
+              value={formatCampaignRoi(metrics.roiRatio)}
+              hint={
+                metrics.attributedSalesCop > 0
+                  ? `${formatCop(metrics.attributedSalesCop)} en ventas`
+                  : metrics.objective === 'reviews'
+                    ? `${metrics.successCount} reseñas`
+                    : 'Sin ventas aún'
+              }
+              icon={<TrendUp weight="duotone" />}
+              tone="success"
+            />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <section className="onda-card space-y-5 p-5">
+              <div>
+                <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
+                  ¿A cuántos llegó?
+                </h3>
+                <p className="mt-1 text-xs text-[var(--onda-muted)]">
+                  Comparación entre lo que estimaste al lanzar y lo que realmente contactamos.
                 </p>
               </div>
-              <MetricCompare
-                label="Costo (COP)"
-                expected={metrics.estimatedCostCop}
-                actual={metrics.costCop}
-                format={formatCop}
+              <ReachCompareBar expected={reachExpected} actual={reachActual} />
+              <div className="grid grid-cols-2 gap-3 text-center">
+                <div className="rounded-xl bg-[var(--onda-bg)] px-3 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+                    Estimado
+                  </p>
+                  <p className="mt-1 font-display text-2xl font-bold tabular-nums">
+                    {reachExpected || '—'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-[var(--onda-primary-50)] px-3 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--onda-primary-700)]">
+                    Real
+                  </p>
+                  <p className="mt-1 font-display text-2xl font-bold tabular-nums text-[var(--onda-primary-700)]">
+                    {reachActual}
+                  </p>
+                </div>
+              </div>
+              <SuccessMeter
+                label={metrics.successLabel}
+                count={metrics.successCount}
+                total={reachActual}
+                pct={successPct}
               />
-            </div>
-          </section>
+            </section>
 
-          <section className="onda-card space-y-3 p-5">
-            <h3 className="font-display text-sm font-semibold">Costo de la campaña (real)</h3>
-            <dl className="space-y-2 text-sm">
-              <Row label="Personas alcanzadas" value={String(metrics.reachCount)} />
-              <Row
-                label="Gratis aplicadas (mes)"
-                value={String(metrics.freeReachApplied ?? 0)}
-              />
-              {(metrics.paidReachCount ?? 0) > 0 ? (
-                <Row
-                  label="Personas de pago"
-                  value={`${metrics.paidReachCount} × ${formatCop(unitCop)}`}
-                />
-              ) : null}
-              <Row label="Costo total" value={formatCop(metrics.costCop)} bold />
-            </dl>
-          </section>
+            <section className="onda-card space-y-5 p-5">
+              <div>
+                <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
+                  ¿Cuánto costó y qué dejó?
+                </h3>
+                <p className="mt-1 text-xs text-[var(--onda-muted)]">
+                  Desglose del alcance y retorno en ventas atribuidas.
+                </p>
+              </div>
 
-          <section className="onda-card space-y-3 p-5">
-            <h3 className="font-display text-sm font-semibold">Retorno de inversión</h3>
-            <dl className="space-y-2 text-sm">
-              <Row
-                label="Ventas atribuidas"
-                value={formatCop(metrics.attributedSalesCop)}
+              <CostStackBar
+                free={freeApplied}
+                paid={paidCount}
+                total={reachActual}
+                unitCop={unitCop}
+                costCop={metrics.costCop}
               />
-              <Row label="Costo campaña" value={formatCop(metrics.costCop)} />
-              <Row
-                label="ROI"
-                value={formatCampaignRoi(metrics.roiRatio)}
-                bold
+
+              <InvestmentChart
+                costCop={metrics.costCop}
+                salesCop={metrics.attributedSalesCop}
               />
-            </dl>
-            {metrics.costCop > 0 && metrics.attributedSalesCop > 0 ? (
-              <p className="text-xs text-[var(--onda-muted)]">
-                Por cada $1 invertido en alcance, generaste{' '}
-                {formatCampaignRoi(metrics.roiRatio)} en ventas atribuidas.
-              </p>
-            ) : metrics.objective === 'reviews' ? (
-              <p className="text-xs text-[var(--onda-muted)]">
-                El retorno principal es reputación ({metrics.successCount} reseñas), no ventas
-                directas.
-              </p>
-            ) : (
-              <p className="text-xs text-[var(--onda-muted)]">
-                Aún no hay ventas atribuidas en la ventana de medición.
-              </p>
-            )}
-          </section>
+
+              <div className="rounded-2xl bg-[var(--onda-bg)] px-4 py-4 text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+                  Retorno
+                </p>
+                <p className="mt-1 font-display text-4xl font-bold text-[var(--onda-ink)]">
+                  {formatCampaignRoi(metrics.roiRatio)}
+                </p>
+                <p className="mt-2 text-xs leading-relaxed text-[var(--onda-muted)]">
+                  {metrics.costCop > 0 && metrics.attributedSalesCop > 0 ? (
+                    <>
+                      Por cada <strong className="text-[var(--onda-ink)]">$1</strong> en alcance
+                      generaste{' '}
+                      <strong className="text-[var(--onda-ink)]">
+                        {formatCampaignRoi(metrics.roiRatio)}
+                      </strong>{' '}
+                      en ventas.
+                    </>
+                  ) : metrics.objective === 'reviews' ? (
+                    <>El valor principal son {metrics.successCount} reseñas, no ventas directas.</>
+                  ) : metrics.costCop === 0 ? (
+                    <>Campaña 100% gratis — el ROI en ventas aparece cuando haya compras atribuidas.</>
+                  ) : (
+                    <>Aún no hay ventas atribuidas en la ventana de medición.</>
+                  )}
+                </p>
+              </div>
+            </section>
+          </div>
 
           {funnelChart.length > 0 ? (
             <section className="onda-card p-5">
-              <h3 className="font-display text-sm font-semibold">Conversión</h3>
-              <div className="mt-4 h-48">
+              <h3 className="font-display text-sm font-semibold">Embudo de la campaña</h3>
+              <p className="mt-1 text-xs text-[var(--onda-muted)]">
+                De personas contactadas a conversiones y ventas atribuidas.
+              </p>
+              <div className="mt-4 h-52">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={funnelChart}>
-                    <XAxis dataKey="etapa" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip />
-                    <Bar dataKey="valor" fill="var(--onda-primary-500)" radius={[6, 6, 0, 0]} />
+                  <BarChart data={funnelChart} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                    <XAxis dataKey="etapa" tick={{ fontSize: 12 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={32} />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(5,45,222,0.06)' }}
+                      contentStyle={{
+                        borderRadius: 12,
+                        border: '1px solid var(--onda-border)',
+                        fontSize: 12,
+                      }}
+                    />
+                    <Bar dataKey="valor" name="Personas" radius={[8, 8, 0, 0]}>
+                      {funnelChart.map((entry) => (
+                        <Cell key={entry.etapa} fill={entry.fill} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -303,51 +334,225 @@ export function CampaignDetail({
           Los resultados aparecen cuando la campaña se envía.
         </p>
       )}
+
+      <section className="onda-card overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setConfigOpen((o) => !o)}
+          className="flex w-full items-center justify-between px-5 py-4 text-left"
+        >
+          <span className="font-display text-sm font-semibold text-[var(--onda-ink)]">
+            Lo que configuraste
+          </span>
+          <span className="text-xs text-[var(--onda-muted)]">{configOpen ? 'Ocultar' : 'Ver'}</span>
+        </button>
+        {configOpen ? (
+          <div className="space-y-4 border-t border-[var(--onda-border)] px-5 pb-5 pt-4">
+            <p className="text-sm font-medium">{configuration.objectiveLabel}</p>
+            <p className="text-xs text-[var(--onda-muted)]">
+              {[configuration.sendWallet && 'Wallet', configuration.sendSms && 'SMS']
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+            {configuration.walletBody ? (
+              <MessageBubble channel="Wallet" text={configuration.walletBody} />
+            ) : null}
+            {configuration.smsBody ? (
+              <MessageBubble channel="SMS" text={configuration.smsBody} />
+            ) : null}
+          </div>
+        ) : null}
+      </section>
     </div>
   );
 }
 
-function Row({
-  label,
-  value,
-  bold,
-}: {
-  label: string;
-  value: string;
-  bold?: boolean;
-}) {
+function ReachCompareBar({ expected, actual }: { expected: number; actual: number }) {
+  const max = Math.max(expected, actual, 1);
+  const expectedPct = expected > 0 ? (expected / max) * 100 : 0;
+  const actualPct = (actual / max) * 100;
+
   return (
-    <div className="flex justify-between gap-4">
-      <dt className="text-[var(--onda-muted)]">{label}</dt>
-      <dd className={bold ? 'font-semibold text-[var(--onda-ink)]' : ''}>{value}</dd>
+    <div className="space-y-3">
+      <div>
+        <div className="mb-1 flex justify-between text-[10px] font-medium text-[var(--onda-muted)]">
+          <span>Estimado al lanzar</span>
+          <span>{expected || 0}</span>
+        </div>
+        <div className="h-3 overflow-hidden rounded-full bg-[var(--onda-bg)]">
+          <div
+            className="h-full rounded-full bg-[var(--onda-border)] transition-all"
+            style={{ width: `${expectedPct}%` }}
+          />
+        </div>
+      </div>
+      <div>
+        <div className="mb-1 flex justify-between text-[10px] font-medium text-[var(--onda-primary-700)]">
+          <span>Alcance real</span>
+          <span>{actual}</span>
+        </div>
+        <div className="h-3 overflow-hidden rounded-full bg-[var(--onda-primary-50)]">
+          <div
+            className="h-full rounded-full bg-[var(--onda-primary-500)] transition-all"
+            style={{ width: `${actualPct}%` }}
+          />
+        </div>
+      </div>
     </div>
   );
 }
 
-function MetricCompare({
+function SuccessMeter({
   label,
-  expected,
-  actual,
-  format = (n: number) => String(n),
+  count,
+  total,
+  pct,
 }: {
   label: string;
-  expected: number | null | undefined;
-  actual: number | null | undefined;
-  format?: (n: number) => string;
+  count: number;
+  total: number;
+  pct: number;
 }) {
-  const exp = expected ?? 0;
-  const act = actual ?? 0;
-  const delta = exp > 0 ? Math.round(((act - exp) / exp) * 100) : null;
   return (
-    <div className="rounded-xl border border-[var(--onda-border)] p-3">
-      <p className="text-xs text-[var(--onda-muted)]">{label}</p>
-      <p className="mt-1 text-xs text-[var(--onda-muted)]">
-        Estimado: {expected != null ? format(exp) : '—'}
+    <div className="rounded-xl border border-[var(--onda-border)] p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-[var(--onda-muted)]">{label}</p>
+        <p className="font-display text-lg font-bold tabular-nums">
+          {count}
+          <span className="text-sm font-normal text-[var(--onda-muted)]"> / {total || 0}</span>
+        </p>
+      </div>
+      <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-[var(--onda-bg)]">
+        <div
+          className="h-full rounded-full bg-[var(--onda-success)] transition-all"
+          style={{ width: `${Math.min(100, total > 0 ? pct : 0)}%` }}
+        />
+      </div>
+      <p className="mt-2 text-[11px] text-[var(--onda-muted)]">{pct}% respondió al objetivo</p>
+    </div>
+  );
+}
+
+function CostStackBar({
+  free,
+  paid,
+  total,
+  unitCop,
+  costCop,
+}: {
+  free: number;
+  paid: number;
+  total: number;
+  unitCop: number;
+  costCop: number;
+}) {
+  if (total <= 0) {
+    return (
+      <p className="text-sm text-[var(--onda-muted)]">Sin personas alcanzadas en el envío.</p>
+    );
+  }
+  const freePct = (free / total) * 100;
+  const paidPct = (paid / total) * 100;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex h-8 overflow-hidden rounded-xl">
+        {free > 0 ? (
+          <div
+            className="flex items-center justify-center bg-[var(--onda-success)]/20 text-[10px] font-semibold text-[var(--onda-success)]"
+            style={{ width: `${freePct}%` }}
+            title={`${free} gratis`}
+          >
+            {freePct >= 18 ? `${free} gratis` : ''}
+          </div>
+        ) : null}
+        {paid > 0 ? (
+          <div
+            className="flex items-center justify-center bg-[#F5A524]/25 text-[10px] font-semibold text-[var(--onda-ink)]"
+            style={{ width: `${paidPct}%` }}
+            title={`${paid} de pago`}
+          >
+            {paidPct >= 18 ? `${paid} × ${formatCop(unitCop)}` : ''}
+          </div>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap gap-4 text-xs">
+        <LegendDot color="var(--onda-success)" label={`${free} cupo gratis`} />
+        {paid > 0 ? (
+          <LegendDot color="#F5A524" label={`${paid} de pago (${formatCop(unitCop)} c/u)`} />
+        ) : null}
+        <span className="ml-auto font-semibold tabular-nums text-[var(--onda-ink)]">
+          Total {formatCop(costCop)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function InvestmentChart({
+  costCop,
+  salesCop,
+}: {
+  costCop: number;
+  salesCop: number;
+}) {
+  const data = [
+    { name: 'Costo', monto: costCop, fill: '#F5A524' },
+    { name: 'Ventas', monto: salesCop, fill: '#2BB673' },
+  ];
+  const max = Math.max(costCop, salesCop, 1);
+
+  return (
+    <div>
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+        Costo vs ventas atribuidas
       </p>
-      <p className="font-display text-2xl font-bold">{format(act)}</p>
-      {delta != null && delta !== 0 ? (
-        <p className="text-xs text-[var(--onda-muted)]">{delta > 0 ? '+' : ''}{delta}% vs estimado</p>
-      ) : null}
+      <div className="h-36">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={data}
+            layout="vertical"
+            margin={{ top: 0, right: 8, left: 8, bottom: 0 }}
+          >
+            <XAxis type="number" hide domain={[0, max * 1.15]} />
+            <YAxis type="category" dataKey="name" width={52} tick={{ fontSize: 11 }} />
+            <Tooltip
+              formatter={(v: number) => formatCop(v)}
+              cursor={{ fill: 'rgba(5,45,222,0.04)' }}
+              contentStyle={{
+                borderRadius: 12,
+                border: '1px solid var(--onda-border)',
+                fontSize: 12,
+              }}
+            />
+            <Bar dataKey="monto" radius={[0, 6, 6, 0]} barSize={22}>
+              {data.map((entry) => (
+                <Cell key={entry.name} fill={entry.fill} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[var(--onda-muted)]">
+      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+      {label}
+    </span>
+  );
+}
+
+function MessageBubble({ channel, text }: { channel: string; text: string }) {
+  return (
+    <div className="rounded-xl bg-[var(--onda-bg)] px-3 py-2.5 text-sm">
+      <span className="text-[10px] font-semibold uppercase text-[var(--onda-muted)]">
+        {channel}
+      </span>
+      <p className="mt-1 leading-snug">{text}</p>
     </div>
   );
 }
