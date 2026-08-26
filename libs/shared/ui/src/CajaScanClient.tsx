@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser';
 import { api, setApiAuthTokenGetter } from './api';
+import { Skeleton, SkeletonList, SkeletonScreen } from './Skeleton';
 import { OndaHandMark } from './brand';
 import {
   formatMoneyInput,
@@ -335,7 +336,7 @@ function AccumulateLinkTabs({
           Elige una venta abierta sin cliente. Las ondas se acumulan al cobrar.
         </p>
         {loading ? (
-          <p className="py-4 text-center text-sm text-[var(--onda-muted)]">Cargando…</p>
+          <SkeletonList rows={3} />
         ) : tabs.length === 0 ? (
           <p className="py-4 text-center text-sm text-[var(--onda-muted)]">
             No hay cuentas pendientes de asociar.
@@ -690,15 +691,10 @@ export function CajaScanClient({
 
   if (!storeId) {
     return (
-      <main
-        className={
-          embedded
-            ? 'flex min-h-[12rem] items-center justify-center text-sm text-[var(--onda-muted)]'
-            : 'flex min-h-dvh items-center justify-center text-sm text-[var(--onda-muted)]'
-        }
-      >
-        Abriendo caja…
-      </main>
+      <SkeletonScreen
+        label="Abriendo caja"
+        className={embedded ? 'min-h-[12rem]' : undefined}
+      />
     );
   }
 
@@ -731,9 +727,9 @@ export function CajaScanClient({
           />
           <div className="onda-caja-scan-frame" />
           {!camReady && !flash ? (
-            <p className="onda-caja-flash text-sm text-[var(--onda-muted)]">
-              Abriendo cámara…
-            </p>
+            <div className="onda-caja-flash flex justify-center">
+              <Skeleton className="h-3 w-28" />
+            </div>
           ) : null}
           {flash ? (
             <div

@@ -9,17 +9,46 @@ import { PlusCircleIcon as PlusCircle } from '@phosphor-icons/react/dist/csr/Plu
 import { QrCodeIcon as QrCode } from '@phosphor-icons/react/dist/csr/QrCode';
 import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
 import { UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
-import { WavesIcon as Waves } from '@phosphor-icons/react/dist/csr/Waves';
 import { api } from './api';
 import { CajaScanClient } from './CajaScanClient';
 import { PhoneInput } from './PhoneInput';
+import { OndaWordmark, OndaHandMark } from './brand';
 import {
   formatCop,
   isCompletePhoneMask,
   ondasFromPayment,
   toE164Colombia,
 } from '@onda/shared-utils';
+import { SkeletonList } from './Skeleton';
 import type { PosTabDto } from '@onda/shared-types';
+
+function CajaIdentity({ storeName }: { storeName?: string }) {
+  const name = storeName?.trim() || 'tu comercio';
+  return (
+    <div className="flex flex-col items-center gap-3 text-center">
+      <OndaWordmark className="h-6 w-auto" />
+      <h1 className="font-display text-xl font-bold leading-snug text-[var(--onda-ink)] sm:text-2xl">
+        <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--onda-muted)]">
+          Caja móvil de
+        </span>
+        <span className="mt-1 block">{name}</span>
+      </h1>
+    </div>
+  );
+}
+
+/** Cabecera compacta al entrar a Acumular / Cuentas. */
+function CajaIdentityBar({ storeName }: { storeName?: string }) {
+  const name = storeName?.trim() || 'tu comercio';
+  return (
+    <header className="flex items-center justify-between gap-3">
+      <OndaWordmark className="h-4 w-auto shrink-0" />
+      <p className="min-w-0 truncate text-right text-sm font-semibold text-[var(--onda-ink)]">
+        {name}
+      </p>
+    </header>
+  );
+}
 
 function QrLinkScanner({
   onScan,
@@ -83,9 +112,9 @@ function BackButton({ onClick, label }: { onClick: () => void; label: string }) 
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--onda-primary)]"
+      className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--onda-primary-500)]"
     >
-      <CaretLeft className="h-4 w-4" weight="bold" aria-hidden />
+      <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
       {label}
     </button>
   );
@@ -124,8 +153,8 @@ export function AsociarVentaList({
   if (tabs.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 py-14 text-center">
-        <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--onda-bg)] text-[var(--onda-muted)]">
-          <Receipt className="h-8 w-8" weight="duotone" aria-hidden />
+        <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--onda-primary-50)] text-[var(--onda-primary-500)]">
+          <Receipt className="h-8 w-8" weight="regular" aria-hidden />
         </span>
         <p className="font-display text-lg font-semibold text-[var(--onda-ink)]">
           Sin cuentas
@@ -152,13 +181,13 @@ export function AsociarVentaList({
                 className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
                   linked
                     ? 'bg-[var(--onda-success)]/15 text-[var(--onda-success)]'
-                    : 'bg-[var(--onda-sky-soft)] text-[var(--onda-sky)]'
+                    : 'bg-[var(--onda-primary-50)] text-[var(--onda-primary-500)]'
                 }`}
               >
                 {linked ? (
-                  <UserCircle className="h-7 w-7" weight="duotone" aria-hidden />
+                  <UserCircle className="h-7 w-7" weight="regular" aria-hidden />
                 ) : (
-                  <Receipt className="h-7 w-7" weight="duotone" aria-hidden />
+                  <Receipt className="h-7 w-7" weight="regular" aria-hidden />
                 )}
               </span>
               <div className="min-w-0 flex-1">
@@ -274,11 +303,7 @@ export function AsociarVentaDetail({
   );
 
   if (!tab) {
-    return (
-      <p className="py-10 text-center text-sm text-[var(--onda-muted)]">
-        Cargando…
-      </p>
-    );
+    return <SkeletonList rows={3} />;
   }
 
   if (tab.status !== 'OPEN' && tab.status !== 'CHECKOUT') {
@@ -329,7 +354,7 @@ export function AsociarVentaDetail({
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-[var(--onda-success)]/25 bg-[var(--onda-success)]/10 px-4 py-8 text-center">
           <UserCircle
             className="h-14 w-14 text-[var(--onda-success)]"
-            weight="duotone"
+            weight="regular"
             aria-hidden
           />
           <p className="font-display text-xl font-semibold text-[var(--onda-ink)]">
@@ -354,11 +379,11 @@ export function AsociarVentaDetail({
               onClick={() => setMode('qr')}
               className={`flex flex-col items-center gap-1.5 rounded-2xl border px-3 py-3 text-sm font-semibold transition ${
                 mode === 'qr'
-                  ? 'border-[var(--onda-primary)] bg-[var(--onda-primary-50)] text-[var(--onda-primary)]'
-                  : 'border-[var(--onda-border)] text-[var(--onda-muted)]'
+                  ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-50)] text-[var(--onda-primary-700)]'
+                  : 'border-[var(--onda-border)] bg-[var(--onda-card)] text-[var(--onda-muted)]'
               }`}
             >
-              <QrCode className="h-6 w-6" weight="duotone" aria-hidden />
+              <QrCode className="h-6 w-6" weight="regular" aria-hidden />
               Escanear
             </button>
             <button
@@ -366,11 +391,11 @@ export function AsociarVentaDetail({
               onClick={() => setMode('phone')}
               className={`flex flex-col items-center gap-1.5 rounded-2xl border px-3 py-3 text-sm font-semibold transition ${
                 mode === 'phone'
-                  ? 'border-[var(--onda-primary)] bg-[var(--onda-primary-50)] text-[var(--onda-primary)]'
-                  : 'border-[var(--onda-border)] text-[var(--onda-muted)]'
+                  ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-50)] text-[var(--onda-primary-700)]'
+                  : 'border-[var(--onda-border)] bg-[var(--onda-card)] text-[var(--onda-muted)]'
               }`}
             >
-              <Phone className="h-6 w-6" weight="duotone" aria-hidden />
+              <Phone className="h-6 w-6" weight="regular" aria-hidden />
               Celular
             </button>
           </div>
@@ -434,28 +459,25 @@ export function CajaOperationsPanel({
 
   if (selectedTabId) {
     return (
-      <AsociarVentaDetail
-        storeId={storeId}
-        tabId={selectedTabId}
-        token={token}
-        ondaValue={ondaValue}
-        onBack={() => setSelectedTabId(null)}
-      />
+      <div className="flex min-h-[70dvh] flex-col gap-3">
+        <CajaIdentityBar storeName={storeName} />
+        <AsociarVentaDetail
+          storeId={storeId}
+          tabId={selectedTabId}
+          token={token}
+          ondaValue={ondaValue}
+          onBack={() => setSelectedTabId(null)}
+        />
+      </div>
     );
   }
 
   if (mode === 'acumular') {
     return (
-      <div className="space-y-3">
-        {posEnabled ? (
-          <BackButton onClick={() => setMode('home')} label="Inicio" />
-        ) : storeName ? (
-          <h1 className="font-display text-center text-xl font-semibold">
-            {storeName}
-          </h1>
-        ) : null}
-        <div className="flex items-center justify-center gap-2 text-[var(--onda-primary)]">
-          <Waves className="h-5 w-5" weight="duotone" aria-hidden />
+      <div className="flex min-h-[70dvh] flex-col gap-3">
+        <CajaIdentityBar storeName={storeName} />
+        <div className="flex items-center justify-center gap-2 text-[var(--onda-sky)]">
+          <OndaHandMark className="h-5 w-auto" />
           <p className="font-display text-lg font-semibold text-[var(--onda-ink)]">
             Acumular
           </p>
@@ -463,7 +485,7 @@ export function CajaOperationsPanel({
         <p className="text-center text-sm text-[var(--onda-muted)]">
           Escanea el pase del cliente
         </p>
-        <div className="overflow-hidden rounded-2xl">
+        <div className="min-h-0 flex-1 overflow-hidden rounded-2xl">
           <CajaScanClient
             storeId={storeId}
             token={token}
@@ -472,27 +494,53 @@ export function CajaOperationsPanel({
             posEnabled={posEnabled}
           />
         </div>
+        {posEnabled ? (
+          <div className="flex justify-center pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1">
+            <button
+              type="button"
+              onClick={() => setMode('home')}
+              className="inline-flex min-h-12 min-w-[12rem] cursor-pointer items-center justify-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 text-sm font-semibold text-[var(--onda-ink)] shadow-[0_8px_24px_rgba(26,27,46,0.06)] transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary-500)]/35"
+            >
+              <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
+              Inicio
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   }
 
   if (mode === 'asociar') {
     return (
-      <div className="space-y-4">
-        <BackButton onClick={() => setMode('home')} label="Inicio" />
+      <div className="flex min-h-[70dvh] flex-col gap-4">
+        <CajaIdentityBar storeName={storeName} />
         <div className="flex items-center justify-center gap-2">
           <PlusCircle
-            className="h-5 w-5 text-[var(--onda-sky)]"
-            weight="duotone"
+            className="h-5 w-5 text-[var(--onda-primary-500)]"
+            weight="regular"
             aria-hidden
           />
-          <h2 className="font-display text-lg font-semibold">Cuentas</h2>
+          <h2 className="font-display text-lg font-semibold text-[var(--onda-ink)]">
+            Cuentas
+          </h2>
         </div>
-        <AsociarVentaList
-          storeId={storeId}
-          token={token}
-          onSelect={setSelectedTabId}
-        />
+        <div className="min-h-0 flex-1">
+          <AsociarVentaList
+            storeId={storeId}
+            token={token}
+            onSelect={setSelectedTabId}
+          />
+        </div>
+        <div className="flex justify-center pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1">
+          <button
+            type="button"
+            onClick={() => setMode('home')}
+            className="inline-flex min-h-12 min-w-[12rem] cursor-pointer items-center justify-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 text-sm font-semibold text-[var(--onda-ink)] shadow-[0_8px_24px_rgba(26,27,46,0.06)] transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary-500)]/35"
+          >
+            <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
+            Inicio
+          </button>
+        </div>
       </div>
     );
   }
@@ -500,38 +548,39 @@ export function CajaOperationsPanel({
   /* Home: dos acciones grandes */
   return (
     <div className="flex min-h-[70dvh] flex-col">
-      <div className="mb-8 text-center">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--onda-muted)]">
-          Caja
-        </p>
-        <h1 className="mt-1 font-display text-2xl font-bold text-[var(--onda-ink)]">
-          {storeName || 'Onda'}
-        </h1>
+      <div className="mb-8">
+        <CajaIdentity storeName={storeName} />
       </div>
 
-      <div className="grid flex-1 content-center gap-4">
+      <div className="grid flex-1 content-center gap-3">
         <button
           type="button"
           onClick={() => setMode('acumular')}
-          className="flex flex-col items-center gap-3 rounded-[1.5rem] bg-[var(--onda-primary)] px-6 py-10 text-white shadow-[0_16px_40px_rgba(5,45,222,0.28)] transition active:scale-[0.98]"
+          className="flex flex-col items-center gap-3 rounded-[1.5rem] bg-[var(--onda-sky)] px-6 py-10 text-[var(--onda-ink)] shadow-[0_16px_40px_rgba(61,185,232,0.35)] transition duration-150 hover:-translate-y-0.5 hover:shadow-[0_20px_48px_rgba(61,185,232,0.45)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-sky)] focus-visible:ring-offset-2"
         >
-          <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-white/15">
-            <QrCode className="h-9 w-9" weight="duotone" aria-hidden />
+          <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-white/55 text-[var(--onda-ink)]">
+            <QrCode className="h-9 w-9" weight="regular" aria-hidden />
           </span>
-          <span className="font-display text-2xl font-bold">Acumular</span>
-          <span className="text-sm text-white/80">Escanear pase</span>
+          <span className="font-display text-2xl font-bold tracking-tight">
+            Acumular
+          </span>
+          <span className="text-sm font-medium text-[var(--onda-ink)]/70">
+            Escanear pase
+          </span>
         </button>
 
         <button
           type="button"
           onClick={() => setMode('asociar')}
-          className="flex flex-col items-center gap-3 rounded-[1.5rem] border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 py-10 text-[var(--onda-ink)] shadow-[0_12px_28px_rgba(26,27,46,0.08)] transition active:scale-[0.98]"
+          className="flex flex-col items-center gap-3 rounded-[1.5rem] border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 py-10 text-[var(--onda-ink)] shadow-[0_12px_28px_rgba(26,27,46,0.08)] transition duration-150 hover:-translate-y-0.5 hover:border-[var(--onda-primary-500)]/30 hover:shadow-[0_16px_36px_rgba(26,27,46,0.12)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary-500)]/35 focus-visible:ring-offset-2"
         >
-          <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--onda-sky-soft)] text-[var(--onda-sky)]">
-            <Receipt className="h-9 w-9" weight="duotone" aria-hidden />
+          <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--onda-primary-100)] text-[var(--onda-primary-500)]">
+            <Receipt className="h-9 w-9" weight="regular" aria-hidden />
           </span>
-          <span className="font-display text-2xl font-bold">Cuentas</span>
-          <span className="text-sm text-[var(--onda-muted)]">
+          <span className="font-display text-2xl font-bold tracking-tight">
+            Cuentas
+          </span>
+          <span className="text-sm font-medium text-[var(--onda-muted)]">
             Asociar cliente a venta
           </span>
         </button>

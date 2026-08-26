@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api, PassPreview } from '@onda/shared-ui';
+import { api, PassPreview, SkeletonPwa } from '@onda/shared-ui';
 import { cartillaDeadlineLabel, loyaltyProgressCopy, pickLoyaltyReward } from '@onda/shared-utils';
 import { loadSession, type CustomerSession } from '../lib/session';
 import { issueWalletPass, walletInstallUrl } from '../lib/wallet';
@@ -140,8 +140,8 @@ export function MisTarjetasClient() {
 
   if (step === 'loading') {
     return (
-      <div className="onda-pwa-shell items-center justify-center gap-3">
-        <div className="onda-pwa-avatar onda-pwa-avatar--pulse" aria-hidden />
+      <div className="onda-pwa-shell items-center justify-center">
+        <SkeletonPwa />
       </div>
     );
   }

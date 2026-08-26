@@ -1,6 +1,6 @@
 "use client";
 
-import { OndaIcons } from "@onda/shared-ui";
+import { OndaIcons, SkeletonList } from "@onda/shared-ui";
 import { CartillaEditor } from "./CartillaEditor";
 import type { StoreSetupStatus } from "./setupStatus";
 
@@ -100,7 +100,7 @@ export function SetupChecklist({
           onPromoCreated={onPromoCreated}
         />
       ) : (
-        <p className="text-sm text-[var(--onda-muted)]">Cargando cartilla…</p>
+        <SkeletonList rows={3} />
       )}
     </div>
   );

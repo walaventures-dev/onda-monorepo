@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
-import { ToastProvider, api } from "@onda/shared-ui";
+import { ToastProvider, api, SkeletonScreen } from "@onda/shared-ui";
 import { MerchantWorkspace } from "./MerchantWorkspace";
 import { MerchantOnboarding } from "./MerchantOnboarding";
 import { MerchantLogin } from "./MerchantLogin";
@@ -14,14 +14,6 @@ import {
   merchantHomePath,
   type StoreSetupFields,
 } from "./setupStatus";
-
-function LoadingScreen() {
-  return (
-    <div className="flex min-h-screen items-center justify-center text-sm text-[var(--onda-muted)]">
-      Cargando…
-    </div>
-  );
-}
 
 function isLoginPath(pathname: string) {
   return pathname === "/login" || pathname.startsWith("/login/");
@@ -144,29 +136,29 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   ]);
 
   if (!ready) {
-    return <LoadingScreen />;
+    return <SkeletonScreen />;
   }
 
   let screen: ReactNode;
   if (isChangePassword) {
     screen = (
-      <Suspense fallback={<LoadingScreen />}>
+      <Suspense fallback={<SkeletonScreen />}>
         <MerchantChangePassword />
       </Suspense>
     );
   } else if (isInvite) {
     screen = (
-      <Suspense fallback={<LoadingScreen />}>
+      <Suspense fallback={<SkeletonScreen />}>
         <MerchantInviteAccept />
       </Suspense>
     );
   } else if (firebaseEnabled && !user && !isOnboarding) {
-    screen = isLogin ? <MerchantLogin /> : <LoadingScreen />;
+    screen = isLogin ? <MerchantLogin /> : <SkeletonScreen />;
   } else if (user && isLogin) {
-    screen = <LoadingScreen />;
+    screen = <SkeletonScreen />;
   } else if (isOnboarding) {
     screen = (
-      <Suspense fallback={<LoadingScreen />}>
+      <Suspense fallback={<SkeletonScreen />}>
         <MerchantOnboarding />
       </Suspense>
     );

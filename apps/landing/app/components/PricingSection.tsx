@@ -57,7 +57,7 @@ export function PricingSection() {
           Planes que se pagan solos
         </motion.h2>
         <motion.p variants={staggerItem} className="mt-3 text-lg text-[var(--onda-muted)]">
-          Primer mes gratis. Elige plan y periodo — sin tarjeta para empezar.
+          POS y lealtad incluidos. Primer mes gratis — sin tarjeta para empezar.
         </motion.p>
       </motion.div>
 

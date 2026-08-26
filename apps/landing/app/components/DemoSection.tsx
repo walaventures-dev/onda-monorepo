@@ -319,7 +319,7 @@ export function DemoSection() {
     <section id="demo" className="mx-auto max-w-6xl px-6 py-20 md:py-28">
       <motion.div {...fadeUp} className="max-w-2xl">
         <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold tracking-tight text-[var(--onda-ink)]">
-          Pruébalo en vivo
+          El lado Lealtad, en vivo
         </h2>
         <p className="mt-3 text-lg text-[var(--onda-muted)]">
           Activa la tarjeta de <strong className="text-[var(--onda-ink)]">Onda Spa</strong>,

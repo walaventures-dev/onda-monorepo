@@ -5,6 +5,7 @@ import {
   api,
   GradientButton,
   OndaIcons,
+  SkeletonDashboard,
 } from '@onda/shared-ui';
 import { formatDateEs } from '@onda/shared-utils';
 
@@ -198,9 +199,7 @@ export function ReferralsPanel({ storeId }: { storeId: string }) {
   }
 
   if (loading) {
-    return (
-      <p className="text-sm text-[var(--onda-muted)]">Cargando referidos…</p>
-    );
+    return <SkeletonDashboard kpis={3} />;
   }
 
   if (error) {

@@ -160,8 +160,9 @@ export function CampaignSection() {
           Llena el local cuando esté flojo.
         </motion.h2>
         <motion.p variants={staggerItem} className="mt-3 text-lg text-[var(--onda-muted)]">
-          Objetivo, audiencia y promo: en cuatro pasos llegas a tus clientes
-          por Wallet y SMS — {PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis al mes.
+          Desde Lealtad: objetivo, audiencia y promo en cuatro pasos. Llegas a
+          tus clientes por Wallet y SMS — {PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS
+          gratis al mes.
         </motion.p>
       </motion.div>
 

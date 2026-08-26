@@ -8,6 +8,7 @@ import {
   Button,
   api,
   setApiAuthTokenGetter,
+  SkeletonScreen,
 } from '@onda/shared-ui';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getMerchantAuth } from '../lib/firebase';
@@ -57,11 +58,7 @@ export function CajaKioskClient({ token }: { token: string }) {
   }
 
   if (!session) {
-    return (
-      <main className="flex min-h-dvh items-center justify-center text-sm text-[var(--onda-muted)]">
-        Abriendo caja…
-      </main>
-    );
+    return <SkeletonScreen label="Abriendo caja" />;
   }
 
   return (
@@ -186,11 +183,7 @@ export function CajaHubClient() {
   }, [ready, user, firebaseEnabled, router]);
 
   if (!storeId) {
-    return (
-      <p className="p-6 text-center text-sm text-[var(--onda-muted)]">
-        Cargando sede…
-      </p>
-    );
+    return <SkeletonScreen label="Cargando sede" />;
   }
 
   return (

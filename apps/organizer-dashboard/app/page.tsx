@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AppShell, KpiCard, GradientButton, PassPreview, HeatmapPoints, OndaSelect, OndaColorPicker, ImageUploadField, useOndaDialogs, api, OndaIcons } from '@onda/shared-ui';
+import { AppShell, KpiCard, GradientButton, PassPreview, HeatmapPoints, OndaSelect, OndaColorPicker, ImageUploadField, useOndaDialogs, api, OndaIcons, SkeletonDashboard, SkeletonScreen } from '@onda/shared-ui';
 import { displayPhone, derivePassPalette } from '@onda/shared-utils';
 import {
   BarChart,
@@ -17,6 +17,7 @@ type Tab = 'evento' | 'aliados' | 'analytics' | 'sorteos' | 'pase';
 export default function OrganizerPage() {
   const [tab, setTab] = useState<Tab>('analytics');
   const [events, setEvents] = useState<any[]>([]);
+  const [eventsReady, setEventsReady] = useState(false);
   const [eventId, setEventId] = useState('');
   const [macro, setMacro] = useState<any>(null);
   const [memberships, setMemberships] = useState<any[]>([]);
@@ -46,14 +47,17 @@ export default function OrganizerPage() {
   );
 
   useEffect(() => {
-    api<any[]>('/events').then((list) => {
-      setEvents(list);
-      if (list[0]) setEventId(list[0].id);
-    });
+    api<any[]>('/events')
+      .then((list) => {
+        setEvents(list);
+        if (list[0]) setEventId(list[0].id);
+      })
+      .finally(() => setEventsReady(true));
   }, []);
 
   useEffect(() => {
     if (!eventId) return;
+    setMacro(null);
     api(`/analytics/event/${eventId}/macro`).then(setMacro);
     api(`/memberships?eventId=${eventId}`).then(setMemberships);
     api(`/pass-designs/event/${eventId}`).then(setDesign).catch(() => null);
@@ -165,6 +169,10 @@ export default function OrganizerPage() {
     });
   }
 
+  if (!eventsReady) {
+    return <SkeletonScreen label="Cargando organizador" />;
+  }
+
   return (
     <>
     <AppShell
@@ -183,6 +191,9 @@ export default function OrganizerPage() {
       }
     >
       {tab === 'analytics' && (
+        !macro ? (
+          <SkeletonDashboard kpis={3} />
+        ) : (
         <div className="flex flex-col gap-6">
           <div className="onda-kpi-grid">
             <KpiCard label="Ondas globales" value={macro?.totalOndas ?? 0} positive delta="+8%" />
@@ -221,6 +232,7 @@ export default function OrganizerPage() {
             </div>
           </div>
         </div>
+        )
       )}
 
       {tab === 'aliados' && (

@@ -7,6 +7,7 @@ import { getPortalSession, clearPortalSession } from './lib/mockAuth';
 import { OndaCardView } from './OndaCardView';
 import { RestaurantCardList } from './RestaurantCardList';
 import { PortalLoginView } from './PortalLoginView';
+import { SkeletonPwa } from '@onda/shared-ui';
 import type { OndaCardDto, RestaurantCardDto } from '@onda/shared-types';
 
 export default function PortalClient() {
@@ -47,8 +48,8 @@ export default function PortalClient() {
 
   if (authed === null) {
     return (
-      <div className="onda-pwa-shell items-center justify-center gap-3">
-        <div className="onda-pwa-avatar onda-pwa-avatar--pulse" aria-hidden />
+      <div className="onda-pwa-shell items-center justify-center">
+        <SkeletonPwa />
       </div>
     );
   }
@@ -59,9 +60,8 @@ export default function PortalClient() {
 
   if (loading || !ondaCard) {
     return (
-      <div className="onda-pwa-shell items-center justify-center gap-3">
-        <div className="onda-pwa-avatar onda-pwa-avatar--pulse" aria-hidden />
-        <p className="text-sm text-[var(--onda-muted)]">Cargando tu tarjeta…</p>
+      <div className="onda-pwa-shell items-center justify-center">
+        <SkeletonPwa />
       </div>
     );
   }

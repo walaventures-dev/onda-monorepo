@@ -6,6 +6,7 @@ import {
   OndaIcons,
   BadgePill,
   TxActivityRow,
+  SkeletonDetail,
 } from '@onda/shared-ui';
 import { displayPhone, formatCop } from '@onda/shared-utils';
 import {
@@ -52,11 +53,7 @@ export function CustomerDetail({
   const whatsapp = waLink(user?.phone);
 
   if (loading && !user) {
-    return (
-      <div className="onda-card p-8 text-center text-sm text-[var(--onda-muted)]">
-        Cargando cliente…
-      </div>
-    );
+    return <SkeletonDetail />;
   }
 
   if (!user) {

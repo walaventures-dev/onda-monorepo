@@ -7,7 +7,9 @@ import { FaqSection } from './components/FaqSection';
 import { FooterCta } from './components/FooterCta';
 import { HeroSection } from './components/HeroSection';
 import { LandingHeader } from './components/LandingHeader';
+import { PosSection } from './components/PosSection';
 import { PricingSection } from './components/PricingSection';
+import { ProductPillarsSection } from './components/ProductPillarsSection';
 import { SmoothScrollProvider } from './components/SmoothScroll';
 
 export default function LandingPage() {
@@ -17,8 +19,10 @@ export default function LandingPage() {
         <LandingHeader />
         <main>
           <HeroSection />
+          <ProductPillarsSection />
           <DemoSection />
           <ConceptSection />
+          <PosSection />
           <CampaignSection />
           <PricingSection />
           <FaqSection />

@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { CashRegisterIcon as CashRegister } from '@phosphor-icons/react/dist/csr/CashRegister';
 import { DeviceMobileIcon as DeviceMobile } from '@phosphor-icons/react/dist/csr/DeviceMobile';
 import { EnvelopeSimpleIcon as EnvelopeSimple } from '@phosphor-icons/react/dist/csr/EnvelopeSimple';
 import { LightningIcon as Lightning } from '@phosphor-icons/react/dist/csr/Lightning';
@@ -12,23 +13,24 @@ import { fadeUp, inViewStagger, staggerItem } from '../lib/motion';
 import { onboardingUrl } from '../lib/pricing';
 
 const BADGES = [
+  { icon: CashRegister, label: 'POS + lealtad en un solo lugar' },
   { icon: DeviceMobile, label: 'Sin app que descargar' },
   { icon: Wallet, label: 'Apple y Google Wallet' },
   { icon: Lightning, label: 'Listo en minutos' },
-  { icon: ShieldCheck, label: 'Sin tarjeta al iniciar' },
 ];
 
 const PRODUCT_LINKS = [
+  { href: '#producto', label: 'Lealtad y POS' },
+  { href: '#pos', label: 'Punto de venta' },
   { href: '#demo', label: 'Pruébalo en vivo' },
   { href: '#campanas', label: 'Campañas' },
   { href: '#pricing', label: 'Planes y precios' },
-  { href: '#pricing', label: 'Kit de bienvenida' },
 ];
 
 const TRUST_POINTS = [
   'Hecho en Colombia para comercios locales',
+  'Cobra en el POS y fideliza con Ondas',
   'El cliente guarda el pase en su Wallet',
-  'Tú defines la recompensa y las reglas',
   'Activación digital; Kit físico en 6 y 12 meses',
 ];
 
@@ -50,7 +52,7 @@ export function FooterCta() {
               variants={staggerItem}
               className="mt-4 font-display text-2xl font-semibold md:text-3xl"
             >
-              ¿Listo para que tus clientes vuelvan?
+              ¿Listo para cobrar y que vuelvan?
             </motion.p>
             <motion.div
               variants={staggerItem}
@@ -81,8 +83,8 @@ export function FooterCta() {
               <OndaWordmark className="h-8 w-auto" />
             </a>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-[var(--onda-muted)]">
-              Fidelización con Ondas en Wallet. Sin puntos confusos, sin app extra: progreso claro
-              hacia una recompensa que tú defines.
+              POS y lealtad con Ondas en Wallet. Cobra el día a día y haz que el
+              cliente vuelva por el premio — sin app extra.
             </p>
             <div className="mt-5 space-y-2 text-sm text-[var(--onda-muted)]">
               <p className="inline-flex items-center gap-2">

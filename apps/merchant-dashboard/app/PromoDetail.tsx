@@ -14,6 +14,7 @@ import {
   type PromoTypeKey,
   OndaIcons,
   SegmentedControl,
+  SkeletonDetail,
 } from "@onda/shared-ui";
 import {
   displayPhone,
@@ -128,11 +129,7 @@ export function PromoDetail({
   }, [scope, promo?.id, detail?.range?.from, detail?.range?.to]);
 
   if (loading && !promo) {
-    return (
-      <div className="onda-card p-8 text-center text-sm text-[var(--onda-muted)]">
-        Cargando detalle…
-      </div>
-    );
+    return <SkeletonDetail />;
   }
 
   if (!promo) {

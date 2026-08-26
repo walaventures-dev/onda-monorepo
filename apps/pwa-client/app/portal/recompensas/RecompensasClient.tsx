@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { SkeletonList } from '@onda/shared-ui';
 import { getRewardsCatalog, type CatalogReward } from '../lib/mockData';
 
 export default function RecompensasClient() {
@@ -43,7 +44,7 @@ export default function RecompensasClient() {
         </Link>
 
         {loading ? (
-          <p className="text-sm text-[var(--onda-muted)]">Cargando recompensas…</p>
+          <SkeletonList rows={4} />
         ) : (
           <div className="flex flex-col gap-3 pb-6">
             {rewards.map((r) => (

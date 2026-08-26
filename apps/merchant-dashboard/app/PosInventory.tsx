@@ -1,13 +1,23 @@
 'use client';
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Button, api, ImageUploadField, toast, OndaSelect } from '@onda/shared-ui';
+import {
+  Button,
+  api,
+  ImageUploadField,
+  toast,
+  OndaSelect,
+  OndaIcons,
+  SkeletonList,
+  SkeletonTable,
+} from '@onda/shared-ui';
 import { formatCop, formatMoneyInput, parseMoneyInput } from '@onda/shared-utils';
 import type {
   PosAddonDto,
   PosItemDto,
   PosItemKind,
 } from '@onda/shared-types';
+import { UploadSimpleIcon as UploadSimple } from '@phosphor-icons/react/dist/csr/UploadSimple';
 
 const CSV_TEMPLATE = `nombre,precio,tipo,stock
 Consulta general,80000,servicio,
@@ -165,10 +175,10 @@ function InventoryModal({
           </div>
           <button
             type="button"
-            className="text-sm text-[var(--onda-muted)] hover:text-[var(--onda-ink)]"
+            className="inline-flex items-center gap-1 text-sm text-[var(--onda-muted)] hover:text-[var(--onda-ink)]"
             onClick={onClose}
           >
-            Cerrar
+            {OndaIcons.close} Cerrar
           </button>
         </header>
         <div className="mt-4">{children}</div>
@@ -288,19 +298,19 @@ function ItemOptionsEditor({
               </label>
               <button
                 type="button"
-                className="text-xs text-[var(--onda-danger)]"
+                className="inline-flex items-center gap-1 text-xs text-[var(--onda-danger)]"
                 onClick={() =>
                   setVariantDrafts((rows) => rows.filter((_, i) => i !== idx))
                 }
               >
-                Quitar
+                {OndaIcons.trash} Quitar
               </button>
             </div>
           ))}
         </div>
         <button
           type="button"
-          className="mt-2 text-xs font-medium text-[var(--onda-primary)]"
+          className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[var(--onda-primary)]"
           onClick={() =>
             setVariantDrafts((rows) => [
               ...rows,
@@ -312,7 +322,7 @@ function ItemOptionsEditor({
             ])
           }
         >
-          + Variante
+          {OndaIcons.plus} Variante
         </button>
       </div>
 
@@ -354,7 +364,11 @@ function ItemOptionsEditor({
       </div>
 
       <Button type="button" isDisabled={saving} onPress={() => void save()}>
-        {saving ? 'Guardando…' : 'Guardar opciones'}
+        {saving ? 'Guardando…' : (
+          <>
+            {OndaIcons.save} Guardar opciones
+          </>
+        )}
       </Button>
     </div>
   );
@@ -552,10 +566,10 @@ export function PosInventory({ storeId }: { storeId: string }) {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="text-sm font-medium text-[var(--onda-primary)]"
+            className="inline-flex items-center gap-1 text-sm font-medium text-[var(--onda-primary)]"
             onClick={downloadTemplate}
           >
-            Plantilla CSV
+            {OndaIcons.download} Plantilla CSV
           </button>
           <input
             ref={csvInputRef}
@@ -570,13 +584,20 @@ export function PosInventory({ storeId }: { storeId: string }) {
             isDisabled={csvBusy}
             onPress={() => csvInputRef.current?.click()}
           >
-            {csvBusy ? 'Importando…' : 'Cargar CSV'}
+            {csvBusy ? (
+              'Importando…'
+            ) : (
+              <>
+                <UploadSimple className="h-3 w-3 shrink-0" weight="regular" aria-hidden />{' '}
+                Cargar CSV
+              </>
+            )}
           </Button>
           <Button type="button" variant="outline" onPress={() => setModal('addon')}>
-            Nuevo adicional
+            {OndaIcons.plus} Nuevo adicional
           </Button>
           <Button type="button" onPress={() => setModal('item')}>
-            Nuevo ítem
+            {OndaIcons.plus} Nuevo ítem
           </Button>
         </div>
       </div>
@@ -584,29 +605,32 @@ export function PosInventory({ storeId }: { storeId: string }) {
       <div className="flex gap-2">
         <button
           type="button"
-          className={`rounded-full px-4 py-1.5 text-sm font-medium ${
+          className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium ${
             view === 'items'
               ? 'bg-[var(--onda-primary-100)] text-[var(--onda-primary-700)]'
               : 'text-[var(--onda-muted)] hover:bg-[var(--onda-bg)]'
           }`}
           onClick={() => setView('items')}
         >
-          Ítems ({items.length})
+          {OndaIcons.product} Ítems ({items.length})
         </button>
         <button
           type="button"
-          className={`rounded-full px-4 py-1.5 text-sm font-medium ${
+          className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium ${
             view === 'addons'
               ? 'bg-[var(--onda-primary-100)] text-[var(--onda-primary-700)]'
               : 'text-[var(--onda-muted)] hover:bg-[var(--onda-bg)]'
           }`}
           onClick={() => setView('addons')}
         >
-          Adicionales ({addons.length})
+          {OndaIcons.accumulate} Adicionales ({addons.length})
         </button>
       </div>
 
       {view === 'items' ? (
+        loading ? (
+          <SkeletonTable rows={6} cols={7} />
+        ) : (
         <div className="onda-card overflow-hidden">
           <table className="w-full text-sm">
             <thead className="border-b border-[var(--onda-border)] bg-[var(--onda-bg)] text-left text-[var(--onda-muted)]">
@@ -617,17 +641,11 @@ export function PosInventory({ storeId }: { storeId: string }) {
                 <th className="px-4 py-2">Precio</th>
                 <th className="px-4 py-2">Opciones</th>
                 <th className="px-4 py-2">Stock</th>
-                <th className="px-4 py-2">Estado</th>
+                <th className="px-4 py-2 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-[var(--onda-muted)]">
-                    Cargando…
-                  </td>
-                </tr>
-              ) : items.length === 0 ? (
+              {items.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-10 text-center">
                     <p className="text-sm text-[var(--onda-muted)]">Aún no hay ítems.</p>
@@ -636,14 +654,14 @@ export function PosInventory({ storeId }: { storeId: string }) {
                       className="mt-3"
                       onPress={() => setModal('item')}
                     >
-                      Crear el primero
+                      {OndaIcons.plus} Crear el primero
                     </Button>
                   </td>
                 </tr>
               ) : (
                 items.map((item) => (
                   <Fragment key={item.id}>
-                    <tr className="border-b border-[var(--onda-border)]">
+                    <tr className="group border-b border-[var(--onda-border)] transition-colors hover:bg-[var(--onda-bg)]/80">
                       <td className="px-4 py-3">
                         {item.imageUrl ? (
                           <img
@@ -655,33 +673,55 @@ export function PosInventory({ storeId }: { storeId: string }) {
                           <span className="text-xs text-[var(--onda-muted)]">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 font-medium">{item.name}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <span className={item.isActive ? '' : 'text-[var(--onda-muted)]'}>
+                          {item.name}
+                        </span>
+                        {!item.isActive ? (
+                          <span className="ml-2 rounded-full bg-[var(--onda-bg)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+                            Inactivo
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-3">
                         {item.kind === 'SERVICE' ? 'Servicio' : 'Producto'}
                       </td>
                       <td className="px-4 py-3 tabular-nums">{formatCop(item.price)}</td>
                       <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          className="text-xs font-medium text-[var(--onda-primary)]"
-                          onClick={() =>
-                            setExpandedId((id) => (id === item.id ? null : item.id))
-                          }
-                        >
+                        <span className="text-xs text-[var(--onda-muted)]">
                           {optionsSummary(item)}
-                        </button>
+                        </span>
                       </td>
                       <td className="px-4 py-3 tabular-nums">
                         {item.trackStock ? (item.stockQty ?? 0) : '—'}
                       </td>
                       <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          className="text-xs font-medium text-[var(--onda-primary)]"
-                          onClick={() => void toggleActive(item)}
+                        <div
+                          className={`flex items-center justify-end gap-1.5 transition-opacity duration-150 ${
+                            expandedId === item.id
+                              ? 'opacity-100'
+                              : 'opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100'
+                          }`}
                         >
-                          {item.isActive ? 'Desactivar' : 'Activar'}
-                        </button>
+                          <button
+                            type="button"
+                            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-2.5 py-1 text-xs font-medium text-[var(--onda-ink)] transition hover:border-[var(--onda-primary-500)]/35 hover:bg-[var(--onda-primary-50)] hover:text-[var(--onda-primary-700)]"
+                            onClick={() =>
+                              setExpandedId((id) => (id === item.id ? null : item.id))
+                            }
+                          >
+                            {OndaIcons.edit}{' '}
+                            {expandedId === item.id ? 'Cerrar' : 'Opciones'}
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-2.5 py-1 text-xs font-medium text-[var(--onda-ink)] transition hover:border-[var(--onda-primary-500)]/35 hover:bg-[var(--onda-primary-50)] hover:text-[var(--onda-primary-700)]"
+                            onClick={() => void toggleActive(item)}
+                          >
+                            {OndaIcons.power}{' '}
+                            {item.isActive ? 'Desactivar' : 'Activar'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     {expandedId === item.id ? (
@@ -706,19 +746,18 @@ export function PosInventory({ storeId }: { storeId: string }) {
             </tbody>
           </table>
         </div>
+        )
+      ) : loading ? (
+        <SkeletonList rows={4} />
       ) : (
         <div className="onda-card overflow-hidden">
-          {loading ? (
-            <p className="px-4 py-6 text-center text-sm text-[var(--onda-muted)]">
-              Cargando…
-            </p>
-          ) : addons.length === 0 ? (
+          {addons.length === 0 ? (
             <div className="px-4 py-10 text-center">
               <p className="text-sm text-[var(--onda-muted)]">
                 Los adicionales son extras opcionales al vender (precio 0 = gratis).
               </p>
               <Button type="button" className="mt-3" onPress={() => setModal('addon')}>
-                Crear adicional
+                {OndaIcons.plus} Crear adicional
               </Button>
             </div>
           ) : (
@@ -726,20 +765,25 @@ export function PosInventory({ storeId }: { storeId: string }) {
               {addons.map((a) => (
                 <li
                   key={a.id}
-                  className="flex items-center justify-between gap-3 px-4 py-3 text-sm"
+                  className="group flex items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-[var(--onda-bg)]/80"
                 >
                   <span className={a.isActive ? '' : 'text-[var(--onda-muted)] line-through'}>
                     {a.name}{' '}
                     <span className="tabular-nums text-[var(--onda-muted)]">
                       {a.price > 0 ? formatCop(a.price) : 'gratis'}
                     </span>
+                    {!a.isActive ? (
+                      <span className="ml-2 rounded-full bg-[var(--onda-bg)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--onda-muted)] no-underline">
+                        Inactivo
+                      </span>
+                    ) : null}
                   </span>
                   <button
                     type="button"
-                    className="text-xs font-medium text-[var(--onda-primary)]"
+                    className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-2.5 py-1 text-xs font-medium text-[var(--onda-ink)] opacity-100 transition hover:border-[var(--onda-primary-500)]/35 hover:bg-[var(--onda-primary-50)] hover:text-[var(--onda-primary-700)] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                     onClick={() => void toggleAddon(a)}
                   >
-                    {a.isActive ? 'Desactivar' : 'Activar'}
+                    {OndaIcons.power} {a.isActive ? 'Desactivar' : 'Activar'}
                   </button>
                 </li>
               ))}
@@ -844,11 +888,15 @@ export function PosInventory({ storeId }: { storeId: string }) {
             </div>
 
             <div className="onda-dialog-footer flex justify-end gap-2 pt-2">
-              <button type="button" className="onda-dialog-btn" onClick={closeModal}>
-                Cancelar
+              <button type="button" className="onda-dialog-btn inline-flex items-center gap-1" onClick={closeModal}>
+                {OndaIcons.close} Cancelar
               </button>
               <Button type="submit" isDisabled={saving}>
-                {saving ? 'Guardando…' : 'Agregar'}
+                {saving ? 'Guardando…' : (
+                  <>
+                    {OndaIcons.plus} Agregar
+                  </>
+                )}
               </Button>
             </div>
           </form>
@@ -885,11 +933,15 @@ export function PosInventory({ storeId }: { storeId: string }) {
               />
             </label>
             <div className="onda-dialog-footer flex justify-end gap-2 pt-2">
-              <button type="button" className="onda-dialog-btn" onClick={closeModal}>
-                Cancelar
+              <button type="button" className="onda-dialog-btn inline-flex items-center gap-1" onClick={closeModal}>
+                {OndaIcons.close} Cancelar
               </button>
               <Button type="submit" isDisabled={saving}>
-                {saving ? 'Guardando…' : 'Crear'}
+                {saving ? 'Guardando…' : (
+                  <>
+                    {OndaIcons.plus} Crear
+                  </>
+                )}
               </Button>
             </div>
           </form>

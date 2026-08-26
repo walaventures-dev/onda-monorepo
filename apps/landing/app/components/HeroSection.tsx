@@ -8,10 +8,10 @@ import {
   useScroll,
   useTransform,
 } from "framer-motion";
-import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/dist/csr/DeviceMobile";
+import { CashRegisterIcon as CashRegister } from "@phosphor-icons/react/dist/csr/CashRegister";
 import { GiftIcon as Gift } from "@phosphor-icons/react/dist/csr/Gift";
 import { MegaphoneIcon as Megaphone } from "@phosphor-icons/react/dist/csr/Megaphone";
-import { StarIcon as Star } from "@phosphor-icons/react/dist/csr/Star";
+import { WalletIcon as Wallet } from "@phosphor-icons/react/dist/csr/Wallet";
 import { onboardingUrl } from "../lib/pricing";
 import {
   easeSoft,
@@ -69,10 +69,10 @@ function HeroHighlight({ children }: { children: string }) {
 }
 
 const VALUE_POINTS = [
-  { icon: DeviceMobile, title: "Wallet", desc: "Sin descargar app" },
-  { icon: Gift, title: "Recompensas", desc: "Tú defines el premio" },
-  { icon: Megaphone, title: "Campañas", desc: "4 SMS gratis al mes" },
-  { icon: Star, title: "Reseñas", desc: "Más estrellas en Google" },
+  { icon: Gift, title: "Lealtad", desc: "Ondas hacia el premio" },
+  { icon: CashRegister, title: "POS", desc: "Vende e inventaria" },
+  { icon: Wallet, title: "Wallet", desc: "Sin descargar app" },
+  { icon: Megaphone, title: "Campañas", desc: "Llena el local" },
 ];
 
 export function HeroSection() {
@@ -111,15 +111,14 @@ export function HeroSection() {
             variants={heroItem}
             className="max-w-xl overflow-visible font-display text-[clamp(2rem,5vw,3.5rem)] font-bold leading-[1.08] tracking-tight text-[var(--onda-ink)]"
           >
-            Tu cliente <br /> Vuelve por{" "}
-            <HeroHighlight>el premio</HeroHighlight>.
+            Cobra. Fideliza. <HeroHighlight>Vuelve</HeroHighlight>.
           </motion.h1>
           <motion.p
             variants={heroItem}
             className="mt-5 max-w-lg text-lg text-[var(--onda-muted)]"
           >
-            Cada visita suma hacia un premio que tú defines. El pase queda en
-            Wallet — sin app que descargar.
+            POS para vender e inventariar, y un pase en Wallet para que el
+            cliente vuelva por el premio — sin app que descargar.
           </motion.p>
 
           <motion.div

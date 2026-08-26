@@ -8,6 +8,7 @@ import {
   FilterGroup,
   SegmentedControl,
   OndaIcons,
+  SkeletonKpiRow,
 } from "@onda/shared-ui";
 import {
   LineChart,
@@ -287,16 +288,7 @@ export function CompareStores({
         </div>
       ) : null}
 
-      {loading && !data ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5 [&>*]:min-w-0">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-20 animate-pulse rounded-2xl bg-[var(--onda-border)]/40"
-            />
-          ))}
-        </div>
-      ) : null}
+      {loading && !data ? <SkeletonKpiRow count={5} /> : null}
 
       {data && displayKpis ? (
         <>

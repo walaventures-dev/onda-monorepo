@@ -12,7 +12,7 @@ import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/Cre
 import { MoneyIcon as Money } from '@phosphor-icons/react/dist/csr/Money';
 import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
 import { WavesIcon as Waves } from '@phosphor-icons/react/dist/csr/Waves';
-import { api } from '@onda/shared-ui';
+import { api, SkeletonTable } from '@onda/shared-ui';
 import { formatCop } from '@onda/shared-utils';
 import type { PosSaleDto } from '@onda/shared-types';
 
@@ -124,12 +124,15 @@ export function PosSalesList({
         </div>
         <h2 className="font-display text-xl font-semibold">Ventas</h2>
         <p className="text-sm text-[var(--onda-muted)]">
-          {loading
-            ? 'Cargando ventas…'
-            : `${total} venta${total === 1 ? '' : 's'} registrada${total === 1 ? '' : 's'}`}
+          {!loading
+            ? `${total} venta${total === 1 ? '' : 's'} registrada${total === 1 ? '' : 's'}`
+            : '\u00a0'}
         </p>
       </div>
 
+      {loading ? (
+        <SkeletonTable rows={6} cols={colSpan} />
+      ) : (
       <div className="onda-card overflow-hidden p-0">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[42rem] text-sm">
@@ -158,16 +161,7 @@ export function PosSalesList({
               </tr>
             </thead>
             <tbody>
-              {loading ? (
-                <tr>
-                  <td
-                    colSpan={colSpan}
-                    className="px-4 py-12 text-center text-[var(--onda-muted)]"
-                  >
-                    Cargando…
-                  </td>
-                </tr>
-              ) : sales.length === 0 ? (
+              {sales.length === 0 ? (
                 <tr>
                   <td colSpan={colSpan} className="px-4 py-14">
                     <div className="flex flex-col items-center justify-center gap-2 text-center">
@@ -306,12 +300,12 @@ export function PosSalesList({
                           <Link
                             href={href}
                             onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] bg-white px-2.5 py-1 text-xs font-medium text-[var(--onda-primary)] no-underline transition group-hover:border-[var(--onda-primary)]/30 group-hover:bg-[var(--onda-primary-50)]"
+                            className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] bg-white px-2.5 py-1 text-xs font-medium text-[var(--onda-primary-500)] no-underline opacity-100 transition group-hover:border-[var(--onda-primary-500)]/30 group-hover:bg-[var(--onda-primary-50)] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                           >
                             Ver
                             <ArrowRight
                               className="h-3.5 w-3.5"
-                              weight="bold"
+                              weight="regular"
                               aria-hidden
                             />
                           </Link>
@@ -325,6 +319,7 @@ export function PosSalesList({
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

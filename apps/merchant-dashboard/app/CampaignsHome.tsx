@@ -7,6 +7,7 @@ import {
   api,
   toast,
   OndaIcons,
+  SkeletonList,
 } from '@onda/shared-ui';
 import { formatCop, type CampaignPromo, type ObjectiveKind } from '@onda/shared-utils';
 
@@ -242,7 +243,7 @@ export function CampaignsHome({
       </header>
 
       {loading ? (
-        <p className="text-sm text-[var(--onda-muted)]">Cargando campañas…</p>
+        <SkeletonList rows={4} />
       ) : (
         <>
           <section className="space-y-3">

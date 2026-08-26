@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Button, PasswordInput, api } from '@onda/shared-ui';
+import { Button, PasswordInput, api, SkeletonScreen } from '@onda/shared-ui';
 import { useMerchantAuth } from '../lib/MerchantAuth';
 
 export function MerchantInviteAccept() {
@@ -43,11 +43,14 @@ export function MerchantInviteAccept() {
   }
 
   if (!preview) {
-    return (
-      <div className="flex min-h-screen items-center justify-center p-6">
-        <p className="text-sm text-[var(--onda-muted)]">{error || 'Cargando invitación…'}</p>
-      </div>
-    );
+    if (error) {
+      return (
+        <div className="flex min-h-screen items-center justify-center p-6">
+          <p className="text-sm text-[var(--onda-muted)]">{error}</p>
+        </div>
+      );
+    }
+    return <SkeletonScreen label="Cargando invitación" />;
   }
 
   return (

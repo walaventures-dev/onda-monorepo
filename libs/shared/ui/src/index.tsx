@@ -91,6 +91,18 @@ export {
   AsociarVentaList,
   AsociarVentaDetail,
 } from './AsociarVentaPanel';
+export {
+  Skeleton,
+  SkeletonText,
+  SkeletonKpiRow,
+  SkeletonTable,
+  SkeletonList,
+  SkeletonCards,
+  SkeletonDetail,
+  SkeletonScreen,
+  SkeletonDashboard,
+  SkeletonPwa,
+} from './Skeleton';
 
 export function InfoTooltip({ text }: { text: string }) {
   return (

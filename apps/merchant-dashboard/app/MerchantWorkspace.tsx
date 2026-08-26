@@ -34,6 +34,8 @@ import {
   type AnalyticsFiltersValue,
   OndaIcons,
   BadgePill,
+  SkeletonDetail,
+  SkeletonDashboard,
 } from "@onda/shared-ui";
 import {
   displayPhone,
@@ -2168,6 +2170,10 @@ export function MerchantWorkspace() {
 
         {!isPosArea && tab === "resumen" && (
           <div className="space-y-6">
+            {!overview ? (
+              <SkeletonDashboard kpis={4} />
+            ) : (
+              <>
             {/* space-y-6 pone el margen inferior en este hijo; al ocultarlo se
                 anula para que la separación la dé solo el mb-5 de los filtros */}
             <Collapsible open={showPulse} className={showPulse ? "" : "mb-0"}>
@@ -2595,6 +2601,8 @@ export function MerchantWorkspace() {
                 )}
               </div>
             </div>
+              </>
+            )}
           </div>
         )}
 
@@ -3084,11 +3092,7 @@ export function MerchantWorkspace() {
         ) : null}
 
         {tab === "campanas" && campaignNew && storeId ? (
-          <Suspense
-            fallback={
-              <p className="text-sm text-[var(--onda-muted)]">Cargando…</p>
-            }
-          >
+          <Suspense fallback={<SkeletonDetail />}>
             <CampaignWizard
               storeId={storeId}
               store={store || {}}

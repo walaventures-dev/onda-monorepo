@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { api, Button, Chip, OndaIcons, promoTypeIcon } from "@onda/shared-ui";
+import { api, Button, Chip, OndaIcons, promoTypeIcon, SkeletonPwa } from "@onda/shared-ui";
 import { cartillaDeadlineLabel, formatCartillaDay, loyaltyProgressCopy, pickLoyaltyReward } from "@onda/shared-utils";
 import {
   loadSession,
@@ -363,9 +363,8 @@ export default function StoreEntryPage() {
 
   if (step === "loading") {
     return (
-      <div className="onda-pwa-shell items-center justify-center gap-3">
-        <div className="onda-pwa-avatar onda-pwa-avatar--pulse" aria-hidden />
-        <p className="text-sm text-[var(--onda-muted)]">Preparando tu pase…</p>
+      <div className="onda-pwa-shell items-center justify-center">
+        <SkeletonPwa />
       </div>
     );
   }

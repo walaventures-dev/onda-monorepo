@@ -5,9 +5,10 @@ import { OndaLogo } from '@onda/shared-ui';
 import { onboardingUrl } from '../lib/pricing';
 
 const NAV = [
-  { href: '#demo', label: 'Pruébalo' },
-  { href: '#pricing', label: 'Planes' },
+  { href: '#producto', label: 'Producto' },
+  { href: '#pos', label: 'POS' },
   { href: '#campanas', label: 'Campañas' },
+  { href: '#pricing', label: 'Planes' },
 ];
 
 export function LandingHeader() {

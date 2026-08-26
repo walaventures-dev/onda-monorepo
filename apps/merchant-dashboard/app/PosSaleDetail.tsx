@@ -13,7 +13,7 @@ import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
 import { SealCheckIcon as SealCheck } from '@phosphor-icons/react/dist/csr/SealCheck';
 import { WavesIcon as Waves } from '@phosphor-icons/react/dist/csr/Waves';
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from '@phosphor-icons/react/dist/csr/ArrowCounterClockwise';
-import { Button, api } from '@onda/shared-ui';
+import { Button, SkeletonDetail, api } from '@onda/shared-ui';
 import { formatCop } from '@onda/shared-utils';
 import type { PosSaleDto } from '@onda/shared-types';
 
@@ -132,9 +132,7 @@ export function PosSaleDetail({
   }
 
   if (!sale) {
-    return (
-      <p className="text-sm text-[var(--onda-muted)]">Cargando venta…</p>
-    );
+    return <SkeletonDetail />;
   }
 
   const status = statusMeta(sale.status);

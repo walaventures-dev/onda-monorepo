@@ -10,7 +10,7 @@ import { CajaOpenButton } from './PendingRequestsPanel';
 export function MerchantCajaPanel({ storeId }: { storeId: string }) {
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-16 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--onda-primary-50)] text-[var(--onda-primary)] [&>svg]:h-7 [&>svg]:w-7">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--onda-primary-50)] text-[var(--onda-primary-500)] [&>svg]:h-7 [&>svg]:w-7">
         {OndaIcons.qr}
       </div>
       <div className="space-y-2">

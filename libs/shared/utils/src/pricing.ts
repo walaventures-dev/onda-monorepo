@@ -43,6 +43,8 @@ export const PLAN_META: Record<
     shortName: 'Onda',
     features: [
       'Tarjeta en Apple y Google Wallet',
+      'Punto de venta (POS) incluido',
+      '1 admin + 1 caja',
       `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
       `${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis al mes`,
       'Recompensas que tú defines',
@@ -55,6 +57,8 @@ export const PLAN_META: Record<
     shortName: 'Onda Pro',
     features: [
       'Todo lo de Onda',
+      'Punto de venta (POS) incluido',
+      '1 admin + hasta 3 cajas',
       `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
       `${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis al mes`,
       'Campañas para llenar el local',

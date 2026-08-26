@@ -1,7 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, PhoneInput, api, toast } from '@onda/shared-ui';
+import {
+  Button,
+  OndaIcons,
+  PhoneInput,
+  SkeletonCards,
+  api,
+  toast,
+} from '@onda/shared-ui';
 import {
   formatCop,
   formatMoneyInput,
@@ -18,6 +25,8 @@ import type {
 import { MoneyIcon as Money } from '@phosphor-icons/react/dist/csr/Money';
 import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/CreditCard';
 import { BankIcon as Bank } from '@phosphor-icons/react/dist/csr/Bank';
+import { MinusIcon as Minus } from '@phosphor-icons/react/dist/csr/Minus';
+import { PlusIcon as Plus } from '@phosphor-icons/react/dist/csr/Plus';
 import { UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
 import { PhoneIcon as Phone } from '@phosphor-icons/react/dist/csr/Phone';
 import type { ReactNode } from 'react';
@@ -174,7 +183,7 @@ function ItemPickerModal({
           </span>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onPress={onCancel} isDisabled={busy}>
-              Cancelar
+              {OndaIcons.close} Cancelar
             </Button>
             <Button
               type="button"
@@ -186,7 +195,7 @@ function ItemPickerModal({
                 })
               }
             >
-              Agregar
+              {OndaIcons.plus} Agregar
             </Button>
           </div>
         </div>
@@ -550,7 +559,7 @@ export function PosVenderPanel({
             onClick={() => void createNewTab()}
             isDisabled={busy}
           >
-            Nueva cuenta
+            {OndaIcons.plus} Nueva cuenta
           </Button>
         </div>
       </div>
@@ -604,7 +613,7 @@ export function PosVenderPanel({
 
         <section className="min-h-[16rem]">
           {loading ? (
-            <p className="text-sm text-[var(--onda-muted)]">Cargando catálogo…</p>
+            <SkeletonCards count={8} />
           ) : activeItems.length === 0 ? (
             <div className="onda-card flex flex-col items-center justify-center gap-2 p-10 text-center">
               <p className="text-sm text-[var(--onda-muted)]">
@@ -620,19 +629,27 @@ export function PosVenderPanel({
                   key={item.id}
                   type="button"
                   disabled={busy}
-                  className="onda-card group cursor-pointer overflow-hidden p-0 text-left transition duration-150 hover:-translate-y-0.5 hover:border-[var(--onda-primary)]/45 hover:shadow-[0_12px_28px_rgba(26,27,46,0.1)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary)]/40 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  className="onda-card group relative cursor-pointer overflow-hidden p-0 text-left transition duration-150 hover:-translate-y-0.5 hover:border-[var(--onda-primary-500)]/45 hover:shadow-[0_12px_28px_rgba(26,27,46,0.1)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary-500)]/40 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none"
                   onClick={() => void addProduct(item)}
                 >
-                  <div className="overflow-hidden">
+                  <div className="relative overflow-hidden">
                     <div className="transition duration-150 group-hover:scale-[1.03] group-active:scale-100">
                       <ItemPhoto item={item} />
                     </div>
+                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--onda-ink)]/45 opacity-0 transition duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[var(--onda-ink)] shadow-sm">
+                        {OndaIcons.plus}
+                        {(item.variants?.length || item.addons?.length)
+                          ? 'Elegir'
+                          : 'Agregar'}
+                      </span>
+                    </span>
                   </div>
                   <div className="space-y-0.5 p-3">
                     <p className="line-clamp-2 text-sm font-semibold text-[var(--onda-ink)]">
                       {item.name}
                     </p>
-                    <p className="text-sm tabular-nums text-[var(--onda-primary)]">
+                    <p className="text-sm tabular-nums text-[var(--onda-primary-500)]">
                       {formatCop(item.price)}
                     </p>
                     {item.trackStock && item.stockQty != null && item.stockQty <= 5 ? (
@@ -706,7 +723,7 @@ export function PosVenderPanel({
                         onClick={() => setShowLinkForm(true)}
                         disabled={busy || linkingCustomer}
                       >
-                        <Phone className="h-3.5 w-3.5" weight="bold" aria-hidden />
+                        <Phone className="h-3.5 w-3.5" weight="regular" aria-hidden />
                         Asociar cliente por teléfono
                       </button>
                     ) : (
@@ -747,7 +764,13 @@ export function PosVenderPanel({
                             }
                             onClick={() => void linkCustomer()}
                           >
-                            {linkingCustomer ? 'Asociando…' : 'Asociar'}
+                            {linkingCustomer
+                              ? 'Asociando…'
+                              : (
+                                  <>
+                                    {OndaIcons.check} Asociar
+                                  </>
+                                )}
                           </Button>
                           <Button
                             type="button"
@@ -760,7 +783,7 @@ export function PosVenderPanel({
                               setLinkName('');
                             }}
                           >
-                            Cancelar
+                            {OndaIcons.close} Cancelar
                           </Button>
                         </div>
                       </div>
@@ -803,8 +826,9 @@ export function PosVenderPanel({
                               )
                             }
                             disabled={lineBusyId === line.id}
+                            aria-label="Quitar uno"
                           >
-                            −
+                            <Minus className="h-3.5 w-3.5" weight="regular" aria-hidden />
                           </button>
                           <span className="w-6 text-center text-sm tabular-nums">
                             {line.quantity}
@@ -816,8 +840,9 @@ export function PosVenderPanel({
                               void setLineQty(line.id, line.quantity + 1)
                             }
                             disabled={lineBusyId === line.id}
+                            aria-label="Agregar uno"
                           >
-                            +
+                            <Plus className="h-3.5 w-3.5" weight="regular" aria-hidden />
                           </button>
                         </div>
                       ) : (
@@ -837,15 +862,15 @@ export function PosVenderPanel({
                       isDisabled={!selectedTab.lines.length || busy}
                       onClick={() => void checkout()}
                     >
-                      Pedir cuenta
+                      {OndaIcons.ticket} Pedir cuenta
                     </Button>
                     <button
                       type="button"
-                      className="flex w-full cursor-pointer items-center justify-center rounded-xl border border-transparent px-3 py-2 text-xs font-medium text-[var(--onda-muted)] transition hover:border-[var(--onda-danger)]/25 hover:bg-[var(--onda-danger)]/8 hover:text-[var(--onda-danger)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-danger)]/30 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-transparent px-3 py-2 text-xs font-medium text-[var(--onda-muted)] transition hover:border-[var(--onda-danger)]/25 hover:bg-[var(--onda-danger)]/8 hover:text-[var(--onda-danger)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-danger)]/30 disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={busy}
                       onClick={() => void voidTab()}
                     >
-                      Anular cuenta
+                      {OndaIcons.trash} Anular cuenta
                     </button>
                   </>
                 ) : (
@@ -935,15 +960,15 @@ export function PosVenderPanel({
                       isDisabled={busy}
                       onClick={() => void pay()}
                     >
-                      Cobrar {formatCop(selectedTab.total)}
+                      {OndaIcons.dollar} Cobrar {formatCop(selectedTab.total)}
                     </Button>
                     <button
                       type="button"
-                      className="flex w-full cursor-pointer items-center justify-center rounded-xl border border-transparent px-3 py-2 text-xs font-medium text-[var(--onda-muted)] transition hover:border-[var(--onda-border)] hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary)]/30 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-transparent px-3 py-2 text-xs font-medium text-[var(--onda-muted)] transition hover:border-[var(--onda-border)] hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary)]/30 disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={busy}
                       onClick={() => void reopen()}
                     >
-                      Volver a editar
+                      {OndaIcons.edit} Volver a editar
                     </button>
                   </>
                 )}

@@ -28,6 +28,7 @@ import { WavesIcon as Waves } from '@phosphor-icons/react/dist/csr/Waves';
 import {
   AnalyticsSectionHeader,
   KpiCard,
+  SkeletonDashboard,
   api,
   type AnalyticsFiltersValue,
 } from '@onda/shared-ui';
@@ -125,9 +126,7 @@ export function PosSummaryPanel({
   }, [storeId, filters.from, filters.to, methodsKey]);
 
   if (!summary) {
-    return (
-      <p className="text-sm text-[var(--onda-muted)]">Cargando resumen POS…</p>
-    );
+    return <SkeletonDashboard kpis={4} />;
   }
 
   const series = summary.series ?? [];
@@ -144,17 +143,6 @@ export function PosSummaryPanel({
 
   return (
     <div className="space-y-6">
-      <div>
-        <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-[var(--onda-primary-50)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--onda-primary-700)]">
-          <ChartLineUp className="h-3.5 w-3.5" weight="bold" aria-hidden />
-          Ventas
-        </div>
-        <h2 className="font-display text-xl font-semibold">Resumen POS</h2>
-        <p className="text-sm text-[var(--onda-muted)]">
-          Rendimiento del punto de venta en el periodo
-        </p>
-      </div>
-
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Ventas"

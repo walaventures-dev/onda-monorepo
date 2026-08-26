@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Onda — Tu cliente. Vuelve por el premio.",
+  title: "Onda — Cobra. Fideliza. Vuelve.",
   description:
-    "Cada visita suma hacia un premio que tú defines. Recompensas, campañas y reseñas en Wallet — sin app que descargar.",
+    "POS para vender e inventariar, y lealtad con pase en Wallet para que el cliente vuelva por el premio — sin app que descargar.",
 };
 
 export const viewport: Viewport = {
