@@ -8,7 +8,6 @@ import {
 import { ondasFromPayment, parsePositiveInt } from '@onda/shared-utils';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
-import { BrevoService } from './brevo.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
 import { assertCanAccumulate } from './plan-quota';
 
@@ -148,7 +147,6 @@ export class AccumulateService {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(WalletService) private wallet: WalletService,
-    @Inject(BrevoService) private brevo: BrevoService,
     @Inject(PendingRequestsSseService) private sse: PendingRequestsSseService
   ) {}
 
@@ -320,15 +318,6 @@ export class AccumulateService {
           }`
         );
       }
-    }
-    try {
-      await this.brevo.sendSms({ to: full.user.phone, message });
-    } catch (err) {
-      this.logger.warn(
-        `SMS acumulación falló para ${full.id}: ${
-          err instanceof Error ? err.message : err
-        }`
-      );
     }
 
     if (confirmedIds.length) {

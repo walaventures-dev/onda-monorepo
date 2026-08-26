@@ -13,7 +13,6 @@ import {
 } from '@onda/shared-utils';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
-import { BrevoService } from './brevo.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
 import { CartillaService } from './cartilla.service';
 import { parsePaymentAmount } from './accumulate.service';
@@ -42,7 +41,6 @@ export class RedeemService {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(WalletService) private wallet: WalletService,
-    @Inject(BrevoService) private brevo: BrevoService,
     @Inject(PendingRequestsSseService) private sse: PendingRequestsSseService,
     @Inject(CartillaService) private cartillas: CartillaService
   ) {}
@@ -230,15 +228,6 @@ export class RedeemService {
           }`
         );
       }
-    }
-    try {
-      await this.brevo.sendSms({ to: full.user.phone, message });
-    } catch (err) {
-      this.logger.warn(
-        `SMS reclamo falló para ${full.id}: ${
-          err instanceof Error ? err.message : err
-        }`
-      );
     }
 
     if (confirmedIds.length) {

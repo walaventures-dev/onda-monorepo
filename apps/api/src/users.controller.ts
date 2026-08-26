@@ -1,8 +1,10 @@
-import { Inject, Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Inject, Body, Controller, Get, Param, Post, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { buildEnrollmentSmsMessage } from '@onda/shared-utils';
 import { PrismaService } from './prisma.service';
 import { WhatsappService } from './whatsapp.service';
 import { WalletService } from './wallet.service';
+import { BrevoService } from './brevo.service';
 import { remainingOndas } from './plan-quota';
 import { CartillaService } from './cartilla.service';
 import { resolvePassDesign, toPassDesignInput } from './pass-design.util';
@@ -21,11 +23,14 @@ function randomSerial() {
 
 @Controller()
 export class UsersController {
+  private readonly logger = new Logger(UsersController.name);
+
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(JwtService) private jwt: JwtService,
     @Inject(WhatsappService) private whatsapp: WhatsappService,
     @Inject(WalletService) private wallet: WalletService,
+    @Inject(BrevoService) private brevo: BrevoService,
     @Inject(CartillaService) private cartillas: CartillaService
   ) {}
 
@@ -95,6 +100,30 @@ export class UsersController {
         });
       }
       await this.cartillas.assignPassPromos(pass.id);
+
+      const assignments = await this.prisma.passPromoAssignment.findMany({
+        where: { passId: pass.id, cartillaId: active.id },
+        include: { promotion: true },
+        orderBy: { pointsRequired: 'asc' },
+      });
+      const smsMessage = buildEnrollmentSmsMessage({
+        storeName: store.name,
+        rewards: assignments.map((a) => ({
+          title: a.promotion.title,
+          pointsRequired: a.pointsRequired,
+        })),
+        endsAt: active.endsAt,
+        welcomePoints,
+      });
+      try {
+        await this.brevo.sendSms({ to: phone, message: smsMessage });
+      } catch (err) {
+        this.logger.warn(
+          `SMS registro falló para ${pass.id}: ${
+            err instanceof Error ? err.message : err
+          }`
+        );
+      }
 
       const design = toPassDesignInput(
         resolvePassDesign(active.passDesign, store.passDesign)

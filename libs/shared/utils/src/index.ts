@@ -272,6 +272,7 @@ export {
   type LoyaltyRewardHint,
   pickLoyaltyReward,
   loyaltyProgressCopy,
+  buildEnrollmentSmsMessage,
 } from './loyalty-copy';
 
 export {

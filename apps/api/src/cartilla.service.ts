@@ -4,7 +4,6 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  forwardRef,
 } from "@nestjs/common";
 import {
   Prisma,
@@ -20,9 +19,7 @@ import {
   computeRoi,
 } from "@onda/shared-utils";
 import { PrismaService } from "./prisma.service";
-import { JobsService } from "./jobs.service";
 import { WalletService } from "./wallet.service";
-import { BrevoService } from "./brevo.service";
 
 export const PROMO_ASSIGNMENT_TOLERANCE = 0.15;
 export const CARTILLA_CYCLES = [2, 4, 6, 8, 10, 12] as const;
@@ -42,8 +39,6 @@ function assertCycle(n: number): CartillaCycle {
   }
   return n as CartillaCycle;
 }
-
-const MS_5_DAYS = 5 * 24 * 60 * 60 * 1000;
 
 function rangesOverlap(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
   return aStart <= bEnd && bStart <= aEnd;
@@ -79,9 +74,7 @@ export class CartillaService {
 
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
-    @Inject(forwardRef(() => JobsService)) private jobs: JobsService,
     @Inject(WalletService) private wallet: WalletService,
-    @Inject(BrevoService) private brevo: BrevoService,
   ) {}
 
   async ensureDefaultCartilla(storeId: string, db: Db = this.prisma) {
@@ -525,7 +518,6 @@ export class CartillaService {
     });
 
     await this.replacePromos(cartilla.id, body.items || [], maxStamps);
-    if (endsAt) await this.scheduleEndingSms(cartilla.id);
     await this.maybeSyncStoreCycle(body.storeId, cartilla.id, maxStamps);
     return this.get(cartilla.id);
   }
@@ -588,7 +580,6 @@ export class CartillaService {
     } else if (body.maxStamps != null) {
       await this.dropSlotsOverCycle(id, maxStamps);
     }
-    if (endsAt) await this.scheduleEndingSms(id);
     await this.maybeSyncStoreCycle(cartilla.storeId, id, maxStamps);
     return this.get(id);
   }
@@ -639,7 +630,6 @@ export class CartillaService {
       data: { maxStamps: cartilla.maxStamps },
     });
     await this.resetStorePasses(cartilla.storeId, id);
-    await this.scheduleEndingSms(id);
     return this.get(id);
   }
 
@@ -853,62 +843,12 @@ export class CartillaService {
     return alerts;
   }
 
-  async scheduleEndingSms(cartillaId: string) {
-    const cartilla = await this.prisma.cartilla.findUnique({
-      where: { id: cartillaId },
-    });
-    if (!cartilla?.endsAt || cartilla.isDefault) return;
-    const delayMs = cartilla.endsAt.getTime() - MS_5_DAYS - Date.now();
-    await this.jobs.enqueue(
-      "cartilla-ending-sms",
-      {
-        cartillaId: cartilla.id,
-        storeId: cartilla.storeId,
-        endsAt: cartilla.endsAt.toISOString(),
-      },
-      { delayMs: Math.max(0, delayMs) },
-    );
-  }
-
-  async sendEndingSms(payload: {
+  async sendEndingSms(_payload: {
     cartillaId: string;
     storeId: string;
     endsAt: string;
   }) {
-    const cartilla = await this.prisma.cartilla.findUnique({
-      where: { id: payload.cartillaId },
-      include: { store: true },
-    });
-    if (!cartilla || cartilla.status === "ENDED") return;
-    if (!cartilla.endsAt) return;
-    if (cartilla.endsAt.toISOString() !== payload.endsAt) {
-      this.logger.log(`SMS cartilla ${cartilla.id} omitido: endsAt cambió`);
-      return;
-    }
-    if (cartilla.smsRemindedAt) return;
-
-    const endsLabel = formatCartillaDay(cartilla.endsAt);
-    const message =
-      `${cartilla.store.name}: tienes hasta el ${endsLabel} para acumular y redimir en tu cartilla.`.slice(
-        0,
-        160,
-      );
-
-    const passes = await this.prisma.pass.findMany({
-      where: { storeId: cartilla.storeId, cartillaId: cartilla.id },
-      include: { user: true },
-    });
-    const phones = [
-      ...new Set(passes.map((p) => p.user.phone).filter(Boolean)),
-    ];
-    for (const to of phones) {
-      await this.brevo.sendSms({ to, message });
-    }
-    await this.prisma.cartilla.update({
-      where: { id: cartilla.id },
-      data: { smsRemindedAt: new Date() },
-    });
-    this.logger.log(`SMS fin de cartilla ${cartilla.id} n=${phones.length}`);
+    this.logger.log('SMS fin de cartilla omitido: solo registro y campañas a demanda');
   }
 
   private async maybeSyncStoreCycle(
