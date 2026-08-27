@@ -1,6 +1,7 @@
 import {
   parseBillingPeriod,
   parsePlanId,
+  sanitizeReferralCode,
   type BillingPeriod,
   type PlanId,
 } from '@onda/shared-utils';
@@ -10,12 +11,7 @@ const BILLING_KEY = 'onda-onboarding-billing';
 const REF_KEY = 'onda-onboarding-ref';
 const NAME_KEY = 'onda-onboarding-owner-name';
 
-/** Extrae solo el código limpio de ?ref= (evita texto pegado por share). */
-export function sanitizeReferralCode(raw: string | null | undefined): string {
-  const decoded = (raw || '').trim().toUpperCase();
-  const match = decoded.match(/^[A-Z0-9]{4,16}/);
-  return match?.[0] || '';
-}
+export { sanitizeReferralCode };
 
 export function persistOnboardingQuery(searchParams: {
   get(name: string): string | null;

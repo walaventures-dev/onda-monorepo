@@ -47,6 +47,16 @@ export function generateReferralCode(length = 8): string {
   return out;
 }
 
+/** Extrae el código limpio (evita comillas, líneas .env o texto pegado al compartir). */
+export function sanitizeReferralCode(raw: string | null | undefined): string {
+  const decoded = decodeURIComponent((raw || '').trim()).toUpperCase();
+  const stripped = decoded.replace(/["']/g, '');
+  const fromEnv = stripped.match(/=\s*([A-Z0-9]{4,16})\s*$/)?.[1];
+  if (fromEnv) return fromEnv;
+  const match = stripped.match(/([A-Z0-9]{4,16})/);
+  return match?.[1] || '';
+}
+
 const E164_REGEX = /^\+[1-9]\d{6,14}$/;
 
 export function isValidE164(phone: string): boolean {

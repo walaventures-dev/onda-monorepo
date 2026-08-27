@@ -27,7 +27,7 @@ import {
   storeCreatedEmailHtml,
   storeCreatedEmailText,
 } from './mail-templates/store-created';
-import { isDemoReferralCode } from './demo-referral';
+import { isDemoReferralCode, normalizeReferralCode } from './demo-referral';
 
 const storePublicSelect = {
   id: true,
@@ -145,11 +145,12 @@ export class StoresController {
       throw new ConflictException('Ese slug ya está en uso');
     }
 
-    const demoReferral = isDemoReferralCode(body.referralCode);
+    const referralInput = normalizeReferralCode(body.referralCode);
+    const demoReferral = isDemoReferralCode(referralInput);
     let referredByStoreId: string | undefined;
-    if (body.referralCode?.trim() && !demoReferral) {
+    if (referralInput && !demoReferral) {
       const referrer = await this.prisma.store.findUnique({
-        where: { referralCode: body.referralCode.trim().toUpperCase() },
+        where: { referralCode: referralInput },
       });
       if (!referrer) {
         throw new BadRequestException('Código de referido inválido');

@@ -345,7 +345,7 @@ function MerchantBusinessSetup() {
           googlePlaceId,
           lat,
           lng,
-          referralCode: referralCode.trim() || undefined,
+          referralCode: sanitizeReferralCode(referralCode) || undefined,
           planType: plan,
           billingPeriod: billing,
         }),
@@ -644,7 +644,7 @@ function MerchantBusinessSetup() {
                         <input
                           value={referralCode}
                           onChange={(e) =>
-                            setReferralCode(e.target.value.trim().toUpperCase())
+                            setReferralCode(sanitizeReferralCode(e.target.value))
                           }
                           placeholder="ABC12345"
                           className="onda-input uppercase tracking-wider"
