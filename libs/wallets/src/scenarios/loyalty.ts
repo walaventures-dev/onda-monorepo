@@ -80,6 +80,8 @@ export async function buildLoyaltyPassSpec(
   const until = ctx.validUntil ? formatValidUntil(ctx.validUntil, 'long') : null;
   const untilShort = ctx.validUntil ? formatValidUntil(ctx.validUntil, 'short') : null;
 
+  const claimUrl = ctx.claimUrl?.trim() || null;
+
   const backFields = [
     { label: 'Titular', value: ctx.holderName },
     { label: 'Código', value: ctx.barcodeSerial },
@@ -93,6 +95,14 @@ export async function buildLoyaltyPassSpec(
           {
             label: 'Fecha límite',
             value: `Tienes hasta el ${until} para acumular y redimir.`,
+          },
+        ]
+      : []),
+    ...(claimUrl
+      ? [
+          {
+            label: 'Reclamar',
+            value: claimUrl,
           },
         ]
       : []),

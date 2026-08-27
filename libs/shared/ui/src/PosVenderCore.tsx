@@ -877,7 +877,7 @@ export function PosVenderCore({
                           ? 'Ondas al cobrar esta venta'
                           : previewOndas > 0
                             ? `+${previewOndas} onda${previewOndas === 1 ? '' : 's'} al cobrar`
-                            : 'El monto no alcanza para 1 onda'}
+                            : '+0 ondas al cobrar (venta registrada)'}
                       </p>
                     </div>
                   </div>

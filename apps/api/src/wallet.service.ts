@@ -24,7 +24,28 @@ export type IssuePassInput = {
   validUntil?: Date | string | null;
   kind?: 'store' | 'event';
   locations?: PassLocation[];
+  /** Override; si falta se resuelve desde el Pass → Store.slug. */
+  claimUrl?: string | null;
 };
+
+function pwaBaseUrl() {
+  return (
+    process.env.NEXT_PUBLIC_PWA_URL || 'http://localhost:4201'
+  ).replace(/\/$/, '');
+}
+
+/** Página pública del negocio en la PWA para acumular / reclamar. */
+export function buildStoreClaimUrl(input: {
+  storeSlug?: string | null;
+  storeId?: string | null;
+  eventSlug?: string | null;
+}): string | null {
+  const key = input.storeSlug?.trim() || input.storeId?.trim();
+  if (!key) return null;
+  const url = `${pwaBaseUrl()}/r/${encodeURIComponent(key)}`;
+  const event = input.eventSlug?.trim();
+  return event ? `${url}?event=${encodeURIComponent(event)}` : url;
+}
 
 const FALLBACK_DESIGN: PassDesignInput = {
   title: 'Onda',
@@ -77,6 +98,9 @@ export class WalletService {
         input.maxStamps,
         ctx.reward
       );
+    }
+    if (!ctx.claimUrl) {
+      ctx.claimUrl = await this.lookupClaimUrl(input.serialNumber);
     }
     this.logger.log(
       `Wallet issue loyalty barcode=${ctx.barcodeSerial} stub=${this.passes.isStub}`
@@ -191,7 +215,23 @@ export class WalletService {
       validUntil: input.validUntil ?? null,
       kind: input.kind,
       locations: input.locations,
+      claimUrl: input.claimUrl ?? null,
     };
+  }
+
+  private async lookupClaimUrl(serialNumber: string): Promise<string | null> {
+    const pass = await this.prisma.pass.findFirst({
+      where: { serialNumber },
+      select: {
+        store: { select: { id: true, slug: true } },
+        event: { select: { slug: true } },
+      },
+    });
+    return buildStoreClaimUrl({
+      storeSlug: pass?.store?.slug,
+      storeId: pass?.store?.id,
+      eventSlug: pass?.event?.slug,
+    });
   }
 
   private rewardFromPass(
@@ -326,6 +366,11 @@ export class WalletService {
         maxStamps ?? 12,
         reward
       ),
+      claimUrl: buildStoreClaimUrl({
+        storeSlug: pass.store?.slug,
+        storeId: pass.store?.id,
+        eventSlug: pass.event?.slug,
+      }),
     };
   }
 }

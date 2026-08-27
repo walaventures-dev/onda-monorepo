@@ -214,7 +214,7 @@ export function PendingRequestsPanel({
         const pts = Number(pointsById[item.id] || '');
         return Number.isFinite(pts) && pts >= 1;
       }
-      return ondasFromPayment(precio, Number(ondaValue)) >= 1;
+      return true;
     }
     const promoType = item.promotion?.type || 'OTHER';
     if (needsClaimPaymentAmount(promoType)) {
@@ -417,7 +417,7 @@ export function PendingRequestsPanel({
                         <span className="mt-1 block text-xs text-[var(--onda-muted)]">
                           {previewOndas > 0
                             ? `→ ${previewOndas} onda${previewOndas === 1 ? '' : 's'}`
-                            : 'El monto no alcanza para 1 onda'}
+                            : '→ 0 ondas (venta registrada)'}
                         </span>
                       ) : null}
                     </label>

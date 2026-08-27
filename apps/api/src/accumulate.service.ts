@@ -94,12 +94,17 @@ export function buildAccumulateMessage(
   maxStamps: number,
   next: NextReward | null
 ) {
-  const deltaLabel = delta === 1 ? '+1 onda' : `+${delta} ondas`;
+  const deltaLabel =
+    delta === 0
+      ? 'venta · 0 ondas'
+      : delta === 1
+        ? '+1 onda'
+        : `+${delta} ondas`;
   const head = `${clip(storeName, 40)}: ${deltaLabel} (${points}/${maxStamps})`;
   let tail = '';
-  if (next?.ready) {
+  if (delta > 0 && next?.ready) {
     tail = `. Ya puedes reclamar ${clip(next.title, 50)}`;
-  } else if (next) {
+  } else if (delta > 0 && next) {
     tail = `. Próximo: ${clip(next.title, 40)} en onda ${next.pointsRequired}`;
   }
   return `${head}${tail}.`.slice(0, 160);
@@ -119,13 +124,8 @@ function resolveRequestedOndas(input: {
     if (input.paymentAmount == null || !(input.paymentAmount > 0)) {
       throw new BadRequestException('Indica el valor de la cuenta');
     }
-    const auto = ondasFromPayment(input.paymentAmount, ondaValue);
-    if (auto <= 0) {
-      throw new BadRequestException(
-        `El monto no alcanza para 1 onda (mínimo ${Math.ceil(ondaValue)} COP)`
-      );
-    }
-    return auto;
+    // 0 ondas es válido: se registra la venta aunque no alcance para 1 onda.
+    return ondasFromPayment(input.paymentAmount, ondaValue);
   }
 
   const manual = parsePositiveInt(input.points);
@@ -217,19 +217,23 @@ export class AccumulateService {
         const current = await tx.pass.findUniqueOrThrow({
           where: { id: pass.id },
         });
-        const room = Math.max(0, store.maxStamps - current.points);
-        if (room <= 0) {
-          throw new BadRequestException(
-            'Ya alcanzaste el máximo de sellos de este ciclo, reclama tu premio primero'
-          );
-        }
-        const capped = Math.min(requested, room);
-        const allowed = await assertCanAccumulate(tx, store.id, capped);
-        const nextDelta = Math.max(0, allowed);
-        if (nextDelta <= 0) {
-          throw new BadRequestException(
-            'Ya alcanzaste el máximo de sellos de este ciclo, reclama tu premio primero'
-          );
+
+        let nextDelta = 0;
+        if (requested > 0) {
+          const room = Math.max(0, store.maxStamps - current.points);
+          if (room <= 0) {
+            throw new BadRequestException(
+              'Ya alcanzaste el máximo de sellos de este ciclo, reclama tu premio primero'
+            );
+          }
+          const capped = Math.min(requested, room);
+          const allowed = await assertCanAccumulate(tx, store.id, capped);
+          nextDelta = Math.max(0, allowed);
+          if (nextDelta <= 0) {
+            throw new BadRequestException(
+              'Ya alcanzaste el máximo de sellos de este ciclo, reclama tu premio primero'
+            );
+          }
         }
 
         const pendingWhere = {
@@ -253,11 +257,17 @@ export class AccumulateService {
           });
         }
 
-        const updated = await tx.pass.update({
-          where: { id: pass.id },
-          data: { points: { increment: nextDelta } },
-          include: { user: true },
-        });
+        const updated =
+          nextDelta > 0
+            ? await tx.pass.update({
+                where: { id: pass.id },
+                data: { points: { increment: nextDelta } },
+                include: { user: true },
+              })
+            : await tx.pass.findUniqueOrThrow({
+                where: { id: pass.id },
+                include: { user: true },
+              });
         await tx.transaction.create({
           data: {
             passId: pass.id,
@@ -308,7 +318,7 @@ export class AccumulateService {
       next
     );
 
-    if (full.walletRef) {
+    if (delta > 0 && full.walletRef) {
       try {
         await this.wallet.updatePoints(full.walletRef, full.points, message);
       } catch (err) {

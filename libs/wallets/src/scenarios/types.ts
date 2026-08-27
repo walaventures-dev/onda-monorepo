@@ -38,4 +38,9 @@ export type BaseLoyaltyContext = {
   validUntil?: Date | string | null;
   /** Geocerca del comercio: Apple muestra el pase en lock screen al acercarse. */
   locations?: PassSpec['locations'];
+  /**
+   * URL pública de la página del negocio en la PWA (acumular / reclamar).
+   * Va en backFields; iOS/Google la muestran como enlace tocable.
+   */
+  claimUrl?: string | null;
 };

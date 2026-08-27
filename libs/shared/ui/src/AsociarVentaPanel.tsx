@@ -371,7 +371,7 @@ export function AsociarVentaDetail({
               ? 'Ondas al cobrar en el POS'
               : previewOndas > 0
                 ? `+${previewOndas} onda${previewOndas === 1 ? '' : 's'} al cobrar`
-                : 'El monto no alcanza para 1 onda'}
+                : '+0 ondas al cobrar (venta registrada)'}
           </p>
           <Button className="mt-2" onPress={onBack}>
             Listo

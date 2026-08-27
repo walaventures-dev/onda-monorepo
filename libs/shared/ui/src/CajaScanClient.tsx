@@ -142,8 +142,6 @@ function CajaAmountSheet({
     if (draft.needsPoints) {
       const pts = Number(draft.points);
       ready = ready && Number.isFinite(pts) && pts >= 1;
-    } else if (preview != null) {
-      ready = preview >= 1;
     }
   } else {
     ready = true;
@@ -212,7 +210,7 @@ function CajaAmountSheet({
           <p className="mt-2 text-center text-sm text-[var(--onda-muted)]">
             {preview > 0
               ? `→ ${preview} onda${preview === 1 ? '' : 's'}`
-              : 'El monto no alcanza para 1 onda'}
+              : '→ 0 ondas (venta registrada)'}
           </p>
         ) : null}
 

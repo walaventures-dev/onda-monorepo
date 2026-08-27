@@ -115,11 +115,11 @@ export function HeroSection() {
           >
             {SHOW_POS_LANDING ? (
               <>
-                Cobra. Fideliza. <HeroHighlight>Vuelve</HeroHighlight>.
+                Cobra. Haz que <HeroHighlight>vuelvan</HeroHighlight>.
               </>
             ) : (
               <>
-                Fideliza. Premia. <HeroHighlight>Vuelve</HeroHighlight>.
+                Haz que <HeroHighlight>vuelvan</HeroHighlight>.
               </>
             )}
           </motion.h1>

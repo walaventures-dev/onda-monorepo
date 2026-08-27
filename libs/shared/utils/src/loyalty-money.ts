@@ -12,7 +12,7 @@ export function parsePositiveInt(raw: unknown): number | undefined {
 
 /**
  * Ondas a otorgar a partir del pago y el valor de una onda.
- * `floor(pago / ondaValue)`; si da 0, el caller debe rechazar.
+ * `floor(pago / ondaValue)`; puede ser 0 (venta registrada sin ondas).
  */
 export function ondasFromPayment(
   paymentAmount: number,
