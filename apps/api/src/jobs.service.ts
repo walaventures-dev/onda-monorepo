@@ -12,7 +12,6 @@ import { WhatsappService } from './whatsapp.service';
 import { BrevoService } from './brevo.service';
 import { MailService } from './mail.service';
 import { WalletService } from './wallet.service';
-import { WompiService } from './wompi.service';
 import type {
   BrevoEmailJobPayload,
   BrevoSmsJobPayload,
@@ -30,9 +29,9 @@ import type {
 import { CartillaService } from './cartilla.service';
 import { CampaignsService } from './campaigns.service';
 import { PosService } from './pos.service';
+import { BillingService } from './billing.service';
 
 const QUEUE_NAME = 'onda-jobs';
-const MS_30_DAYS = 30 * 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class JobsService implements OnModuleInit, OnModuleDestroy {
@@ -46,10 +45,10 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     @Inject(BrevoService) private brevo: BrevoService,
     @Inject(MailService) private mail: MailService,
     @Inject(WalletService) private wallet: WalletService,
-    @Inject(WompiService) private wompi: WompiService,
     @Inject(forwardRef(() => CartillaService)) private cartillas: CartillaService,
     @Inject(forwardRef(() => CampaignsService)) private campaigns: CampaignsService,
-    @Inject(forwardRef(() => PosService)) private pos: PosService
+    @Inject(forwardRef(() => PosService)) private pos: PosService,
+    @Inject(forwardRef(() => BillingService)) private billing: BillingService
   ) {}
 
   get usesCloudTasks(): boolean {
@@ -174,8 +173,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  scheduleWompiRenew(storeId: string) {
-    return this.enqueue('wompi-renew', { storeId }, { delayMs: MS_30_DAYS });
+  scheduleWompiRenew(storeId: string, delayMs = 0) {
+    return this.enqueue('wompi-renew', { storeId }, { delayMs });
   }
 
   private async dispatchSmsCampaign(payload: BrevoSmsJobPayload) {
@@ -196,21 +195,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async dispatchWompiRenew(payload: WompiRenewJobPayload) {
-    const store = await this.prisma.store.findUnique({
-      where: { id: payload.storeId },
-    });
-    if (!store?.wompiPaymentSourceId) {
-      this.logger.log(`[Wompi renew] sin payment source store=${payload.storeId}`);
-      return;
-    }
-    await this.wompi.chargePaymentSource({
-      paymentSourceId: store.wompiPaymentSourceId,
-      storeId: store.id,
-      amountInCents: this.wompi.proAmountInCents,
-      reference: `onda-renew-${store.id}-${Date.now()}`,
-      customerEmail: store.ownerEmail || undefined,
-    });
-    await this.scheduleWompiRenew(store.id);
+    await this.billing.renewStore(payload.storeId);
   }
 
   private async enqueueCloudTask(

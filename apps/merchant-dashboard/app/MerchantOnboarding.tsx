@@ -1,7 +1,13 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   api,
   GradientButton,
@@ -11,7 +17,7 @@ import {
   OndaSelect,
   PlacesAddressField,
   OndaIcons,
-} from '@onda/shared-ui';
+} from "@onda/shared-ui";
 import {
   StoreCategory,
   StoreSubcategory,
@@ -22,18 +28,21 @@ import {
   STORE_SEGMENT_LABELS,
   STORE_SEGMENTS_BY_SUBCATEGORY,
   defaultSegmentFor,
-} from '@onda/shared-types';
+} from "@onda/shared-types";
 import {
   normalizeStoreSlug,
   parseBillingPeriod,
   parsePlanId,
   PLAN_META,
+  formatCop,
+  quotePlan,
   type BillingPeriod,
   type PlanId,
-} from '@onda/shared-utils';
-import { useMerchantAuth } from '../lib/MerchantAuth';
-import { MerchantSignup } from './MerchantSignup';
-import { PlanPicker } from './PlanPicker';
+} from "@onda/shared-utils";
+import { useMerchantAuth } from "../lib/MerchantAuth";
+import { MerchantSignup } from "./MerchantSignup";
+import { PlanPicker } from "./PlanPicker";
+import { PaymentCardForm } from "./PaymentCardForm";
 import {
   persistOnboardingQuery,
   readStoredBilling,
@@ -42,9 +51,9 @@ import {
   rememberPlanChoice,
   sanitizeReferralCode,
   readStoredOwnerName,
-} from './onboardingQuery';
+} from "./onboardingQuery";
 
-type SetupStep = 'local' | 'plan';
+type SetupStep = "local" | "plan" | "pay";
 
 const CATEGORY_OPTIONS = (
   Object.keys(STORE_CATEGORY_LABELS) as StoreCategory[]
@@ -56,15 +65,21 @@ const STEPS: Array<{
   hint: string;
   icon: ReactNode;
 }> = [
-  { id: 'local', label: 'Local', hint: 'Datos y enlace', icon: OndaIcons.near },
-  { id: 'plan', label: 'Plan', hint: 'Suscripción', icon: OndaIcons.crown },
+  { id: "local", label: "Local", hint: "Datos y enlace", icon: OndaIcons.near },
+  { id: "plan", label: "Plan", hint: "Suscripción", icon: OndaIcons.crown },
+  {
+    id: "pay",
+    label: "Pago",
+    hint: "Completa suscripción",
+    icon: OndaIcons.upgrade,
+  },
 ];
 
 function Field({
   label,
   hint,
   children,
-  className = '',
+  className = "",
 }: {
   label: string;
   hint?: string;
@@ -115,40 +130,47 @@ function MerchantBusinessSetup() {
   const searchParams = useSearchParams();
   const { email: sessionEmail, user, logout } = useMerchantAuth();
 
-  const [step, setStep] = useState<SetupStep>('local');
+  const [step, setStep] = useState<SetupStep>("local");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
+  const [wompiPublicKey, setWompiPublicKey] = useState<string | null>(
+    () => process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY || null,
+  );
+  const [wompiConfigured, setWompiConfigured] = useState(() =>
+    Boolean(process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY),
+  );
   const [referrerName, setReferrerName] = useState<string | null>(null);
+  const [skipPayment, setSkipPayment] = useState(false);
 
   const [planType, setPlanType] = useState<PlanId>(
-    () => parsePlanId(searchParams.get('plan')) ?? 'BASIC'
+    () => parsePlanId(searchParams.get("plan")) ?? "BASIC",
   );
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(
-    () => parseBillingPeriod(searchParams.get('billing')) ?? '12'
+    () => parseBillingPeriod(searchParams.get("billing")) ?? "12",
   );
 
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
+  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
   const [googlePlaceId, setGooglePlaceId] = useState<string | undefined>();
   const [lat, setLat] = useState<number | undefined>();
   const [lng, setLng] = useState<number | undefined>();
-  const [slug, setSlug] = useState('');
+  const [slug, setSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
   const [category, setCategory] = useState<StoreCategory>(
-    StoreCategory.RESTAURANT
+    StoreCategory.RESTAURANT,
   );
   const [subcategory, setSubcategory] = useState<StoreSubcategory>(
-    StoreSubcategory.CAFE
+    StoreSubcategory.CAFE,
   );
   const [segment, setSegment] = useState<StoreSegment>(
-    StoreSegment.CAFE_COFFEE
+    StoreSegment.CAFE_COFFEE,
   );
-  const [ownerName, setOwnerName] = useState(user?.displayName?.trim() || '');
+  const [ownerName, setOwnerName] = useState(user?.displayName?.trim() || "");
   const [ownerEmail, setOwnerEmail] = useState(
-    sessionEmail || user?.email || ''
+    sessionEmail || user?.email || "",
   );
-  const [referralCode, setReferralCode] = useState(
-    () => sanitizeReferralCode(searchParams.get('ref'))
+  const [referralCode, setReferralCode] = useState(() =>
+    sanitizeReferralCode(searchParams.get("ref")),
   );
 
   const needsOwnerName = !ownerName.trim();
@@ -160,7 +182,7 @@ function MerchantBusinessSetup() {
         id,
         label: STORE_SUBCATEGORY_LABELS[id],
       })),
-    [category]
+    [category],
   );
 
   const segmentOptions = useMemo(
@@ -169,23 +191,45 @@ function MerchantBusinessSetup() {
         id,
         label: STORE_SEGMENT_LABELS[id],
       })),
-    [subcategory]
+    [subcategory],
   );
 
   useEffect(() => {
     const negocio = name.trim();
-    document.title = negocio ? `Onda - ${negocio}` : 'Onda - Crear negocio';
+    document.title = negocio ? `Onda - ${negocio}` : "Onda - Crear negocio";
   }, [name]);
 
   useEffect(() => {
+    let cancelled = false;
+    api<{ wompiConfigured: boolean; wompiPublicKey: string | null }>(
+      "/billing/config",
+    )
+      .then((cfg) => {
+        if (cancelled) return;
+        setWompiConfigured(cfg.wompiConfigured);
+        setWompiPublicKey(
+          cfg.wompiPublicKey ||
+            process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY ||
+            null,
+        );
+      })
+      .catch(() => {
+        /* keep env defaults */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     persistOnboardingQuery(searchParams);
-    if (!parsePlanId(searchParams.get('plan'))) {
+    if (!parsePlanId(searchParams.get("plan"))) {
       setPlanType(readStoredPlan());
     }
-    if (!parseBillingPeriod(searchParams.get('billing'))) {
+    if (!parseBillingPeriod(searchParams.get("billing"))) {
       setBillingPeriod(readStoredBilling());
     }
-    if (!sanitizeReferralCode(searchParams.get('ref'))) {
+    if (!sanitizeReferralCode(searchParams.get("ref"))) {
       const storedRef = readStoredReferral();
       if (storedRef) setReferralCode(storedRef);
     }
@@ -211,8 +255,8 @@ function MerchantBusinessSetup() {
   useEffect(() => {
     const prevHtml = document.documentElement.style.overflow;
     const prevBody = document.body.style.overflow;
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
     return () => {
       document.documentElement.style.overflow = prevHtml;
       document.body.style.overflow = prevBody;
@@ -242,17 +286,22 @@ function MerchantBusinessSetup() {
   useEffect(() => {
     if (!referralCode) {
       setReferrerName(null);
+      setSkipPayment(false);
       return;
     }
     let cancelled = false;
-    api<{ code: string; storeName: string }>(
-      `/referrals/resolve/${encodeURIComponent(referralCode)}`
+    api<{ code: string; storeName: string; skipPayment?: boolean }>(
+      `/referrals/resolve/${encodeURIComponent(referralCode)}`,
     )
       .then((r) => {
-        if (!cancelled) setReferrerName(r.storeName);
+        if (cancelled) return;
+        setReferrerName(r.storeName);
+        setSkipPayment(Boolean(r.skipPayment));
       })
       .catch(() => {
-        if (!cancelled) setReferrerName('');
+        if (cancelled) return;
+        setReferrerName("");
+        setSkipPayment(false);
       });
     return () => {
       cancelled = true;
@@ -261,53 +310,68 @@ function MerchantBusinessSetup() {
 
   function finish(id: string) {
     try {
-      localStorage.setItem('onda-merchant-store-id', id);
+      localStorage.setItem("onda-merchant-store-id", id);
     } catch {
       /* ignore */
     }
-    router.push('/completar');
+    router.push("/completar");
   }
 
   function goNextFromLocal(e: FormEvent) {
     e.preventDefault();
-    setError('');
+    setError("");
     if (!name.trim()) {
-      setError('Indica el nombre del negocio');
+      setError("Indica el nombre del negocio");
       return;
     }
     const slugValue = normalizeStoreSlug(slug);
     if (!slugValue) {
-      setError('El slug es inválido');
+      setError("El slug es inválido");
       return;
     }
     if (needsOwnerName && !ownerName.trim()) {
-      setError('Indica tu nombre');
+      setError("Indica tu nombre");
       return;
     }
     if (needsOwnerEmail && !ownerEmail.trim()) {
-      setError('Indica el email del encargado');
+      setError("Indica el email del encargado");
       return;
     }
-    setStep('plan');
+    setStep("plan");
   }
 
-  async function submitBusiness(e: FormEvent) {
+  function goNextFromPlan(e: FormEvent) {
     e.preventDefault();
-    setError('');
+    setError("");
+    rememberPlanChoice(planType, billingPeriod);
+    if (skipPayment) {
+      void submitPayment({});
+      return;
+    }
+    setStep("pay");
+  }
+
+  async function submitPayment(payload: {
+    cardToken?: string;
+    acceptanceToken?: string;
+    acceptPersonalAuth?: string;
+  }) {
+    setError("");
     const slugValue = normalizeStoreSlug(slug);
     if (!slugValue) {
-      setError('El slug es inválido');
+      setError("El slug es inválido");
       return;
     }
     setBusy(true);
     rememberPlanChoice(planType, billingPeriod);
     try {
-      const created = await api<{ id: string }>('/stores', {
-        method: 'POST',
+      const created = await api<{ id: string }>("/stores/with-subscription", {
+        method: "POST",
         body: JSON.stringify({
           name: name.trim(),
           slug: slugValue,
-          ownerName: ownerName.trim() || user?.displayName?.trim() || 'Encargado',
+          ownerName:
+            ownerName.trim() || user?.displayName?.trim() || "Encargado",
           category,
           subcategory,
           segment,
@@ -319,31 +383,44 @@ function MerchantBusinessSetup() {
           referralCode: referralCode.trim() || undefined,
           planType,
           billingPeriod,
+          cardToken: payload.cardToken,
+          acceptanceToken: payload.acceptanceToken,
+          acceptPersonalAuth: payload.acceptPersonalAuth,
         }),
       });
       finish(created.id);
     } catch (err: unknown) {
       const message =
-        err && typeof err === 'object' && 'message' in err
+        err && typeof err === "object" && "message" in err
           ? String((err as { message: unknown }).message)
-          : 'No se pudo crear el negocio';
+          : "No se pudo crear el negocio";
       setError(message);
     } finally {
       setBusy(false);
     }
   }
 
+  const planQuote = quotePlan(planType, billingPeriod);
+  const isReferred = Boolean(referralCode && referrerName && !skipPayment);
+  const isDemoCode = Boolean(skipPayment && referrerName);
   const stepIndex = STEPS.findIndex((s) => s.id === step);
   const header =
-    step === 'local'
+    step === "local"
       ? {
-          title: 'Tu negocio',
-          sub: 'Ya estás dentro. Datos del local y tu enlace público; el pase y las recompensas los configuras después en el panel.',
+          title: "Tu negocio",
+          sub: "Ya estás dentro. Datos del local y tu enlace público; el pase y las recompensas los configuras después en el panel.",
         }
-      : {
-          title: 'Elige tu plan',
-          sub: 'Último paso. El primer mes es gratis y no necesitas tarjeta.',
-        };
+      : step === "plan"
+        ? {
+            title: "Elige tu plan",
+            sub: isDemoCode
+              ? "Código demo: activas el plan sin cobro ni tarjeta."
+              : "Pagas hoy el periodo. Incluye 30 días extra hasta el siguiente cobro.",
+          }
+        : {
+            title: "Paga y activa",
+            sub: `Total hoy ${formatCop(planQuote.total)}. Guardamos tu tarjeta para renovar automáticamente.`,
+          };
 
   return (
     <div className="relative h-dvh max-h-dvh overflow-hidden bg-[var(--onda-bg)]">
@@ -372,13 +449,13 @@ function MerchantBusinessSetup() {
             </p>
             <p className="mt-4 max-w-sm text-[var(--onda-muted)]">
               Ya tienes cuenta
-              {user?.displayName ? ` · ${user.displayName}` : ''}. Completa el
+              {user?.displayName ? ` · ${user.displayName}` : ""}. Completa el
               local y elige plan para entrar al panel.
             </p>
 
             <div className="mt-8 inline-flex items-center gap-2 rounded-full bg-[var(--onda-violet-soft)] px-4 py-2 text-sm font-medium text-[var(--onda-violet)]">
               {OndaIcons.sparkle}
-              {PLAN_META[planType].name} · 1 mes gratis
+              {PLAN_META[planType].name} · +30 días al primer ciclo
             </div>
 
             <ul className="mt-10 space-y-4">
@@ -389,16 +466,20 @@ function MerchantBusinessSetup() {
                   <li
                     key={s.id}
                     className={`flex items-start gap-3 transition ${
-                      active ? 'opacity-100' : done ? 'opacity-80' : 'opacity-45'
+                      active
+                        ? "opacity-100"
+                        : done
+                          ? "opacity-80"
+                          : "opacity-45"
                     }`}
                   >
                     <span
                       className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm ${
                         done
-                          ? 'bg-[var(--onda-success)] text-white'
+                          ? "bg-[var(--onda-success)] text-white"
                           : active
-                            ? 'onda-gradient text-white shadow-[0_8px_20px_rgba(5,45,222,0.25)]'
-                            : 'bg-[var(--onda-card)] text-[var(--onda-muted)] ring-1 ring-[var(--onda-border)]'
+                            ? "onda-gradient text-white shadow-[0_8px_20px_rgba(5,45,222,0.25)]"
+                            : "bg-[var(--onda-card)] text-[var(--onda-muted)] ring-1 ring-[var(--onda-border)]"
                       }`}
                     >
                       {done ? OndaIcons.check : s.icon}
@@ -407,7 +488,9 @@ function MerchantBusinessSetup() {
                       <p className="font-display text-base font-semibold text-[var(--onda-ink)]">
                         {s.label}
                       </p>
-                      <p className="text-sm text-[var(--onda-muted)]">{s.hint}</p>
+                      <p className="text-sm text-[var(--onda-muted)]">
+                        {s.hint}
+                      </p>
                     </div>
                   </li>
                 );
@@ -421,7 +504,7 @@ function MerchantBusinessSetup() {
             </span>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-[var(--onda-ink)]">
-                {sessionEmail || user?.email || 'Sesión activa'}
+                {sessionEmail || user?.email || "Sesión activa"}
               </p>
               <button
                 type="button"
@@ -451,14 +534,17 @@ function MerchantBusinessSetup() {
             </div>
           </div>
 
-          <div className="mb-3 flex shrink-0 gap-2 lg:hidden" aria-label="Progreso">
+          <div
+            className="mb-3 flex shrink-0 gap-2 lg:hidden"
+            aria-label="Progreso"
+          >
             {STEPS.map((s, i) => (
               <div
                 key={s.id}
                 className={`h-1.5 flex-1 rounded-full transition-colors ${
                   i <= stepIndex
-                    ? 'bg-[var(--onda-violet)]'
-                    : 'bg-[var(--onda-border)]'
+                    ? "bg-[var(--onda-violet)]"
+                    : "bg-[var(--onda-border)]"
                 }`}
               />
             ))}
@@ -474,15 +560,21 @@ function MerchantBusinessSetup() {
               </p>
             </header>
 
-            {referrerName && step === 'local' ? (
+            {referrerName && step === "local" ? (
               <div className="mb-4 flex shrink-0 items-start gap-3 rounded-2xl bg-[var(--onda-sky-soft)] px-4 py-3 text-sm text-[var(--onda-ink)]">
                 <span className="mt-0.5 text-[var(--onda-sky)]">
                   {OndaIcons.users}
                 </span>
                 <div>
-                  <p className="font-medium">Invitado por {referrerName}</p>
+                  <p className="font-medium">
+                    {isDemoCode
+                      ? "Código demo de Onda"
+                      : `Invitado por ${referrerName}`}
+                  </p>
                   <p className="text-[var(--onda-muted)]">
-                    Ambos ganan un mes gratis con este registro.
+                    {isDemoCode
+                      ? "Esta alta no requiere tarjeta ni cobro."
+                      : "Ambos ganan +30 días en la fecha de cobro cuando pagues el plan."}
                   </p>
                 </div>
               </div>
@@ -492,7 +584,7 @@ function MerchantBusinessSetup() {
               key={step}
               className="min-h-0 flex-1 duration-300 ease-out animate-[fadeIn_0.28s_ease-out]"
             >
-              {step === 'local' ? (
+              {step === "local" ? (
                 <form
                   onSubmit={goNextFromLocal}
                   className="flex h-full min-h-0 flex-col"
@@ -607,7 +699,7 @@ function MerchantBusinessSetup() {
                           className="onda-input uppercase tracking-wider"
                         />
                       </Field>
-                      {referralCode && referrerName === '' ? (
+                      {referralCode && referrerName === "" ? (
                         <p className="text-sm text-[var(--onda-danger)]">
                           Código de referido no válido
                         </p>
@@ -617,16 +709,18 @@ function MerchantBusinessSetup() {
                         </p>
                       ) : null}
                       {error ? (
-                        <p className="text-sm text-[var(--onda-danger)]">{error}</p>
+                        <p className="text-sm text-[var(--onda-danger)]">
+                          {error}
+                        </p>
                       ) : null}
                     </div>
                   </FormShell>
                 </form>
               ) : null}
 
-              {step === 'plan' ? (
+              {step === "plan" ? (
                 <form
-                  onSubmit={submitBusiness}
+                  onSubmit={goNextFromPlan}
                   className="flex h-full min-h-0 flex-col"
                 >
                   <FormShell
@@ -638,14 +732,15 @@ function MerchantBusinessSetup() {
                           className="min-w-[10rem]"
                         >
                           {busy
-                            ? 'Creando…'
-                            : `Activar ${PLAN_META[planType].shortName}`}
+                            ? "Activando…"
+                            : isDemoCode
+                              ? `Activar ${PLAN_META[planType].shortName} (demo)`
+                              : "Continuar al pago"}
                         </GradientButton>
                         <button
                           type="button"
                           className="rounded-full px-4 py-2.5 text-sm font-medium text-[var(--onda-muted)] transition hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
-                          disabled={busy}
-                          onClick={() => setStep('local')}
+                          onClick={() => setStep("local")}
                         >
                           Volver
                         </button>
@@ -657,6 +752,7 @@ function MerchantBusinessSetup() {
                       billing={billingPeriod}
                       onPlan={setPlanType}
                       onBilling={setBillingPeriod}
+                      referred={isReferred}
                     />
                     {error ? (
                       <p className="mt-4 text-sm text-[var(--onda-danger)]">
@@ -665,6 +761,43 @@ function MerchantBusinessSetup() {
                     ) : null}
                   </FormShell>
                 </form>
+              ) : null}
+
+              {step === "pay" ? (
+                <div className="flex h-full min-h-0 flex-col">
+                  <FormShell footer={null}>
+                    <div className="mb-4 rounded-2xl bg-[var(--onda-bg)] px-4 py-3 text-sm">
+                      <p className="font-medium text-[var(--onda-ink)]">
+                        {PLAN_META[planType].name} · {planQuote.periodLabel}
+                      </p>
+                      <p className="mt-1 text-[var(--onda-muted)]">
+                        Total hoy{" "}
+                        <span className="font-semibold text-[var(--onda-ink)]">
+                          {formatCop(planQuote.total)}
+                        </span>
+                        {" · "}
+                        próximo cobro en{" "}
+                        {isReferred
+                          ? planQuote.referredFirstIntervalDays
+                          : planQuote.firstIntervalDays}{" "}
+                        días
+                      </p>
+                    </div>
+                    <PaymentCardForm
+                      publicKey={wompiPublicKey}
+                      stubMode={!wompiConfigured}
+                      busy={busy}
+                      submitLabel={`Pagar ${formatCop(planQuote.total)}`}
+                      onBack={() => setStep("plan")}
+                      onSubmit={submitPayment}
+                    />
+                    {error ? (
+                      <p className="mt-4 text-sm text-[var(--onda-danger)]">
+                        {error}
+                      </p>
+                    ) : null}
+                  </FormShell>
+                </div>
               ) : null}
             </div>
           </div>

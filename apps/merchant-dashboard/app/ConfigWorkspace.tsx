@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { FormEvent, ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { BooksIcon as Books } from '@phosphor-icons/react/dist/csr/Books';
 import { BuildingsIcon as Buildings } from '@phosphor-icons/react/dist/csr/Buildings';
 import { CameraIcon as Camera } from '@phosphor-icons/react/dist/csr/Camera';
@@ -12,18 +12,31 @@ import { GearIcon as Gear } from '@phosphor-icons/react/dist/csr/Gear';
 import { GiftIcon as Gift } from '@phosphor-icons/react/dist/csr/Gift';
 import { UsersThreeIcon as UsersThree } from '@phosphor-icons/react/dist/csr/UsersThree';
 import {
+  api,
   GradientButton,
   ImageUploadField,
   OndaIcons,
   OndaSelect,
 } from '@onda/shared-ui';
-import { formatMoneyInput, parseMoneyInput, formatCop } from '@onda/shared-utils';
+import {
+  formatMoneyInput,
+  parseMoneyInput,
+  formatCop,
+  formatChargeDate,
+  parseBillingPeriod,
+  parsePlanId,
+  quotePlan,
+  type BillingPeriod,
+  type PlanId,
+} from '@onda/shared-utils';
 import {
   PLAN_ONDA_MONTHLY_LIMIT,
   CAMPAIGN_FREE_REACH_MONTHLY,
 } from '@onda/shared-types';
 import { PosPaymentMethodsConfig } from './PosPaymentMethodsConfig';
 import { PosAccountingConfig } from './PosAccountingConfig';
+import { PlanPicker } from './PlanPicker';
+import { PaymentCardForm } from './PaymentCardForm';
 
 const STORE_CURRENCIES = [
   { id: 'COP', label: 'COP — peso colombiano' },
@@ -249,6 +262,7 @@ export function ConfigWorkspace({
   onSaveLogo,
   onSaveEconomics,
   onUpgrade,
+  onBillingUpdated,
 }: {
   storeId: string;
   store: any;
@@ -263,11 +277,35 @@ export function ConfigWorkspace({
   savingStoreEconomics: boolean;
   onSaveLogo: (e: FormEvent) => void;
   onSaveEconomics: (e: FormEvent) => void;
-  onUpgrade: () => void;
+  /** @deprecated use plan editor */
+  onUpgrade?: () => void;
+  onBillingUpdated?: () => void | Promise<void>;
 }) {
   const pathname = usePathname();
   const section = parseConfigSection(pathname);
   const posEnabled = Boolean(store?.posEnabled);
+
+  const currentPlan =
+    parsePlanId(billing?.planType || store?.planType) || 'BASIC';
+  const currentPeriod =
+    parseBillingPeriod(billing?.billingPeriod || store?.billingPeriod) ||
+    'monthly';
+  const [editPlan, setEditPlan] = useState<PlanId>(currentPlan);
+  const [editPeriod, setEditPeriod] = useState<BillingPeriod>(currentPeriod);
+  const [planBusy, setPlanBusy] = useState(false);
+  const [planError, setPlanError] = useState('');
+  const [showCard, setShowCard] = useState(false);
+  const editQuote = quotePlan(editPlan, editPeriod);
+  const needsCard =
+    !billing?.hasPaymentMethod && Boolean(billing?.wompiConfigured);
+
+  useEffect(() => {
+    setEditPlan(parsePlanId(billing?.planType || store?.planType) || 'BASIC');
+    setEditPeriod(
+      parseBillingPeriod(billing?.billingPeriod || store?.billingPeriod) ||
+        'monthly'
+    );
+  }, [billing?.planType, billing?.billingPeriod, store?.planType, store?.billingPeriod]);
 
   const navGroups = NAV_GROUPS.filter(
     (group) => group.id !== 'pos' || posEnabled,
@@ -276,6 +314,35 @@ export function ConfigWorkspace({
     // Temporal: ocultar Equipo del menú de config
     items: group.items.filter((item) => item.id !== 'equipo'),
   }));
+
+  async function applyPlanChange(tokens?: {
+    cardToken?: string;
+    acceptanceToken?: string;
+    acceptPersonalAuth?: string;
+  }) {
+    setPlanError('');
+    setPlanBusy(true);
+    try {
+      await api(`/billing/store/${storeId}/plan`, {
+        method: 'POST',
+        body: JSON.stringify({
+          planType: editPlan,
+          billingPeriod: editPeriod,
+          cardToken: tokens?.cardToken,
+          acceptanceToken: tokens?.acceptanceToken,
+          acceptPersonalAuth: tokens?.acceptPersonalAuth,
+        }),
+      });
+      setShowCard(false);
+      await onBillingUpdated?.();
+    } catch (err) {
+      setPlanError(
+        err instanceof Error ? err.message : 'No se pudo cambiar el plan'
+      );
+    } finally {
+      setPlanBusy(false);
+    }
+  }
 
   function renderSection() {
     if (
@@ -410,16 +477,34 @@ export function ConfigWorkspace({
                     <dt className="text-[var(--onda-muted)]">Plan</dt>
                     <dd className="font-medium text-[var(--onda-ink)]">
                       {billing?.planType || '—'}
+                      {billing?.billingPeriod
+                        ? ` · ${billing.billingPeriod === 'monthly' ? 'mensual' : billing.billingPeriod === '6' ? '6 meses' : '12 meses'}`
+                        : ''}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-[var(--onda-muted)]">Próximo cobro</dt>
+                    <dd className="font-medium text-[var(--onda-ink)]">
+                      {billing?.nextBillingAt
+                        ? formatChargeDate(new Date(billing.nextBillingAt))
+                        : '—'}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-[var(--onda-muted)]">Tarjeta</dt>
+                    <dd className="font-medium text-[var(--onda-ink)]">
+                      {billing?.hasPaymentMethod ? 'Guardada' : 'Sin método'}
                     </dd>
                   </div>
                 </dl>
                 <div className="rounded-xl bg-[var(--onda-bg)] px-3 py-2.5 text-sm">
                   <p className="font-medium text-[var(--onda-ink)]">
-                    Meses gratis:{' '}
-                    {billing?.freeMonthsBalance ?? store?.freeMonthsBalance ?? '—'}
+                    Bonos referidos:{' '}
+                    {billing?.freeMonthsBalance ?? store?.freeMonthsBalance ?? 0}
                   </p>
                   <p className="mt-1 text-xs text-[var(--onda-muted)]">
-                    Detalle en Referidos (bienvenida + meses por cada alta)
+                    +30 días en tu fecha de cobro cuando un referido paga
+                    cualquier plan.
                   </p>
                 </div>
               </div>
@@ -446,13 +531,58 @@ export function ConfigWorkspace({
                     Excedente: {formatCop(billing?.reachUnitCop ?? 200)} por persona al enviar.
                   </p>
                 </dl>
-                {billing?.planType === 'BASIC' ? (
-                  <GradientButton type="button" onClick={onUpgrade}>
-                    {OndaIcons.upgrade}
-                    Upgrade a PRO
-                  </GradientButton>
-                ) : null}
               </div>
+            </div>
+            <div className="onda-card mt-6 space-y-4 p-5">
+              <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
+                Cambiar suscripción
+              </h3>
+              <p className="text-sm text-[var(--onda-muted)]">
+                Al aplicar se cobra {formatCop(editQuote.total)} y se reinicia la
+                fecha de corte (+{editQuote.firstIntervalDays} días).
+              </p>
+              <PlanPicker
+                plan={editPlan}
+                billing={editPeriod}
+                onPlan={setEditPlan}
+                onBilling={setEditPeriod}
+                compact
+              />
+              {showCard || needsCard ? (
+                <PaymentCardForm
+                  publicKey={
+                    billing?.wompiPublicKey ||
+                    process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY ||
+                    null
+                  }
+                  stubMode={!billing?.wompiConfigured}
+                  busy={planBusy}
+                  submitLabel={`Cobrar ${formatCop(editQuote.total)}`}
+                  onSubmit={(tokens) => void applyPlanChange(tokens)}
+                />
+              ) : (
+                <GradientButton
+                  type="button"
+                  disabled={planBusy}
+                  onClick={() => void applyPlanChange()}
+                >
+                  {planBusy
+                    ? 'Procesando…'
+                    : `Aplicar y cobrar ${formatCop(editQuote.total)}`}
+                </GradientButton>
+              )}
+              {!needsCard && !showCard && onUpgrade ? (
+                <button
+                  type="button"
+                  className="text-xs font-medium text-[var(--onda-muted)] underline"
+                  onClick={() => setShowCard(true)}
+                >
+                  Usar otra tarjeta
+                </button>
+              ) : null}
+              {planError ? (
+                <p className="text-sm text-[var(--onda-danger)]">{planError}</p>
+              ) : null}
             </div>
             <div className="onda-card mt-6 p-5">
               <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">

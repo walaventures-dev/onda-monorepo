@@ -1,7 +1,12 @@
 import { createHash, timingSafeEqual } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
-
-const PRO_PRICE_COP = 69_900;
+import {
+  parseBillingPeriod,
+  parsePlanId,
+  quotePlan,
+  type BillingPeriod,
+  type PlanId,
+} from '@onda/shared-utils';
 
 @Injectable()
 export class WompiService {
@@ -26,18 +31,41 @@ export class WompiService {
     );
   }
 
-  get proAmountInCents(): number {
-    return PRO_PRICE_COP * 100;
+  amountInCentsFor(plan: PlanId, billing: BillingPeriod): number {
+    return quotePlan(plan, billing).total * 100;
   }
 
-  createCheckout(storeId: string) {
-    const reference = `onda-pro-${storeId}-${Date.now()}`;
-    const amountInCents = this.proAmountInCents;
-    const currency = 'COP';
+  /** Firma SHA256(reference + amountInCents + currency + integritySecret). */
+  integritySignature(
+    reference: string,
+    amountInCents: number,
+    currency = 'COP'
+  ): string {
     const integritySecret = process.env.WOMPI_INTEGRITY_SECRET || '';
-    const integrity = createHash('sha256')
+    return createHash('sha256')
       .update(`${reference}${amountInCents}${currency}${integritySecret}`)
       .digest('hex');
+  }
+
+  /** @deprecated use amountInCentsFor */
+  get proAmountInCents(): number {
+    return this.amountInCentsFor('PRO', 'monthly');
+  }
+
+  createCheckout(input: {
+    storeId: string;
+    planType: PlanId;
+    billingPeriod: BillingPeriod;
+    kind?: 'subscribe' | 'plan-change' | 'upgrade';
+  }) {
+    const kind = input.kind || 'subscribe';
+    const reference = `onda-${kind}-${input.storeId}-${Date.now()}`;
+    const amountInCents = this.amountInCentsFor(
+      input.planType,
+      input.billingPeriod
+    );
+    const currency = 'COP';
+    const integrity = this.integritySignature(reference, amountInCents, currency);
     const merchantUrl =
       process.env.NEXT_PUBLIC_MERCHANT_URL || 'http://localhost:4202';
 
@@ -48,6 +76,16 @@ export class WompiService {
       publicKey: this.publicKey,
       integrity,
       redirectUrl: `${merchantUrl}/config`,
+    };
+  }
+
+  parsePlanFromStore(store: {
+    planType?: string | null;
+    billingPeriod?: string | null;
+  }): { planType: PlanId; billingPeriod: BillingPeriod } {
+    return {
+      planType: parsePlanId(store.planType) || 'BASIC',
+      billingPeriod: parseBillingPeriod(store.billingPeriod) || 'monthly',
     };
   }
 
@@ -92,6 +130,44 @@ export class WompiService {
     };
   }
 
+  async createPaymentSource(input: {
+    token: string;
+    customerEmail: string;
+    acceptanceToken: string;
+    acceptPersonalAuth: string;
+  }): Promise<{ id: string; stub?: boolean }> {
+    const privateKey = process.env.WOMPI_PRIVATE_KEY;
+    if (!privateKey) {
+      const stubId = `stub-ps-${Date.now()}`;
+      this.logger.log(`[Wompi stub] payment_source ${stubId}`);
+      return { id: stubId, stub: true };
+    }
+    const res = await fetch(`${this.apiUrl}/payment_sources`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${privateKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        type: 'CARD',
+        token: input.token,
+        customer_email: input.customerEmail,
+        acceptance_token: input.acceptanceToken,
+        accept_personal_auth: input.acceptPersonalAuth,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Wompi payment_source ${res.status}: ${text}`);
+    }
+    const json = (await res.json()) as { data?: { id?: number | string } };
+    const id = json.data?.id;
+    if (id == null) {
+      throw new Error('Wompi payment_source sin id');
+    }
+    return { id: String(id) };
+  }
+
   async chargePaymentSource(input: {
     paymentSourceId: string;
     storeId: string;
@@ -106,6 +182,17 @@ export class WompiService {
       );
       return { ok: true as const, stub: true as const };
     }
+    const currency = 'COP';
+    const signature = this.integritySignature(
+      input.reference,
+      input.amountInCents,
+      currency
+    );
+    if (!process.env.WOMPI_INTEGRITY_SECRET) {
+      throw new Error(
+        'WOMPI_INTEGRITY_SECRET requerido para cobrar (firma de integridad)'
+      );
+    }
     const res = await fetch(`${this.apiUrl}/transactions`, {
       method: 'POST',
       headers: {
@@ -114,11 +201,12 @@ export class WompiService {
       },
       body: JSON.stringify({
         amount_in_cents: input.amountInCents,
-        currency: 'COP',
+        currency,
         customer_email: input.customerEmail || 'billing@onda.lat',
         payment_source_id:
           Number(input.paymentSourceId) || input.paymentSourceId,
         reference: input.reference,
+        signature,
         payment_method: { installments: 1 },
       }),
     });

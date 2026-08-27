@@ -30,9 +30,9 @@ const BILLING_TABS: {
   label: string;
   hint?: string;
 }[] = [
-  { id: 'monthly', label: 'Mensual' },
-  { id: '6', label: '6 meses', hint: '+ mes gratis' },
-  { id: '12', label: '12 meses', hint: '+ mes gratis' },
+  { id: 'monthly', label: 'Mensual', hint: '+30 días' },
+  { id: '6', label: '6 meses', hint: '+30 días' },
+  { id: '12', label: '12 meses', hint: '+30 días' },
 ];
 
 export function PricingSection() {
@@ -59,8 +59,8 @@ export function PricingSection() {
         </motion.h2>
         <motion.p variants={staggerItem} className="mt-3 text-lg text-[var(--onda-muted)]">
           {SHOW_POS_LANDING
-            ? 'POS y lealtad incluidos. Primer mes gratis — sin tarjeta para empezar.'
-            : 'Lealtad con Ondas incluida. Primer mes gratis — sin tarjeta para empezar.'}
+            ? 'POS y lealtad incluidos. Pagas hoy y sumas 30 días extra hasta el siguiente cobro.'
+            : 'Lealtad con Ondas incluida. Pagas hoy y sumas 30 días extra hasta el siguiente cobro.'}
         </motion.p>
       </motion.div>
 
@@ -107,7 +107,10 @@ export function PricingSection() {
               className="mt-0.5 shrink-0 text-[var(--onda-success)]"
               weight="fill"
             />
-            <span>No necesitas tarjeta de crédito para iniciar.</span>
+            <span>
+              Activas con tarjeta. El primer ciclo incluye +30 días hasta el
+              siguiente cobro.
+            </span>
           </p>
 
           <AnimatePresence mode="wait">
@@ -143,8 +146,7 @@ export function PricingSection() {
                 className="inline-flex items-center gap-1.5 text-sm text-[var(--onda-muted)]"
               >
                 <Gift size={16} className="text-[var(--onda-success)]" weight="fill" />
-                Descuento + 1 mes gratis adicional ·{' '}
-                {billing === '6' ? '7 meses' : '13 meses'} de servicio
+                Descuento por prepago · +30 días hasta el siguiente cobro
               </motion.p>
             ) : null}
           </AnimatePresence>
@@ -207,24 +209,23 @@ export function PricingSection() {
 
                   {billing === 'monthly' ? (
                     <p className="mt-2 text-sm text-[var(--onda-muted)]">
-                      Primer mes gratis · después {formatCop(quote.monthlyList)}/mes
+                      Hoy {formatCop(quote.total)} · próximo cobro en{' '}
+                      {quote.firstIntervalDays} días
                     </p>
                   ) : (
                     <p className="mt-2 text-sm text-[var(--onda-muted)]">
-                      Pagas {quote.paidMonths} meses ({formatCop(quote.total)}) ·{' '}
-                      <span className="font-medium text-[var(--onda-success)]">
-                        recibes {quote.serviceMonths} meses
-                      </span>
+                      Hoy {formatCop(quote.total)} ({quote.paidMonths} meses) ·
+                      próximo cobro en {quote.firstIntervalDays} días
                     </p>
                   )}
 
                   {quote.discountSavings > 0 ? (
                     <span className="mt-3 inline-flex rounded-full bg-[color-mix(in_srgb,var(--onda-success)_16%,white)] px-3 py-1 text-xs font-semibold text-[var(--onda-success)]">
-                      Ahorras {formatCop(quote.discountSavings)} + 1 mes gratis
+                      Ahorras {formatCop(quote.discountSavings)} + 30 días
                     </span>
                   ) : (
                     <span className="mt-3 inline-flex rounded-full bg-[color-mix(in_srgb,var(--onda-success)_16%,white)] px-3 py-1 text-xs font-semibold text-[var(--onda-success)]">
-                      1er mes gratis
+                      +30 días al primer ciclo
                     </span>
                   )}
                 </motion.div>

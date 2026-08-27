@@ -336,8 +336,10 @@ export interface StoreDto {
   planType: PlanType | string;
   billingStatus: string;
   billingPeriod?: string | null;
+  nextBillingAt?: string | null;
   whatsappUsed: number;
   freeMonthsBalance?: number;
+  referralBonusApplied?: boolean;
   referralCode?: string;
   ownerName?: string;
   ownerEmail?: string | null;

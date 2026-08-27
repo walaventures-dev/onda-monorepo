@@ -3039,6 +3039,9 @@ export function MerchantWorkspace() {
             onSaveLogo={(e) => void saveStoreLogo(e)}
             onSaveEconomics={(e) => void saveStoreEconomics(e)}
             onUpgrade={() => void upgrade()}
+            onBillingUpdated={async () => {
+              setBilling(await api(`/billing/store/${storeId}`));
+            }}
           />
         ) : null}
       </AppShell>

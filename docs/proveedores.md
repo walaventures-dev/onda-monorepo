@@ -114,9 +114,9 @@ El diagrama asume el API en Google (Cloud Run/GCE). Este repo no incluye Terrafo
 
 ---
 
-## 3. Wompi (cobro de suscripción PRO)
+## 3. Wompi (cobro de suscripción)
 
-Plan PRO: **$69.900 COP / mes**.
+Planes BASIC/PRO con periodos mensual (30d), 6 meses (180d) o 12 meses (365d).
 
 ### Consola
 
@@ -130,25 +130,36 @@ WOMPI_PRIVATE_KEY="prv_test_..."
 WOMPI_INTEGRITY_SECRET=""
 WOMPI_EVENTS_SECRET=""
 WOMPI_API_URL="https://sandbox.wompi.co/v1"
+# Frontends (tokenización en el navegador)
+NEXT_PUBLIC_WOMPI_PUBLIC_KEY="pub_test_..."
+NEXT_PUBLIC_WOMPI_API_URL="https://sandbox.wompi.co/v1"
 ```
 
 En producción: `https://production.wompi.co/v1` y llaves `pub_prod_` / `prv_prod_`.
 
-### Flujo
+### Flujo onboarding
 
-1. En el dashboard, Configuración → Upgrade a PRO.
-2. La API guarda `Store.wompiTransactionId` (referencia) y devuelve datos del Widget.
-3. El merchant paga en el checkout Wompi.
-4. El webhook, si la firma es válida y `status=APPROVED`, pone `planType=PRO` y guarda `wompiPaymentSourceId` si viene.
-5. Se encola `wompi-renew` a 30 días (Cloud Tasks o BullMQ). Sin payment source, el job solo deja log.
+1. Merchant elige plan + periodo → paso Pagar.
+2. El navegador tokeniza la tarjeta (`POST /v1/tokens/cards` con la pública).
+3. `POST /api/stores/with-subscription` crea el store, crea payment source, cobra el total del periodo y guarda `wompiPaymentSourceId`.
+4. `nextBillingAt` = ahora + periodDays + 30 (60 / 210 / 395). Si es referido, +30 extra y el referidor también mueve +30.
+5. Se encola `wompi-renew` para esa fecha. Renovaciones posteriores suman solo periodDays (30 / 180 / 365).
 
-Sin llaves, el botón activa PRO **sin cobro** (modo desarrollo).
+### Cambio de plan (Configuración)
+
+`POST /api/billing/store/:id/plan` cobra el nuevo total y reinicia `nextBillingAt` a periodDays + 30.
+
+### Stub local / demo
+
+Sin llaves Wompi, el cobro se simula y el plan queda ACTIVE con `nextBillingAt` igual.
+
+Código demo de entregas: `ONDA_DEMO_REFERRAL_CODE` en `.env`. Si el merchant lo usa en onboarding, se activa el plan **sin tarjeta ni cobro** (no agenda renew).
 
 ### Fallos típicos
 
-- Widget no abre: falta `WOMPI_INTEGRITY_SECRET` o la pública no es `pub_test_`/`pub_prod_`.
+- Tokenización falla: pública incorrecta o tarjeta inválida en sandbox.
 - Webhook `Firma Wompi inválida`: `WOMPI_EVENTS_SECRET` incorrecto.
-- Pago ok pero sigue BASIC: la referencia no coincide con `wompiTransactionId` (revisa logs del webhook).
+- Pago ok pero sin renovación: revisa `nextBillingAt` y el job `wompi-renew`.
 
 ---
 
@@ -296,6 +307,7 @@ Las campañas `channel: WALLET` (`POST /api/campaigns`) hacen push (`WalletServi
 4. WalletWallet — pases reales.
 5. Google Places — autocomplete en onboarding.
 6. Firebase — login del dashboard (crea el usuario con el email del seed).
-7. Wompi sandbox — cobro PRO.
+# 7. Wompi sandbox — cobro PRO / suscripción.
+# Código demo sin cobro: `ONDA_DEMO_REFERRAL_CODE` en `.env` (solo para entregas internas).
 8. Brevo — emails y SMS de campañas.
 9. Cloud Tasks — cuando el API esté en GCP; hasta entonces BullMQ basta.

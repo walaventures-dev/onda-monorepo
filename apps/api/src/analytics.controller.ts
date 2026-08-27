@@ -25,7 +25,8 @@ import {
   monthlyReachUsed,
 } from './plan-quota';
 import { campaignReachPricing } from './campaign-pricing';
-import { computeRoi } from '@onda/shared-utils';
+import { computeRoi, quotePlan, initialNextBillingAt } from '@onda/shared-utils';
+import { BillingService } from './billing.service';
 
 const COMPARE_MAX_STORES = 20;
 
@@ -1868,20 +1869,37 @@ export class BillingController {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(WompiService) private wompi: WompiService,
-    @Inject(JobsService) private jobs: JobsService
+    @Inject(JobsService) private jobs: JobsService,
+    @Inject(BillingService) private billing: BillingService
   ) {}
+
+  @Get('config')
+  publicConfig() {
+    return {
+      wompiConfigured: this.wompi.isConfigured,
+      wompiPublicKey: this.wompi.publicKey,
+    };
+  }
 
   @Get('store/:storeId')
   async summary(@Param('storeId') storeId: string) {
-    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: storeId },
+    });
     const pricing = campaignReachPricing();
+    const planType = this.billing.normalizePlan(store.planType);
+    const billingPeriod = this.billing.normalizePeriod(store.billingPeriod);
+    const planQuote = quotePlan(planType, billingPeriod);
     const [ondasUsed, reachUsed] = await Promise.all([
       monthlyOndasUsed(this.prisma, storeId),
       monthlyReachUsed(this.prisma, storeId),
     ]);
     return {
       planType: store.planType,
+      billingPeriod: store.billingPeriod,
       billingStatus: store.billingStatus,
+      nextBillingAt: store.nextBillingAt,
+      referralBonusApplied: store.referralBonusApplied,
       ondasUsed,
       ondasLimit: PLAN_ONDA_MONTHLY_LIMIT,
       reachUsed,
@@ -1891,11 +1909,14 @@ export class BillingController {
       smsCampaignsLimit: pricing.freeMonthly,
       campaignCredits: 0,
       packSubscribed: false,
-      hasPaymentMethod: Boolean(store.wompiPaymentSourceId) || !this.wompi.isConfigured,
+      hasPaymentMethod:
+        Boolean(store.wompiPaymentSourceId) || !this.wompi.isConfigured,
       campaignPricing: pricing,
-      planPriceCop: store.planType === 'PRO' ? 69_900 : 49_900,
+      planPriceCop: planQuote.monthlyEffective,
+      planQuote,
       freeMonthsBalance: store.freeMonthsBalance,
       wompiPublicKey: process.env.WOMPI_PUBLIC_KEY || null,
+      wompiConfigured: this.wompi.isConfigured,
       features: {
         gpsProximity: store.planType === 'PRO',
         npsSurveys: store.planType === 'PRO',
@@ -1905,23 +1926,159 @@ export class BillingController {
     };
   }
 
+  @Post('store/:storeId/subscribe')
+  async subscribe(
+    @Param('storeId') storeId: string,
+    @Body()
+    body: {
+      planType?: string;
+      billingPeriod?: string;
+      cardToken?: string;
+      acceptanceToken?: string;
+      acceptPersonalAuth?: string;
+      customerEmail?: string;
+    }
+  ) {
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: storeId },
+    });
+    const planType = this.billing.normalizePlan(body.planType || store.planType);
+    const billingPeriod = this.billing.normalizePeriod(
+      body.billingPeriod || store.billingPeriod
+    );
+    const tokens =
+      body.cardToken || !store.wompiPaymentSourceId
+        ? {
+            cardToken: body.cardToken || '',
+            acceptanceToken: body.acceptanceToken || '',
+            acceptPersonalAuth: body.acceptPersonalAuth || '',
+            customerEmail:
+              body.customerEmail || store.ownerEmail || 'billing@onda.lat',
+          }
+        : undefined;
+    const result = await this.billing.activatePaidSubscription({
+      storeId,
+      planType,
+      billingPeriod,
+      tokens,
+    });
+    return {
+      store: result.store,
+      amountCop: result.amountCop,
+      quote: result.quote,
+      stub: result.stub,
+    };
+  }
+
+  @Post('store/:storeId/plan')
+  async changePlan(
+    @Param('storeId') storeId: string,
+    @Body()
+    body: {
+      planType: string;
+      billingPeriod: string;
+      cardToken?: string;
+      acceptanceToken?: string;
+      acceptPersonalAuth?: string;
+      customerEmail?: string;
+    }
+  ) {
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: storeId },
+    });
+    const planType = this.billing.normalizePlan(body.planType);
+    const billingPeriod = this.billing.normalizePeriod(body.billingPeriod);
+    const needsCard = !store.wompiPaymentSourceId && this.wompi.isConfigured;
+    if (needsCard && !body.cardToken) {
+      throw new BadRequestException('Tarjeta requerida para cambiar el plan');
+    }
+    const tokens = body.cardToken
+      ? {
+          cardToken: body.cardToken,
+          acceptanceToken: body.acceptanceToken || '',
+          acceptPersonalAuth: body.acceptPersonalAuth || '',
+          customerEmail:
+            body.customerEmail || store.ownerEmail || 'billing@onda.lat',
+        }
+      : undefined;
+    const result = await this.billing.activatePaidSubscription({
+      storeId,
+      planType,
+      billingPeriod,
+      tokens,
+      resetBillingCycle: true,
+    });
+    return {
+      store: result.store,
+      amountCop: result.amountCop,
+      quote: result.quote,
+      stub: result.stub,
+    };
+  }
+
+  /** @deprecated Prefer POST .../plan con planType PRO */
   @Post('store/:storeId/upgrade')
-  async upgrade(@Param('storeId') storeId: string) {
-    await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
-    if (!this.wompi.isConfigured) {
-      const store = await this.prisma.store.update({
-        where: { id: storeId },
-        data: { planType: 'PRO', billingStatus: 'ACTIVE' },
+  async upgrade(
+    @Param('storeId') storeId: string,
+    @Body()
+    body?: {
+      billingPeriod?: string;
+      cardToken?: string;
+      acceptanceToken?: string;
+      acceptPersonalAuth?: string;
+      customerEmail?: string;
+    }
+  ) {
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: storeId },
+    });
+    const billingPeriod = this.billing.normalizePeriod(
+      body?.billingPeriod || store.billingPeriod
+    );
+    if (!this.wompi.isConfigured && !store.wompiPaymentSourceId) {
+      const next = await this.billing.activatePaidSubscription({
+        storeId,
+        planType: 'PRO',
+        billingPeriod,
       });
-      return { store, stub: true as const, checkout: null };
+      return { store: next.store, stub: true as const, checkout: null };
     }
 
-    const checkout = this.wompi.createCheckout(storeId);
-    await this.prisma.store.update({
-      where: { id: storeId },
-      data: { wompiTransactionId: checkout.reference },
+    // Legacy Widget path if no card token provided
+    if (!body?.cardToken && this.wompi.isConfigured) {
+      const checkout = this.wompi.createCheckout({
+        storeId,
+        planType: 'PRO',
+        billingPeriod,
+        kind: 'upgrade',
+      });
+      await this.prisma.store.update({
+        where: { id: storeId },
+        data: {
+          planType: 'PRO',
+          billingPeriod,
+          wompiTransactionId: checkout.reference,
+        },
+      });
+      return { stub: false as const, checkout };
+    }
+
+    const result = await this.billing.activatePaidSubscription({
+      storeId,
+      planType: 'PRO',
+      billingPeriod,
+      tokens: body?.cardToken
+        ? {
+            cardToken: body.cardToken,
+            acceptanceToken: body.acceptanceToken || '',
+            acceptPersonalAuth: body.acceptPersonalAuth || '',
+            customerEmail:
+              body.customerEmail || store.ownerEmail || 'billing@onda.lat',
+          }
+        : undefined,
+      resetBillingCycle: true,
     });
-    return { stub: false as const, checkout };
+    return { store: result.store, stub: result.stub, checkout: null };
   }
 
   @Post('wompi/webhook')
@@ -1940,19 +2097,36 @@ export class BillingController {
       return { received: true, store: null };
     }
     const paymentSourceId =
-      tx.paymentSourceId != null ? String(tx.paymentSourceId) : store.wompiPaymentSourceId;
+      tx.paymentSourceId != null
+        ? String(tx.paymentSourceId)
+        : store.wompiPaymentSourceId;
+    const planType = this.billing.normalizePlan(store.planType);
+    const billingPeriod = this.billing.normalizePeriod(store.billingPeriod);
+    const nextBillingAt =
+      store.nextBillingAt || initialNextBillingAt(billingPeriod);
+
     await this.prisma.store.update({
       where: { id: store.id },
       data: {
-        planType: 'PRO',
+        planType,
         billingStatus: 'ACTIVE',
         wompiPaymentSourceId: paymentSourceId,
+        nextBillingAt,
       },
     });
     if (paymentSourceId) {
-      await this.jobs.scheduleWompiRenew(store.id);
+      await this.billing.applyReferralBonusOnPayment(store.id);
+      const refreshed = await this.prisma.store.findUnique({
+        where: { id: store.id },
+        select: { nextBillingAt: true },
+      });
+      if (refreshed?.nextBillingAt) {
+        await this.billing.scheduleRenewAt(store.id, refreshed.nextBillingAt);
+      } else {
+        await this.jobs.scheduleWompiRenew(store.id);
+      }
     }
-    return { received: true, storeId: store.id, status: 'PRO' };
+    return { received: true, storeId: store.id, status: planType };
   }
 }
 

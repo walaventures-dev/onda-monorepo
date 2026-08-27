@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { CheckIcon as Check } from '@phosphor-icons/react/dist/csr/Check';
 import { GiftIcon as Gift } from '@phosphor-icons/react/dist/csr/Gift';
 import { PackageIcon as Package } from '@phosphor-icons/react/dist/csr/Package';
-import { ShieldCheckIcon as ShieldCheck } from '@phosphor-icons/react/dist/csr/ShieldCheck';
+import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/CreditCard';
 import {
   formatCop,
   PLAN_META,
@@ -21,9 +21,9 @@ const BILLING_TABS: {
   label: string;
   hint?: string;
 }[] = [
-  { id: 'monthly', label: 'Mensual' },
-  { id: '6', label: '6 meses', hint: '+ mes gratis' },
-  { id: '12', label: '12 meses', hint: '+ mes gratis' },
+  { id: 'monthly', label: 'Mensual', hint: '+30 días' },
+  { id: '6', label: '6 meses', hint: '+30 días' },
+  { id: '12', label: '12 meses', hint: '+30 días' },
 ];
 
 export function PlanPicker({
@@ -31,11 +31,15 @@ export function PlanPicker({
   billing,
   onPlan,
   onBilling,
+  referred = false,
+  compact = false,
 }: {
   plan: PlanId;
   billing: BillingPeriod;
   onPlan: (plan: PlanId) => void;
   onBilling: (billing: BillingPeriod) => void;
+  referred?: boolean;
+  compact?: boolean;
 }) {
   const quotes = useMemo(
     () => ({
@@ -45,9 +49,10 @@ export function PlanPicker({
     [billing]
   );
   const includesKit = billing !== 'monthly';
+  const selectedQuote = quotes[plan];
 
   return (
-    <div className="space-y-6 pb-2">
+    <div className={`space-y-6 ${compact ? 'pb-0' : 'pb-2'}`}>
       <div className="flex flex-col items-center gap-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
           ¿Cómo quieres pagar?
@@ -81,12 +86,16 @@ export function PlanPicker({
           })}
         </div>
         <p className="inline-flex items-center gap-1.5 text-center text-sm text-[var(--onda-muted)]">
-          <ShieldCheck
+          <CreditCard
             size={16}
-            className="shrink-0 text-[var(--onda-success)]"
+            className="shrink-0 text-[var(--onda-primary-500)]"
             weight="fill"
           />
-          No necesitas tarjeta para iniciar.
+          Pagas hoy {formatCop(selectedQuote.total)}. Próximo cobro en{' '}
+          {referred
+            ? selectedQuote.referredFirstIntervalDays
+            : selectedQuote.firstIntervalDays}{' '}
+          días.
         </p>
         <p className="inline-flex items-start justify-center gap-1.5 text-center text-sm text-[var(--onda-muted)]">
           <Package
@@ -103,8 +112,7 @@ export function PlanPicker({
         {billing !== 'monthly' ? (
           <p className="inline-flex items-center gap-1.5 text-sm text-[var(--onda-muted)]">
             <Gift size={16} className="text-[var(--onda-success)]" weight="fill" />
-            Descuento + 1 mes gratis adicional ·{' '}
-            {billing === '6' ? '7 meses' : '13 meses'} de servicio
+            Descuento por prepago · +30 días hasta el siguiente cobro
           </p>
         ) : null}
       </div>
@@ -143,9 +151,7 @@ export function PlanPicker({
                   }`}
                   aria-hidden
                 >
-                  {selected ? (
-                    <Check size={12} weight="bold" />
-                  ) : null}
+                  {selected ? <Check size={12} weight="bold" /> : null}
                 </span>
               </div>
               <div className="mt-3 flex flex-wrap items-end gap-2">
@@ -162,18 +168,13 @@ export function PlanPicker({
                   </p>
                 ) : null}
               </div>
-              {billing === 'monthly' ? (
-                <p className="mt-1.5 text-xs text-[var(--onda-muted)]">
-                  Primer mes gratis · después {formatCop(quote.monthlyList)}/mes
-                </p>
-              ) : (
-                <p className="mt-1.5 text-xs text-[var(--onda-muted)]">
-                  Pagas {quote.paidMonths} meses ({formatCop(quote.total)}) ·{' '}
-                  <span className="font-medium text-[var(--onda-success)]">
-                    recibes {quote.serviceMonths} meses
-                  </span>
-                </p>
-              )}
+              <p className="mt-1.5 text-xs text-[var(--onda-muted)]">
+                Hoy pagas {formatCop(quote.total)}
+                {quote.paidMonths > 1
+                  ? ` (${quote.paidMonths} meses)`
+                  : ''}{' '}
+                · siguiente cobro en {quote.firstIntervalDays} días
+              </p>
               <ul className="mt-3 space-y-1.5 text-xs text-[var(--onda-muted)]">
                 {meta.features.slice(0, 4).map((f) => (
                   <li key={f} className="flex gap-1.5">
@@ -201,7 +202,13 @@ export function PlanPicker({
         })}
       </div>
 
-      <SubscriptionCalendar plan={plan} billing={billing} />
+      {!compact ? (
+        <SubscriptionCalendar
+          plan={plan}
+          billing={billing}
+          referred={referred}
+        />
+      ) : null}
     </div>
   );
 }

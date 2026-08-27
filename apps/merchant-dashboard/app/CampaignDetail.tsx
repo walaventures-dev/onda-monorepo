@@ -517,7 +517,7 @@ function InvestmentChart({
             <XAxis type="number" hide domain={[0, max * 1.15]} />
             <YAxis type="category" dataKey="name" width={52} tick={{ fontSize: 11 }} />
             <Tooltip
-              formatter={(v: number) => formatCop(v)}
+              formatter={(v) => formatCop(Number(v ?? 0))}
               cursor={{ fill: 'rgba(5,45,222,0.04)' }}
               contentStyle={{
                 borderRadius: 12,

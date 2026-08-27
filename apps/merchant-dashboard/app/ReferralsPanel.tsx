@@ -187,7 +187,7 @@ export function ReferralsPanel({ storeId }: { storeId: string }) {
         // Solo `url` limpia: meter el link en `text` contamina el path en WhatsApp/iOS.
         await navigator.share({
           title: 'Únete a Onda',
-          text: 'Regístrate en Onda y empieza con 1 mes gratis.',
+          text: 'Regístrate en Onda. Ambos ganan +30 días en la suscripción cuando pagues.',
           url: inviteLink,
         });
         return;
@@ -263,8 +263,8 @@ export function ReferralsPanel({ storeId }: { storeId: string }) {
       <header className="space-y-1">
         <h2 className="font-display text-2xl font-semibold">Referidos</h2>
         <p className="text-sm text-[var(--onda-muted)]">
-          Tu calendario de meses gratis: lo que ya disfrutaste y lo que viene por
-          cada referido.
+          Invita comercios: cuando paguen cualquier plan, ambos reciben +30 días
+          en la fecha de cobro.
         </p>
       </header>
 
@@ -272,7 +272,7 @@ export function ReferralsPanel({ storeId }: { storeId: string }) {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--onda-muted)]">
-              Meses gratis
+              Bonos (+30 días)
             </p>
             <p className="mt-1 font-display text-4xl font-semibold tabular-nums text-[var(--onda-ink)]">
               {breakdown.total}

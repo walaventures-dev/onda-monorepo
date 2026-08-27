@@ -6,6 +6,7 @@ import {
   Param,
 } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import { getDemoReferralCode, isDemoReferralCode } from './demo-referral';
 
 @Controller('referrals')
 export class ReferralsController {
@@ -13,6 +14,13 @@ export class ReferralsController {
 
   @Get('resolve/:code')
   async resolve(@Param('code') code: string) {
+    if (isDemoReferralCode(code)) {
+      return {
+        code: getDemoReferralCode(),
+        storeName: 'Onda (demo)',
+        skipPayment: true,
+      };
+    }
     const store = await this.prisma.store.findUnique({
       where: { referralCode: code.trim().toUpperCase() },
       select: { name: true, referralCode: true },
@@ -20,7 +28,11 @@ export class ReferralsController {
     if (!store) {
       throw new NotFoundException('Código de referido no encontrado');
     }
-    return { code: store.referralCode, storeName: store.name };
+    return {
+      code: store.referralCode,
+      storeName: store.name,
+      skipPayment: false,
+    };
   }
 
   @Get('store/:storeId')
@@ -32,17 +44,25 @@ export class ReferralsController {
         name: true,
         referralCode: true,
         freeMonthsBalance: true,
+        nextBillingAt: true,
         createdAt: true,
       },
     });
 
     const referredStores = await this.prisma.store.findMany({
       where: { referredByStoreId: storeId },
-      select: { id: true, name: true, createdAt: true, slug: true },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        slug: true,
+        referralBonusApplied: true,
+      },
       orderBy: { createdAt: 'asc' },
     });
 
-    const fromReferrals = referredStores.length;
+    const paidReferrals = referredStores.filter((s) => s.referralBonusApplied);
+    const fromReferrals = paidReferrals.length;
     const welcomeMonths = Math.max(0, store.freeMonthsBalance - fromReferrals);
 
     const freeMonthCredits: Array<{
@@ -65,7 +85,7 @@ export class ReferralsController {
       });
     }
 
-    for (const s of referredStores) {
+    for (const s of paidReferrals) {
       freeMonthCredits.push({
         id: `referral-${s.id}`,
         type: 'REFERRAL',
@@ -82,6 +102,7 @@ export class ReferralsController {
       storeName: store.name,
       storeCreatedAt: store.createdAt.toISOString(),
       referralCode: store.referralCode,
+      nextBillingAt: store.nextBillingAt?.toISOString() ?? null,
       freeMonthsBalance: store.freeMonthsBalance,
       freeMonthsBreakdown: {
         welcome: welcomeMonths,

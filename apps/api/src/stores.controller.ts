@@ -27,6 +27,9 @@ import {
   storeCreatedEmailHtml,
   storeCreatedEmailText,
 } from './mail-templates/store-created';
+import { BillingService } from './billing.service';
+import { WompiService } from './wompi.service';
+import { isDemoReferralCode } from './demo-referral';
 
 const storePublicSelect = {
   id: true,
@@ -40,6 +43,7 @@ const storePublicSelect = {
   planType: true,
   billingStatus: true,
   billingPeriod: true,
+  nextBillingAt: true,
   whatsappUsed: true,
   maxStamps: true,
   currency: true,
@@ -50,6 +54,7 @@ const storePublicSelect = {
   ownerEmail: true,
   referralCode: true,
   freeMonthsBalance: true,
+  referralBonusApplied: true,
   referredByStoreId: true,
   createdAt: true,
   passDesign: true,
@@ -64,7 +69,9 @@ export class StoresController {
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(JobsService) private jobs: JobsService,
     @Inject(CartillaService) private cartillas: CartillaService,
-    @Inject(PosService) private pos: PosService
+    @Inject(PosService) private pos: PosService,
+    @Inject(BillingService) private billing: BillingService,
+    @Inject(WompiService) private wompi: WompiService
   ) {}
 
   @Get()
@@ -146,13 +153,18 @@ export class StoresController {
 
     let referredByStoreId: string | undefined;
     if (body.referralCode?.trim()) {
-      const referrer = await this.prisma.store.findUnique({
-        where: { referralCode: body.referralCode.trim().toUpperCase() },
-      });
-      if (!referrer) {
-        throw new BadRequestException('Código de referido inválido');
+      if (isDemoReferralCode(body.referralCode)) {
+        // Código interno de demos: sin referidor real ni bono.
+        referredByStoreId = undefined;
+      } else {
+        const referrer = await this.prisma.store.findUnique({
+          where: { referralCode: body.referralCode.trim().toUpperCase() },
+        });
+        if (!referrer) {
+          throw new BadRequestException('Código de referido inválido');
+        }
+        referredByStoreId = referrer.id;
       }
-      referredByStoreId = referrer.id;
     }
 
     const planType =
@@ -192,7 +204,8 @@ export class StoresController {
           referralCode,
           planType,
           billingPeriod,
-          freeMonthsBalance: 1,
+          billingStatus: 'PENDING_PAYMENT',
+          freeMonthsBalance: 0,
           referredByStoreId,
           passDesign: {
             create: {
@@ -207,13 +220,6 @@ export class StoresController {
         },
         include: { passDesign: true },
       });
-
-      if (referredByStoreId) {
-        await tx.store.update({
-          where: { id: referredByStoreId },
-          data: { freeMonthsBalance: { increment: 1 } },
-        });
-      }
 
       if (created.ownerEmail) {
         await tx.storeMember.create({
@@ -261,6 +267,102 @@ export class StoresController {
     }
 
     return store;
+  }
+
+  /**
+   * Alta atómica: crea el comercio y cobra la suscripción (tokenización Wompi).
+   * Sin llaves Wompi en local: stub de payment source y ACTIVE.
+   */
+  @Post('with-subscription')
+  async createWithSubscription(
+    @Body()
+    body: {
+      name: string;
+      slug: string;
+      ownerName: string;
+      category: string;
+      subcategory: string;
+      segment?: string;
+      googlePlaceId?: string;
+      address?: string;
+      ownerEmail?: string;
+      lat?: number;
+      lng?: number;
+      referralCode?: string;
+      planType?: 'BASIC' | 'PRO';
+      billingPeriod?: 'monthly' | '6' | '12';
+      cardToken?: string;
+      acceptanceToken?: string;
+      acceptPersonalAuth?: string;
+    }
+  ) {
+    const planType = this.billing.normalizePlan(body.planType);
+    const billingPeriod = this.billing.normalizePeriod(body.billingPeriod);
+    const demo = isDemoReferralCode(body.referralCode);
+
+    if (!demo && this.wompi.isConfigured && !body.cardToken) {
+      throw new BadRequestException('Tarjeta requerida para activar el plan');
+    }
+
+    const store = await this.create({
+      ...body,
+      planType,
+      billingPeriod,
+    });
+
+    try {
+      if (demo) {
+        const result = await this.billing.activateComplimentarySubscription({
+          storeId: store.id,
+          planType,
+          billingPeriod,
+        });
+        return {
+          ...result.store,
+          passDesign: store.passDesign,
+          amountCop: 0,
+          quote: result.quote,
+          stub: true,
+          demo: true,
+        };
+      }
+
+      const result = await this.billing.activatePaidSubscription({
+        storeId: store.id,
+        planType,
+        billingPeriod,
+        tokens: body.cardToken
+          ? {
+              cardToken: body.cardToken,
+              acceptanceToken: body.acceptanceToken || '',
+              acceptPersonalAuth: body.acceptPersonalAuth || '',
+              customerEmail: body.ownerEmail || 'billing@onda.lat',
+            }
+          : undefined,
+      });
+      return {
+        ...result.store,
+        passDesign: store.passDesign,
+        amountCop: result.amountCop,
+        quote: result.quote,
+        stub: result.stub,
+      };
+    } catch (e) {
+      this.logger.error(
+        `Pago falló tras crear store ${store.id}: ${
+          e instanceof Error ? e.message : e
+        }`
+      );
+      await this.prisma.store.update({
+        where: { id: store.id },
+        data: { billingStatus: 'PENDING_PAYMENT' },
+      });
+      throw e instanceof BadRequestException
+        ? e
+        : new BadRequestException(
+            e instanceof Error ? e.message : 'No se pudo procesar el pago'
+          );
+    }
   }
 
   @Patch(':id')

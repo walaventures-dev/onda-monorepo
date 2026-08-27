@@ -12,39 +12,35 @@ import {
 export function SubscriptionCalendar({
   plan,
   billing,
+  referred = false,
 }: {
   plan: PlanId;
   billing: BillingPeriod;
+  referred?: boolean;
 }) {
   const quote = quotePlan(plan, billing);
-  const { firstCharge, nextCharge } = subscriptionChargeDates(billing);
+  const { firstCharge, nextCharge, firstIntervalDays, renewIntervalDays } =
+    subscriptionChargeDates(billing, new Date(), { referred });
   const firstLabel = formatChargeDate(firstCharge);
   const nextLabel = formatChargeDate(nextCharge);
 
-  const milestones =
-    billing === 'monthly'
-      ? [
-          { label: 'Ahora', value: 'Mes gratis', tone: 'free' as const },
-          {
-            label: 'Primer cobro',
-            value: `${firstLabel} · ${formatCop(quote.monthlyList)}`,
-            tone: 'next' as const,
-          },
-          { label: 'Después', value: 'Cada mes', tone: 'later' as const },
-        ]
-      : [
-          { label: 'Ahora', value: 'Mes gratis', tone: 'free' as const },
-          {
-            label: 'Cubierto',
-            value: `${quote.serviceMonths} meses de servicio`,
-            tone: 'later' as const,
-          },
-          {
-            label: 'Siguiente cobro',
-            value: nextLabel,
-            tone: 'next' as const,
-          },
-        ];
+  const milestones = [
+    {
+      label: 'Ahora',
+      value: `Pagas ${formatCop(quote.total)}`,
+      tone: 'next' as const,
+    },
+    {
+      label: 'Próximo cobro',
+      value: `${nextLabel} · +${firstIntervalDays}d`,
+      tone: 'later' as const,
+    },
+    {
+      label: 'Después',
+      value: `Cada ${renewIntervalDays} días`,
+      tone: 'later' as const,
+    },
+  ];
 
   return (
     <div className="rounded-2xl bg-[var(--onda-bg)] px-4 py-4 ring-1 ring-[var(--onda-border)]">
@@ -52,28 +48,18 @@ export function SubscriptionCalendar({
         Cómo funciona el cobro
       </p>
       <p className="mt-2 text-sm leading-relaxed text-[var(--onda-ink)]">
-        {billing === 'monthly' ? (
-          <>
-            Este mes no pagas. El {firstLabel} son{' '}
-            {formatCop(quote.monthlyList)} y sigue mensual.
-          </>
-        ) : (
-          <>
-            Este mes no pagas. El {firstLabel} cubres {quote.paidMonths} meses (
-            {formatCop(quote.total)}) y recibes {quote.serviceMonths}. El
-            siguiente cobro es el {nextLabel}.
-          </>
-        )}
+        Cobras hoy {formatCop(quote.total)}. El siguiente cobro es el {nextLabel}{' '}
+        (+{firstIntervalDays} días
+        {referred ? ', incluye +30 por referido' : ', incluye +30 de regalo'}).
+        Luego cada {renewIntervalDays} días. Activación el {firstLabel}.
       </p>
 
       <ol className="mt-4 grid grid-cols-3 gap-2">
         {milestones.map((m, i) => {
           const tone =
-            m.tone === 'free'
-              ? 'bg-[color-mix(in_srgb,var(--onda-success)_16%,white)] text-[var(--onda-success)]'
-              : m.tone === 'next'
-                ? 'bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]'
-                : 'bg-[var(--onda-card)] text-[var(--onda-ink)] ring-1 ring-[var(--onda-border)]';
+            m.tone === 'next'
+              ? 'bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]'
+              : 'bg-[var(--onda-card)] text-[var(--onda-ink)] ring-1 ring-[var(--onda-border)]';
           return (
             <li
               key={m.label}

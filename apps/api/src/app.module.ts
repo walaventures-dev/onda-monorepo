@@ -45,6 +45,7 @@ import { MailService } from './mail.service';
 import { MAIL_PROVIDER } from './mail.types';
 import { MerchantPasswordResetService } from './merchant-password-reset.service';
 import { WompiService } from './wompi.service';
+import { BillingService } from './billing.service';
 import { CartillaService } from './cartilla.service';
 import { CampaignsService } from './campaigns.service';
 import { PosService } from './pos.service';
@@ -105,6 +106,7 @@ import { MerchantInviteService } from './merchant-invite.service';
     MailService,
     MerchantPasswordResetService,
     WompiService,
+    BillingService,
     CartillaService,
     CampaignsService,
     PosService,
