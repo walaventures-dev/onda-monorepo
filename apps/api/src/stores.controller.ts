@@ -27,6 +27,7 @@ import {
   storeCreatedEmailHtml,
   storeCreatedEmailText,
 } from './mail-templates/store-created';
+import { isDemoReferralCode } from './demo-referral';
 
 const storePublicSelect = {
   id: true,
@@ -144,8 +145,9 @@ export class StoresController {
       throw new ConflictException('Ese slug ya está en uso');
     }
 
+    const demoReferral = isDemoReferralCode(body.referralCode);
     let referredByStoreId: string | undefined;
-    if (body.referralCode?.trim()) {
+    if (body.referralCode?.trim() && !demoReferral) {
       const referrer = await this.prisma.store.findUnique({
         where: { referralCode: body.referralCode.trim().toUpperCase() },
       });
@@ -155,14 +157,17 @@ export class StoresController {
       referredByStoreId = referrer.id;
     }
 
-    const planType =
-      body.planType === 'PRO' || body.planType === 'BASIC'
+    // Código demo interno → PRO mensual, sin referidor ni bono.
+    const planType = demoReferral
+      ? 'PRO'
+      : body.planType === 'PRO' || body.planType === 'BASIC'
         ? body.planType
         : 'BASIC';
-    const billingPeriod =
-      body.billingPeriod === '6' ||
-      body.billingPeriod === '12' ||
-      body.billingPeriod === 'monthly'
+    const billingPeriod = demoReferral
+      ? 'monthly'
+      : body.billingPeriod === '6' ||
+          body.billingPeriod === '12' ||
+          body.billingPeriod === 'monthly'
         ? body.billingPeriod
         : 'monthly';
 

@@ -6,6 +6,7 @@ import {
   Param,
 } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import { getDemoReferralCode, isDemoReferralCode } from './demo-referral';
 
 @Controller('referrals')
 export class ReferralsController {
@@ -13,6 +14,13 @@ export class ReferralsController {
 
   @Get('resolve/:code')
   async resolve(@Param('code') code: string) {
+    if (isDemoReferralCode(code)) {
+      return {
+        code: getDemoReferralCode(),
+        storeName: 'Onda (demo)',
+        demo: true,
+      };
+    }
     const store = await this.prisma.store.findUnique({
       where: { referralCode: code.trim().toUpperCase() },
       select: { name: true, referralCode: true },
@@ -20,7 +28,7 @@ export class ReferralsController {
     if (!store) {
       throw new NotFoundException('Código de referido no encontrado');
     }
-    return { code: store.referralCode, storeName: store.name };
+    return { code: store.referralCode, storeName: store.name, demo: false };
   }
 
   @Get('store/:storeId')

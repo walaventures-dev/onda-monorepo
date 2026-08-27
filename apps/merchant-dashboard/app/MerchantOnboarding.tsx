@@ -119,6 +119,7 @@ function MerchantBusinessSetup() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [referrerName, setReferrerName] = useState<string | null>(null);
+  const [isDemoReferral, setIsDemoReferral] = useState(false);
 
   const [planType, setPlanType] = useState<PlanId>(
     () => parsePlanId(searchParams.get('plan')) ?? 'BASIC'
@@ -242,17 +243,26 @@ function MerchantBusinessSetup() {
   useEffect(() => {
     if (!referralCode) {
       setReferrerName(null);
+      setIsDemoReferral(false);
       return;
     }
     let cancelled = false;
-    api<{ code: string; storeName: string }>(
+    api<{ code: string; storeName: string; demo?: boolean }>(
       `/referrals/resolve/${encodeURIComponent(referralCode)}`
     )
       .then((r) => {
-        if (!cancelled) setReferrerName(r.storeName);
+        if (cancelled) return;
+        setReferrerName(r.storeName);
+        setIsDemoReferral(Boolean(r.demo));
+        if (r.demo) {
+          setPlanType('PRO');
+          setBillingPeriod('monthly');
+        }
       })
       .catch(() => {
-        if (!cancelled) setReferrerName('');
+        if (cancelled) return;
+        setReferrerName('');
+        setIsDemoReferral(false);
       });
     return () => {
       cancelled = true;
@@ -288,11 +298,30 @@ function MerchantBusinessSetup() {
       setError('Indica el email del encargado');
       return;
     }
+    if (referralCode) {
+      if (referrerName === null) {
+        setError('Espera a verificar el código de referido');
+        return;
+      }
+      if (referrerName === '') {
+        setError('Código de referido no válido');
+        return;
+      }
+    }
+    // Código demo: salta plan y crea como PRO mensual.
+    if (isDemoReferral) {
+      void createStore('PRO', 'monthly');
+      return;
+    }
     setStep('plan');
   }
 
   async function submitBusiness(e: FormEvent) {
     e.preventDefault();
+    await createStore(planType, billingPeriod);
+  }
+
+  async function createStore(plan: PlanId, billing: BillingPeriod) {
     setError('');
     const slugValue = normalizeStoreSlug(slug);
     if (!slugValue) {
@@ -300,7 +329,7 @@ function MerchantBusinessSetup() {
       return;
     }
     setBusy(true);
-    rememberPlanChoice(planType, billingPeriod);
+    rememberPlanChoice(plan, billing);
     try {
       const created = await api<{ id: string }>('/stores', {
         method: 'POST',
@@ -317,8 +346,8 @@ function MerchantBusinessSetup() {
           lat,
           lng,
           referralCode: referralCode.trim() || undefined,
-          planType,
-          billingPeriod,
+          planType: plan,
+          billingPeriod: billing,
         }),
       });
       finish(created.id);
@@ -480,9 +509,15 @@ function MerchantBusinessSetup() {
                   {OndaIcons.users}
                 </span>
                 <div>
-                  <p className="font-medium">Invitado por {referrerName}</p>
+                  <p className="font-medium">
+                    {isDemoReferral
+                      ? 'Código demo de Onda'
+                      : `Invitado por ${referrerName}`}
+                  </p>
                   <p className="text-[var(--onda-muted)]">
-                    Ambos ganan un mes gratis con este registro.
+                    {isDemoReferral
+                      ? 'Se activa Onda Pro mensual al crear el negocio; no eliges plan.'
+                      : 'Ambos ganan un mes gratis con este registro.'}
                   </p>
                 </div>
               </div>
@@ -500,8 +535,16 @@ function MerchantBusinessSetup() {
                   <FormShell
                     footer={
                       <div className="flex flex-wrap items-center gap-3">
-                        <GradientButton type="submit" className="min-w-[10rem]">
-                          Continuar
+                        <GradientButton
+                          type="submit"
+                          disabled={busy}
+                          className="min-w-[10rem]"
+                        >
+                          {busy
+                            ? 'Creando…'
+                            : isDemoReferral
+                              ? 'Crear con Onda Pro'
+                              : 'Continuar'}
                         </GradientButton>
                       </div>
                     }
