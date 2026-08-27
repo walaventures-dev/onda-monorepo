@@ -1068,7 +1068,7 @@ export class PosService {
       } catch (err) {
         // Venta registrada; lealtad puede hacerse por flujo B/C
       }
-      if (ondasGranted > 0) {
+      if (loyaltyTxId) {
         await this.prisma.posSale.update({
           where: { id: sale.id },
           data: { ondasGranted, loyaltyTxId },
