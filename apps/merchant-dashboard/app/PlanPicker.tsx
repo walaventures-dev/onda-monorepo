@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { CheckIcon as Check } from '@phosphor-icons/react/dist/csr/Check';
 import { GiftIcon as Gift } from '@phosphor-icons/react/dist/csr/Gift';
 import { PackageIcon as Package } from '@phosphor-icons/react/dist/csr/Package';
@@ -8,7 +8,7 @@ import { ShieldCheckIcon as ShieldCheck } from '@phosphor-icons/react/dist/csr/S
 import {
   formatCop,
   PLAN_META,
-  quotePlan,
+  quotePlanWithDiscount,
   type BillingPeriod,
   type PlanId,
 } from '@onda/shared-utils';
@@ -22,8 +22,8 @@ const BILLING_TABS: {
   hint?: string;
 }[] = [
   { id: 'monthly', label: 'Mensual' },
-  { id: '6', label: '6 meses', hint: '+ mes gratis' },
-  { id: '12', label: '12 meses', hint: '+ mes gratis' },
+  { id: '6', label: '6 meses', hint: 'prepago' },
+  { id: '12', label: '12 meses', hint: 'prepago' },
 ];
 
 export function PlanPicker({
@@ -31,23 +31,49 @@ export function PlanPicker({
   billing,
   onPlan,
   onBilling,
+  discountPercentage = 0,
+  forceMonthlyOnly = false,
+  referred = false,
 }: {
   plan: PlanId;
   billing: BillingPeriod;
   onPlan: (plan: PlanId) => void;
   onBilling: (billing: BillingPeriod) => void;
+  discountPercentage?: number;
+  forceMonthlyOnly?: boolean;
+  referred?: boolean;
 }) {
   const quotes = useMemo(
     () => ({
-      BASIC: quotePlan('BASIC', billing),
-      PRO: quotePlan('PRO', billing),
+      BASIC: quotePlanWithDiscount('BASIC', billing, discountPercentage),
+      PRO: quotePlanWithDiscount('PRO', billing, discountPercentage),
     }),
-    [billing]
+    [billing, discountPercentage]
   );
+  const activeQuote = quotes[plan];
   const includesKit = billing !== 'monthly';
+
+  useEffect(() => {
+    if (forceMonthlyOnly && billing !== 'monthly') {
+      onBilling('monthly');
+    }
+  }, [forceMonthlyOnly, billing, onBilling]);
 
   return (
     <div className="space-y-6 pb-2">
+      {discountPercentage > 0 ? (
+        <div className="rounded-2xl bg-[var(--onda-sky-soft)] px-4 py-3 text-sm text-[var(--onda-ink)]">
+          <p className="font-medium">
+            Descuento del {discountPercentage}% aplicado
+          </p>
+          {forceMonthlyOnly ? (
+            <p className="text-[var(--onda-muted)]">
+              Con este descuento solo puedes pagar mensual.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="flex flex-col items-center gap-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
           ¿Cómo quieres pagar?
@@ -55,15 +81,19 @@ export function PlanPicker({
         <div className="flex flex-wrap justify-center gap-2 rounded-full bg-[var(--onda-bg)] p-1.5 ring-1 ring-[var(--onda-border)]">
           {BILLING_TABS.map((t) => {
             const active = billing === t.id;
+            const disabled = forceMonthlyOnly && t.id !== 'monthly';
             return (
               <button
                 key={t.id}
                 type="button"
+                disabled={disabled}
                 onClick={() => onBilling(t.id)}
                 className={`rounded-full px-4 py-2.5 text-sm font-semibold transition ${
-                  active
-                    ? 'bg-[var(--onda-primary-500)] text-white shadow-[0_8px_18px_rgba(5,45,222,0.22)]'
-                    : 'text-[var(--onda-muted)] hover:text-[var(--onda-ink)]'
+                  disabled
+                    ? 'cursor-not-allowed opacity-40'
+                    : active
+                      ? 'bg-[var(--onda-primary-500)] text-white shadow-[0_8px_18px_rgba(5,45,222,0.22)]'
+                      : 'text-[var(--onda-muted)] hover:text-[var(--onda-ink)]'
                 }`}
               >
                 {t.label}
@@ -86,8 +116,16 @@ export function PlanPicker({
             className="shrink-0 text-[var(--onda-success)]"
             weight="fill"
           />
-          No necesitas tarjeta para iniciar.
+          {activeQuote.skipPayment
+            ? 'Total $0 — no necesitas tarjeta.'
+            : 'Pagas hoy y guardamos tu tarjeta para renovar.'}
         </p>
+        {referred ? (
+          <p className="inline-flex items-center gap-1.5 text-sm text-[var(--onda-muted)]">
+            <Gift size={16} className="text-[var(--onda-success)]" weight="fill" />
+            Referido: +30 días extra en la fecha de cobro al pagar.
+          </p>
+        ) : null}
         <p className="inline-flex items-start justify-center gap-1.5 text-center text-sm text-[var(--onda-muted)]">
           <Package
             size={16}
@@ -96,17 +134,10 @@ export function PlanPicker({
           />
           <span>
             {includesKit
-              ? 'Con tu primer pago te llega el Kit a tu negocio, con NFC + QR.'
+              ? 'Con tu pago te llega el Kit a tu negocio, con NFC + QR.'
               : 'Activación digital ya. El Kit NFC + QR viene en planes de 6 o 12 meses.'}
           </span>
         </p>
-        {billing !== 'monthly' ? (
-          <p className="inline-flex items-center gap-1.5 text-sm text-[var(--onda-muted)]">
-            <Gift size={16} className="text-[var(--onda-success)]" weight="fill" />
-            Descuento + 1 mes gratis adicional ·{' '}
-            {billing === '6' ? '7 meses' : '13 meses'} de servicio
-          </p>
-        ) : null}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -150,28 +181,32 @@ export function PlanPicker({
               </div>
               <div className="mt-3 flex flex-wrap items-end gap-2">
                 <p className="font-display text-2xl font-semibold text-[var(--onda-primary-500)]">
-                  {formatCop(quote.monthlyEffective)}
-                  <span className="text-sm font-normal text-[var(--onda-muted)]">
-                    {' '}
-                    / mes
-                  </span>
+                  {formatCop(quote.amountDue)}
+                  {billing !== 'monthly' ? (
+                    <span className="text-sm font-normal text-[var(--onda-muted)]">
+                      {' '}
+                      total
+                    </span>
+                  ) : (
+                    <span className="text-sm font-normal text-[var(--onda-muted)]">
+                      {' '}
+                      / mes
+                    </span>
+                  )}
                 </p>
-                {quote.discount > 0 ? (
+                {quote.promoSavings > 0 || quote.discount > 0 ? (
                   <p className="pb-0.5 text-xs text-[var(--onda-muted)] line-through">
-                    {formatCop(quote.monthlyList)}
+                    {formatCop(quote.total)}
                   </p>
                 ) : null}
               </div>
               {billing === 'monthly' ? (
                 <p className="mt-1.5 text-xs text-[var(--onda-muted)]">
-                  Primer mes gratis · después {formatCop(quote.monthlyList)}/mes
+                  Cobro hoy · próximo pago según calendario
                 </p>
               ) : (
                 <p className="mt-1.5 text-xs text-[var(--onda-muted)]">
-                  Pagas {quote.paidMonths} meses ({formatCop(quote.total)}) ·{' '}
-                  <span className="font-medium text-[var(--onda-success)]">
-                    recibes {quote.serviceMonths} meses
-                  </span>
+                  Pagas {quote.paidMonths} meses · cubiertos en el periodo
                 </p>
               )}
               <ul className="mt-3 space-y-1.5 text-xs text-[var(--onda-muted)]">
@@ -201,7 +236,7 @@ export function PlanPicker({
         })}
       </div>
 
-      <SubscriptionCalendar plan={plan} billing={billing} />
+      <SubscriptionCalendar plan={plan} billing={billing} referred={referred} />
     </div>
   );
 }

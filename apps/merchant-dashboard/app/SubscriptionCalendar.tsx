@@ -3,7 +3,7 @@
 import {
   formatChargeDate,
   formatCop,
-  quotePlan,
+  quotePlanWithDiscount,
   subscriptionChargeDates,
   type BillingPeriod,
   type PlanId,
@@ -12,37 +12,51 @@ import {
 export function SubscriptionCalendar({
   plan,
   billing,
+  discountPercentage = 0,
+  referred = false,
 }: {
   plan: PlanId;
   billing: BillingPeriod;
+  discountPercentage?: number;
+  referred?: boolean;
 }) {
-  const quote = quotePlan(plan, billing);
-  const { firstCharge, nextCharge } = subscriptionChargeDates(billing);
+  const quote = quotePlanWithDiscount(plan, billing, discountPercentage);
+  const { firstCharge, nextCharge } = subscriptionChargeDates(billing, new Date(), {
+    referred,
+  });
   const firstLabel = formatChargeDate(firstCharge);
   const nextLabel = formatChargeDate(nextCharge);
 
   const milestones =
     billing === 'monthly'
       ? [
-          { label: 'Ahora', value: 'Mes gratis', tone: 'free' as const },
           {
-            label: 'Primer cobro',
-            value: `${firstLabel} · ${formatCop(quote.monthlyList)}`,
+            label: 'Hoy',
+            value: formatCop(quote.amountDue),
             tone: 'next' as const,
           },
-          { label: 'Después', value: 'Cada mes', tone: 'later' as const },
+          {
+            label: 'Próximo cobro',
+            value: nextLabel,
+            tone: 'later' as const,
+          },
+          { label: 'Después', value: 'Cada 30 días', tone: 'later' as const },
         ]
       : [
-          { label: 'Ahora', value: 'Mes gratis', tone: 'free' as const },
+          {
+            label: 'Hoy',
+            value: formatCop(quote.amountDue),
+            tone: 'next' as const,
+          },
           {
             label: 'Cubierto',
-            value: `${quote.serviceMonths} meses de servicio`,
+            value: `${quote.paidMonths} meses`,
             tone: 'later' as const,
           },
           {
             label: 'Siguiente cobro',
             value: nextLabel,
-            tone: 'next' as const,
+            tone: 'later' as const,
           },
         ];
 
@@ -52,16 +66,18 @@ export function SubscriptionCalendar({
         Cómo funciona el cobro
       </p>
       <p className="mt-2 text-sm leading-relaxed text-[var(--onda-ink)]">
-        {billing === 'monthly' ? (
+        {quote.skipPayment ? (
+          <>Activación gratis hoy. El próximo cobro sería el {nextLabel}.</>
+        ) : billing === 'monthly' ? (
           <>
-            Este mes no pagas. El {firstLabel} son{' '}
-            {formatCop(quote.monthlyList)} y sigue mensual.
+            Pagas {formatCop(quote.amountDue)} hoy ({firstLabel}). El próximo
+            cobro es el {nextLabel}
+            {referred ? ' (+30 días por referido)' : ''}.
           </>
         ) : (
           <>
-            Este mes no pagas. El {firstLabel} cubres {quote.paidMonths} meses (
-            {formatCop(quote.total)}) y recibes {quote.serviceMonths}. El
-            siguiente cobro es el {nextLabel}.
+            Pagas {formatCop(quote.amountDue)} hoy por {quote.paidMonths} meses.
+            El siguiente cobro es el {nextLabel}.
           </>
         )}
       </p>
@@ -69,11 +85,9 @@ export function SubscriptionCalendar({
       <ol className="mt-4 grid grid-cols-3 gap-2">
         {milestones.map((m, i) => {
           const tone =
-            m.tone === 'free'
-              ? 'bg-[color-mix(in_srgb,var(--onda-success)_16%,white)] text-[var(--onda-success)]'
-              : m.tone === 'next'
-                ? 'bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]'
-                : 'bg-[var(--onda-card)] text-[var(--onda-ink)] ring-1 ring-[var(--onda-border)]';
+            m.tone === 'next'
+              ? 'bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]'
+              : 'bg-[var(--onda-card)] text-[var(--onda-ink)] ring-1 ring-[var(--onda-border)]';
           return (
             <li
               key={m.label}

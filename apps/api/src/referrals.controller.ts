@@ -6,33 +6,39 @@ import {
   Param,
 } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
-import { getDemoReferralCode, isDemoReferralCode, normalizeReferralCode } from './demo-referral';
+import { CodeResolverService } from './code-resolver.service';
 
 @Controller('referrals')
 export class ReferralsController {
-  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(CodeResolverService) private codes: CodeResolverService
+  ) {}
 
   @Get('resolve/:code')
   async resolve(@Param('code') code: string) {
-    const normalized = normalizeReferralCode(code);
-    if (!normalized) {
-      throw new NotFoundException('Código de referido no encontrado');
-    }
-    if (isDemoReferralCode(normalized)) {
+    const resolved = await this.codes.resolve(code);
+    if (resolved.kind === 'referral') {
       return {
-        code: getDemoReferralCode(),
-        storeName: 'Onda (demo)',
-        demo: true,
+        kind: 'referral' as const,
+        code: resolved.code,
+        storeName: resolved.storeName,
       };
     }
-    const store = await this.prisma.store.findUnique({
-      where: { referralCode: normalized },
-      select: { name: true, referralCode: true },
-    });
-    if (!store) {
-      throw new NotFoundException('Código de referido no encontrado');
+    if (resolved.kind === 'promo') {
+      return {
+        kind: 'promo' as const,
+        code: resolved.code,
+        discountPercentage: resolved.discountPercentage,
+      };
     }
-    return { code: store.referralCode, storeName: store.name, demo: false };
+    if (resolved.kind === 'expired') {
+      return {
+        kind: 'expired' as const,
+        code: resolved.code,
+      };
+    }
+    throw new NotFoundException('Código de referido no encontrado');
   }
 
   @Get('store/:storeId')

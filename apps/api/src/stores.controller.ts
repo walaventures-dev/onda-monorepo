@@ -27,7 +27,10 @@ import {
   storeCreatedEmailHtml,
   storeCreatedEmailText,
 } from './mail-templates/store-created';
-import { isDemoReferralCode, normalizeReferralCode } from './demo-referral';
+import { BillingService } from './billing.service';
+import { CodeResolverService } from './code-resolver.service';
+import { WompiService } from './wompi.service';
+import { quotePlanWithDiscount } from '@onda/shared-utils';
 
 const storePublicSelect = {
   id: true,
@@ -41,6 +44,7 @@ const storePublicSelect = {
   planType: true,
   billingStatus: true,
   billingPeriod: true,
+  nextBillingAt: true,
   whatsappUsed: true,
   maxStamps: true,
   currency: true,
@@ -51,11 +55,33 @@ const storePublicSelect = {
   ownerEmail: true,
   referralCode: true,
   freeMonthsBalance: true,
+  referralBonusApplied: true,
+  promoCodeUsed: true,
   referredByStoreId: true,
   createdAt: true,
   passDesign: true,
   promotions: true,
 } as const;
+
+type CreateStoreBody = {
+  name: string;
+  slug: string;
+  ownerName: string;
+  category: string;
+  subcategory: string;
+  segment?: string;
+  googlePlaceId?: string;
+  address?: string;
+  ownerEmail?: string;
+  lat?: number;
+  lng?: number;
+  referralCode?: string;
+  planType?: 'BASIC' | 'PRO';
+  billingPeriod?: 'monthly' | '6' | '12';
+  cardToken?: string;
+  acceptanceToken?: string;
+  acceptPersonalAuth?: string;
+};
 
 @Controller('stores')
 export class StoresController {
@@ -65,7 +91,10 @@ export class StoresController {
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(JobsService) private jobs: JobsService,
     @Inject(CartillaService) private cartillas: CartillaService,
-    @Inject(PosService) private pos: PosService
+    @Inject(PosService) private pos: PosService,
+    @Inject(BillingService) private billing: BillingService,
+    @Inject(CodeResolverService) private codeResolver: CodeResolverService,
+    @Inject(WompiService) private wompi: WompiService
   ) {}
 
   @Get()
@@ -92,23 +121,136 @@ export class StoresController {
   }
 
   @Post()
-  async create(
-    @Body()
-    body: {
-      name: string;
-      slug: string;
-      ownerName: string;
-      category: string;
-      subcategory: string;
-      segment?: string;
-      googlePlaceId?: string;
-      address?: string;
-      ownerEmail?: string;
-      lat?: number;
-      lng?: number;
-      referralCode?: string;
-      planType?: 'BASIC' | 'PRO';
-      billingPeriod?: 'monthly' | '6' | '12';
+  async create(@Body() body: CreateStoreBody) {
+    const store = await this.insertStore(body, {
+      planType: body.planType === 'PRO' ? 'PRO' : 'BASIC',
+      billingPeriod:
+        body.billingPeriod === '6' ||
+        body.billingPeriod === '12' ||
+        body.billingPeriod === 'monthly'
+          ? body.billingPeriod
+          : 'monthly',
+      referredByStoreId: await this.resolveReferrerId(body.referralCode),
+      billingStatus: 'ACTIVE',
+    });
+    return store;
+  }
+
+  @Post('with-subscription')
+  async createWithSubscription(@Body() body: CreateStoreBody) {
+    const planType = this.billing.normalizePlan(body.planType);
+    let billingPeriod = this.billing.normalizePeriod(body.billingPeriod);
+
+    let codeMeta: {
+      referredByStoreId?: string;
+      promoCode?: string;
+      discountPercentage: number;
+    };
+    try {
+      codeMeta = await this.codeResolver.resolveForSubscription(
+        body.referralCode
+      );
+    } catch (e) {
+      throw new BadRequestException(
+        e instanceof Error ? e.message : 'Código inválido'
+      );
+    }
+
+    if (codeMeta.discountPercentage > 30) {
+      billingPeriod = 'monthly';
+    }
+    this.billing.assertBillingAllowed(
+      billingPeriod,
+      codeMeta.discountPercentage
+    );
+
+    const quote = quotePlanWithDiscount(
+      planType,
+      billingPeriod,
+      codeMeta.discountPercentage
+    );
+
+    if (quote.amountDue > 0 && this.wompi.isConfigured && !body.cardToken) {
+      throw new BadRequestException('Tarjeta requerida para activar el plan');
+    }
+
+    const store = await this.insertStore(body, {
+      planType,
+      billingPeriod,
+      referredByStoreId: codeMeta.referredByStoreId,
+      promoCodeUsed: codeMeta.promoCode,
+      billingStatus: 'PENDING',
+    });
+
+    try {
+      if (quote.skipPayment) {
+        const result = await this.billing.activateComplimentarySubscription({
+          storeId: store.id,
+          planType,
+          billingPeriod,
+          promoCode: codeMeta.promoCode,
+          referred: Boolean(codeMeta.referredByStoreId),
+        });
+        return {
+          ...result.store,
+          passDesign: store.passDesign,
+          amountCop: 0,
+          quote: result.quote,
+          stub: true,
+          complimentary: true,
+        };
+      }
+
+      const result = await this.billing.activatePaidSubscription({
+        storeId: store.id,
+        planType,
+        billingPeriod,
+        discountPercentage: codeMeta.discountPercentage,
+        promoCode: codeMeta.promoCode,
+        tokens: body.cardToken
+          ? {
+              cardToken: body.cardToken,
+              acceptanceToken: body.acceptanceToken || '',
+              acceptPersonalAuth: body.acceptPersonalAuth || '',
+              customerEmail: body.ownerEmail || 'billing@onda.lat',
+            }
+          : undefined,
+      });
+      return {
+        ...result.store,
+        passDesign: store.passDesign,
+        amountCop: result.amountCop,
+        quote: result.quote,
+        stub: result.stub,
+      };
+    } catch (e) {
+      await this.prisma.store.delete({ where: { id: store.id } }).catch(() => {});
+      throw e;
+    }
+  }
+
+  private async resolveReferrerId(referralCode?: string) {
+    if (!referralCode?.trim()) return undefined;
+    const resolved = await this.codeResolver.resolve(referralCode);
+    if (resolved.kind !== 'referral') return undefined;
+    const referrer = await this.prisma.store.findUnique({
+      where: { referralCode: resolved.code },
+      select: { id: true },
+    });
+    if (!referrer) {
+      throw new BadRequestException('Código de referido inválido');
+    }
+    return referrer.id;
+  }
+
+  private async insertStore(
+    body: CreateStoreBody,
+    opts: {
+      planType: 'BASIC' | 'PRO';
+      billingPeriod: 'monthly' | '6' | '12';
+      referredByStoreId?: string;
+      promoCodeUsed?: string;
+      billingStatus?: string;
     }
   ) {
     if (!body.name?.trim()) {
@@ -145,32 +287,6 @@ export class StoresController {
       throw new ConflictException('Ese slug ya está en uso');
     }
 
-    const referralInput = normalizeReferralCode(body.referralCode);
-    const demoReferral = isDemoReferralCode(referralInput);
-    let referredByStoreId: string | undefined;
-    if (referralInput && !demoReferral) {
-      const referrer = await this.prisma.store.findUnique({
-        where: { referralCode: referralInput },
-      });
-      if (!referrer) {
-        throw new BadRequestException('Código de referido inválido');
-      }
-      referredByStoreId = referrer.id;
-    }
-
-    // Código demo interno → PRO mensual, sin referidor ni bono.
-    const planType = demoReferral
-      ? 'PRO'
-      : body.planType === 'PRO' || body.planType === 'BASIC'
-        ? body.planType
-        : 'BASIC';
-    const billingPeriod = demoReferral
-      ? 'monthly'
-      : body.billingPeriod === '6' ||
-          body.billingPeriod === '12' ||
-          body.billingPeriod === 'monthly'
-        ? body.billingPeriod
-        : 'monthly';
 
     let referralCode = generateReferralCode();
     for (let i = 0; i < 5; i++) {
@@ -196,10 +312,12 @@ export class StoresController {
           lat: body.lat,
           lng: body.lng,
           referralCode,
-          planType,
-          billingPeriod,
-          freeMonthsBalance: 1,
-          referredByStoreId,
+          planType: opts.planType,
+          billingPeriod: opts.billingPeriod,
+          billingStatus: opts.billingStatus || 'ACTIVE',
+          freeMonthsBalance: 0,
+          referredByStoreId: opts.referredByStoreId,
+          promoCodeUsed: opts.promoCodeUsed,
           passDesign: {
             create: {
               title: body.name.trim(),
@@ -213,13 +331,6 @@ export class StoresController {
         },
         include: { passDesign: true },
       });
-
-      if (referredByStoreId) {
-        await tx.store.update({
-          where: { id: referredByStoreId },
-          data: { freeMonthsBalance: { increment: 1 } },
-        });
-      }
 
       if (created.ownerEmail) {
         await tx.storeMember.create({

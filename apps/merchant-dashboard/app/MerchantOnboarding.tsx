@@ -29,12 +29,15 @@ import {
   parsePlanId,
   PLAN_META,
   isReferralCodeComplete,
+  quotePlanWithDiscount,
+  formatCop,
   type BillingPeriod,
   type PlanId,
 } from '@onda/shared-utils';
 import { useMerchantAuth } from '../lib/MerchantAuth';
 import { MerchantSignup } from './MerchantSignup';
 import { PlanPicker } from './PlanPicker';
+import { PaymentCardForm, type PaymentCardResult } from './PaymentCardForm';
 import {
   persistOnboardingQuery,
   readStoredBilling,
@@ -46,23 +49,14 @@ import {
   readStoredOwnerName,
 } from './onboardingQuery';
 
-type SetupStep = 'local' | 'plan';
+type SetupStep = 'local' | 'plan' | 'pay';
 
-function configuredDemoReferralCode(): string {
-  return sanitizeReferralCode(process.env.NEXT_PUBLIC_ONDA_DEMO_REFERRAL_CODE);
-}
+type CodeKind = 'referral' | 'promo' | 'expired' | null;
 
-function applyDemoReferralState(setters: {
-  setReferrerName: (v: string) => void;
-  setIsDemoReferral: (v: boolean) => void;
-  setPlanType: (v: PlanId) => void;
-  setBillingPeriod: (v: BillingPeriod) => void;
-}) {
-  setters.setReferrerName('Onda (demo)');
-  setters.setIsDemoReferral(true);
-  setters.setPlanType('PRO');
-  setters.setBillingPeriod('monthly');
-}
+type CodeResolveResponse =
+  | { kind: 'referral'; code: string; storeName: string }
+  | { kind: 'promo'; code: string; discountPercentage: number }
+  | { kind: 'expired'; code: string };
 
 const CATEGORY_OPTIONS = (
   Object.keys(STORE_CATEGORY_LABELS) as StoreCategory[]
@@ -76,6 +70,7 @@ const STEPS: Array<{
 }> = [
   { id: 'local', label: 'Local', hint: 'Datos y enlace', icon: OndaIcons.near },
   { id: 'plan', label: 'Plan', hint: 'Suscripción', icon: OndaIcons.crown },
+  { id: 'pay', label: 'Pago', hint: 'Activar', icon: OndaIcons.sparkle },
 ];
 
 function Field({
@@ -136,8 +131,11 @@ function MerchantBusinessSetup() {
   const [step, setStep] = useState<SetupStep>('local');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [codeKind, setCodeKind] = useState<CodeKind>(null);
   const [referrerName, setReferrerName] = useState<string | null>(null);
-  const [isDemoReferral, setIsDemoReferral] = useState(false);
+  const [discountPercentage, setDiscountPercentage] = useState(0);
+  const [wompiConfigured, setWompiConfigured] = useState(false);
+  const [wompiPublicKey, setWompiPublicKey] = useState<string | null>(null);
 
   const [planType, setPlanType] = useState<PlanId>(
     () => parsePlanId(searchParams.get('plan')) ?? 'BASIC'
@@ -195,6 +193,28 @@ function MerchantBusinessSetup() {
     const negocio = name.trim();
     document.title = negocio ? `Onda - ${negocio}` : 'Onda - Crear negocio';
   }, [name]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<{ wompiConfigured: boolean; wompiPublicKey: string | null }>(
+      '/billing/config'
+    )
+      .then((cfg) => {
+        if (cancelled) return;
+        setWompiConfigured(cfg.wompiConfigured);
+        setWompiPublicKey(
+          cfg.wompiPublicKey ||
+            process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY ||
+            null
+        );
+      })
+      .catch(() => {
+        /* keep env defaults */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     persistOnboardingQuery(searchParams);
@@ -262,40 +282,45 @@ function MerchantBusinessSetup() {
     const normalized = sanitizeReferralCode(referralCode);
     if (!normalized || !isReferralCodeComplete(normalized)) {
       setReferrerName(null);
-      setIsDemoReferral(false);
-      return;
-    }
-
-    const demoCode = configuredDemoReferralCode();
-    if (demoCode && normalized === demoCode) {
-      applyDemoReferralState({
-        setReferrerName,
-        setIsDemoReferral,
-        setPlanType,
-        setBillingPeriod,
-      });
+      setCodeKind(null);
+      setDiscountPercentage(0);
       return;
     }
 
     setReferrerName(null);
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      api<{ code: string; storeName: string; demo?: boolean }>(
+      api<CodeResolveResponse>(
         `/referrals/resolve/${encodeURIComponent(normalized)}`
       )
         .then((r) => {
           if (cancelled) return;
-          setReferrerName(r.storeName);
-          setIsDemoReferral(Boolean(r.demo));
-          if (r.demo) {
-            setPlanType('PRO');
-            setBillingPeriod('monthly');
+          if (r.kind === 'referral') {
+            setCodeKind('referral');
+            setReferrerName(r.storeName);
+            setDiscountPercentage(0);
+            return;
+          }
+          if (r.kind === 'promo') {
+            setCodeKind('promo');
+            setReferrerName('Promo Onda');
+            setDiscountPercentage(r.discountPercentage);
+            if (r.discountPercentage > 30) {
+              setBillingPeriod('monthly');
+            }
+            return;
+          }
+          if (r.kind === 'expired') {
+            setCodeKind('expired');
+            setReferrerName('');
+            setDiscountPercentage(0);
           }
         })
         .catch(() => {
           if (cancelled) return;
+          setCodeKind(null);
           setReferrerName('');
-          setIsDemoReferral(false);
+          setDiscountPercentage(0);
         });
     }, 350);
 
@@ -340,6 +365,10 @@ function MerchantBusinessSetup() {
         setError('El código de referido debe tener 8 caracteres');
         return;
       }
+      if (codeKind === 'expired') {
+        setError('Este código expiró');
+        return;
+      }
       if (referrerName === null) {
         setError('Espera a verificar el código de referido');
         return;
@@ -349,30 +378,43 @@ function MerchantBusinessSetup() {
         return;
       }
     }
-    // Código demo: salta plan y crea como PRO mensual.
-    if (isDemoReferral) {
-      void createStore('PRO', 'monthly');
-      return;
-    }
     setStep('plan');
   }
 
-  async function submitBusiness(e: FormEvent) {
+  const activeQuote = quotePlanWithDiscount(
+    planType,
+    billingPeriod,
+    discountPercentage
+  );
+  const forceMonthlyOnly = discountPercentage > 30;
+  const isReferred = codeKind === 'referral';
+
+  function goNextFromPlan(e: FormEvent) {
     e.preventDefault();
-    await createStore(planType, billingPeriod);
+    setError('');
+    rememberPlanChoice(planType, billingPeriod);
+    if (activeQuote.skipPayment) {
+      void submitWithSubscription();
+      return;
+    }
+    setStep('pay');
   }
 
-  async function createStore(plan: PlanId, billing: BillingPeriod) {
+  async function submitWithSubscription(payment?: PaymentCardResult) {
     setError('');
     const slugValue = normalizeStoreSlug(slug);
     if (!slugValue) {
       setError('El slug es inválido');
       return;
     }
+    if (!activeQuote.skipPayment && wompiConfigured && !payment?.cardToken) {
+      setError('Completa los datos de la tarjeta');
+      return;
+    }
     setBusy(true);
-    rememberPlanChoice(plan, billing);
+    rememberPlanChoice(planType, billingPeriod);
     try {
-      const created = await api<{ id: string }>('/stores', {
+      const created = await api<{ id: string }>('/stores/with-subscription', {
         method: 'POST',
         body: JSON.stringify({
           name: name.trim(),
@@ -387,8 +429,11 @@ function MerchantBusinessSetup() {
           lat,
           lng,
           referralCode: sanitizeReferralCode(referralCode) || undefined,
-          planType: plan,
-          billingPeriod: billing,
+          planType,
+          billingPeriod,
+          cardToken: payment?.cardToken,
+          acceptanceToken: payment?.acceptanceToken,
+          acceptPersonalAuth: payment?.acceptPersonalAuth,
         }),
       });
       finish(created.id);
@@ -410,10 +455,17 @@ function MerchantBusinessSetup() {
           title: 'Tu negocio',
           sub: 'Ya estás dentro. Datos del local y tu enlace público; el pase y las recompensas los configuras después en el panel.',
         }
-      : {
-          title: 'Elige tu plan',
-          sub: 'Último paso. El primer mes es gratis y no necesitas tarjeta.',
-        };
+      : step === 'plan'
+        ? {
+            title: 'Elige tu plan',
+            sub: activeQuote.skipPayment
+              ? 'Total $0 con tu código. Activas sin tarjeta.'
+              : 'Pagas hoy el periodo elegido. Guardamos tu tarjeta para renovar.',
+          }
+        : {
+            title: 'Paga y activa',
+            sub: `Total hoy ${formatCop(activeQuote.amountDue)}. Cobro seguro con Wompi.`,
+          };
 
   return (
     <div className="relative h-dvh max-h-dvh overflow-hidden bg-[var(--onda-bg)]">
@@ -448,7 +500,12 @@ function MerchantBusinessSetup() {
 
             <div className="mt-8 inline-flex items-center gap-2 rounded-full bg-[var(--onda-violet-soft)] px-4 py-2 text-sm font-medium text-[var(--onda-violet)]">
               {OndaIcons.sparkle}
-              {PLAN_META[planType].name} · 1 mes gratis
+              {PLAN_META[planType].name}
+              {discountPercentage > 0
+                ? ` · −${discountPercentage}%`
+                : isReferred
+                  ? ' · referido'
+                  : ''}
             </div>
 
             <ul className="mt-10 space-y-4">
@@ -544,21 +601,31 @@ function MerchantBusinessSetup() {
               </p>
             </header>
 
-            {referrerName && step === 'local' ? (
+            {codeKind === 'expired' && step === 'local' ? (
+              <div className="mb-4 flex shrink-0 items-start gap-3 rounded-2xl bg-[var(--onda-danger)]/10 px-4 py-3 text-sm text-[var(--onda-danger)]">
+                <span className="mt-0.5">{OndaIcons.users}</span>
+                <div>
+                  <p className="font-medium">Este código expiró</p>
+                  <p>Prueba otro código o continúa sin él.</p>
+                </div>
+              </div>
+            ) : referrerName && codeKind !== 'expired' && step === 'local' ? (
               <div className="mb-4 flex shrink-0 items-start gap-3 rounded-2xl bg-[var(--onda-sky-soft)] px-4 py-3 text-sm text-[var(--onda-ink)]">
                 <span className="mt-0.5 text-[var(--onda-sky)]">
                   {OndaIcons.users}
                 </span>
                 <div>
                   <p className="font-medium">
-                    {isDemoReferral
-                      ? 'Código demo de Onda'
+                    {codeKind === 'promo'
+                      ? `Descuento del ${discountPercentage}%`
                       : `Invitado por ${referrerName}`}
                   </p>
                   <p className="text-[var(--onda-muted)]">
-                    {isDemoReferral
-                      ? 'Se activa Onda Pro mensual al crear el negocio; no eliges plan.'
-                      : 'Ambos ganan un mes gratis con este registro.'}
+                    {codeKind === 'promo'
+                      ? forceMonthlyOnly
+                        ? 'Solo aplica en plan mensual.'
+                        : 'Se aplica al total del periodo que elijas.'
+                      : 'Al pagar, ambos ganan +30 días en la fecha de cobro.'}
                   </p>
                 </div>
               </div>
@@ -581,11 +648,7 @@ function MerchantBusinessSetup() {
                           disabled={busy}
                           className="min-w-[10rem]"
                         >
-                          {busy
-                            ? 'Creando…'
-                            : isDemoReferral
-                              ? 'Crear con Onda Pro'
-                              : 'Continuar'}
+                          {busy ? 'Creando…' : 'Continuar'}
                         </GradientButton>
                       </div>
                     }
@@ -697,7 +760,12 @@ function MerchantBusinessSetup() {
                         />
                       </Field>
                       {isReferralCodeComplete(referralCode) &&
-                      referrerName === '' ? (
+                      codeKind === 'expired' ? (
+                        <p className="text-sm text-[var(--onda-danger)]">
+                          Este código expiró
+                        </p>
+                      ) : isReferralCodeComplete(referralCode) &&
+                        referrerName === '' ? (
                         <p className="text-sm text-[var(--onda-danger)]">
                           Código de referido no válido
                         </p>
@@ -717,7 +785,7 @@ function MerchantBusinessSetup() {
 
               {step === 'plan' ? (
                 <form
-                  onSubmit={submitBusiness}
+                  onSubmit={goNextFromPlan}
                   className="flex h-full min-h-0 flex-col"
                 >
                   <FormShell
@@ -729,8 +797,10 @@ function MerchantBusinessSetup() {
                           className="min-w-[10rem]"
                         >
                           {busy
-                            ? 'Creando…'
-                            : `Activar ${PLAN_META[planType].shortName}`}
+                            ? 'Activando…'
+                            : activeQuote.skipPayment
+                              ? `Activar ${PLAN_META[planType].shortName}`
+                              : 'Continuar al pago'}
                         </GradientButton>
                         <button
                           type="button"
@@ -748,6 +818,9 @@ function MerchantBusinessSetup() {
                       billing={billingPeriod}
                       onPlan={setPlanType}
                       onBilling={setBillingPeriod}
+                      discountPercentage={discountPercentage}
+                      forceMonthlyOnly={forceMonthlyOnly}
+                      referred={isReferred}
                     />
                     {error ? (
                       <p className="mt-4 text-sm text-[var(--onda-danger)]">
@@ -756,6 +829,89 @@ function MerchantBusinessSetup() {
                     ) : null}
                   </FormShell>
                 </form>
+              ) : null}
+
+              {step === 'pay' ? (
+                <div className="flex h-full min-h-0 flex-col">
+                  <FormShell
+                    footer={
+                      <div className="flex flex-wrap items-center gap-3">
+                        <GradientButton
+                          type="button"
+                          disabled={
+                            busy ||
+                            (wompiConfigured && !wompiPublicKey)
+                          }
+                          className="min-w-[10rem]"
+                          onClick={() => {
+                            if (!wompiConfigured) {
+                              void submitWithSubscription();
+                              return;
+                            }
+                            const form = document.getElementById(
+                              'onda-pay-form'
+                            ) as HTMLFormElement | null;
+                            form?.requestSubmit();
+                          }}
+                        >
+                          {busy
+                            ? 'Procesando…'
+                            : wompiConfigured
+                              ? `Pagar ${formatCop(activeQuote.amountDue)}`
+                              : `Activar ${formatCop(activeQuote.amountDue)}`}
+                        </GradientButton>
+                        <button
+                          type="button"
+                          className="rounded-full px-4 py-2.5 text-sm font-medium text-[var(--onda-muted)] transition hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
+                          disabled={busy}
+                          onClick={() => setStep('plan')}
+                        >
+                          Volver
+                        </button>
+                      </div>
+                    }
+                  >
+                    <div className="space-y-4 pb-2">
+                      <p className="text-sm text-[var(--onda-muted)]">
+                        {PLAN_META[planType].name} ·{' '}
+                        {billingPeriod === 'monthly'
+                          ? 'mensual'
+                          : billingPeriod === '6'
+                            ? '6 meses'
+                            : '12 meses'}{' '}
+                        · {formatCop(activeQuote.amountDue)}
+                      </p>
+                      {wompiConfigured ? (
+                        wompiPublicKey ? (
+                          <div id="onda-pay-form">
+                            <PaymentCardForm
+                              publicKey={wompiPublicKey}
+                              busy={busy}
+                              onSubmit={(payment) =>
+                                submitWithSubscription(payment)
+                              }
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-sm text-[var(--onda-danger)]">
+                            Wompi no está configurado. Revisa las llaves en el
+                            servidor.
+                          </p>
+                        )
+                      ) : (
+                        <p className="text-sm text-[var(--onda-muted)]">
+                          Wompi no está configurado en este entorno. Puedes
+                          activar la suscripción en modo desarrollo sin tarjeta.
+                        </p>
+                      )}
+                      {error ? (
+                        <p className="text-sm text-[var(--onda-danger)]">
+                          {error}
+                        </p>
+                      ) : null}
+                    </div>
+                  </FormShell>
+                </div>
               ) : null}
             </div>
           </div>

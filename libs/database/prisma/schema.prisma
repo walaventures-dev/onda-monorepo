@@ -259,8 +259,11 @@ model Store {
   referralCode      String                 @unique
   wompiTransactionId   String?
   wompiPaymentSourceId String?
+  nextBillingAt        DateTime?
+  referralBonusApplied Boolean               @default(false)
+  promoCodeUsed        String?
   referredByStoreId String?
-  freeMonthsBalance Int                    @default(1)
+  freeMonthsBalance Int                    @default(0)
   referredBy        Store?                 @relation("StoreReferrals", fields: [referredByStoreId], references: [id])
   referrals         Store[]                @relation("StoreReferrals")
   passes            Pass[]

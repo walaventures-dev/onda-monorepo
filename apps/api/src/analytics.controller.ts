@@ -26,6 +26,7 @@ import {
 } from './plan-quota';
 import { campaignReachPricing } from './campaign-pricing';
 import { computeRoi } from '@onda/shared-utils';
+import { BillingService } from './billing.service';
 
 const COMPARE_MAX_STORES = 20;
 
@@ -1868,8 +1869,17 @@ export class BillingController {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(WompiService) private wompi: WompiService,
-    @Inject(JobsService) private jobs: JobsService
+    @Inject(JobsService) private jobs: JobsService,
+    @Inject(BillingService) private billing: BillingService
   ) {}
+
+  @Get('config')
+  config() {
+    return {
+      wompiConfigured: this.wompi.isConfigured,
+      wompiPublicKey: this.wompi.publicKey,
+    };
+  }
 
   @Get('store/:storeId')
   async summary(@Param('storeId') storeId: string) {
@@ -1882,6 +1892,8 @@ export class BillingController {
     return {
       planType: store.planType,
       billingStatus: store.billingStatus,
+      billingPeriod: store.billingPeriod,
+      nextBillingAt: store.nextBillingAt,
       ondasUsed,
       ondasLimit: PLAN_ONDA_MONTHLY_LIMIT,
       reachUsed,
@@ -1895,7 +1907,7 @@ export class BillingController {
       campaignPricing: pricing,
       planPriceCop: store.planType === 'PRO' ? 69_900 : 49_900,
       freeMonthsBalance: store.freeMonthsBalance,
-      wompiPublicKey: process.env.WOMPI_PUBLIC_KEY || null,
+      wompiPublicKey: this.wompi.publicKey,
       features: {
         gpsProximity: store.planType === 'PRO',
         npsSurveys: store.planType === 'PRO',
@@ -1907,16 +1919,22 @@ export class BillingController {
 
   @Post('store/:storeId/upgrade')
   async upgrade(@Param('storeId') storeId: string) {
-    await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
+    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
     if (!this.wompi.isConfigured) {
-      const store = await this.prisma.store.update({
+      const updated = await this.prisma.store.update({
         where: { id: storeId },
         data: { planType: 'PRO', billingStatus: 'ACTIVE' },
       });
-      return { store, stub: true as const, checkout: null };
+      return { store: updated, stub: true as const, checkout: null };
     }
 
-    const checkout = this.wompi.createCheckout(storeId);
+    const { planType, billingPeriod } = this.wompi.parsePlanFromStore(store);
+    const checkout = this.wompi.createCheckout({
+      storeId,
+      planType: 'PRO',
+      billingPeriod,
+      kind: 'upgrade',
+    });
     await this.prisma.store.update({
       where: { id: storeId },
       data: { wompiTransactionId: checkout.reference },
@@ -1949,8 +1967,11 @@ export class BillingController {
         wompiPaymentSourceId: paymentSourceId,
       },
     });
-    if (paymentSourceId) {
-      await this.jobs.scheduleWompiRenew(store.id);
+    if (paymentSourceId && store.nextBillingAt) {
+      await this.jobs.scheduleWompiRenew(
+        store.id,
+        Math.max(0, store.nextBillingAt.getTime() - Date.now())
+      );
     }
     return { received: true, storeId: store.id, status: 'PRO' };
   }

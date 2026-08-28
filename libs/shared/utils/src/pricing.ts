@@ -36,6 +36,49 @@ export const BILLING_MONTHS: Record<BillingPeriod, number> = {
   '12': 12,
 };
 
+/** Días del periodo de facturación (renovaciones). */
+export const BILLING_PERIOD_DAYS: Record<BillingPeriod, number> = {
+  monthly: 30,
+  '6': 180,
+  '12': 365,
+};
+
+/** Días extra del primer ciclo (segundo cobro = period + bonus). */
+export const FIRST_CYCLE_BONUS_DAYS = 30;
+
+/** Días que mueve el referido/referidor al pagar. */
+export const REFERRAL_BONUS_DAYS = 30;
+
+export function addBillingDays(from: Date, days: number): Date {
+  return new Date(from.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+/** Primer intervalo hasta el segundo cobro: periodDays + 30 (+ 30 si referido). */
+export function initialBillingIntervalDays(
+  billing: BillingPeriod,
+  opts?: { referred?: boolean }
+): number {
+  const periodDays = BILLING_PERIOD_DAYS[billing];
+  const bonus =
+    FIRST_CYCLE_BONUS_DAYS + (opts?.referred ? REFERRAL_BONUS_DAYS : 0);
+  return periodDays + bonus;
+}
+
+export function initialNextBillingAt(
+  billing: BillingPeriod,
+  from = new Date(),
+  opts?: { referred?: boolean }
+): Date {
+  return addBillingDays(from, initialBillingIntervalDays(billing, opts));
+}
+
+export function advanceNextBillingAt(
+  billing: BillingPeriod,
+  from = new Date()
+): Date {
+  return addBillingDays(from, BILLING_PERIOD_DAYS[billing]);
+}
+
 export const PLAN_META: Record<
   PlanId,
   { name: string; shortName: string; features: string[] }
@@ -162,15 +205,17 @@ export function quotePlan(plan: PlanId, billing: BillingPeriod) {
   const total = monthlyEffective * paidMonths;
   const fullTotal = monthlyList * paidMonths;
   const discountSavings = fullTotal - total;
-  /** Primer mes gratis en todos; en 6/12 es adicional al descuento del prepago. */
-  const freeMonths = 1;
-  const serviceMonths =
-    billing === 'monthly' ? freeMonths : paidMonths + freeMonths;
-  const freeMonthValue = monthlyList * freeMonths;
-  const savings = discountSavings + (billing === 'monthly' ? 0 : freeMonthValue);
+  const periodDays = BILLING_PERIOD_DAYS[billing];
+  const firstIntervalDays = initialBillingIntervalDays(billing);
+  const referredFirstIntervalDays = initialBillingIntervalDays(billing, {
+    referred: true,
+  });
+  const freeMonths = 0;
+  const serviceMonths = paidMonths;
+  const freeMonthValue = 0;
+  const savings = discountSavings;
   const includesKit = billing !== 'monthly';
-  /** Ningún plan pide tarjeta para iniciar. */
-  const noCardRequired = true;
+  const noCardRequired = false;
   const discount = discountSavings > 0 ? discountSavings / fullTotal : 0;
 
   return {
@@ -181,6 +226,10 @@ export function quotePlan(plan: PlanId, billing: BillingPeriod) {
     months: paidMonths,
     serviceMonths,
     freeMonths,
+    periodDays,
+    firstIntervalDays,
+    referredFirstIntervalDays,
+    firstCycleBonusDays: FIRST_CYCLE_BONUS_DAYS,
     total,
     discountSavings,
     freeMonthValue,
@@ -194,6 +243,27 @@ export function quotePlan(plan: PlanId, billing: BillingPeriod) {
         : billing === '6'
           ? 'semestral'
           : 'anual',
+  };
+}
+
+export function quotePlanWithDiscount(
+  plan: PlanId,
+  billing: BillingPeriod,
+  discountPercentage = 0
+) {
+  const base = quotePlan(plan, billing);
+  const pct = Math.max(0, Math.min(100, discountPercentage));
+  const amountDue = Math.max(
+    0,
+    Math.round(base.total * (1 - pct / 100))
+  );
+  return {
+    ...base,
+    discountPercentage: pct,
+    amountDue,
+    promoSavings: base.total - amountDue,
+    forceMonthlyOnly: pct > 30,
+    skipPayment: amountDue === 0,
   };
 }
 
@@ -218,18 +288,19 @@ export function formatChargeDate(date: Date) {
   });
 }
 
-/** Meses visibles: gratis + cubiertos + el mes en que vuelve a pagar. */
+/** Meses visibles: cubiertos por el prepago + el mes del segundo cobro. */
 export function subscriptionCalendar(
   billing: BillingPeriod,
-  from = new Date()
+  from = new Date(),
+  opts?: { referred?: boolean }
 ): SubscriptionMonth[] {
-  const { freeMonths, serviceMonths } = quotePlan('BASIC', billing);
-  const total = serviceMonths + 1;
+  const { paidMonths } = quotePlan('BASIC', billing);
+  const nextCharge = initialNextBillingAt(billing, from, opts);
+  const total = paidMonths + 1;
   const months: SubscriptionMonth[] = [];
   for (let i = 0; i < total; i++) {
     const d = new Date(from.getFullYear(), from.getMonth() + i, 1);
-    const kind: TimelineMonthKind =
-      i < freeMonths ? 'free' : i < serviceMonths ? 'paid' : 'renewal';
+    const kind: TimelineMonthKind = i < paidMonths ? 'paid' : 'renewal';
     months.push({
       key: `${d.getFullYear()}-${d.getMonth()}`,
       label: d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', ''),
@@ -237,16 +308,26 @@ export function subscriptionCalendar(
       kind,
     });
   }
+  const renew = months[months.length - 1];
+  if (renew) {
+    renew.key = `${nextCharge.getFullYear()}-${nextCharge.getMonth()}`;
+    renew.label = nextCharge
+      .toLocaleDateString('es-CO', { month: 'short' })
+      .replace('.', '');
+    renew.year = nextCharge.getFullYear();
+  }
   return months;
 }
 
 export function subscriptionChargeDates(
   billing: BillingPeriod,
-  from = new Date()
+  from = new Date(),
+  opts?: { referred?: boolean }
 ) {
-  const { serviceMonths } = quotePlan('BASIC', billing);
   return {
-    firstCharge: addCalendarMonths(from, 1),
-    nextCharge: addCalendarMonths(from, serviceMonths),
+    firstCharge: from,
+    nextCharge: initialNextBillingAt(billing, from, opts),
+    renewIntervalDays: BILLING_PERIOD_DAYS[billing],
+    firstIntervalDays: initialBillingIntervalDays(billing, opts),
   };
 }
