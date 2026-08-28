@@ -55,6 +55,9 @@ import { FirestoreService } from './firestore.service';
 import { PromoCodesService } from './promo-codes.service';
 import { CodeResolverService } from './code-resolver.service';
 import { BillingService } from './billing.service';
+import { PlacesController } from './places.controller';
+import { FeedbackService } from './feedback.service';
+import { GooglePlacesService } from './google-places.service';
 
 @Module({
   imports: [
@@ -96,6 +99,7 @@ import { BillingService } from './billing.service';
     DemoOndaSpaController,
     CampaignsController,
     JobsController,
+    PlacesController,
   ],
   providers: [
     PrismaService,
@@ -122,6 +126,8 @@ import { BillingService } from './billing.service';
     PromoCodesService,
     CodeResolverService,
     BillingService,
+    FeedbackService,
+    GooglePlacesService,
   ],
 })
 export class AppModule {}

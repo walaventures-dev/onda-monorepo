@@ -85,6 +85,28 @@ enum CampaignObjective {
   REVIEWS
 }
 
+enum FeedbackSentiment {
+  POSITIVE
+  NEGATIVE
+}
+
+enum FeedbackSource {
+  POST_ACCUMULATE
+  MANUAL
+  CAMPAIGN
+}
+
+enum FeedbackFollowUpStatus {
+  OPEN
+  CONTACTED
+  RESOLVED
+}
+
+enum GooglePlaceSnapshotSource {
+  ONBOARDING
+  CRON
+}
+
 enum CampaignBillingKind {
   FREE
   CREDIT
@@ -244,6 +266,9 @@ model Store {
   segment           StoreSegment?
   googlePlaceId     String?
   address           String?
+  googleRating      Float?
+  googleReviewCount Int?
+  googleRatingUpdatedAt DateTime?
   planType          PlanType               @default(BASIC)
   billingStatus     String                 @default("ACTIVE")
   billingPeriod     String                 @default("monthly")
@@ -269,6 +294,7 @@ model Store {
   passes            Pass[]
   transactions      Transaction[]
   feedbacks         Feedback[]
+  googlePlaceSnapshots GooglePlaceSnapshot[]
   promotions        Promotion[]
   cartillas         Cartilla[]
   eventMemberships  StoreEventMembership[]
@@ -402,6 +428,7 @@ model Pass {
   cycleStartedAt DateTime    @default(now())
   pushToken    String?
   walletRef    String?
+  lastFeedbackSmsAt DateTime?
   user         User          @relation(fields: [userId], references: [id])
   store        Store?        @relation(fields: [storeId], references: [id])
   event        Event?        @relation(fields: [eventId], references: [id])
@@ -443,15 +470,38 @@ model Transaction {
 }
 
 model Feedback {
-  id                 String   @id @default(uuid())
+  id                 String                 @id @default(uuid())
   userId             String
   storeId            String
+  passId             String?
+  transactionId      String?
   rating             Int
+  sentiment          FeedbackSentiment      @default(POSITIVE)
+  dimensions         String[]               @default([])
+  source             FeedbackSource         @default(MANUAL)
+  followUpStatus     FeedbackFollowUpStatus @default(OPEN)
   comment            String?
-  redirectedToGoogle Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  user               User     @relation(fields: [userId], references: [id])
-  store              Store    @relation(fields: [storeId], references: [id])
+  redirectedToGoogle Boolean                @default(false)
+  createdAt          DateTime               @default(now())
+  user               User                   @relation(fields: [userId], references: [id])
+  store              Store                  @relation(fields: [storeId], references: [id])
+
+  @@index([storeId, createdAt])
+  @@index([storeId, sentiment])
+  @@index([passId])
+}
+
+model GooglePlaceSnapshot {
+  id            String                    @id @default(uuid())
+  storeId       String
+  googlePlaceId String
+  rating        Float?
+  reviewCount   Int?
+  fetchedAt     DateTime                  @default(now())
+  source        GooglePlaceSnapshotSource
+  store         Store                     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, fetchedAt])
 }
 
 model Promotion {

@@ -28,6 +28,7 @@ import {
   storeCreatedEmailText,
 } from './mail-templates/store-created';
 import { BillingService } from './billing.service';
+import { GooglePlacesService } from './google-places.service';
 import { CodeResolverService } from './code-resolver.service';
 import { WompiService } from './wompi.service';
 import { quotePlanWithDiscount } from '@onda/shared-utils';
@@ -40,6 +41,9 @@ const storePublicSelect = {
   subcategory: true,
   segment: true,
   googlePlaceId: true,
+  googleRating: true,
+  googleReviewCount: true,
+  googleRatingUpdatedAt: true,
   address: true,
   planType: true,
   billingStatus: true,
@@ -94,7 +98,8 @@ export class StoresController {
     @Inject(PosService) private pos: PosService,
     @Inject(BillingService) private billing: BillingService,
     @Inject(CodeResolverService) private codeResolver: CodeResolverService,
-    @Inject(WompiService) private wompi: WompiService
+    @Inject(WompiService) private wompi: WompiService,
+    @Inject(GooglePlacesService) private googlePlaces: GooglePlacesService
   ) {}
 
   @Get()
@@ -350,6 +355,22 @@ export class StoresController {
 
     await this.cartillas.ensureDefaultCartilla(store.id);
     await this.pos.bootstrapStore(store.id);
+
+    if (store.googlePlaceId) {
+      try {
+        await this.googlePlaces.saveSnapshot(
+          store.id,
+          store.googlePlaceId,
+          'ONBOARDING'
+        );
+      } catch (e) {
+        this.logger.warn(
+          `Snapshot Google Places falló: ${
+            e instanceof Error ? e.message : e
+          }`
+        );
+      }
+    }
 
     if (store.ownerEmail) {
       try {

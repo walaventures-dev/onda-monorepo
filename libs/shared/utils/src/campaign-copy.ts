@@ -982,12 +982,12 @@ export function buildObjectiveMessages(opts: {
       {
         channel: 'Wallet',
         channelLabel: 'Push · Wallet',
-        text: `${reviewIncentive}. Ábrelo en tu pase de ${storeName}.`,
+        text: `${reviewIncentive}. Cuéntanos: {{feedbackUrl}}`,
       },
       {
         channel: 'SMS',
         channelLabel: 'SMS',
-        text: `Hola ${name}, ¿cómo te fue en ${storeName}? Una reseña nos ayuda — ${reviewIncentive.toLowerCase()}.`,
+        text: `Hola ${name}, ¿cómo te fue en ${storeName}? Cuéntanos: {{feedbackUrl}}`,
       },
     ];
   }
@@ -1110,7 +1110,10 @@ export function buildCampaignMessages(opts: {
 
 export function renderCampaignTemplate(
   text: string,
-  vars: { nombre?: string }
+  vars: { nombre?: string; feedbackUrl?: string; store?: string }
 ): string {
-  return text.replaceAll('{{nombre}}', vars.nombre?.trim() || 'tú');
+  return text
+    .replaceAll('{{nombre}}', vars.nombre?.trim() || 'tú')
+    .replaceAll('{{feedbackUrl}}', vars.feedbackUrl?.trim() || '')
+    .replaceAll('{{store}}', vars.store?.trim() || '');
 }

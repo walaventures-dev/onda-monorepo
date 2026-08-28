@@ -47,6 +47,7 @@ import {
 import {
   BarChart,
   Bar,
+  CartesianGrid,
   ResponsiveContainer,
   XAxis,
   YAxis,
@@ -55,7 +56,6 @@ import {
   ComposedChart,
   Area,
   Line,
-  CartesianGrid,
 } from "recharts";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/dist/csr/ChartBar";
 import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/dist/csr/ChartLineUp";
@@ -65,6 +65,7 @@ import { PercentIcon as Percent } from "@phosphor-icons/react/dist/csr/Percent";
 import { ReceiptIcon as Receipt } from "@phosphor-icons/react/dist/csr/Receipt";
 import { TargetIcon as Target } from "@phosphor-icons/react/dist/csr/Target";
 import { TrendUpIcon as TrendUp } from "@phosphor-icons/react/dist/csr/TrendUp";
+import { SparkleIcon as Sparkle } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { PromoDetail } from "./PromoDetail";
 import { CreatePromo } from "./CreatePromo";
@@ -74,6 +75,7 @@ import { CustomerDetail } from "./CustomerDetail";
 import { CompareStores, type CompareResponse } from "./CompareStores";
 import { PendingRequestsPanel, CajaOpenButton } from "./PendingRequestsPanel";
 import { ReferralsPanel } from "./ReferralsPanel";
+import { FeedbackWorkspace } from "./FeedbackWorkspace";
 import { CampaignsHome } from "./CampaignsHome";
 import { CampaignWizard } from "./CampaignWizard";
 import { CampaignDetail } from "./CampaignDetail";
@@ -83,6 +85,7 @@ import { useMerchantAuth } from "../lib/MerchantAuth";
 import { PosWorkspace } from "./PosWorkspace";
 import { ConfigWorkspace } from "./ConfigWorkspace";
 import { useStoreRole, isAdmin, cajaAllowedMerchantPath } from "../lib/useStoreRole";
+import { useStoreSse } from "../lib/useStoreSse";
 
 type Tab =
   | "completar"
@@ -91,6 +94,7 @@ type Tab =
   | "clientes"
   | "promos"
   | "campanas"
+  | "feedback"
   | "eventos"
   | "referidos"
   | "config"
@@ -118,6 +122,7 @@ const SECTIONS: Tab[] = [
   "clientes",
   "promos",
   "campanas",
+  "feedback",
   ...(EVENTOS_ENABLED ? (["eventos"] as const) : []),
   "referidos",
   "pos",
@@ -979,6 +984,12 @@ export function MerchantWorkspace() {
             icon: OndaIcons.megaphone,
             active: tab === "campanas",
           },
+          {
+            href: "/feedback",
+            label: "Feedback",
+            icon: OndaIcons.sparkle,
+            active: tab === "feedback",
+          },
           ...(EVENTOS_ENABLED
             ? [
                 {
@@ -1197,6 +1208,20 @@ export function MerchantWorkspace() {
   useEffect(() => {
     return () => window.clearTimeout(activityRefreshTimer.current);
   }, []);
+
+  useStoreSse(
+    storeId,
+    Boolean(storeId && store?.planType === "PRO" && tab === "resumen"),
+    (payload) => {
+      if (
+        payload.kind !== "feedback_new" &&
+        payload.kind !== "feedback_alert"
+      ) {
+        return;
+      }
+      void loadOverview();
+    }
+  );
 
   useEffect(() => {
     api<any[]>("/auth/merchant/stores").then((list) => {
@@ -2204,6 +2229,90 @@ export function MerchantWorkspace() {
               </div>
             ) : null}
 
+            {overview?.feedback && store?.planType === "PRO" ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="font-display text-lg font-semibold text-[var(--onda-ink)]">
+                    Feedback
+                  </h2>
+                  <button
+                    type="button"
+                    className="text-sm font-medium text-[var(--onda-violet)] hover:underline"
+                    onClick={() => router.push("/feedback")}
+                  >
+                    Ver módulo →
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4 [&>*]:min-w-0">
+                  <KpiCard
+                    label="Satisfacción"
+                    value={`${Math.round((overview.feedback.positiveRate || 0) * 100)}%`}
+                    tone="success"
+                    icon={
+                      <Sparkle
+                        className="h-5 w-5"
+                        weight="duotone"
+                        aria-hidden
+                      />
+                    }
+                  />
+                  <KpiCard
+                    label="Respuestas"
+                    value={`${Math.round((overview.feedback.responseRate || 0) * 100)}%`}
+                    hint="Sobre acumulaciones en el periodo"
+                    tone="sky"
+                  />
+                  <KpiCard
+                    label="Reseñas Google"
+                    value={String(overview.feedback.googleRedirects ?? 0)}
+                    tone="primary"
+                  />
+                  <KpiCard
+                    label="Alertas abiertas"
+                    value={String(overview.feedback.openAlerts ?? 0)}
+                    tone={
+                      (overview.feedback.openAlerts ?? 0) > 0 ? "amber" : "sky"
+                    }
+                  />
+                </div>
+                {(overview.feedback.series?.length ?? 0) > 0 ? (
+                  <div className="onda-card p-4">
+                    <p className="mb-3 text-sm font-medium text-[var(--onda-ink)]">
+                      Experiencias reportadas
+                    </p>
+                    <div className="h-40">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={overview.feedback.series.slice(-14)}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis
+                            dataKey="date"
+                            tickFormatter={(v) =>
+                              String(v).slice(5).replace("-", "/")
+                            }
+                            fontSize={11}
+                          />
+                          <YAxis allowDecimals={false} fontSize={11} />
+                          <Tooltip />
+                          <Bar
+                            dataKey="positive"
+                            name="Positivo"
+                            fill="var(--onda-success)"
+                            stackId="fb"
+                          />
+                          <Bar
+                            dataKey="negative"
+                            name="Negativo"
+                            fill="var(--onda-danger)"
+                            stackId="fb"
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             {overview ? (
               <div className="onda-card flex min-h-[22rem] flex-col overflow-hidden p-4">
                 <AnalyticsSectionHeader
@@ -2997,6 +3106,15 @@ export function MerchantWorkspace() {
 
         {tab === "referidos" && storeId ? (
           <ReferralsPanel storeId={storeId} />
+        ) : null}
+
+        {tab === "feedback" && storeId ? (
+          <FeedbackWorkspace
+            storeId={storeId}
+            planType={store?.planType}
+            subcategory={store?.subcategory}
+            segment={store?.segment}
+          />
         ) : null}
 
         {tab === "campanas" && campaignNew && storeId ? (

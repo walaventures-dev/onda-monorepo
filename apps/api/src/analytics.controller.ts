@@ -9,6 +9,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Patch,
   Query,
   Req,
 } from '@nestjs/common';
@@ -19,6 +20,13 @@ import { PrismaService } from './prisma.service';
 import { WompiService } from './wompi.service';
 import { JobsService } from './jobs.service';
 import { WhatsappService } from './whatsapp.service';
+import { FeedbackService } from './feedback.service';
+
+function bearerToken(header?: string): string {
+  if (!header) return '';
+  const m = header.match(/^Bearer\s+(.+)$/i);
+  return m?.[1]?.trim() || '';
+}
 import {
   PLAN_ONDA_MONTHLY_LIMIT,
   monthlyOndasUsed,
@@ -92,7 +100,8 @@ function pctDelta(current: number, previous: number) {
 @Controller('analytics')
 export class AnalyticsController {
   constructor(
-    @Inject(PrismaService) private prisma: PrismaService
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(FeedbackService) private feedback: FeedbackService
   ) {}
 
   @Get('store/:storeId/kpis')
@@ -654,6 +663,30 @@ export class AnalyticsController {
       };
     }
 
+    let feedbackBlock: Awaited<ReturnType<FeedbackService['analytics']>> | null =
+      null;
+    if (store.planType === 'PRO') {
+      try {
+        const daySpan = Math.max(
+          1,
+          Math.ceil((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000))
+        );
+        feedbackBlock = await this.feedback.analytics(storeId, daySpan);
+        if (feedbackBlock.openAlerts > 0) {
+          insights.unshift({
+            id: 'feedback-alerts',
+            tone: 'danger',
+            title: 'Clientes insatisfechos sin seguimiento',
+            message: `${feedbackBlock.openAlerts} feedback negativo(s) pendientes de revisar.`,
+            action: '/feedback',
+            stat: String(feedbackBlock.openAlerts),
+          });
+        }
+      } catch {
+        feedbackBlock = null;
+      }
+    }
+
     return {
       range: { from: from.toISOString(), to: to.toISOString() },
       previousRange: {
@@ -706,6 +739,7 @@ export class AnalyticsController {
           createdAt: t.createdAt,
           promotion: t.promotion,
         })),
+      feedback: feedbackBlock,
     };
   }
 
@@ -1979,51 +2013,64 @@ export class BillingController {
 
 @Controller('feedback')
 export class FeedbackController {
-  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
+  constructor(@Inject(FeedbackService) private feedback: FeedbackService) {}
 
   @Post()
-  async create(
+  create(
+    @Headers('authorization') authHeader: string | undefined,
     @Body()
     body: {
-      userId: string;
+      passId: string;
       storeId: string;
-      rating: number;
+      sentiment: 'POSITIVE' | 'NEGATIVE';
+      dimensions?: string[];
       comment?: string;
+      source?: 'POST_ACCUMULATE' | 'MANUAL' | 'CAMPAIGN';
+      transactionId?: string;
     }
   ) {
-    const store = await this.prisma.store.findUniqueOrThrow({
-      where: { id: body.storeId },
+    const token = bearerToken(authHeader);
+    return this.feedback.create({
+      token: token || undefined,
+      passId: body.passId,
+      storeId: body.storeId,
+      sentiment: body.sentiment as any,
+      dimensions: body.dimensions || [],
+      comment: body.comment,
+      source: body.source as any,
+      transactionId: body.transactionId,
     });
-    const reviewGating = store.planType === 'PRO';
-    const redirectedToGoogle = reviewGating && body.rating >= 4;
+  }
 
-    const feedback = await this.prisma.feedback.create({
-      data: {
-        userId: body.userId,
-        storeId: body.storeId,
-        rating: body.rating,
-        comment: body.comment,
-        redirectedToGoogle,
-      },
-    });
-
-    return {
-      feedback,
-      redirectToGoogle: redirectedToGoogle,
-      googleMapsUrl: store.googlePlaceId
-        ? `https://search.google.com/local/writereview?placeid=${store.googlePlaceId}`
-        : null,
-      alertMerchant: reviewGating && body.rating < 4,
-    };
+  @Get('dimensions/:storeId')
+  dimensions(@Param('storeId') storeId: string) {
+    return this.feedback.getDimensions(storeId);
   }
 
   @Get('store/:storeId')
   list(@Param('storeId') storeId: string) {
-    return this.prisma.feedback.findMany({
-      where: { storeId },
-      include: { user: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.feedback.list(storeId);
+  }
+
+  @Get('store/:storeId/analytics')
+  analytics(
+    @Param('storeId') storeId: string,
+    @Query('days') days?: string
+  ) {
+    return this.feedback.analytics(storeId, days ? Number(days) : 30);
+  }
+
+  @Get('store/:storeId/google-comparison')
+  googleComparison(@Param('storeId') storeId: string) {
+    return this.feedback.analytics(storeId, 365).then((a) => a.googleDelta);
+  }
+
+  @Patch(':id/follow-up')
+  followUp(
+    @Param('id') id: string,
+    @Body() body: { storeId: string; status: 'OPEN' | 'CONTACTED' | 'RESOLVED' }
+  ) {
+    return this.feedback.updateFollowUp(body.storeId, id, body.status as any);
   }
 }
 

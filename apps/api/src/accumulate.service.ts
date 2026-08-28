@@ -9,6 +9,8 @@ import { ondasFromPayment, parsePositiveInt } from '@onda/shared-utils';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
+import { FeedbackService } from './feedback.service';
+import { buildFeedbackSms, buildFeedbackUrl } from './feedback-url';
 import { assertCanAccumulate } from './plan-quota';
 
 const DOUBLE_SCAN_MS = 15_000;
@@ -147,13 +149,23 @@ export class AccumulateService {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(WalletService) private wallet: WalletService,
-    @Inject(PendingRequestsSseService) private sse: PendingRequestsSseService
+    @Inject(PendingRequestsSseService) private sse: PendingRequestsSseService,
+    @Inject(FeedbackService) private feedback: FeedbackService
   ) {}
 
   async accumulate(input: AccumulateInput) {
     const paymentAmount = parsePaymentAmount(input.paymentAmount);
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: input.storeId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        planType: true,
+        maxStamps: true,
+        ondaValue: true,
+        currency: true,
+      },
     });
 
     const requested = resolveRequestedOndas({
@@ -339,6 +351,22 @@ export class AccumulateService {
       passId: pass.id,
       delta,
     });
+
+    if (delta > 0 && full.user.phone) {
+      const url = buildFeedbackUrl({ slug: store.slug, passId: full.id });
+      const sms = buildFeedbackSms(store.name, url);
+      void this.feedback.sendPostAccumulateSms({
+        store: {
+          id: store.id,
+          name: store.name,
+          slug: store.slug,
+          planType: store.planType,
+        },
+        passId: full.id,
+        phone: full.user.phone,
+        message: sms,
+      });
+    }
 
     return {
       pass: full,

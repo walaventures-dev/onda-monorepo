@@ -414,10 +414,53 @@ export interface FeedbackDto {
   id: string;
   userId: string;
   storeId: string;
+  passId?: string | null;
+  transactionId?: string | null;
   rating: number;
+  sentiment: 'POSITIVE' | 'NEGATIVE';
+  dimensions: string[];
+  source: 'POST_ACCUMULATE' | 'MANUAL' | 'CAMPAIGN';
+  followUpStatus: 'OPEN' | 'CONTACTED' | 'RESOLVED';
   comment?: string | null;
   redirectedToGoogle: boolean;
   createdAt: string;
+  user?: { id: string; name: string; phone: string };
+}
+
+export interface FeedbackDimensionDto {
+  id: string;
+  label: string;
+  icon: string;
+  positiveLabel: string;
+  negativeLabel: string;
+}
+
+export interface FeedbackAnalyticsDto {
+  responseRate: number;
+  positiveRate: number;
+  googleRedirects: number;
+  openAlerts: number;
+  total: number;
+  series: { date: string; positive: number; negative: number }[];
+  topDimensions: {
+    id: string;
+    label: string;
+    count: number;
+    sentiment: 'POSITIVE' | 'NEGATIVE';
+  }[];
+  googleDelta: {
+    ratingBefore: number | null;
+    ratingNow: number | null;
+    reviewsBefore: number | null;
+    reviewsNow: number | null;
+  };
+}
+
+export interface FeedbackSubmitResponse {
+  feedback: FeedbackDto;
+  redirectToGoogle: boolean;
+  googleMapsUrl: string | null;
+  alertMerchant: boolean;
 }
 
 export interface EnrollRequest {

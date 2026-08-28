@@ -295,6 +295,13 @@ export {
 } from './campaign-copy';
 
 export {
+  feedbackDimensionsFor,
+  feedbackDimensionLabel,
+  type FeedbackDimensionDef,
+  type FeedbackDimensionId,
+} from './feedback-dimensions';
+
+export {
   type LoyaltyRewardHint,
   pickLoyaltyReward,
   loyaltyProgressCopy,

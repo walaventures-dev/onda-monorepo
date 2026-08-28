@@ -479,6 +479,14 @@ export default function StoreEntryPage() {
                 Cartilla vigente hasta nuevo aviso.
               </p>
             ) : null}
+            {store?.planType === "PRO" && pass ? (
+              <Link
+                href={`/r/${store.slug || storeKey}/feedback`}
+                className="mt-4 block text-center text-sm font-semibold text-[var(--onda-violet)] underline-offset-2 hover:underline"
+              >
+                ¿Cómo estuvo tu visita?
+              </Link>
+            ) : null}
             {pass && promotionsWithStatus.length > 0 ? (
               <div className="mt-4 flex flex-col gap-3">
                 {promotionsWithStatus.map((p: any) => {

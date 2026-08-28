@@ -30,6 +30,7 @@ import { JobsService } from './jobs.service';
 import { WalletService } from './wallet.service';
 import { BrevoService } from './brevo.service';
 import { WompiService } from './wompi.service';
+import { buildFeedbackUrl } from './feedback-url';
 import {
   assertCanLaunchReach,
   monthlyReachUsed,
@@ -352,6 +353,68 @@ export class CampaignsService {
       }
     }
 
+    if (store.planType === 'PRO') {
+      const weekAgo = new Date(Date.now() - 7 * DAY_MS);
+      const negativeCount = await this.prisma.feedback.count({
+        where: {
+          storeId,
+          sentiment: 'NEGATIVE',
+          createdAt: { gte: weekAgo },
+        },
+      });
+      if (negativeCount >= 3) {
+        const recoveryAudience = await this.audience(storeId, 'reactivate');
+        recs.unshift({
+          id: 'feedback-recovery',
+          objective: 'reactivate',
+          origin: 'RECOMMENDED',
+          reason: `${negativeCount} experiencias negativas esta semana. Conviene recuperar clientes insatisfechos con una promo.`,
+          title: 'Recuperar clientes insatisfechos',
+          audienceCount: recoveryAudience.count,
+          messages: buildObjectiveMessages({
+            kind: 'reactivate',
+            voice,
+            storeName: store.name,
+            details: recommendedDetails(voice),
+          }),
+        });
+      }
+
+      const fortnightAgo = new Date(Date.now() - 14 * DAY_MS);
+      const recentFeedbacks = await this.prisma.feedback.findMany({
+        where: { storeId, createdAt: { gte: fortnightAgo } },
+        select: { sentiment: true, redirectedToGoogle: true },
+      });
+      if (recentFeedbacks.length >= 5 && store.googlePlaceId) {
+        const positive = recentFeedbacks.filter(
+          (f) => f.sentiment === 'POSITIVE'
+        ).length;
+        const positiveRate = positive / recentFeedbacks.length;
+        const googleRedirects = recentFeedbacks.filter(
+          (f) => f.redirectedToGoogle
+        ).length;
+        if (positiveRate >= 0.7 && googleRedirects < positive * 0.3) {
+          const reviewsAudience = await this.audience(storeId, 'reviews');
+          if (reviewsAudience.count >= 1) {
+            recs.push({
+              id: 'feedback-google-push',
+              objective: 'reviews',
+              origin: 'RECOMMENDED',
+              reason: `${Math.round(positiveRate * 100)}% de feedback positivo pero pocas reseñas en Google. Refuerza la campaña de reseñas.`,
+              title: 'Convertir feedback positivo en reseñas Google',
+              audienceCount: reviewsAudience.count,
+              messages: buildObjectiveMessages({
+                kind: 'reviews',
+                voice,
+                storeName: store.name,
+                details: recommendedDetails(voice),
+              }),
+            });
+          }
+        }
+      }
+    }
+
     const ending = cartillas.find((c) => {
       if (c.isDefault || !c.endsAt) return false;
       const days = (c.endsAt.getTime() - Date.now()) / DAY_MS;
@@ -498,7 +561,7 @@ export class CampaignsService {
   async dispatch(payload: { campaignId: string }) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: payload.campaignId },
-      include: { store: { select: { wompiPaymentSourceId: true, ownerEmail: true } } },
+      include: { store: { select: { wompiPaymentSourceId: true, ownerEmail: true, slug: true, name: true } } },
     });
     if (!campaign) {
       this.logger.warn(`campaign-dispatch: ${payload.campaignId} no existe`);
@@ -568,9 +631,15 @@ export class CampaignsService {
       }
 
       for (const m of reachList) {
+        const feedbackUrl = buildFeedbackUrl({
+          slug: campaign.store.slug,
+          passId: m.passId,
+        });
         if (campaign.sendSms && campaign.smsBody && m.phone) {
           const message = renderCampaignTemplate(campaign.smsBody, {
             nombre: m.name.split(' ')[0] || 'tú',
+            feedbackUrl,
+            store: campaign.store.name,
           }).slice(0, 160);
           await this.brevo.sendSms({ to: m.phone, message });
         }
@@ -579,6 +648,8 @@ export class CampaignsService {
             m.walletRef,
             renderCampaignTemplate(campaign.walletBody, {
               nombre: m.name.split(' ')[0],
+              feedbackUrl,
+              store: campaign.store.name,
             })
           );
         }
@@ -652,10 +723,14 @@ export class CampaignsService {
           userId: { in: userIds },
           createdAt: { gte: campaign.sentAt, lte: windowEnd },
         },
-        select: { userId: true, rating: true, redirectedToGoogle: true },
+        select: { userId: true, rating: true, redirectedToGoogle: true, sentiment: true },
       });
       for (const f of feedbacks) {
-        if (f.redirectedToGoogle || (f.rating != null && f.rating >= 4)) {
+        if (
+          f.redirectedToGoogle ||
+          f.sentiment === 'POSITIVE' ||
+          (f.rating != null && f.rating >= 4)
+        ) {
           successUserIds.add(f.userId);
         }
       }
