@@ -5,7 +5,10 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { json, urlencoded } from 'express';
 import type { IncomingMessage } from 'http';
 import { join } from 'path';
+import { loadRootEnv } from './load-env';
 import { AppModule } from './app.module';
+
+loadRootEnv();
 
 async function bootstrap() {
   const otpMockOff =

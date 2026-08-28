@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { join } from 'path';
 import { HealthController } from './health.controller';
 import { StoresController } from './stores.controller';
 import { EventsController } from './events.controller';
@@ -53,7 +54,10 @@ import { MerchantInviteService } from './merchant-invite.service';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: join(process.cwd(), '.env'),
+    }),
     JwtModule.register({
       global: true,
       secret: process.env.JWT_SECRET || 'onda-dev-secret-change-me',

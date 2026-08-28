@@ -1,6 +1,7 @@
 import {
   parseBillingPeriod,
   parsePlanId,
+  formatReferralCodeInput,
   sanitizeReferralCode,
   type BillingPeriod,
   type PlanId,
@@ -11,7 +12,7 @@ const BILLING_KEY = 'onda-onboarding-billing';
 const REF_KEY = 'onda-onboarding-ref';
 const NAME_KEY = 'onda-onboarding-owner-name';
 
-export { sanitizeReferralCode };
+export { sanitizeReferralCode, formatReferralCodeInput };
 
 export function persistOnboardingQuery(searchParams: {
   get(name: string): string | null;

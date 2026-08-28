@@ -47,14 +47,30 @@ export function generateReferralCode(length = 8): string {
   return out;
 }
 
-/** Extrae el código limpio (evita comillas, líneas .env o texto pegado al compartir). */
+/** Normaliza mientras el usuario escribe (sin mínimo de longitud). */
+export function formatReferralCodeInput(raw: string | null | undefined): string {
+  try {
+    return decodeURIComponent((raw || '').trim())
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 16);
+  } catch {
+    return (raw || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+  }
+}
+
+/** Extrae el código limpio al validar o pegar desde .env / share. */
 export function sanitizeReferralCode(raw: string | null | undefined): string {
-  const decoded = decodeURIComponent((raw || '').trim()).toUpperCase();
-  const stripped = decoded.replace(/["']/g, '');
-  const fromEnv = stripped.match(/=\s*([A-Z0-9]{4,16})\s*$/)?.[1];
+  const upper = (raw || '').trim().toUpperCase().replace(/["']/g, '');
+  const fromEnv = upper.match(/=\s*([A-Z0-9]{4,16})\s*$/)?.[1];
   if (fromEnv) return fromEnv;
-  const match = stripped.match(/([A-Z0-9]{4,16})/);
-  return match?.[1] || '';
+  return formatReferralCodeInput(raw);
+}
+
+export const REFERRAL_CODE_MIN_LENGTH = 8;
+
+export function isReferralCodeComplete(raw: string | null | undefined): boolean {
+  return sanitizeReferralCode(raw).length >= REFERRAL_CODE_MIN_LENGTH;
 }
 
 const E164_REGEX = /^\+[1-9]\d{6,14}$/;

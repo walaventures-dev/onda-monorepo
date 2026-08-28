@@ -28,6 +28,7 @@ import {
   parseBillingPeriod,
   parsePlanId,
   PLAN_META,
+  isReferralCodeComplete,
   type BillingPeriod,
   type PlanId,
 } from '@onda/shared-utils';
@@ -41,10 +42,27 @@ import {
   readStoredReferral,
   rememberPlanChoice,
   sanitizeReferralCode,
+  formatReferralCodeInput,
   readStoredOwnerName,
 } from './onboardingQuery';
 
 type SetupStep = 'local' | 'plan';
+
+function configuredDemoReferralCode(): string {
+  return sanitizeReferralCode(process.env.NEXT_PUBLIC_ONDA_DEMO_REFERRAL_CODE);
+}
+
+function applyDemoReferralState(setters: {
+  setReferrerName: (v: string) => void;
+  setIsDemoReferral: (v: boolean) => void;
+  setPlanType: (v: PlanId) => void;
+  setBillingPeriod: (v: BillingPeriod) => void;
+}) {
+  setters.setReferrerName('Onda (demo)');
+  setters.setIsDemoReferral(true);
+  setters.setPlanType('PRO');
+  setters.setBillingPeriod('monthly');
+}
 
 const CATEGORY_OPTIONS = (
   Object.keys(STORE_CATEGORY_LABELS) as StoreCategory[]
@@ -241,31 +259,49 @@ function MerchantBusinessSetup() {
   }, [name, slugTouched]);
 
   useEffect(() => {
-    if (!referralCode) {
+    const normalized = sanitizeReferralCode(referralCode);
+    if (!normalized || !isReferralCodeComplete(normalized)) {
       setReferrerName(null);
       setIsDemoReferral(false);
       return;
     }
-    let cancelled = false;
-    api<{ code: string; storeName: string; demo?: boolean }>(
-      `/referrals/resolve/${encodeURIComponent(referralCode)}`
-    )
-      .then((r) => {
-        if (cancelled) return;
-        setReferrerName(r.storeName);
-        setIsDemoReferral(Boolean(r.demo));
-        if (r.demo) {
-          setPlanType('PRO');
-          setBillingPeriod('monthly');
-        }
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setReferrerName('');
-        setIsDemoReferral(false);
+
+    const demoCode = configuredDemoReferralCode();
+    if (demoCode && normalized === demoCode) {
+      applyDemoReferralState({
+        setReferrerName,
+        setIsDemoReferral,
+        setPlanType,
+        setBillingPeriod,
       });
+      return;
+    }
+
+    setReferrerName(null);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      api<{ code: string; storeName: string; demo?: boolean }>(
+        `/referrals/resolve/${encodeURIComponent(normalized)}`
+      )
+        .then((r) => {
+          if (cancelled) return;
+          setReferrerName(r.storeName);
+          setIsDemoReferral(Boolean(r.demo));
+          if (r.demo) {
+            setPlanType('PRO');
+            setBillingPeriod('monthly');
+          }
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setReferrerName('');
+          setIsDemoReferral(false);
+        });
+    }, 350);
+
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [referralCode]);
 
@@ -298,7 +334,12 @@ function MerchantBusinessSetup() {
       setError('Indica el email del encargado');
       return;
     }
-    if (referralCode) {
+    const normalizedReferral = sanitizeReferralCode(referralCode);
+    if (normalizedReferral) {
+      if (!isReferralCodeComplete(normalizedReferral)) {
+        setError('El código de referido debe tener 8 caracteres');
+        return;
+      }
       if (referrerName === null) {
         setError('Espera a verificar el código de referido');
         return;
@@ -644,17 +685,24 @@ function MerchantBusinessSetup() {
                         <input
                           value={referralCode}
                           onChange={(e) =>
-                            setReferralCode(sanitizeReferralCode(e.target.value))
+                            setReferralCode(formatReferralCodeInput(e.target.value))
+                          }
+                          onBlur={() =>
+                            setReferralCode((current) =>
+                              sanitizeReferralCode(current)
+                            )
                           }
                           placeholder="ABC12345"
                           className="onda-input uppercase tracking-wider"
                         />
                       </Field>
-                      {referralCode && referrerName === '' ? (
+                      {isReferralCodeComplete(referralCode) &&
+                      referrerName === '' ? (
                         <p className="text-sm text-[var(--onda-danger)]">
                           Código de referido no válido
                         </p>
-                      ) : referralCode && referrerName === null ? (
+                      ) : isReferralCodeComplete(referralCode) &&
+                        referrerName === null ? (
                         <p className="text-sm text-[var(--onda-muted)]">
                           Verificando código…
                         </p>
