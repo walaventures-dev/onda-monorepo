@@ -43,6 +43,9 @@ import {
   formatMoneyInput,
   parseMoneyInput,
   formatCop,
+  DEFAULT_BRAND_PRIMARY,
+  DEFAULT_BRAND_SECONDARY,
+  derivePassPalette,
 } from "@onda/shared-utils";
 import {
   BarChart,
@@ -881,6 +884,12 @@ export function MerchantWorkspace() {
   const [storeCurrency, setStoreCurrency] = useState("COP");
   const [storeOndaValue, setStoreOndaValue] = useState("");
   const [storeLogoUrl, setStoreLogoUrl] = useState("");
+  const [storePrimaryColor, setStorePrimaryColor] = useState(
+    DEFAULT_BRAND_PRIMARY,
+  );
+  const [storeSecondaryColor, setStoreSecondaryColor] = useState(
+    DEFAULT_BRAND_SECONDARY,
+  );
   const [savingStoreLogo, setSavingStoreLogo] = useState(false);
   const [savingStoreEconomics, setSavingStoreEconomics] = useState(false);
   const { confirm, alert, dialogs } = useOndaDialogs();
@@ -911,7 +920,40 @@ export function MerchantWorkspace() {
     setStoreCurrency(store?.currency || "COP");
     setStoreOndaValue(store?.ondaValue != null ? String(store.ondaValue) : "");
     setStoreLogoUrl(store?.passDesign?.logoUrl || "");
-  }, [store?.id, store?.currency, store?.ondaValue, store?.passDesign?.logoUrl]);
+    if (store?.passDesign?.backgroundColor) {
+      setStorePrimaryColor(store.passDesign.backgroundColor);
+    }
+    if (store?.passDesign?.labelColor) {
+      setStoreSecondaryColor(store.passDesign.labelColor);
+    }
+  }, [
+    store?.id,
+    store?.currency,
+    store?.ondaValue,
+    store?.passDesign?.logoUrl,
+    store?.passDesign?.backgroundColor,
+    store?.passDesign?.labelColor,
+  ]);
+
+  useEffect(() => {
+    if (!storeId) return;
+    let cancelled = false;
+    void api<{
+      logoUrl?: string | null;
+      backgroundColor?: string | null;
+      labelColor?: string | null;
+    }>(`/pass-designs/store/${storeId}`)
+      .then((design) => {
+        if (cancelled || !design) return;
+        if (design.logoUrl) setStoreLogoUrl(design.logoUrl);
+        if (design.backgroundColor) setStorePrimaryColor(design.backgroundColor);
+        if (design.labelColor) setStoreSecondaryColor(design.labelColor);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [storeId]);
   const showSetupNav = storesReady && stores.length > 0 && !setup.complete;
   const kpis = overview?.kpis;
   const customers = overview?.customers || [];
@@ -1550,19 +1592,23 @@ export function MerchantWorkspace() {
         body: JSON.stringify({
           logoUrl: storeLogoUrl.trim() || null,
           title: store?.name,
+          ...derivePassPalette(storePrimaryColor, storeSecondaryColor),
         }),
       });
       setStores((prev) =>
         prev.map((s) =>
           s.id === storeId
-            ? { ...s, passDesign: { ...s.passDesign, logoUrl: updated.logoUrl } }
+            ? { ...s, passDesign: { ...s.passDesign, ...updated } }
             : s,
         ),
       );
-      toast.success("Logo del negocio guardado");
+      toast.success("Marca guardada", {
+        description:
+          "Logo y colores aplican a las cartillas que usaban la marca del negocio.",
+      });
     } catch (err: any) {
       await alert({
-        title: "No se pudo guardar el logo",
+        title: "No se pudo guardar la marca",
         message: err.message || "Intenta de nuevo.",
         tone: "danger",
       });
@@ -1980,11 +2026,21 @@ export function MerchantWorkspace() {
                     ? {
                         ...s,
                         passDesign: {
+                          ...s.passDesign,
                           logoUrl:
                             cartilla._storeLogoUrl ??
                             cartilla.passDesign?.logoUrl ??
                             s.passDesign?.logoUrl ??
                             null,
+                          backgroundColor:
+                            cartilla.passDesign?.backgroundColor ??
+                            s.passDesign?.backgroundColor,
+                          labelColor:
+                            cartilla.passDesign?.labelColor ??
+                            s.passDesign?.labelColor,
+                          foregroundColor:
+                            cartilla.passDesign?.foregroundColor ??
+                            s.passDesign?.foregroundColor,
                         },
                         cartillas: [
                           {
@@ -3148,6 +3204,10 @@ export function MerchantWorkspace() {
             billing={billing}
             storeLogoUrl={storeLogoUrl}
             setStoreLogoUrl={setStoreLogoUrl}
+            storePrimaryColor={storePrimaryColor}
+            setStorePrimaryColor={setStorePrimaryColor}
+            storeSecondaryColor={storeSecondaryColor}
+            setStoreSecondaryColor={setStoreSecondaryColor}
             storeCurrency={storeCurrency}
             setStoreCurrency={setStoreCurrency}
             storeOndaValue={storeOndaValue}

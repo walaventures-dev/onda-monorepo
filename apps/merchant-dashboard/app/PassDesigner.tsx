@@ -8,7 +8,11 @@ import {
   PassPreview,
   OndaIcons,
 } from "@onda/shared-ui";
-import { derivePassPalette } from "@onda/shared-utils";
+import {
+  DEFAULT_BRAND_PRIMARY,
+  DEFAULT_BRAND_SECONDARY,
+  derivePassPalette,
+} from "@onda/shared-utils";
 
 export function PassDesigner({
   design,
@@ -80,20 +84,35 @@ export function PassDesigner({
             }}
           />
           <div className="onda-pass-designer-brand-color">
-            <OndaColorPicker
-              label="Color de marca"
-              value={design.backgroundColor || "#6E5AE6"}
-              fallback="#6E5AE6"
-              onChange={(backgroundColor) =>
-                onChange({
-                  ...design,
-                  ...derivePassPalette(backgroundColor),
-                })
-              }
-            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <OndaColorPicker
+                compact
+                label="Color principal"
+                value={design.backgroundColor || DEFAULT_BRAND_PRIMARY}
+                fallback={DEFAULT_BRAND_PRIMARY}
+                onChange={(backgroundColor) =>
+                  onChange({
+                    ...design,
+                    ...derivePassPalette(backgroundColor, design.labelColor),
+                  })
+                }
+              />
+              <OndaColorPicker
+                compact
+                label="Color secundario"
+                value={design.labelColor || DEFAULT_BRAND_SECONDARY}
+                fallback={DEFAULT_BRAND_SECONDARY}
+                onChange={(labelColor) =>
+                  onChange({
+                    ...design,
+                    labelColor,
+                  })
+                }
+              />
+            </div>
             <p className="mt-2 text-xs leading-snug text-[var(--onda-muted)]">
-              El texto y las etiquetas se ajustan solos para contraste y
-              jerarquía.
+              Principal: fondo del pase. Secundario: etiquetas y acentos. El
+              texto se ajusta solo para contraste.
             </p>
           </div>
         </div>

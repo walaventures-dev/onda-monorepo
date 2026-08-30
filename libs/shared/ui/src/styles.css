@@ -1235,9 +1235,9 @@ button.onda-gradient:focus-visible:not(:disabled) {
 }
 
 .onda-pass-designer-brand-color {
-  flex: 1 1 14rem;
+  flex: 1 1 18rem;
   min-width: 0;
-  max-width: 18rem;
+  max-width: 28rem;
 }
 
 .onda-pass-designer-brand-color--solo {

@@ -16,7 +16,14 @@ import { StoreAccessService } from './store-access.service';
 import { MerchantInviteService } from './merchant-invite.service';
 
 const merchantStoreInclude = {
-  passDesign: { select: { logoUrl: true } },
+  passDesign: {
+    select: {
+      logoUrl: true,
+      backgroundColor: true,
+      foregroundColor: true,
+      labelColor: true,
+    },
+  },
   _count: { select: { promotions: true } },
   cartillas: {
     where: { isDefault: true },

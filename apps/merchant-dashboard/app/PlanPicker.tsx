@@ -51,7 +51,6 @@ export function PlanPicker({
     [billing, discountPercentage]
   );
   const activeQuote = quotes[plan];
-  const includesKit = billing !== 'monthly';
 
   useEffect(() => {
     if (forceMonthlyOnly && billing !== 'monthly') {
@@ -133,9 +132,9 @@ export function PlanPicker({
             weight="fill"
           />
           <span>
-            {includesKit
-              ? 'Con tu pago te llega el Kit a tu negocio, con NFC + QR.'
-              : 'Activación digital ya. El Kit NFC + QR viene en planes de 6 o 12 meses.'}
+            {plan === 'PRO'
+              ? 'Onda Pro incluye el Kit físico con NFC + QR, enviado a tu negocio.'
+              : 'Onda Basic incluye kit de bienvenida digital. El Kit físico viene en Onda Pro.'}
           </span>
         </p>
       </div>

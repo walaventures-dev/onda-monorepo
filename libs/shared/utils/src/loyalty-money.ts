@@ -10,6 +10,11 @@ export function parsePositiveInt(raw: unknown): number | undefined {
   return Math.round(n);
 }
 
+/** Ondas manuales si el negocio no tiene precio de onda. Vacío o inválido → 1. */
+export function manualOndasOrDefault(raw: unknown, fallback = 1): number {
+  return parsePositiveInt(raw) ?? fallback;
+}
+
 /**
  * Ondas a otorgar a partir del pago y el valor de una onda.
  * `floor(pago / ondaValue)`; puede ser 0 (venta registrada sin ondas).

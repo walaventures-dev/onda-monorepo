@@ -1,11 +1,14 @@
 import {
-  PLAN_ONDA_MONTHLY_LIMIT,
   PLAN_SMS_CAMPAIGNS_MONTHLY,
   CAMPAIGN_PRICE_COP,
   CAMPAIGN_PACK_SIZE,
   CAMPAIGN_PACK_DISCOUNT,
   CAMPAIGN_FREE_REACH_MONTHLY,
   CAMPAIGN_REACH_PRICE_COP,
+  PLAN_NEW_CUSTOMERS_MONTHLY,
+  PLAN_SMS_REACH_MONTHLY,
+  NEW_CUSTOMER_OVERAGE_COP,
+  SMS_OVERAGE_COP,
 } from '@onda/shared-types';
 
 export type PlanId = 'BASIC' | 'PRO';
@@ -49,6 +52,81 @@ export const FIRST_CYCLE_BONUS_DAYS = 30;
 /** Días que mueve el referido/referidor al pagar. */
 export const REFERRAL_BONUS_DAYS = 30;
 
+/** Corte de consumos (extras SMS + clientes nuevos): siempre mensual. */
+export const USAGE_BILLING_DAYS = 30;
+
+/** Mínimo práctico de cargo Wompi en COP. */
+export const WOMPI_MIN_CHARGE_COP = 1_500;
+
+export const BILLING_ISSUER = {
+  legalName: 'Wala Ventures S.A.S',
+  website: 'walaventures.io',
+  nit: '902055897-8',
+} as const;
+
+export function planNewCustomersLimit(plan: PlanId): number {
+  return PLAN_NEW_CUSTOMERS_MONTHLY[plan];
+}
+
+export function planSmsReachLimit(plan: PlanId): number {
+  return PLAN_SMS_REACH_MONTHLY[plan];
+}
+
+export function planIncludesPhysicalKit(plan: PlanId): boolean {
+  return plan === 'PRO';
+}
+
+export function planHasGpsProximity(plan: PlanId): boolean {
+  return plan === 'PRO';
+}
+
+export function initialNextUsageBillingAt(from = new Date()): Date {
+  return addBillingDays(from, USAGE_BILLING_DAYS);
+}
+
+export function advanceNextUsageBillingAt(from = new Date()): Date {
+  return addBillingDays(from, USAGE_BILLING_DAYS);
+}
+
+export function usagePeriodFor(nextUsageBillingAt: Date): {
+  start: Date;
+  end: Date;
+} {
+  return {
+    start: addBillingDays(nextUsageBillingAt, -USAGE_BILLING_DAYS),
+    end: nextUsageBillingAt,
+  };
+}
+
+export function quoteUsageOverage(opts: {
+  plan: PlanId;
+  newCustomersUsed: number;
+  smsUsed: number;
+  carriedInCop?: number;
+}) {
+  const newCustomersLimit = planNewCustomersLimit(opts.plan);
+  const smsLimit = planSmsReachLimit(opts.plan);
+  const extraCustomers = Math.max(0, opts.newCustomersUsed - newCustomersLimit);
+  const extraSms = Math.max(0, opts.smsUsed - smsLimit);
+  const extraCustomersCop = extraCustomers * NEW_CUSTOMER_OVERAGE_COP;
+  const extraSmsCop = extraSms * SMS_OVERAGE_COP;
+  const extrasCop = extraCustomersCop + extraSmsCop;
+  const carriedInCop = Math.max(0, opts.carriedInCop ?? 0);
+  return {
+    newCustomersLimit,
+    smsLimit,
+    extraCustomers,
+    extraSms,
+    extraCustomersCop,
+    extraSmsCop,
+    extrasCop,
+    carriedInCop,
+    subtotal: extrasCop + carriedInCop,
+    unitCustomerCop: NEW_CUSTOMER_OVERAGE_COP,
+    unitSmsCop: SMS_OVERAGE_COP,
+  };
+}
+
 export function addBillingDays(from: Date, days: number): Date {
   return new Date(from.getTime() + days * 24 * 60 * 60 * 1000);
 }
@@ -84,32 +162,30 @@ export const PLAN_META: Record<
   { name: string; shortName: string; features: string[] }
 > = {
   BASIC: {
-    name: 'Onda',
-    shortName: 'Onda',
+    name: 'Onda Basic',
+    shortName: 'Onda Basic',
     features: [
-      'Tarjeta en Apple y Google Wallet',
-      'Punto de venta (POS) incluido',
+      'Ilimitadas tarjetas en Apple y Google Wallet activas',
+      'Personalización de tarjeta y promociones',
+      `Hasta ${PLAN_NEW_CUSTOMERS_MONTHLY.BASIC} clientes nuevos mensuales`,
+      `Hasta ${PLAN_SMS_REACH_MONTHLY.BASIC} clientes alcanzados en campañas`,
+      'Kit de bienvenida digital',
+      'Soporte técnico',
       '1 admin + 1 caja',
-      `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
-      `${CAMPAIGN_FREE_REACH_MONTHLY} personas alcanzadas gratis al mes`,
-      'Recompensas que tú defines',
-      'Tu propia base de clientes',
-      'Avisos push desde el Wallet',
     ],
   },
   PRO: {
     name: 'Onda Pro',
     shortName: 'Onda Pro',
     features: [
-      'Todo lo de Onda',
-      'Punto de venta (POS) incluido',
+      'Todo Onda Basic',
+      'Feedback tras consumo e incentivo de crecimiento en Google Maps',
+      `Hasta ${PLAN_NEW_CUSTOMERS_MONTHLY.PRO} clientes nuevos mensuales`,
+      `Hasta ${PLAN_SMS_REACH_MONTHLY.PRO} clientes alcanzados en campañas`,
+      'Kit de bienvenida físico',
+      'Avisos cuando el cliente está cerca (GPS)',
+      'Soporte técnico personalizado',
       '1 admin + hasta 3 cajas',
-      `Hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes`,
-      `${CAMPAIGN_FREE_REACH_MONTHLY} personas alcanzadas gratis al mes`,
-      'Campañas para llenar el local',
-      'Pide reseñas en Google al canjear',
-      'Aviso cuando el cliente está cerca',
-      'Analítica para ver qué sí funciona',
     ],
   },
 };
@@ -120,7 +196,7 @@ export function campaignReachQuote(opts: {
   unitCop?: number;
   freeMonthly?: number;
 }) {
-  const unitCop = opts.unitCop ?? CAMPAIGN_REACH_PRICE_COP;
+  const unitCop = opts.unitCop ?? SMS_OVERAGE_COP;
   const freeMonthly = opts.freeMonthly ?? CAMPAIGN_FREE_REACH_MONTHLY;
   const remainingFree = Math.max(0, freeMonthly - opts.reachUsedThisMonth);
   const freeApplied = Math.min(opts.audienceCount, remainingFree);
@@ -214,7 +290,7 @@ export function quotePlan(plan: PlanId, billing: BillingPeriod) {
   const serviceMonths = paidMonths;
   const freeMonthValue = 0;
   const savings = discountSavings;
-  const includesKit = billing !== 'monthly';
+  const includesKit = plan === 'PRO';
   const noCardRequired = false;
   const discount = discountSavings > 0 ? discountSavings / fullTotal : 0;
 

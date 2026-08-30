@@ -98,6 +98,14 @@ export class WalletService {
         input.maxStamps,
         ctx.reward
       );
+    } else {
+      const allowed = await this.lookupStoreLocations(
+        input.serialNumber,
+        input.points,
+        input.maxStamps,
+        ctx.reward
+      );
+      if (!allowed.length) ctx.locations = [];
     }
     if (!ctx.claimUrl) {
       ctx.claimUrl = await this.lookupClaimUrl(input.serialNumber);
@@ -294,11 +302,12 @@ export class WalletService {
     const pass = await this.prisma.pass.findFirst({
       where: { serialNumber },
       select: {
-        store: { select: { name: true, lat: true, lng: true, maxStamps: true } },
+        store: { select: { name: true, lat: true, lng: true, maxStamps: true, planType: true } },
         cartilla: { select: { maxStamps: true } },
       },
     });
     const max = maxStamps ?? pass?.cartilla?.maxStamps ?? pass?.store?.maxStamps ?? 12;
+    if (pass?.store?.planType !== 'PRO') return [];
     return storeLockScreenLocations(pass?.store, points, max, reward);
   }
 
@@ -360,17 +369,32 @@ export class WalletService {
       validUntil: pass.cartilla?.endsAt ?? null,
       kind: pass.eventId ? 'event' : 'store',
       reward,
-      locations: storeLockScreenLocations(
-        pass.store,
-        points,
-        maxStamps ?? 12,
-        reward
-      ),
+      locations:
+        pass.store?.planType === 'PRO'
+          ? storeLockScreenLocations(
+              pass.store,
+              points,
+              maxStamps ?? 12,
+              reward
+            )
+          : [],
       claimUrl: buildStoreClaimUrl({
         storeSlug: pass.store?.slug,
         storeId: pass.store?.id,
         eventSlug: pass.event?.slug,
       }),
     };
+  }
+
+  async syncStorePassLocations(storeId: string) {
+    const passes = await this.prisma.pass.findMany({
+      where: { storeId, walletRef: { not: null } },
+      select: { walletRef: true, points: true },
+    });
+    for (const p of passes) {
+      if (!p.walletRef) continue;
+      await this.updatePoints(p.walletRef, p.points);
+    }
+    return { updated: passes.length };
   }
 }

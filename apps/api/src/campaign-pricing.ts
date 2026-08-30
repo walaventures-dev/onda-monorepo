@@ -1,7 +1,8 @@
 import {
-  CAMPAIGN_FREE_REACH_MONTHLY,
-  CAMPAIGN_REACH_PRICE_COP,
+  PLAN_SMS_REACH_MONTHLY,
+  SMS_OVERAGE_COP,
 } from '@onda/shared-types';
+import { parsePlanId, type PlanId } from '@onda/shared-utils';
 
 function envInt(name: string, fallback: number) {
   const n = Number(process.env[name]);
@@ -11,15 +12,16 @@ function envInt(name: string, fallback: number) {
 export function campaignReachPricing(opts?: {
   freeMonthly?: number;
   unitCop?: number;
+  planType?: PlanId | string | null;
 }) {
+  const plan = parsePlanId(opts?.planType) || 'BASIC';
   const freeMonthly = Math.max(
     0,
-    opts?.freeMonthly ??
-      envInt('CAMPAIGN_FREE_REACH_MONTHLY', CAMPAIGN_FREE_REACH_MONTHLY)
+    opts?.freeMonthly ?? PLAN_SMS_REACH_MONTHLY[plan]
   );
   const unitCop = Math.max(
     0,
-    opts?.unitCop ?? envInt('CAMPAIGN_REACH_PRICE_COP', CAMPAIGN_REACH_PRICE_COP)
+    opts?.unitCop ?? envInt('CAMPAIGN_REACH_PRICE_COP', SMS_OVERAGE_COP)
   );
   return { freeMonthly, unitCop };
 }

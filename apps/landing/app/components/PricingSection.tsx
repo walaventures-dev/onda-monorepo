@@ -46,8 +46,6 @@ export function PricingSection() {
     [billing],
   );
 
-  const includesKit = billing !== 'monthly';
-
   return (
     <section id="pricing" className="mx-auto max-w-6xl px-6 py-20 md:py-28">
       <motion.div {...inViewStagger} className="mx-auto max-w-2xl text-center">
@@ -112,7 +110,7 @@ export function PricingSection() {
 
           <AnimatePresence mode="wait">
             <motion.p
-              key={includesKit ? `kit-${billing}` : 'digital'}
+              key="kit-copy"
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
@@ -125,9 +123,8 @@ export function PricingSection() {
                 weight="fill"
               />
               <span>
-                {includesKit
-                  ? 'Con tu primer pago te llega el Kit a tu negocio, con NFC + QR listos para usar.'
-                  : 'Activación digital ya. El Kit NFC + QR viene en planes de 6 o 12 meses.'}
+                El Kit físico con NFC + QR está incluido en Onda Pro. Basic
+                activa el kit digital al instante.
               </span>
             </motion.p>
           </AnimatePresence>
@@ -281,7 +278,7 @@ export function PricingSection() {
             Todo listo para poner Onda en tu local
           </h3>
           <p className="mt-3 text-[var(--onda-muted)]">
-            Incluido en planes de 6 o 12 meses. Llega con tu primer pago — NFC y QR
+            Incluido en Onda Pro. Llega con tu primer pago — NFC y QR
             configurados para empezar a acumular Ondas desde el mostrador.
           </p>
           <ul className="mt-6 space-y-3 text-sm text-[var(--onda-ink)]">
@@ -302,8 +299,8 @@ export function PricingSection() {
             ))}
           </ul>
           <p className="mt-5 text-sm text-[var(--onda-muted)]">
-            En el plan mensual la activación es digital; el Kit físico está disponible al
-            pasar a 6 o 12 meses.
+            En Onda Basic la activación es digital. El Kit físico está incluido
+            en Onda Pro.
           </p>
         </div>
       </motion.div>
@@ -314,9 +311,9 @@ export function PricingSection() {
       >
         <ShieldCheck size={14} className="text-[var(--onda-success)]" weight="fill" />
         Sin tarjeta para empezar
-        {includesKit
-          ? ' · el Kit llega con tu primer pago'
-          : ' · activación digital (Kit en planes de 6 o 12 meses)'}
+        {billing === '12' || billing === '6'
+          ? ' · descuento por prepago'
+          : ' · activación digital'}
       </motion.p>
     </section>
   );

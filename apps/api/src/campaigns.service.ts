@@ -35,6 +35,7 @@ import {
   assertCanLaunchReach,
   monthlyReachUsed,
   quoteReachCost,
+  usageWindow,
 } from './plan-quota';
 import { campaignReachPricing } from './campaign-pricing';
 
@@ -81,18 +82,19 @@ export class CampaignsService {
   ) {}
 
   async list(storeId: string) {
-    const pricing = campaignReachPricing();
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: storeId },
-      select: { wompiPaymentSourceId: true },
+      select: { wompiPaymentSourceId: true, planType: true, nextUsageBillingAt: true },
     });
+    const pricing = campaignReachPricing({ planType: store.planType });
+    const window = usageWindow(store.nextUsageBillingAt);
     const [campaigns, reachUsed] = await Promise.all([
       this.prisma.campaign.findMany({
         where: { storeId },
         orderBy: { createdAt: 'desc' },
         take: 50,
       }),
-      monthlyReachUsed(this.prisma, storeId),
+      monthlyReachUsed(this.prisma, storeId, window.start, window.end),
     ]);
     const freeRemaining = Math.max(0, pricing.freeMonthly - reachUsed);
     return {
@@ -113,12 +115,18 @@ export class CampaignsService {
 
   async quota(storeId: string) {
     if (!storeId) throw new BadRequestException('storeId es obligatorio');
-    const pricing = campaignReachPricing();
-    const reachUsed = await monthlyReachUsed(this.prisma, storeId);
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: storeId },
-      select: { wompiPaymentSourceId: true },
+      select: { wompiPaymentSourceId: true, planType: true, nextUsageBillingAt: true },
     });
+    const pricing = campaignReachPricing({ planType: store.planType });
+    const window = usageWindow(store.nextUsageBillingAt);
+    const reachUsed = await monthlyReachUsed(
+      this.prisma,
+      storeId,
+      window.start,
+      window.end
+    );
     return {
       reachUsed,
       reachLimit: pricing.freeMonthly,
@@ -487,8 +495,20 @@ export class CampaignsService {
     }) as AudienceFilter;
     const members = await this.resolveMembers(storeId, filter);
     const audienceCount = body.audienceCount ?? members.length;
-    const reachUsed = await monthlyReachUsed(this.prisma, storeId);
-    const quote = quoteReachCost(reachUsed, audienceCount);
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: storeId },
+      select: { planType: true, nextUsageBillingAt: true },
+    });
+    const window = usageWindow(store.nextUsageBillingAt);
+    const reachUsed = await monthlyReachUsed(
+      this.prisma,
+      storeId,
+      window.start,
+      window.end
+    );
+    const quote = quoteReachCost(reachUsed, audienceCount, {
+      planType: store.planType,
+    });
     await assertCanLaunchReach(this.prisma, storeId, audienceCount);
 
     const title = (body.title || '').trim() || defaultTitle(objective);
@@ -544,7 +564,7 @@ export class CampaignsService {
     void storeId;
     void sku;
     throw new BadRequestException(
-      'Las campañas se cobran por alcance al enviar. Configura tu tarjeta en Configuración si superas las 30 personas gratis al mes.'
+      'Las campañas se cobran por SMS extra en la siguiente factura de consumos. Configura tu tarjeta en Facturación si superas el cupo del plan.'
     );
   }
 
@@ -605,30 +625,27 @@ export class CampaignsService {
 
     const reachList = [...reached.values()];
     const reachCount = reachList.length;
-    const reachUsedBefore = await monthlyReachUsed(this.prisma, campaign.storeId);
-    const quote = quoteReachCost(reachUsedBefore, reachCount);
+    let smsReachCount = 0;
+    for (const m of reachList) {
+      if (campaign.sendSms && campaign.smsBody && m.phone) smsReachCount += 1;
+    }
+    const storeRow = await this.prisma.store.findUnique({
+      where: { id: campaign.storeId },
+      select: { planType: true, nextUsageBillingAt: true },
+    });
+    const window = usageWindow(storeRow?.nextUsageBillingAt);
+    const reachUsedBefore = await monthlyReachUsed(
+      this.prisma,
+      campaign.storeId,
+      window.start,
+      window.end
+    );
+    const quote = quoteReachCost(reachUsedBefore, smsReachCount, {
+      planType: storeRow?.planType,
+    });
 
     try {
-      if (quote.paidCount > 0) {
-        const store = campaign.store;
-        if (this.wompi.isConfigured && !store.wompiPaymentSourceId) {
-          throw new BadRequestException('Tarjeta Wompi requerida para alcance de pago');
-        }
-        if (store.wompiPaymentSourceId) {
-          const reference = `onda-reach-${campaign.id}-${Date.now()}`;
-          await this.wompi.chargePaymentSource({
-            paymentSourceId: store.wompiPaymentSourceId,
-            storeId: campaign.storeId,
-            amountInCents: quote.costCop * 100,
-            reference,
-            customerEmail: store.ownerEmail || undefined,
-          });
-        } else {
-          this.logger.log(
-            `[Wompi stub] reach store=${campaign.storeId} ${quote.costCop} COP`
-          );
-        }
-      }
+      // El extra de SMS se factura en el corte de consumos, no al enviar.
 
       for (const m of reachList) {
         const feedbackUrl = buildFeedbackUrl({
@@ -673,6 +690,7 @@ export class CampaignsService {
             status: CampaignStatus.SENT,
             sentAt,
             reachCount,
+            smsReachCount,
             freeReachApplied: quote.freeApplied,
             paidReachCount: quote.paidCount,
             costCop: quote.costCop,

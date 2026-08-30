@@ -14,6 +14,13 @@ export type MailMessage = {
    * configurado de la app (`MAIL_FROM_*`), independiente del proveedor.
    */
   from?: MailAddress;
+  attachments?: MailAttachment[];
+};
+
+export type MailAttachment = {
+  filename: string;
+  content: Buffer;
+  mimeType?: string;
 };
 
 /** Contrato de cualquier proveedor transaccional (Brevo, SES, …). */

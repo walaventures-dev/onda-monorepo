@@ -243,20 +243,30 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
   };
 }
 
-/** Un color de marca → texto y etiquetas con contraste/jerarquía automática */
-export function derivePassPalette(backgroundColor: string): {
+export const DEFAULT_BRAND_PRIMARY = '#6E5AE6';
+export const DEFAULT_BRAND_SECONDARY = '#3DB9E8';
+
+/** Color principal (+ secundario opcional) → texto con contraste; el secundario pinta etiquetas. */
+export function derivePassPalette(
+  backgroundColor: string,
+  secondaryColor?: string | null
+): {
   backgroundColor: string;
   foregroundColor: string;
   labelColor: string;
 } {
-  const bg = normalizeHexColor(backgroundColor);
+  const bg = normalizeHexColor(backgroundColor, DEFAULT_BRAND_PRIMARY);
   const { r, g, b } = hexToRgb(bg);
   const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
   const dark = luminance < 0.55;
+  const derivedLabel = dark ? '#E5F6FC' : '#6B7289';
+  const secondary = (secondaryColor || '').trim();
   return {
     backgroundColor: bg,
     foregroundColor: dark ? '#FFFFFF' : '#1A1B2E',
-    labelColor: dark ? '#E5F6FC' : '#6B7289',
+    labelColor: secondary
+      ? normalizeHexColor(secondary, derivedLabel)
+      : derivedLabel,
   };
 }
 
@@ -311,6 +321,7 @@ export {
 export {
   type PromoBenefitInput,
   parsePositiveInt,
+  manualOndasOrDefault,
   ondasFromPayment,
   computeRoi,
   computeBenefitAmount,
@@ -339,6 +350,9 @@ export {
   BILLING_PERIOD_DAYS,
   FIRST_CYCLE_BONUS_DAYS,
   REFERRAL_BONUS_DAYS,
+  USAGE_BILLING_DAYS,
+  WOMPI_MIN_CHARGE_COP,
+  BILLING_ISSUER,
   PLAN_META,
   formatCop,
   campaignReachQuote,
@@ -351,10 +365,18 @@ export {
   parseBillingPeriod,
   quotePlan,
   quotePlanWithDiscount,
+  quoteUsageOverage,
+  planNewCustomersLimit,
+  planSmsReachLimit,
+  planIncludesPhysicalKit,
+  planHasGpsProximity,
   addBillingDays,
   initialBillingIntervalDays,
   initialNextBillingAt,
   advanceNextBillingAt,
+  initialNextUsageBillingAt,
+  advanceNextUsageBillingAt,
+  usagePeriodFor,
   formatChargeDate,
   subscriptionCalendar,
   subscriptionChargeDates,

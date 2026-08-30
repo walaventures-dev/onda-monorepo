@@ -313,8 +313,10 @@ export interface PassDesignDto {
   id: string;
   storeId?: string | null;
   eventId?: string | null;
+  /** Color principal de marca (fondo del pase). */
   backgroundColor: string;
   foregroundColor: string;
+  /** Color secundario de marca (etiquetas y acentos). */
   labelColor?: string | null;
   logoUrl?: string | null;
   /** Banner horizontal opcional encima de los sellos (UI y Wallet). */
@@ -505,17 +507,35 @@ export interface KpiSummary {
   whatsappLimit: number;
 }
 
-/** Ondas incluidas por mes en cualquier suscripción (BASIC o PRO). */
+/** @deprecated Ya no hay tope de ondas; se mantiene por compatibilidad. */
 export const PLAN_ONDA_MONTHLY_LIMIT = 300;
 
-/** Campañas SMS/Wallet incluidas gratis por mes (override API: CAMPAIGN_FREE_MONTHLY). */
-export const PLAN_SMS_CAMPAIGNS_MONTHLY = 1;
+/** Clientes nuevos incluidos por mes según el plan. */
+export const PLAN_NEW_CUSTOMERS_MONTHLY = {
+  BASIC: 100,
+  PRO: 300,
+} as const;
 
-/** Personas alcanzadas gratis al mes (todas las campañas). */
-export const CAMPAIGN_FREE_REACH_MONTHLY = 30;
+/** Personas alcanzadas por SMS incluidas por mes según el plan. */
+export const PLAN_SMS_REACH_MONTHLY = {
+  BASIC: 100,
+  PRO: 300,
+} as const;
 
-/** Precio por persona alcanzada fuera del cupo gratis (COP). */
-export const CAMPAIGN_REACH_PRICE_COP = 200;
+/** Precio por cliente nuevo fuera del cupo (COP). */
+export const NEW_CUSTOMER_OVERAGE_COP = 500;
+
+/** Precio por SMS fuera del cupo (COP). */
+export const SMS_OVERAGE_COP = 150;
+
+/** @deprecated Cupo SMS es por plan; alias del cupo Basic. */
+export const PLAN_SMS_CAMPAIGNS_MONTHLY = PLAN_SMS_REACH_MONTHLY.BASIC;
+
+/** Personas SMS incluidas (Basic). Preferir PLAN_SMS_REACH_MONTHLY[plan]. */
+export const CAMPAIGN_FREE_REACH_MONTHLY = PLAN_SMS_REACH_MONTHLY.BASIC;
+
+/** Precio por SMS extra (COP). */
+export const CAMPAIGN_REACH_PRICE_COP = SMS_OVERAGE_COP;
 
 /** @deprecated Cobro legacy por campaña extra; usar CAMPAIGN_REACH_PRICE_COP */
 export const CAMPAIGN_PRICE_COP = 29_900;

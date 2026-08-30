@@ -93,14 +93,16 @@ export class PassDesignsController {
   ) {
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: storeId },
+      include: { passDesign: true },
     });
+    const previous = store.passDesign;
     const payload = {
       ...body,
       ...(body.logoUrl !== undefined
         ? { logoUrl: body.logoUrl?.trim() || null }
         : {}),
     };
-    return this.prisma.passDesign.upsert({
+    const updated = await this.prisma.passDesign.upsert({
       where: { storeId },
       create: {
         storeId,
@@ -115,6 +117,23 @@ export class PassDesignsController {
       },
       update: payload,
     });
+    await this.cartillas.syncStoreBrand(
+      storeId,
+      {
+        logoUrl: updated.logoUrl,
+        backgroundColor: updated.backgroundColor,
+        foregroundColor: updated.foregroundColor,
+        labelColor: updated.labelColor || updated.foregroundColor,
+      },
+      previous
+        ? {
+            logoUrl: previous.logoUrl,
+            backgroundColor: previous.backgroundColor,
+            labelColor: previous.labelColor,
+          }
+        : null,
+    );
+    return updated;
   }
 
   @Put('event/:eventId')

@@ -43,7 +43,7 @@ import {
 } from '../lib/campaign-demo';
 import { fadeUpDelay, inViewStagger, staggerItem } from '../lib/motion';
 import { onboardingUrl } from '../lib/pricing';
-import { CAMPAIGN_FREE_REACH_MONTHLY } from '@onda/shared-types';
+import { PLAN_SMS_REACH_MONTHLY } from '@onda/shared-types';
 import {
   IPhonePreview,
   LockScreen,
@@ -189,8 +189,9 @@ export function CampaignSection() {
         </motion.h2>
         <motion.p variants={staggerItem} className="mt-3 text-lg text-[var(--onda-muted)]">
           Desde Lealtad: objetivo, audiencia y revisión en tres pasos. Llegas a
-          tus clientes por Wallet y SMS — {CAMPAIGN_FREE_REACH_MONTHLY} personas
-          alcanzadas gratis al mes.
+          tus clientes por Wallet y SMS — hasta {PLAN_SMS_REACH_MONTHLY.BASIC}{' '}
+          personas incluidas en Basic y {PLAN_SMS_REACH_MONTHLY.PRO} en Pro. El
+          extra se cobra en la siguiente factura de consumos.
         </motion.p>
       </motion.div>
 

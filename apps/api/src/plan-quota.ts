@@ -1,14 +1,21 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
 import {
-  CAMPAIGN_FREE_REACH_MONTHLY,
-  CAMPAIGN_REACH_PRICE_COP,
+  PLAN_SMS_REACH_MONTHLY,
+  SMS_OVERAGE_COP,
 } from '@onda/shared-types';
-import { campaignReachQuote } from '@onda/shared-utils';
+import {
+  campaignReachQuote,
+  parsePlanId,
+  planNewCustomersLimit,
+  planSmsReachLimit,
+  usagePeriodFor,
+  type PlanId,
+} from '@onda/shared-utils';
 import { campaignReachPricing } from './campaign-pricing';
 
 export { PLAN_ONDA_MONTHLY_LIMIT } from '@onda/shared-types';
-export { CAMPAIGN_FREE_REACH_MONTHLY, CAMPAIGN_REACH_PRICE_COP };
+export { PLAN_SMS_REACH_MONTHLY, SMS_OVERAGE_COP };
 
 const BILLING_TZ = 'America/Bogota';
 
@@ -27,6 +34,17 @@ export function startOfCurrentMonth(now = new Date()): Date {
   return new Date(`${parts.year}-${parts.month}-01T05:00:00.000Z`);
 }
 
+export function usageWindow(
+  nextUsageBillingAt: Date | null | undefined,
+  now = new Date()
+): { start: Date; end: Date } {
+  if (nextUsageBillingAt) {
+    return usagePeriodFor(nextUsageBillingAt);
+  }
+  return { start: startOfCurrentMonth(now), end: now };
+}
+
+/** @deprecated Ondas ya no tienen tope comercial. */
 export async function monthlyOndasUsed(
   db: QuotaDb,
   storeId: string,
@@ -43,54 +61,79 @@ export async function monthlyOndasUsed(
   return agg._sum.points ?? 0;
 }
 
+/** @deprecated Siempre ilimitado. */
 export async function remainingOndas(
-  db: QuotaDb,
-  storeId: string,
-  now = new Date()
+  _db: QuotaDb,
+  _storeId: string,
+  _now = new Date()
 ): Promise<number> {
-  const used = await monthlyOndasUsed(db, storeId, now);
-  const { PLAN_ONDA_MONTHLY_LIMIT } = await import('@onda/shared-types');
-  return Math.max(0, PLAN_ONDA_MONTHLY_LIMIT - used);
+  return Number.MAX_SAFE_INTEGER;
 }
 
+/** Ya no pausa acumulación; el excedente de clientes nuevos se factura. */
 export async function assertCanAccumulate(
-  db: QuotaDb,
-  storeId: string,
+  _db: QuotaDb,
+  _storeId: string,
   points: number,
-  now = new Date()
+  _now = new Date()
 ): Promise<number> {
-  const remaining = await remainingOndas(db, storeId, now);
-  const { PLAN_ONDA_MONTHLY_LIMIT } = await import('@onda/shared-types');
-  if (remaining <= 0) {
-    throw new BadRequestException(
-      `Este mes ya usaste las ${PLAN_ONDA_MONTHLY_LIMIT} ondas incluidas en tu suscripción.`
-    );
-  }
-  return Math.min(Math.max(0, points), remaining);
+  return Math.max(0, points);
 }
 
-/** Personas alcanzadas (reachCount) en campañas enviadas este mes. */
+export async function monthlyNewCustomersUsed(
+  db: QuotaDb,
+  storeId: string,
+  from: Date,
+  to: Date
+): Promise<number> {
+  return db.pass.count({
+    where: {
+      storeId,
+      createdAt: { gte: from, lt: to },
+    },
+  });
+}
+
+/** SMS enviados (no cuenta push de Wallet). */
 export async function monthlyReachUsed(
   db: QuotaDb,
   storeId: string,
-  now = new Date()
+  from?: Date,
+  to?: Date
 ): Promise<number> {
-  const monthStart = startOfCurrentMonth(now);
+  const start = from ?? startOfCurrentMonth();
+  const end = to;
   const agg = await db.campaign.aggregate({
     where: {
       storeId,
       status: 'SENT',
-      sentAt: { gte: monthStart },
+      sendSms: true,
+      sentAt: end ? { gte: start, lt: end } : { gte: start },
     },
-    _sum: { reachCount: true },
+    _sum: { smsReachCount: true, reachCount: true },
   });
-  return agg._sum.reachCount ?? 0;
+  return agg._sum.smsReachCount ?? agg._sum.reachCount ?? 0;
+}
+
+export async function monthlyCampaignsSent(
+  db: QuotaDb,
+  storeId: string,
+  from: Date,
+  to: Date
+): Promise<number> {
+  return db.campaign.count({
+    where: {
+      storeId,
+      status: 'SENT',
+      sentAt: { gte: from, lt: to },
+    },
+  });
 }
 
 export function quoteReachCost(
   reachUsedThisMonth: number,
   projectedReach: number,
-  opts?: { unitCop?: number; freeMonthly?: number }
+  opts?: { unitCop?: number; freeMonthly?: number; planType?: PlanId | string | null }
 ) {
   const pricing = campaignReachPricing(opts);
   return campaignReachQuote({
@@ -107,24 +150,39 @@ export async function assertCanLaunchReach(
   projectedReach: number,
   now = new Date()
 ) {
-  const used = await monthlyReachUsed(db, storeId, now);
-  const quote = quoteReachCost(used, projectedReach);
-  if (quote.paidCount <= 0) return quote;
-
   const store = await db.store.findUniqueOrThrow({
     where: { id: storeId },
-    select: { wompiPaymentSourceId: true },
+    select: {
+      wompiPaymentSourceId: true,
+      planType: true,
+      nextUsageBillingAt: true,
+    },
   });
+  const plan = parsePlanId(store.planType) || 'BASIC';
+  const window = usageWindow(store.nextUsageBillingAt, now);
+  const used = await monthlyReachUsed(db, storeId, window.start, window.end);
+  const quote = quoteReachCost(used, projectedReach, { planType: plan });
+  if (quote.paidCount <= 0) return quote;
+
   if (!store.wompiPaymentSourceId) {
     throw new BadRequestException({
       code: 'PAYMENT_METHOD_REQUIRED',
       message:
-        'Para alcanzar más de 30 personas al mes necesitas tarjeta en Configuración.',
+        'Para superar el cupo de SMS del plan necesitas tarjeta. El extra se cobra en la próxima factura de consumos.',
       hasPaymentMethod: false,
       quote,
     });
   }
   return quote;
+}
+
+export function planLimitsFor(planType: string | null | undefined) {
+  const plan = parsePlanId(planType) || 'BASIC';
+  return {
+    plan,
+    newCustomersLimit: planNewCustomersLimit(plan),
+    smsLimit: planSmsReachLimit(plan),
+  };
 }
 
 /** @deprecated Legacy slot billing — use monthlyReachUsed */
@@ -133,7 +191,7 @@ export async function monthlySmsCampaignsUsed(
   storeId: string,
   now = new Date()
 ): Promise<number> {
-  return monthlyReachUsed(db, storeId, now);
+  return monthlyReachUsed(db, storeId, startOfCurrentMonth(now));
 }
 
 /** @deprecated Legacy — use assertCanLaunchReach */

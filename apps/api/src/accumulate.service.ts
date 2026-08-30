@@ -5,7 +5,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { ondasFromPayment, parsePositiveInt } from '@onda/shared-utils';
+import { ondasFromPayment, manualOndasOrDefault } from '@onda/shared-utils';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
@@ -21,7 +21,7 @@ export type AccumulateInput = {
   serialNumber?: string;
   pendingRequestId?: string;
   paymentAmount?: number;
-  /** Cantidad manual de ondas (obligatoria si el store no tiene ondaValue). */
+  /** Cantidad manual de ondas (si el store no tiene ondaValue; vacío → 1). */
   points?: number;
 };
 
@@ -130,16 +130,10 @@ function resolveRequestedOndas(input: {
     return ondasFromPayment(input.paymentAmount, ondaValue);
   }
 
-  const manual = parsePositiveInt(input.points);
-  if (manual == null) {
-    throw new BadRequestException(
-      'Indica cuántas ondas acumular (o configura el valor de una onda)'
-    );
-  }
   if (input.paymentAmount == null || !(input.paymentAmount > 0)) {
     throw new BadRequestException('Indica el valor de la cuenta');
   }
-  return manual;
+  return manualOndasOrDefault(input.points);
 }
 
 @Injectable()

@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 import { CaretDownIcon as CaretDown } from '@phosphor-icons/react/dist/csr/CaretDown';
-import { PLAN_ONDA_MONTHLY_LIMIT, PLAN_SMS_CAMPAIGNS_MONTHLY } from '@onda/shared-types';
+import { PLAN_NEW_CUSTOMERS_MONTHLY, PLAN_SMS_REACH_MONTHLY } from '@onda/shared-types';
 import { easeOut, fadeUpDelay, inViewStagger, staggerItem } from '../lib/motion';
 import { SHOW_POS_LANDING } from '../lib/pricing';
 
@@ -41,23 +41,23 @@ const FAQS_ALL = [
     : []),
   {
     q: '¿Qué incluye el Kit?',
-    a: 'En planes de 6 o 12 meses te enviamos el Kit a tu negocio con NFC y QR listos para usar. En el plan mensual la activación es digital; el Kit está disponible al pasar a 6 o 12 meses.',
+    a: 'Onda Pro incluye el Kit físico enviado a tu negocio, con NFC y QR listos para usar. Onda Basic activa un kit de bienvenida digital.',
   },
   {
     q: '¿Cuánto tarda poner Onda en mi negocio?',
-    a: 'Puedes activarte en minutos: eliges plan, configuras tu recompensa y empiezas. El Kit físico llega después de tu primer pago en los periodos de 6 o 12 meses.',
+    a: 'Puedes activarte en minutos: eliges plan, configuras tu recompensa y empiezas. En Onda Pro el Kit físico llega después de tu primer pago.',
   },
   {
-    q: '¿Cuál es la diferencia entre Onda y Onda Pro?',
+    q: '¿Cuál es la diferencia entre Onda Basic y Onda Pro?',
     a: SHOW_POS_LANDING
-      ? `Ambos incluyen POS, pase en Wallet, hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes y ${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis. Onda trae 1 admin + 1 caja. Onda Pro suma hasta 3 cajas, campañas para traer clientes, avisos de proximidad, reseñas en Google y analítica.`
-      : `Ambos incluyen pase en Wallet, hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas al mes y ${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis. Onda trae 1 admin + 1 caja. Onda Pro suma hasta 3 cajas, campañas para traer clientes, avisos de proximidad, reseñas en Google y analítica.`,
+      ? `Ambos incluyen POS, pase en Wallet ilimitado y personalización. Basic cubre ${PLAN_NEW_CUSTOMERS_MONTHLY.BASIC} clientes nuevos y ${PLAN_SMS_REACH_MONTHLY.BASIC} SMS al mes, kit digital y soporte técnico. Pro suma ${PLAN_NEW_CUSTOMERS_MONTHLY.PRO} clientes nuevos y ${PLAN_SMS_REACH_MONTHLY.PRO} SMS, kit físico, feedback + Google Maps, avisos por proximidad GPS y soporte personalizado.`
+      : `Ambos incluyen pase en Wallet ilimitado y personalización. Basic cubre ${PLAN_NEW_CUSTOMERS_MONTHLY.BASIC} clientes nuevos y ${PLAN_SMS_REACH_MONTHLY.BASIC} SMS al mes, kit digital y soporte técnico. Pro suma ${PLAN_NEW_CUSTOMERS_MONTHLY.PRO} clientes nuevos y ${PLAN_SMS_REACH_MONTHLY.PRO} SMS, kit físico, feedback + Google Maps, avisos por proximidad GPS y soporte personalizado.`,
   },
   {
     q: '¿Qué cubre la suscripción cada mes?',
     a: SHOW_POS_LANDING
-      ? `POS + lealtad: hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas acumuladas por tus clientes y ${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis. Si llegas al tope de ondas, la acumulación se pausa hasta el siguiente mes. El push de Wallet no cuenta contra ese cupo.`
-      : `Lealtad con Ondas: hasta ${PLAN_ONDA_MONTHLY_LIMIT} ondas acumuladas por tus clientes y ${PLAN_SMS_CAMPAIGNS_MONTHLY} campaña SMS gratis. Si llegas al tope de ondas, la acumulación se pausa hasta el siguiente mes. El push de Wallet no cuenta contra ese cupo.`,
+      ? `POS + lealtad: cupo de clientes nuevos y de SMS según el plan. El excedente se cobra en la factura de consumos del mes siguiente ($500 por cliente extra, $150 por SMS extra). El push de Wallet no cuenta contra ese cupo.`
+      : `Lealtad con Ondas: cupo de clientes nuevos y de SMS según el plan. El excedente se cobra en la factura de consumos del mes siguiente ($500 por cliente extra, $150 por SMS extra). El push de Wallet no cuenta contra ese cupo.`,
   },
   {
     q: '¿El primer mes es gratis de verdad?',

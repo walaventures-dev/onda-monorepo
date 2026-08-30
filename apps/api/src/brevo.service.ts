@@ -48,6 +48,14 @@ export class BrevoService implements MailProvider {
         subject: message.subject,
         htmlContent: message.html,
         textContent: message.text,
+        ...(message.attachments?.length
+          ? {
+              attachment: message.attachments.map((a) => ({
+                name: a.filename,
+                content: a.content.toString('base64'),
+              })),
+            }
+          : {}),
       }),
     });
     if (!res.ok) {

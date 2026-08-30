@@ -9,6 +9,7 @@ import {
   needsClaimPaymentAmount,
   needsClaimBenefitInput,
   formatCop,
+  manualOndasOrDefault,
 } from '@onda/shared-utils';
 
 type PendingItem = {
@@ -210,10 +211,6 @@ export function PendingRequestsPanel({
     const precio = Number(parseMoneyInput(amounts[item.id] || ''));
     if (item.type === 'ACCUMULATE') {
       if (!(Number.isFinite(precio) && precio > 0)) return false;
-      if (!hasOndaValue) {
-        const pts = Number(pointsById[item.id] || '');
-        return Number.isFinite(pts) && pts >= 1;
-      }
       return true;
     }
     const promoType = item.promotion?.type || 'OTHER';
@@ -232,7 +229,7 @@ export function PendingRequestsPanel({
     if (action === 'confirm' && item && !canConfirm(item)) return;
 
     const precio = Number(parseMoneyInput(amounts[id] || ''));
-    const pts = Number(pointsById[id] || '');
+    const pts = manualOndasOrDefault(pointsById[id]);
     const ben = Number(parseMoneyInput(benefitsById[id] || ''));
 
     setBusyId(id);
@@ -240,7 +237,7 @@ export function PendingRequestsPanel({
       const body: Record<string, number> = {};
       if (action === 'confirm' && item) {
         if (Number.isFinite(precio) && precio > 0) body.paymentAmount = precio;
-        if (item.type === 'ACCUMULATE' && !hasOndaValue && Number.isFinite(pts)) {
+        if (item.type === 'ACCUMULATE' && !hasOndaValue) {
           body.points = pts;
         }
         if (
@@ -430,6 +427,7 @@ export function PendingRequestsPanel({
                       <input
                         type="number"
                         min={1}
+                        placeholder="1"
                         className="mt-1 w-full rounded-xl border border-[var(--onda-border)] bg-[var(--onda-bg)] px-3 py-2 text-sm text-[var(--onda-ink)]"
                         value={pointsById[item.id] || ''}
                         onChange={(e) =>
@@ -440,6 +438,9 @@ export function PendingRequestsPanel({
                         }
                         aria-label="Ondas a acumular"
                       />
+                      <span className="mt-1 block text-xs text-[var(--onda-muted)]">
+                        Opcional. Si no pones nada, se acumula 1 onda.
+                      </span>
                     </label>
                   ) : null}
                   {askClaimBenefit ? (

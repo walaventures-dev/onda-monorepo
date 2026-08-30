@@ -5,7 +5,6 @@ import { PrismaService } from './prisma.service';
 import { WhatsappService } from './whatsapp.service';
 import { WalletService } from './wallet.service';
 import { BrevoService } from './brevo.service';
-import { remainingOndas } from './plan-quota';
 import { CartillaService } from './cartilla.service';
 import { resolvePassDesign, toPassDesignInput } from './pass-design.util';
 
@@ -75,7 +74,7 @@ export class UsersController {
 
     if (!pass) {
       const serialNumber = randomSerial();
-      const welcomePoints = (await remainingOndas(this.prisma, store.id)) > 0 ? 1 : 0;
+      const welcomePoints = 1;
       const active = await this.cartillas.resolveActiveCartilla(body.storeId);
       pass = await this.prisma.pass.create({
         data: {

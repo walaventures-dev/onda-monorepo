@@ -351,7 +351,7 @@ export class StoresController {
               description: 'Acumula ondas y gana recompensas',
               backgroundColor: '#6E5AE6',
               foregroundColor: '#FFFFFF',
-              labelColor: '#E5F6FC',
+              labelColor: '#3DB9E8',
             },
           },
         },

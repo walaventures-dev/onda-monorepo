@@ -157,9 +157,7 @@ export class CajaController {
     const hasOndaValue =
       link.store.ondaValue != null && Number(link.store.ondaValue) > 0;
     const needsManualPoints = !hasOndaValue;
-    const readyToAccumulate =
-      body.paymentAmount != null &&
-      (!needsManualPoints || body.points != null);
+    const readyToAccumulate = body.paymentAmount != null;
 
     if (!readyToAccumulate) {
       return {

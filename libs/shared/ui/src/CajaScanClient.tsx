@@ -10,6 +10,7 @@ import {
   parseMoneyInput,
   ondasFromPayment,
   formatCop,
+  manualOndasOrDefault,
 } from '@onda/shared-utils';
 import type { PosTabDto } from '@onda/shared-types';
 
@@ -139,10 +140,6 @@ function CajaAmountSheet({
   let ready = false;
   if (draft.mode === 'accumulate') {
     ready = Boolean(parseMoneyInput(draft.amount));
-    if (draft.needsPoints) {
-      const pts = Number(draft.points);
-      ready = ready && Number.isFinite(pts) && pts >= 1;
-    }
   } else {
     ready = true;
     if (draft.needsPaymentAmount) {
@@ -220,12 +217,16 @@ function CajaAmountSheet({
             <input
               type="number"
               min={1}
+              placeholder="1"
               className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
               value={draft.points}
               onChange={(e) =>
                 onChange({ points: e.target.value } as Partial<Draft>)
               }
             />
+            <span className="mt-1 block text-xs">
+              Opcional. Si no pones nada, se acumula 1 onda.
+            </span>
           </label>
         ) : null}
 
@@ -659,11 +660,13 @@ export function CajaScanClient({
       Number.isFinite(precio) && precio > 0 ? precio : undefined;
 
     if (draft.mode === 'accumulate') {
-      const points = draft.needsPoints ? Number(draft.points) : undefined;
+      const points = draft.needsPoints
+        ? manualOndasOrDefault(draft.points)
+        : undefined;
       setDraft(null);
       await resolveScan(serial, {
         paymentAmount,
-        ...(points != null && Number.isFinite(points) ? { points } : {}),
+        ...(points != null ? { points } : {}),
       });
       return;
     }

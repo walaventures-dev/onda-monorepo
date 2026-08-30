@@ -200,7 +200,14 @@ export class StoreAccessService {
       include: {
         store: {
           include: {
-            passDesign: { select: { logoUrl: true } },
+            passDesign: {
+              select: {
+                logoUrl: true,
+                backgroundColor: true,
+                foregroundColor: true,
+                labelColor: true,
+              },
+            },
             _count: { select: { promotions: true } },
             cartillas: {
               where: { isDefault: true },
@@ -227,7 +234,14 @@ export class StoreAccessService {
     return this.prisma.store.findMany({
       where: { ownerEmail: { equals: normalized, mode: 'insensitive' } },
       include: {
-        passDesign: { select: { logoUrl: true } },
+        passDesign: {
+          select: {
+            logoUrl: true,
+            backgroundColor: true,
+            foregroundColor: true,
+            labelColor: true,
+          },
+        },
         _count: { select: { promotions: true } },
         cartillas: {
           where: { isDefault: true },

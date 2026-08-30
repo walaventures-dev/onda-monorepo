@@ -15,10 +15,25 @@ const DEFAULTS: PassDesignLike = {
   description: '',
   backgroundColor: '#6E5AE6',
   foregroundColor: '#FFFFFF',
-  labelColor: '#E5F6FC',
+  labelColor: '#3DB9E8',
   logoUrl: null,
   stripImageUrl: null,
 };
+
+/** Paleta de marca del negocio (Config → Marca). */
+export function paletteFromStoreBrand(
+  brand?: PassDesignLike | null
+): {
+  backgroundColor: string;
+  foregroundColor: string;
+  labelColor: string;
+} {
+  return {
+    backgroundColor: brand?.backgroundColor || DEFAULTS.backgroundColor!,
+    foregroundColor: brand?.foregroundColor || DEFAULTS.foregroundColor!,
+    labelColor: brand?.labelColor || DEFAULTS.labelColor!,
+  };
+}
 
 function pickLogo(
   primary: PassDesignLike | null | undefined,

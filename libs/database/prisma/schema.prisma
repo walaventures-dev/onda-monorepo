@@ -118,6 +118,20 @@ enum CampaignPurchaseSku {
   PACK_SUB
 }
 
+enum BillingInvoiceKind {
+  PLAN
+  USAGE
+  COMBINED
+}
+
+enum BillingInvoiceStatus {
+  ISSUED
+  PAID
+  ZERO
+  FAILED
+  CARRIED
+}
+
 enum PendingRequestType {
   ACCUMULATE
   CLAIM
@@ -285,6 +299,8 @@ model Store {
   wompiTransactionId   String?
   wompiPaymentSourceId String?
   nextBillingAt        DateTime?
+  nextUsageBillingAt   DateTime?
+  usageBalanceCop      Int                    @default(0)
   referralBonusApplied Boolean               @default(false)
   promoCodeUsed        String?
   referredByStoreId String?
@@ -313,6 +329,7 @@ model Store {
   posSales          PosSale[]
   posPaymentMethods PosPaymentMethodConfig[]
   accountingConfig  StoreAccountingConfig?
+  billingInvoices   BillingInvoice[]
 
   @@index([ownerEmail])
 }
@@ -337,6 +354,7 @@ model Campaign {
   billingKind        CampaignBillingKind @default(FREE)
   audienceCount      Int?
   reachCount         Int?
+  smsReachCount      Int?
   freeReachApplied   Int?
   paidReachCount     Int?
   costCop            Int                 @default(0)
@@ -376,6 +394,43 @@ model CampaignPurchase {
   createdAt       DateTime             @default(now())
 
   @@index([storeId, createdAt])
+}
+
+model BillingInvoice {
+  id                  String               @id @default(uuid())
+  storeId             String
+  store               Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  kind                BillingInvoiceKind
+  status              BillingInvoiceStatus @default(ISSUED)
+  invoiceNumber       String               @unique
+  periodStart         DateTime
+  periodEnd           DateTime
+  planType            PlanType
+  billingPeriod       String               @default("monthly")
+  planCop             Int                  @default(0)
+  newCustomersUsed    Int                  @default(0)
+  newCustomersLimit   Int                  @default(0)
+  extraCustomersCount Int                  @default(0)
+  extraCustomersCop   Int                  @default(0)
+  smsUsed             Int                  @default(0)
+  smsLimit            Int                  @default(0)
+  extraSmsCount       Int                  @default(0)
+  extraSmsCop         Int                  @default(0)
+  campaignsCount      Int                  @default(0)
+  carriedInCop        Int                  @default(0)
+  carriedOutCop       Int                  @default(0)
+  totalCop            Int                  @default(0)
+  chargedCop          Int                  @default(0)
+  wompiReference      String?
+  pdfStoragePath      String?
+  lineItems           Json?
+  emailedAt           DateTime?
+  issuedAt            DateTime             @default(now())
+  paidAt              DateTime?
+  createdAt           DateTime             @default(now())
+
+  @@index([storeId, issuedAt])
+  @@index([storeId, periodStart, periodEnd])
 }
 
 model Event {

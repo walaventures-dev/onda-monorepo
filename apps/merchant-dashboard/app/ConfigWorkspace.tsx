@@ -14,10 +14,19 @@ import { UsersThreeIcon as UsersThree } from '@phosphor-icons/react/dist/csr/Use
 import {
   GradientButton,
   ImageUploadField,
+  OndaColorPicker,
   OndaIcons,
   OndaSelect,
+  PassPreview,
 } from '@onda/shared-ui';
-import { formatMoneyInput, parseMoneyInput, formatCop } from '@onda/shared-utils';
+import {
+  DEFAULT_BRAND_PRIMARY,
+  DEFAULT_BRAND_SECONDARY,
+  derivePassPalette,
+  formatMoneyInput,
+  parseMoneyInput,
+  formatCop,
+} from '@onda/shared-utils';
 import {
   PLAN_ONDA_MONTHLY_LIMIT,
   CAMPAIGN_FREE_REACH_MONTHLY,
@@ -91,7 +100,7 @@ const NAV_GROUPS: NavGroup[] = [
         id: 'marca',
         href: '/config/marca',
         label: 'Marca',
-        description: 'Logo del negocio',
+        description: 'Logo y colores globales',
         icon: <Camera size={NAV_ICON_SIZE} weight="regular" aria-hidden />,
       },
       {
@@ -240,6 +249,10 @@ export function ConfigWorkspace({
   billing,
   storeLogoUrl,
   setStoreLogoUrl,
+  storePrimaryColor,
+  setStorePrimaryColor,
+  storeSecondaryColor,
+  setStoreSecondaryColor,
   storeCurrency,
   setStoreCurrency,
   storeOndaValue,
@@ -255,6 +268,10 @@ export function ConfigWorkspace({
   billing: any;
   storeLogoUrl: string;
   setStoreLogoUrl: (v: string) => void;
+  storePrimaryColor: string;
+  setStorePrimaryColor: (v: string) => void;
+  storeSecondaryColor: string;
+  setStoreSecondaryColor: (v: string) => void;
   storeCurrency: string;
   setStoreCurrency: (v: string) => void;
   storeOndaValue: string;
@@ -311,29 +328,74 @@ export function ConfigWorkspace({
             <PosAccountingConfig storeId={storeId} />
           </>
         );
-      case 'marca':
+      case 'marca': {
+        const palette = derivePassPalette(
+          storePrimaryColor,
+          storeSecondaryColor,
+        );
         return (
           <>
             <SectionHeader
               title="Marca"
-              description="Logo que heredan tus cartillas y pases."
+              description="Logo y colores corporativos del negocio. Se usan por defecto en cartillas y pases; una cartilla solo los cambia si editas su diseño."
             />
-            <form onSubmit={onSaveLogo} className="onda-card max-w-xl space-y-4 p-5">
-              <ImageUploadField
-                label="Logo"
-                hint="JPG, PNG o WEBP · esquinas redondeadas"
-                aspectClass="aspect-square max-w-[8rem]"
-                variant="logo"
-                value={storeLogoUrl}
-                onChange={setStoreLogoUrl}
-              />
-              <GradientButton type="submit" disabled={savingStoreLogo || !storeId}>
-                {OndaIcons.save}
-                {savingStoreLogo ? 'Guardando…' : 'Guardar logo'}
-              </GradientButton>
-            </form>
+            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
+              <form onSubmit={onSaveLogo} className="onda-card space-y-4 p-5">
+                <ImageUploadField
+                  label="Logo"
+                  hint="JPG, PNG o WEBP · esquinas redondeadas"
+                  aspectClass="aspect-square max-w-[8rem]"
+                  variant="logo"
+                  value={storeLogoUrl}
+                  onChange={setStoreLogoUrl}
+                />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <OndaColorPicker
+                    compact
+                    label="Color principal"
+                    value={storePrimaryColor}
+                    fallback={DEFAULT_BRAND_PRIMARY}
+                    onChange={setStorePrimaryColor}
+                  />
+                  <OndaColorPicker
+                    compact
+                    label="Color secundario"
+                    value={storeSecondaryColor}
+                    fallback={DEFAULT_BRAND_SECONDARY}
+                    onChange={setStoreSecondaryColor}
+                  />
+                </div>
+                <p className="text-xs leading-snug text-[var(--onda-muted)]">
+                  El principal pinta el fondo del pase. El secundario, etiquetas y
+                  acentos. El texto se ajusta solo para contraste.
+                </p>
+                <GradientButton type="submit" disabled={savingStoreLogo || !storeId}>
+                  {OndaIcons.save}
+                  {savingStoreLogo ? 'Guardando…' : 'Guardar marca'}
+                </GradientButton>
+              </form>
+              <div>
+                <p className="mb-3 text-[0.7rem] font-semibold uppercase tracking-[0.04em] text-[var(--onda-muted)]">
+                  Vista previa
+                </p>
+                <PassPreview
+                  compact
+                  backgroundColor={palette.backgroundColor}
+                  foregroundColor={palette.foregroundColor}
+                  labelColor={palette.labelColor}
+                  logoUrl={storeLogoUrl || null}
+                  title={store?.name || 'Tu negocio'}
+                  subtitle="Programa de lealtad"
+                  points={3}
+                  maxStamps={store?.maxStamps || 12}
+                  memberName="Cliente demo"
+                  deadlineLabel="Hasta nuevo aviso"
+                />
+              </div>
+            </div>
           </>
         );
+      }
       case 'lealtad':
         return (
           <>
@@ -373,7 +435,8 @@ export function ConfigWorkspace({
               </div>
               <p className="text-sm text-[var(--onda-muted)]">
                 Si lo configuras, al acumular las ondas se calculan solas (valor de la cuenta ÷
-                precio de la onda). Si lo dejas vacío, en caja pedirás monto y ondas manualmente.
+                precio de la onda). Si lo dejas vacío, en caja pedirás el monto; las ondas son
+                opcionales (1 por defecto).
               </p>
               <GradientButton type="submit" disabled={savingStoreEconomics || !storeId}>
                 {OndaIcons.save}

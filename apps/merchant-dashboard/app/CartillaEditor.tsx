@@ -11,7 +11,11 @@ import {
   toast,
   useOndaDialogs,
 } from "@onda/shared-ui";
-import { cartillaDeadlineLabel } from "@onda/shared-utils";
+import {
+  cartillaDeadlineLabel,
+  DEFAULT_BRAND_PRIMARY,
+  DEFAULT_BRAND_SECONDARY,
+} from "@onda/shared-utils";
 import { PassDesigner } from "./PassDesigner";
 import { CreatePromo } from "./CreatePromo";
 
@@ -41,6 +45,21 @@ function isBetterWelcome(a: any, b: any) {
   return true;
 }
 
+function brandColorsFromStore(store: {
+  passDesign?: {
+    backgroundColor?: string | null;
+    foregroundColor?: string | null;
+    labelColor?: string | null;
+  } | null;
+} | null) {
+  const brand = store?.passDesign;
+  return {
+    backgroundColor: brand?.backgroundColor || DEFAULT_BRAND_PRIMARY,
+    foregroundColor: brand?.foregroundColor || "#FFFFFF",
+    labelColor: brand?.labelColor || DEFAULT_BRAND_SECONDARY,
+  };
+}
+
 function poolLabel(pool: string) {
   return pool === "BIENVENIDA" ? "Adquisición" : "Retención";
 }
@@ -58,7 +77,12 @@ export function CartillaEditor({
   store: {
     maxStamps?: number;
     name?: string;
-    passDesign?: { logoUrl?: string | null } | null;
+    passDesign?: {
+      logoUrl?: string | null;
+      backgroundColor?: string | null;
+      foregroundColor?: string | null;
+      labelColor?: string | null;
+    } | null;
   } | null;
   cartillaId: string | "nueva";
   onClose: () => void;
@@ -87,15 +111,13 @@ export function CartillaEditor({
   const [pickPool, setPickPool] = useState<"ALL" | "BIENVENIDA" | "RETENCION">(
     "ALL",
   );
-  const [design, setDesign] = useState<any>({
+  const [design, setDesign] = useState<any>(() => ({
     title: store?.name || "Onda",
     subtitle: "Programa de lealtad",
     description: "",
-    backgroundColor: "#6E5AE6",
-    foregroundColor: "#FFFFFF",
-    labelColor: "#E5F6FC",
+    ...brandColorsFromStore(store),
     logoUrl: "",
-  });
+  }));
   const [busy, setBusy] = useState(false);
 
   const storeLogoUrl = store?.passDesign?.logoUrl || "";
@@ -106,11 +128,18 @@ export function CartillaEditor({
       setDesign((prev: any) => ({
         ...prev,
         title: prev.title || store?.name || storeDesign.title || "Onda",
-        subtitle: prev.subtitle || storeDesign.subtitle || "Programa de lealtad",
-        description: prev.description || storeDesign.description || "",
-        backgroundColor: prev.backgroundColor || storeDesign.backgroundColor || "#6E5AE6",
-        foregroundColor: prev.foregroundColor || storeDesign.foregroundColor || "#FFFFFF",
-        labelColor: prev.labelColor || storeDesign.labelColor || "#E5F6FC",
+        subtitle: storeDesign.subtitle || prev.subtitle || "Programa de lealtad",
+        description: storeDesign.description || prev.description || "",
+        backgroundColor:
+          storeDesign.backgroundColor ||
+          prev.backgroundColor ||
+          DEFAULT_BRAND_PRIMARY,
+        foregroundColor:
+          storeDesign.foregroundColor || prev.foregroundColor || "#FFFFFF",
+        labelColor:
+          storeDesign.labelColor ||
+          prev.labelColor ||
+          DEFAULT_BRAND_SECONDARY,
         logoUrl: prev.logoUrl || storeDesign.logoUrl || "",
       }));
     });
@@ -238,17 +267,16 @@ export function CartillaEditor({
     });
 
     if (embedded) {
-      const logoForStore =
-        design.logoUrl?.trim() || storeLogoUrl.trim() || null;
-      if (logoForStore) {
-        await api(`/pass-designs/store/${storeId}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            logoUrl: logoForStore,
-            title: design.title || store?.name,
-          }),
-        });
-      }
+      await api(`/pass-designs/store/${storeId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          logoUrl: design.logoUrl?.trim() || storeLogoUrl.trim() || null,
+          title: design.title || store?.name,
+          backgroundColor: design.backgroundColor,
+          foregroundColor: design.foregroundColor,
+          labelColor: design.labelColor,
+        }),
+      });
     }
   }
 
@@ -312,6 +340,10 @@ export function CartillaEditor({
         ...saved,
         _storeLogoUrl:
           design.logoUrl?.trim() || storeLogoUrl.trim() || null,
+        passDesign: {
+          ...design,
+          logoUrl: design.logoUrl?.trim() || storeLogoUrl.trim() || null,
+        },
       });
       if (!embedded) onClose();
     } catch (err: any) {
@@ -681,7 +713,7 @@ export function CartillaEditor({
           storeLogoUrl={storeLogoUrl}
           logoHint={
             embedded
-              ? "Obligatorio. Se guarda como logo del negocio y aparece en todas tus cartillas."
+              ? "Obligatorio. Se guarda como logo del negocio, junto con los colores, y aparece en todas tus cartillas."
               : undefined
           }
           deadlineLabel={cartillaDeadlineLabel(

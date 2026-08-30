@@ -20,6 +20,7 @@ import {
 } from "@onda/shared-utils";
 import { PrismaService } from "./prisma.service";
 import { WalletService } from "./wallet.service";
+import { paletteFromStoreBrand } from "./pass-design.util";
 
 export const PROMO_ASSIGNMENT_TOLERANCE = 0.15;
 export const CARTILLA_CYCLES = [2, 4, 6, 8, 10, 12] as const;
@@ -167,6 +168,7 @@ export class CartillaService {
     }
 
     const store = await db.store.findUniqueOrThrow({ where: { id: storeId } });
+    const palette = paletteFromStoreBrand(storeDesign);
     await db.passDesign.create({
       data: {
         cartillaId,
@@ -175,13 +177,77 @@ export class CartillaService {
         description:
           storeDesign?.description ??
           "Gana ondas en cada visita y canjea recompensas",
-        backgroundColor: storeDesign?.backgroundColor ?? "#6E5AE6",
-        foregroundColor: storeDesign?.foregroundColor ?? "#FFFFFF",
-        labelColor: storeDesign?.labelColor ?? "#E5F6FC",
+        backgroundColor: palette.backgroundColor,
+        foregroundColor: palette.foregroundColor,
+        labelColor: palette.labelColor,
         logoUrl: storeDesign?.logoUrl ?? null,
         stripImageUrl: storeDesign?.stripImageUrl ?? null,
       },
     });
+  }
+
+  /**
+   * Propaga logo y colores de marca a cartillas que siguen la paleta global.
+   * La cartilla base siempre se actualiza. Las ocasionales, solo si aún tenían
+   * el logo/colores anteriores del negocio (no un diseño propio).
+   */
+  async syncStoreBrand(
+    storeId: string,
+    next: {
+      logoUrl?: string | null;
+      backgroundColor: string;
+      foregroundColor: string;
+      labelColor: string;
+    },
+    prev?: {
+      logoUrl?: string | null;
+      backgroundColor?: string | null;
+      labelColor?: string | null;
+    } | null,
+  ) {
+    const cartillas = await this.prisma.cartilla.findMany({
+      where: { storeId },
+      include: { passDesign: true },
+    });
+    const prevBg = prev?.backgroundColor?.trim().toUpperCase() || "";
+    const prevLabel = prev?.labelColor?.trim().toUpperCase() || "";
+    const prevLogo = prev?.logoUrl?.trim() || "";
+
+    for (const cartilla of cartillas) {
+      if (!cartilla.passDesign) {
+        await this.attachStoreDesign(storeId, cartilla.id);
+        continue;
+      }
+      const design = cartilla.passDesign;
+      const samePalette =
+        cartilla.isDefault ||
+        !prevBg ||
+        (design.backgroundColor.trim().toUpperCase() === prevBg &&
+          (design.labelColor || "").trim().toUpperCase() === prevLabel);
+      const sameLogo =
+        cartilla.isDefault ||
+        !prevLogo ||
+        !(design.logoUrl || "").trim() ||
+        (design.logoUrl || "").trim() === prevLogo;
+
+      if (!samePalette && !sameLogo) continue;
+
+      await this.prisma.passDesign.update({
+        where: { id: design.id },
+        data: {
+          ...(samePalette
+            ? {
+                backgroundColor: next.backgroundColor,
+                foregroundColor: next.foregroundColor,
+                labelColor: next.labelColor,
+              }
+            : {}),
+          ...(sameLogo && next.logoUrl !== undefined
+            ? { logoUrl: next.logoUrl }
+            : {}),
+        },
+      });
+    }
   }
 
   async resolveActiveCartilla(storeId: string): Promise<CartillaWithItems> {
@@ -491,6 +557,7 @@ export class CartillaService {
     );
 
     const cloned = def.passDesign;
+    const brand = paletteFromStoreBrand(store.passDesign);
     const storeLogo = store.passDesign?.logoUrl?.trim() || null;
     const cartillaLogo = cloned?.logoUrl?.trim() || storeLogo;
     const cartilla = await this.prisma.cartilla.create({
@@ -507,9 +574,9 @@ export class CartillaService {
             title: cloned?.title || store.name,
             subtitle: cloned?.subtitle,
             description: cloned?.description,
-            backgroundColor: cloned?.backgroundColor || "#6E5AE6",
-            foregroundColor: cloned?.foregroundColor || "#FFFFFF",
-            labelColor: cloned?.labelColor,
+            backgroundColor: brand.backgroundColor,
+            foregroundColor: brand.foregroundColor,
+            labelColor: brand.labelColor,
             logoUrl: cartillaLogo,
             stripImageUrl: cloned?.stripImageUrl,
           },
