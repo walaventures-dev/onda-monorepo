@@ -1960,7 +1960,18 @@ export class LeadsController {
       role,
       source,
     };
-    const logoUrl = await this.storage.ensureWordmarkUrl();
+
+    let logoUrl: string | undefined;
+    try {
+      logoUrl = await this.storage.ensureWordmarkUrl();
+    } catch (err) {
+      this.logger.warn(
+        `Lead ${lead.id}: logo para correo falló: ${
+          err instanceof Error ? err.message : err
+        }`
+      );
+    }
+
     await Promise.all([
       this.jobs
         .enqueue('brevo-email', {
