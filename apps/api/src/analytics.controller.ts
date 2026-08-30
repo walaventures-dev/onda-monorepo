@@ -1960,14 +1960,14 @@ export class LeadsController {
       role,
       source,
     };
-    const brand = await this.storage.ensureMailBrandUrls();
+    const logoUrl = await this.storage.ensureWordmarkUrl();
     await Promise.all([
       this.jobs
         .enqueue('brevo-email', {
           to: notifyTo,
           toName: 'Onda',
           subject: leadNotifySubject(businessName),
-          html: leadNotifyEmailHtml({ ...payload, logoUrl: brand.wordmark }),
+          html: leadNotifyEmailHtml({ ...payload, logoUrl }),
           text: leadNotifyEmailText(payload),
         })
         .catch((err) =>
@@ -1985,8 +1985,7 @@ export class LeadsController {
           html: leadAckEmailHtml({
             name,
             businessName,
-            imageUrl: brand.funnelHero,
-            logoUrl: brand.wordmark,
+            logoUrl,
           }),
           text: leadAckEmailText({ name, businessName }),
         })

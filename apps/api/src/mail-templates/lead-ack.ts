@@ -1,7 +1,6 @@
 import {
   BRAND,
   escapeHtml,
-  funnelHeroImageUrl,
   landingBaseUrl,
   wordmarkUrl,
 } from './brand';
@@ -9,7 +8,6 @@ import {
 export type LeadAckInput = {
   name: string;
   businessName: string;
-  imageUrl?: string;
   logoUrl?: string;
 };
 
@@ -32,7 +30,6 @@ export function leadAckEmailHtml(input: LeadAckInput): string {
   const who = escapeHtml(firstName(input.name));
   const biz = escapeHtml(input.businessName);
   const logo = escapeHtml(input.logoUrl || wordmarkUrl());
-  const photo = escapeHtml(input.imageUrl || funnelHeroImageUrl());
   const home = escapeHtml(landingBaseUrl());
   const year = new Date().getFullYear();
 
@@ -51,11 +48,6 @@ export function leadAckEmailHtml(input: LeadAckInput): string {
           <tr>
             <td style="padding:24px 32px 12px;text-align:center;">
               <img src="${logo}" alt="Onda" width="120" height="auto" style="display:inline-block;max-width:140px;height:auto;" />
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:0;line-height:0;">
-              <img src="${photo}" alt="Equipo Onda" width="520" style="display:block;width:100%;max-width:520px;height:auto;" />
             </td>
           </tr>
           <tr>
