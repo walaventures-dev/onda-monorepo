@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import { CheckIcon as Check } from '@phosphor-icons/react/dist/csr/Check';
 import { GiftIcon as Gift } from '@phosphor-icons/react/dist/csr/Gift';
 import { LightningIcon as Lightning } from '@phosphor-icons/react/dist/csr/Lightning';
@@ -150,17 +149,7 @@ export default function DemoPage() {
             Cuéntanos de tu negocio y te contactamos para mostrarte Onda en una
             llamada corta.
           </p>
-          <figure className="mt-8">
-            <Image
-              src="/brand/funnel_image.png"
-              alt="Equipo Onda acompañando a un comercio"
-              width={1024}
-              height={768}
-              priority
-              className="h-auto w-full object-contain object-center"
-            />
-          </figure>
-          <ul className="mt-6 space-y-4">
+          <ul className="mt-8 space-y-4">
             {PILLARS.map(({ icon: Icon, text }) => (
               <li key={text} className="flex items-start gap-3">
                 <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--onda-primary-100)] text-[var(--onda-primary-500)]">
