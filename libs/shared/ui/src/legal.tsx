@@ -114,9 +114,9 @@ export function TermsContent() {
         <h2 className="font-display text-xl font-semibold">2. El servicio</h2>
         <p className="mt-2 text-[var(--onda-muted)]">
           Onda permite a comercios y organizadores emitir pases de lealtad, acumular y canjear
-          “ondas”, y comunicar beneficios. Cada suscripción cubre hasta 300 ondas al mes y 4
-          campañas SMS. Las promociones concretas las define cada comercio o evento y pueden
-          cambiar.
+          “ondas”, y comunicar beneficios. El cupo de clientes nuevos y de SMS depende del plan
+          (Basic o Pro); el excedente se cobra en la factura mensual de consumos. Las promociones
+          concretas las define cada comercio o evento y pueden cambiar.
         </p>
       </section>
       <section>

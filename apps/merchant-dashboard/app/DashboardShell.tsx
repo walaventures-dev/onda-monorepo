@@ -156,8 +156,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         <MerchantInviteAccept />
       </Suspense>
     );
+  } else if (!user && isLogin) {
+    screen = <MerchantLogin />;
   } else if (firebaseEnabled && !user && !isOnboarding) {
-    screen = isLogin ? <MerchantLogin /> : <SkeletonScreen />;
+    screen = <SkeletonScreen />;
   } else if (user && isLogin) {
     screen = <SkeletonScreen />;
   } else if (isOnboarding) {

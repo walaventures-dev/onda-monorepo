@@ -497,6 +497,7 @@ model Pass {
   @@index([userId, storeId])
   @@index([userId, eventId])
   @@index([cartillaId])
+  @@index([storeId, createdAt])
 }
 
 model Transaction {

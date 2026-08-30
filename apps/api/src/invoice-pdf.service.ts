@@ -39,8 +39,8 @@ const KIND_LABEL: Record<InvoicePdfInput['kind'], string> = {
 @Injectable()
 export class InvoicePdfService {
   async render(input: InvoicePdfInput): Promise<Buffer> {
-    const PDFDocument = (await import('pdfkit')).default;
-    const doc = new PDFDocument({ size: 'A4', margin: 56 });
+    const PDFKit = (await import('pdfkit')).default;
+    const doc = new PDFKit({ size: 'A4', margin: 56 });
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
     const done = new Promise<Buffer>((resolve, reject) => {

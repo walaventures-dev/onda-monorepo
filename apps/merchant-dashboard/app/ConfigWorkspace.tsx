@@ -17,14 +17,14 @@ import {
   OndaColorPicker,
   OndaIcons,
   OndaSelect,
-  PassPreview,
 } from '@onda/shared-ui';
 import {
   DEFAULT_BRAND_PRIMARY,
   DEFAULT_BRAND_SECONDARY,
-  derivePassPalette,
   formatMoneyInput,
   parseMoneyInput,
+  PLAN_META,
+  type PlanId,
 } from '@onda/shared-utils';
 import { PosPaymentMethodsConfig } from './PosPaymentMethodsConfig';
 import { PosAccountingConfig } from './PosAccountingConfig';
@@ -280,6 +280,11 @@ export function ConfigWorkspace({
   const pathname = usePathname();
   const section = parseConfigSection(pathname);
   const posEnabled = Boolean(store?.posEnabled);
+  const planId = billing?.planType as PlanId | undefined;
+  const planName =
+    planId && PLAN_META[planId]
+      ? PLAN_META[planId].shortName
+      : billing?.planType || null;
 
   const navGroups = NAV_GROUPS.filter(
     (group) => group.id !== 'pos' || posEnabled,
@@ -323,74 +328,52 @@ export function ConfigWorkspace({
             <PosAccountingConfig storeId={storeId} />
           </>
         );
-      case 'marca': {
-        const palette = derivePassPalette(
-          storePrimaryColor,
-          storeSecondaryColor,
-        );
+      case 'marca':
         return (
           <>
             <SectionHeader
               title="Marca"
               description="Logo y colores corporativos del negocio. Se usan por defecto en cartillas y pases; una cartilla solo los cambia si editas su diseño."
             />
-            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
-              <form onSubmit={onSaveLogo} className="onda-card space-y-4 p-5">
+            <form onSubmit={onSaveLogo} className="onda-card max-w-3xl p-5">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">
                 <ImageUploadField
                   label="Logo"
                   hint="JPG, PNG o WEBP · esquinas redondeadas"
-                  aspectClass="aspect-square max-w-[8rem]"
+                  aspectClass="aspect-square"
+                  className="w-full shrink-0 sm:w-36"
                   variant="logo"
                   value={storeLogoUrl}
                   onChange={setStoreLogoUrl}
                 />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <OndaColorPicker
-                    compact
-                    label="Color principal"
-                    value={storePrimaryColor}
-                    fallback={DEFAULT_BRAND_PRIMARY}
-                    onChange={setStorePrimaryColor}
-                  />
-                  <OndaColorPicker
-                    compact
-                    label="Color secundario"
-                    value={storeSecondaryColor}
-                    fallback={DEFAULT_BRAND_SECONDARY}
-                    onChange={setStoreSecondaryColor}
-                  />
+                <div className="min-w-0 flex-1 space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <OndaColorPicker
+                      label="Color principal"
+                      value={storePrimaryColor}
+                      fallback={DEFAULT_BRAND_PRIMARY}
+                      onChange={setStorePrimaryColor}
+                    />
+                    <OndaColorPicker
+                      label="Color secundario"
+                      value={storeSecondaryColor}
+                      fallback={DEFAULT_BRAND_SECONDARY}
+                      onChange={setStoreSecondaryColor}
+                    />
+                  </div>
+                  <p className="text-xs leading-snug text-[var(--onda-muted)]">
+                    El principal pinta el fondo del pase. El secundario, etiquetas y
+                    acentos. El texto se ajusta solo para contraste.
+                  </p>
+                  <GradientButton type="submit" disabled={savingStoreLogo || !storeId}>
+                    {OndaIcons.save}
+                    {savingStoreLogo ? 'Guardando…' : 'Guardar marca'}
+                  </GradientButton>
                 </div>
-                <p className="text-xs leading-snug text-[var(--onda-muted)]">
-                  El principal pinta el fondo del pase. El secundario, etiquetas y
-                  acentos. El texto se ajusta solo para contraste.
-                </p>
-                <GradientButton type="submit" disabled={savingStoreLogo || !storeId}>
-                  {OndaIcons.save}
-                  {savingStoreLogo ? 'Guardando…' : 'Guardar marca'}
-                </GradientButton>
-              </form>
-              <div>
-                <p className="mb-3 text-[0.7rem] font-semibold uppercase tracking-[0.04em] text-[var(--onda-muted)]">
-                  Vista previa
-                </p>
-                <PassPreview
-                  compact
-                  backgroundColor={palette.backgroundColor}
-                  foregroundColor={palette.foregroundColor}
-                  labelColor={palette.labelColor}
-                  logoUrl={storeLogoUrl || null}
-                  title={store?.name || 'Tu negocio'}
-                  subtitle="Programa de lealtad"
-                  points={3}
-                  maxStamps={store?.maxStamps || 12}
-                  memberName="Cliente demo"
-                  deadlineLabel="Hasta nuevo aviso"
-                />
               </div>
-            </div>
+            </form>
           </>
         );
-      }
       case 'lealtad':
         return (
           <>
@@ -448,8 +431,8 @@ export function ConfigWorkspace({
               title="General"
               description="Información de la sede, plan y límites de uso."
             />
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="onda-card space-y-3 p-5">
+            <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+              <div className="onda-card flex h-full flex-col space-y-3 p-5">
                 <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
                   Sede
                 </h3>
@@ -464,14 +447,8 @@ export function ConfigWorkspace({
                       {store?.googlePlaceId || '—'}
                     </dd>
                   </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-[var(--onda-muted)]">Plan</dt>
-                    <dd className="font-medium text-[var(--onda-ink)]">
-                      {billing?.planType || '—'}
-                    </dd>
-                  </div>
                 </dl>
-                <div className="rounded-xl bg-[var(--onda-bg)] px-3 py-2.5 text-sm">
+                <div className="mt-auto rounded-xl bg-[var(--onda-bg)] px-3 py-2.5 text-sm">
                   <p className="font-medium text-[var(--onda-ink)]">
                     Meses gratis:{' '}
                     {billing?.freeMonthsBalance ?? store?.freeMonthsBalance ?? '—'}
@@ -481,52 +458,56 @@ export function ConfigWorkspace({
                   </p>
                 </div>
               </div>
-              <div className="onda-card space-y-3 p-5">
-                <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
-                  Plan y cobros
-                </h3>
-                <p className="text-sm text-[var(--onda-muted)]">
+              <div className="onda-card flex h-full flex-col p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
+                    Plan y cobros
+                  </h3>
+                  {planName ? (
+                    <span className="shrink-0 rounded-full bg-[var(--onda-primary-100)] px-2.5 py-1 text-xs font-semibold text-[var(--onda-primary-700)]">
+                      {planName}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-sm text-[var(--onda-muted)]">
                   Cupos, extras y recibos están en Facturación. El corte del plan
                   y el de consumos son independientes.
                 </p>
-                <Link
-                  href="/facturacion"
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--onda-primary-500)]"
-                >
-                  Ir a Facturación →
-                </Link>
-                {billing?.planType === 'BASIC' ? (
-                  <GradientButton type="button" onClick={onUpgrade}>
-                    {OndaIcons.upgrade}
-                    Upgrade a PRO
-                  </GradientButton>
-                ) : null}
+                <ul className="mt-4 flex-1 space-y-2 text-sm">
+                  <li className="flex justify-between gap-4">
+                    <span className="text-[var(--onda-muted)]">Review gating</span>
+                    <span className="font-medium text-[var(--onda-ink)]">
+                      {billing?.features?.reviewGating ? 'Sí' : 'No'}
+                    </span>
+                  </li>
+                  <li className="flex justify-between gap-4">
+                    <span className="text-[var(--onda-muted)]">NPS</span>
+                    <span className="font-medium text-[var(--onda-ink)]">
+                      {billing?.features?.npsSurveys ? 'Sí' : 'No'}
+                    </span>
+                  </li>
+                  <li className="flex justify-between gap-4">
+                    <span className="text-[var(--onda-muted)]">GPS proximidad</span>
+                    <span className="font-medium text-[var(--onda-ink)]">
+                      {billing?.features?.gpsProximity ? 'Sí' : 'No'}
+                    </span>
+                  </li>
+                </ul>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--onda-border)] pt-4">
+                  <Link
+                    href="/facturacion"
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--onda-primary-500)]"
+                  >
+                    Ir a Facturación →
+                  </Link>
+                  {billing?.planType === 'BASIC' ? (
+                    <GradientButton type="button" onClick={onUpgrade}>
+                      {OndaIcons.upgrade}
+                      Upgrade a PRO
+                    </GradientButton>
+                  ) : null}
+                </div>
               </div>
-            </div>
-            <div className="onda-card mt-6 p-5">
-              <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
-                Features PRO
-              </h3>
-              <ul className="mt-3 space-y-1.5 text-sm text-[var(--onda-muted)]">
-                <li className="flex justify-between">
-                  <span>Review gating</span>
-                  <span className="text-[var(--onda-ink)]">
-                    {billing?.features?.reviewGating ? 'Sí' : 'No'}
-                  </span>
-                </li>
-                <li className="flex justify-between">
-                  <span>NPS</span>
-                  <span className="text-[var(--onda-ink)]">
-                    {billing?.features?.npsSurveys ? 'Sí' : 'No'}
-                  </span>
-                </li>
-                <li className="flex justify-between">
-                  <span>GPS proximidad</span>
-                  <span className="text-[var(--onda-ink)]">
-                    {billing?.features?.gpsProximity ? 'Sí' : 'No'}
-                  </span>
-                </li>
-              </ul>
             </div>
           </>
         );

@@ -554,6 +554,8 @@ export class BillingService {
       extrasCop: 0,
       carriedInCop: store.usageBalanceCop,
       subtotal: store.usageBalanceCop,
+      unitCustomerCop: 500,
+      unitSmsCop: 150,
       newCustomersLimit: quoteUsageOverage({
         plan: planType,
         newCustomersUsed: 0,
@@ -594,13 +596,13 @@ export class BillingService {
     if (flags.usage) {
       if (usageSnap.extraCustomers > 0) {
         lines.push({
-          label: `Clientes nuevos extra (${usageSnap.extraCustomers} × ${usageSnap.extraCustomersCop / Math.max(1, usageSnap.extraCustomers)})`,
+          label: `Clientes nuevos extra (${usageSnap.extraCustomers} × ${formatCopSafe(usageSnap.unitCustomerCop)})`,
           amountCop: usageSnap.extraCustomersCop,
         });
       }
       if (usageSnap.extraSms > 0) {
         lines.push({
-          label: `SMS extra (${usageSnap.extraSms})`,
+          label: `SMS extra (${usageSnap.extraSms} × ${formatCopSafe(usageSnap.unitSmsCop)})`,
           amountCop: usageSnap.extraSmsCop,
         });
       }

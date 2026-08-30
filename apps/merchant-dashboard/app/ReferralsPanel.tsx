@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   api,
   GradientButton,
   OndaIcons,
   SkeletonDashboard,
+  toast,
 } from '@onda/shared-ui';
 import { formatDateEs } from '@onda/shared-utils';
 
@@ -129,6 +130,84 @@ function buildFreeMonthCalendar(
   return cells;
 }
 
+function isLocalhost() {
+  if (typeof window === 'undefined') return false;
+  return (
+    process.env.NODE_ENV === 'development' ||
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  );
+}
+
+function monthsAgo(n: number) {
+  const d = new Date();
+  d.setMonth(d.getMonth() - n);
+  return d;
+}
+
+function mockReferrals(): ReferralSummary {
+  const created = monthsAgo(4);
+  const stores = [
+    {
+      id: 'mock-r1',
+      name: 'Café La Esquina',
+      createdAt: monthsAgo(3).toISOString(),
+      slug: 'cafe-la-esquina',
+    },
+    {
+      id: 'mock-r2',
+      name: 'Panadería El Sol',
+      createdAt: monthsAgo(2).toISOString(),
+      slug: 'panaderia-el-sol',
+    },
+    {
+      id: 'mock-r3',
+      name: 'Barra Norte',
+      createdAt: monthsAgo(1).toISOString(),
+      slug: 'barra-norte',
+    },
+    {
+      id: 'mock-r4',
+      name: 'Heladería Río',
+      createdAt: monthsAgo(0).toISOString(),
+      slug: 'heladeria-rio',
+    },
+    {
+      id: 'mock-r5',
+      name: 'Tacos del Parque',
+      createdAt: new Date().toISOString(),
+      slug: 'tacos-del-parque',
+    },
+  ];
+  return {
+    storeId: 'mock',
+    storeName: 'Demo',
+    storeCreatedAt: created.toISOString(),
+    referralCode: 'ONDA-DEMO',
+    freeMonthsBalance: 6,
+    freeMonthsBreakdown: { welcome: 1, fromReferrals: 5, total: 6 },
+    freeMonthCredits: [
+      {
+        id: 'welcome',
+        type: 'WELCOME',
+        label: 'Mes de bienvenida',
+        months: 1,
+        earnedAt: created.toISOString(),
+      },
+      ...stores.map((s) => ({
+        id: s.id,
+        type: 'REFERRAL' as const,
+        label: s.name,
+        months: 1,
+        earnedAt: s.createdAt,
+        storeId: s.id,
+        slug: s.slug,
+      })),
+    ],
+    referredStores: stores,
+  };
+}
+
 function groupByYear(cells: CalendarCell[]) {
   const groups: Array<{ year: number; cells: CalendarCell[] }> = [];
   for (const cell of cells) {
@@ -142,33 +221,80 @@ function groupByYear(cells: CalendarCell[]) {
   return groups;
 }
 
+function LocalMockButton({
+  mockOn,
+  onToggle,
+}: {
+  mockOn: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="rounded-full border border-dashed border-[var(--onda-bridge)] bg-[var(--onda-primary-50)] px-4 py-2 text-xs font-semibold text-[var(--onda-primary-700)] hover:bg-[var(--onda-primary-100)]"
+    >
+      {mockOn ? 'Quitar simulación' : 'Simular datos (local)'}
+    </button>
+  );
+}
+
 export function ReferralsPanel({ storeId }: { storeId: string }) {
   const [data, setData] = useState<ReferralSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [error, setError] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [mockOn, setMockOn] = useState(false);
+  const [isLocalDev, setIsLocalDev] = useState(false);
+  const loadSeq = useRef(0);
 
   const inviteLink = data?.referralCode
     ? buildReferralInviteUrl(data.referralCode)
     : '';
 
+  useEffect(() => {
+    setIsLocalDev(isLocalhost());
+  }, []);
+
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
+    if (mockOn) {
+      setData(mockReferrals());
+      setError('');
+      setLoading(false);
+      return;
+    }
     if (!storeId) return;
     setLoading(true);
     setError('');
     try {
-      setData(await api<ReferralSummary>(`/referrals/store/${storeId}`));
+      const next = await api<ReferralSummary>(`/referrals/store/${storeId}`);
+      if (seq !== loadSeq.current) return;
+      setData(next);
     } catch (err: any) {
+      if (seq !== loadSeq.current) return;
       setError(err?.message || 'No se pudo cargar referidos');
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
-  }, [storeId]);
+  }, [storeId, mockOn]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  function toggleMock() {
+    setMockOn((on) => {
+      const next = !on;
+      toast(
+        next
+          ? 'Datos demo de referidos (solo local)'
+          : 'Volviste a los datos reales'
+      );
+      return next;
+    });
+  }
 
   async function copy(text: string, kind: 'code' | 'link') {
     try {
@@ -198,12 +324,36 @@ export function ReferralsPanel({ storeId }: { storeId: string }) {
     await copy(inviteLink, 'link');
   }
 
+  const mockBtn = isLocalDev ? (
+    <LocalMockButton mockOn={mockOn} onToggle={toggleMock} />
+  ) : null;
+
   if (loading) {
-    return <SkeletonDashboard kpis={3} />;
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <header className="space-y-1">
+            <h2 className="font-display text-2xl font-semibold">Referidos</h2>
+          </header>
+          {mockBtn}
+        </div>
+        <SkeletonDashboard kpis={3} />
+      </div>
+    );
   }
 
   if (error) {
-    return <p className="text-sm text-[var(--onda-danger)]">{error}</p>;
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <header className="space-y-1">
+            <h2 className="font-display text-2xl font-semibold">Referidos</h2>
+          </header>
+          {mockBtn}
+        </div>
+        <p className="text-sm text-[var(--onda-danger)]">{error}</p>
+      </div>
+    );
   }
 
   if (!data) return null;
@@ -260,13 +410,16 @@ export function ReferralsPanel({ storeId }: { storeId: string }) {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h2 className="font-display text-2xl font-semibold">Referidos</h2>
-        <p className="text-sm text-[var(--onda-muted)]">
-          Tu calendario de meses gratis: lo que ya disfrutaste y lo que viene por
-          cada referido.
-        </p>
-      </header>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <header className="space-y-1">
+          <h2 className="font-display text-2xl font-semibold">Referidos</h2>
+          <p className="text-sm text-[var(--onda-muted)]">
+            Tu calendario de meses gratis: lo que ya disfrutaste y lo que viene por
+            cada referido.
+          </p>
+        </header>
+        {mockBtn}
+      </div>
 
       <section className="onda-card overflow-hidden p-5 sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
