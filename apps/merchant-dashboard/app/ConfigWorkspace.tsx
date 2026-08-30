@@ -23,8 +23,6 @@ import {
   DEFAULT_BRAND_SECONDARY,
   formatMoneyInput,
   parseMoneyInput,
-  PLAN_META,
-  type PlanId,
 } from '@onda/shared-utils';
 import { PosPaymentMethodsConfig } from './PosPaymentMethodsConfig';
 import { PosAccountingConfig } from './PosAccountingConfig';
@@ -280,11 +278,6 @@ export function ConfigWorkspace({
   const pathname = usePathname();
   const section = parseConfigSection(pathname);
   const posEnabled = Boolean(store?.posEnabled);
-  const planId = billing?.planType as PlanId | undefined;
-  const planName =
-    planId && PLAN_META[planId]
-      ? PLAN_META[planId].shortName
-      : billing?.planType || null;
 
   const navGroups = NAV_GROUPS.filter(
     (group) => group.id !== 'pos' || posEnabled,
@@ -431,83 +424,43 @@ export function ConfigWorkspace({
               title="General"
               description="Información de la sede, plan y límites de uso."
             />
-            <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
-              <div className="onda-card flex h-full flex-col space-y-3 p-5">
-                <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
-                  Sede
-                </h3>
-                <dl className="space-y-2 text-sm">
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-[var(--onda-muted)]">Nombre</dt>
-                    <dd className="font-medium text-[var(--onda-ink)]">{store?.name || '—'}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-[var(--onda-muted)]">Place ID</dt>
-                    <dd className="font-mono text-xs text-[var(--onda-ink)]">
-                      {store?.googlePlaceId || '—'}
-                    </dd>
-                  </div>
-                </dl>
-                <div className="mt-auto rounded-xl bg-[var(--onda-bg)] px-3 py-2.5 text-sm">
-                  <p className="font-medium text-[var(--onda-ink)]">
-                    Meses gratis:{' '}
-                    {billing?.freeMonthsBalance ?? store?.freeMonthsBalance ?? '—'}
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--onda-muted)]">
-                    Detalle en Referidos (bienvenida + meses por cada alta)
-                  </p>
+            <div className="onda-card max-w-xl space-y-3 p-5">
+              <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
+                Sede
+              </h3>
+              <dl className="space-y-2 text-sm">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[var(--onda-muted)]">Nombre</dt>
+                  <dd className="font-medium text-[var(--onda-ink)]">{store?.name || '—'}</dd>
                 </div>
-              </div>
-              <div className="onda-card flex h-full flex-col p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
-                    Plan y cobros
-                  </h3>
-                  {planName ? (
-                    <span className="shrink-0 rounded-full bg-[var(--onda-primary-100)] px-2.5 py-1 text-xs font-semibold text-[var(--onda-primary-700)]">
-                      {planName}
-                    </span>
-                  ) : null}
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[var(--onda-muted)]">Place ID</dt>
+                  <dd className="font-mono text-xs text-[var(--onda-ink)]">
+                    {store?.googlePlaceId || '—'}
+                  </dd>
                 </div>
-                <p className="mt-1 text-sm text-[var(--onda-muted)]">
-                  Cupos, extras y recibos están en Facturación. El corte del plan
-                  y el de consumos son independientes.
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[var(--onda-muted)]">Plan</dt>
+                  <dd className="font-medium text-[var(--onda-ink)]">
+                    {billing?.planType || '—'}
+                  </dd>
+                </div>
+              </dl>
+              <div className="rounded-xl bg-[var(--onda-bg)] px-3 py-2.5 text-sm">
+                <p className="font-medium text-[var(--onda-ink)]">
+                  Meses gratis:{' '}
+                  {billing?.freeMonthsBalance ?? store?.freeMonthsBalance ?? '—'}
                 </p>
-                <ul className="mt-4 flex-1 space-y-2 text-sm">
-                  <li className="flex justify-between gap-4">
-                    <span className="text-[var(--onda-muted)]">Review gating</span>
-                    <span className="font-medium text-[var(--onda-ink)]">
-                      {billing?.features?.reviewGating ? 'Sí' : 'No'}
-                    </span>
-                  </li>
-                  <li className="flex justify-between gap-4">
-                    <span className="text-[var(--onda-muted)]">NPS</span>
-                    <span className="font-medium text-[var(--onda-ink)]">
-                      {billing?.features?.npsSurveys ? 'Sí' : 'No'}
-                    </span>
-                  </li>
-                  <li className="flex justify-between gap-4">
-                    <span className="text-[var(--onda-muted)]">GPS proximidad</span>
-                    <span className="font-medium text-[var(--onda-ink)]">
-                      {billing?.features?.gpsProximity ? 'Sí' : 'No'}
-                    </span>
-                  </li>
-                </ul>
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--onda-border)] pt-4">
-                  <Link
-                    href="/facturacion"
-                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--onda-primary-500)]"
-                  >
-                    Ir a Facturación →
-                  </Link>
-                  {billing?.planType === 'BASIC' ? (
-                    <GradientButton type="button" onClick={onUpgrade}>
-                      {OndaIcons.upgrade}
-                      Upgrade a PRO
-                    </GradientButton>
-                  ) : null}
-                </div>
+                <p className="mt-1 text-xs text-[var(--onda-muted)]">
+                  Detalle en Referidos (bienvenida + meses por cada alta)
+                </p>
               </div>
+              {billing?.planType === 'BASIC' ? (
+                <GradientButton type="button" onClick={onUpgrade}>
+                  {OndaIcons.upgrade}
+                  Upgrade a PRO
+                </GradientButton>
+              ) : null}
             </div>
           </>
         );
