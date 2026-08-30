@@ -50,6 +50,7 @@ const storePublicSelect = {
   billingStatus: true,
   billingPeriod: true,
   nextBillingAt: true,
+  nextUsageBillingAt: true,
   whatsappUsed: true,
   maxStamps: true,
   currency: true,

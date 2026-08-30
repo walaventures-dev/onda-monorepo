@@ -17,7 +17,6 @@ import { PlanType, PromotionType, Prisma, PosSaleStatus } from '@prisma/client';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 import { PrismaService } from './prisma.service';
-import { WompiService } from './wompi.service';
 import { JobsService } from './jobs.service';
 import { WhatsappService } from './whatsapp.service';
 import { FeedbackService } from './feedback.service';
@@ -28,13 +27,11 @@ function bearerToken(header?: string): string {
   return m?.[1]?.trim() || '';
 }
 import {
-  PLAN_ONDA_MONTHLY_LIMIT,
+  monthlyNewCustomersUsed,
   monthlyOndasUsed,
-  monthlyReachUsed,
+  usageWindow,
 } from './plan-quota';
-import { campaignReachPricing } from './campaign-pricing';
-import { computeRoi } from '@onda/shared-utils';
-import { BillingService } from './billing.service';
+import { computeRoi, planNewCustomersLimit, parsePlanId } from '@onda/shared-utils';
 
 const COMPARE_MAX_STORES = 20;
 
@@ -595,18 +592,26 @@ export class AnalyticsController {
         stat: String(segments.enRiesgo),
       });
     }
-    const ondasMonthUsed = await monthlyOndasUsed(this.prisma, storeId);
-    const ondasPct = Math.round((ondasMonthUsed / PLAN_ONDA_MONTHLY_LIMIT) * 100);
-    if (ondasPct >= 80) {
+    const window = usageWindow(store.nextUsageBillingAt);
+    const newCustomersUsed = await monthlyNewCustomersUsed(
+      this.prisma,
+      storeId,
+      window.start,
+      window.end
+    );
+    const newLimit = planNewCustomersLimit(parsePlanId(store.planType) || 'BASIC');
+    const newPct = Math.round((newCustomersUsed / Math.max(1, newLimit)) * 100);
+    if (newPct >= 80) {
       insights.push({
-        id: 'onda-limit',
+        id: 'new-customers-limit',
         tone: 'warning',
-        title: 'Cupo de ondas alto',
-        message: `Usaste ${ondasPct}% de las ${PLAN_ONDA_MONTHLY_LIMIT} ondas incluidas este mes (${ondasMonthUsed}/${PLAN_ONDA_MONTHLY_LIMIT}).`,
-        action: 'Ver plan',
-        stat: `${ondasPct}%`,
+        title: 'Cupo de clientes nuevos alto',
+        message: `Este periodo llevas ${newCustomersUsed}/${newLimit} clientes nuevos. El extra se cobra a $500 en la factura de consumos.`,
+        action: 'Ver facturación',
+        stat: `${newPct}%`,
       });
     }
+    const ondasMonthUsed = await monthlyOndasUsed(this.prisma, storeId);
     if (activePromos.length <= 1) {
       insights.push({
         id: 'few-promos',
@@ -712,9 +717,11 @@ export class AnalyticsController {
         beneficioDelta: pctDelta(beneficioVal, prevBeneficioVal),
         roi: computeRoi(ventasVal, beneficioVal),
         ondasMonthUsed,
-        ondasMonthLimit: PLAN_ONDA_MONTHLY_LIMIT,
+        ondasMonthLimit: null,
         whatsappUsed: store.whatsappUsed,
-        whatsappLimit: PLAN_ONDA_MONTHLY_LIMIT,
+        whatsappLimit: newLimit,
+        newCustomersUsed,
+        newCustomersLimit: newLimit,
         planType: store.planType,
         coberturaCatalogo: coverage,
         promosActivas: activePromos.length,
@@ -1352,7 +1359,9 @@ export class AnalyticsController {
           coberturaCatalogo: coverage,
           promosActivas: activePromos.length,
           whatsappUsed: store.whatsappUsed,
-          whatsappLimit: PLAN_ONDA_MONTHLY_LIMIT,
+          whatsappLimit: planNewCustomersLimit(
+            parsePlanId(store.planType) || 'BASIC'
+          ),
           rankOndas: 0,
           rankRedenciones: 0,
           rankTasa: 0,
@@ -1895,119 +1904,6 @@ export class LeadsController {
   @Get()
   list() {
     return this.prisma.lead.findMany({ orderBy: { createdAt: 'desc' } });
-  }
-}
-
-@Controller('billing')
-export class BillingController {
-  constructor(
-    @Inject(PrismaService) private prisma: PrismaService,
-    @Inject(WompiService) private wompi: WompiService,
-    @Inject(JobsService) private jobs: JobsService,
-    @Inject(BillingService) private billing: BillingService
-  ) {}
-
-  @Get('config')
-  config() {
-    return {
-      wompiConfigured: this.wompi.isConfigured,
-      wompiPublicKey: this.wompi.publicKey,
-    };
-  }
-
-  @Get('store/:storeId')
-  async summary(@Param('storeId') storeId: string) {
-    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
-    const pricing = campaignReachPricing();
-    const [ondasUsed, reachUsed] = await Promise.all([
-      monthlyOndasUsed(this.prisma, storeId),
-      monthlyReachUsed(this.prisma, storeId),
-    ]);
-    return {
-      planType: store.planType,
-      billingStatus: store.billingStatus,
-      billingPeriod: store.billingPeriod,
-      nextBillingAt: store.nextBillingAt,
-      ondasUsed,
-      ondasLimit: PLAN_ONDA_MONTHLY_LIMIT,
-      reachUsed,
-      reachLimit: pricing.freeMonthly,
-      reachUnitCop: pricing.unitCop,
-      smsCampaignsUsed: reachUsed,
-      smsCampaignsLimit: pricing.freeMonthly,
-      campaignCredits: 0,
-      packSubscribed: false,
-      hasPaymentMethod: Boolean(store.wompiPaymentSourceId) || !this.wompi.isConfigured,
-      campaignPricing: pricing,
-      planPriceCop: store.planType === 'PRO' ? 69_900 : 49_900,
-      freeMonthsBalance: store.freeMonthsBalance,
-      wompiPublicKey: this.wompi.publicKey,
-      features: {
-        gpsProximity: store.planType === 'PRO',
-        npsSurveys: store.planType === 'PRO',
-        reviewGating: store.planType === 'PRO',
-        dissatisfactionAlerts: store.planType === 'PRO',
-      },
-    };
-  }
-
-  @Post('store/:storeId/upgrade')
-  async upgrade(@Param('storeId') storeId: string) {
-    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
-    if (!this.wompi.isConfigured) {
-      const updated = await this.prisma.store.update({
-        where: { id: storeId },
-        data: { planType: 'PRO', billingStatus: 'ACTIVE' },
-      });
-      return { store: updated, stub: true as const, checkout: null };
-    }
-
-    const { planType, billingPeriod } = this.wompi.parsePlanFromStore(store);
-    const checkout = this.wompi.createCheckout({
-      storeId,
-      planType: 'PRO',
-      billingPeriod,
-      kind: 'upgrade',
-    });
-    await this.prisma.store.update({
-      where: { id: storeId },
-      data: { wompiTransactionId: checkout.reference },
-    });
-    return { stub: false as const, checkout };
-  }
-
-  @Post('wompi/webhook')
-  async wompiWebhook(@Body() body: Record<string, unknown>) {
-    if (!this.wompi.verifyEventChecksum(body)) {
-      throw new ForbiddenException('Firma Wompi inválida');
-    }
-    const tx = this.wompi.transactionFromEvent(body);
-    if (!tx?.reference || tx.status !== 'APPROVED') {
-      return { received: true, ignored: true };
-    }
-    const store = await this.prisma.store.findFirst({
-      where: { wompiTransactionId: tx.reference },
-    });
-    if (!store) {
-      return { received: true, store: null };
-    }
-    const paymentSourceId =
-      tx.paymentSourceId != null ? String(tx.paymentSourceId) : store.wompiPaymentSourceId;
-    await this.prisma.store.update({
-      where: { id: store.id },
-      data: {
-        planType: 'PRO',
-        billingStatus: 'ACTIVE',
-        wompiPaymentSourceId: paymentSourceId,
-      },
-    });
-    if (paymentSourceId && store.nextBillingAt) {
-      await this.jobs.scheduleWompiRenew(
-        store.id,
-        Math.max(0, store.nextBillingAt.getTime() - Date.now())
-      );
-    }
-    return { received: true, storeId: store.id, status: 'PRO' };
   }
 }
 

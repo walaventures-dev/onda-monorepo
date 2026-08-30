@@ -9,6 +9,7 @@ import { cartillaDeadlineLabel, formatCartillaDay, loyaltyProgressCopy, pickLoya
 import {
   loadSession,
   saveSession,
+  clearSession,
   replaceLoginHistory,
   type CustomerSession,
 } from "../../../lib/session";
@@ -97,6 +98,10 @@ export default function StoreEntryPage() {
           return;
         }
         setSession(existing);
+        if (!existing.user.name.trim()) {
+          setStep("name");
+          return;
+        }
         await loadOrClaim(existing, s.id);
       } catch (err: any) {
         if (!cancelled) {
@@ -213,7 +218,7 @@ export default function StoreEntryPage() {
     saveSession(sess);
     replaceLoginHistory();
     setSession(sess);
-    if (result.isNewUser) {
+    if (result.isNewUser || !result.user.name.trim()) {
       setStep("name");
       return;
     }
@@ -456,6 +461,19 @@ export default function StoreEntryPage() {
                   disabled={name.trim().length < 2 || busy}
                 >
                   {busy ? "Guardando…" : "Guardar y seguir →"}
+                </button>
+                <button
+                  type="button"
+                  className="onda-pwa-resend"
+                  onClick={() => {
+                    clearSession();
+                    setSession(null);
+                    setName("");
+                    setError("");
+                    setStep("otp");
+                  }}
+                >
+                  Usar otro WhatsApp
                 </button>
               </form>
             </div>

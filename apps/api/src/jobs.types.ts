@@ -4,6 +4,8 @@ export type JobType =
   | 'brevo-sms'
   | 'wallet-notify'
   | 'wompi-renew'
+  | 'usage-billing'
+  | 'billing-sweep'
   | 'cartilla-ending-sms'
   | 'campaign-dispatch'
   | 'campaign-pack-renew'
@@ -41,6 +43,12 @@ export type WompiRenewJobPayload = {
   storeId: string;
 };
 
+export type UsageBillingJobPayload = {
+  storeId: string;
+};
+
+export type BillingSweepJobPayload = Record<string, never>;
+
 export type CartillaEndingSmsPayload = {
   cartillaId: string;
   storeId: string;
@@ -65,6 +73,8 @@ export type JobPayloadMap = {
   'brevo-sms': BrevoSmsJobPayload;
   'wallet-notify': WalletNotifyJobPayload;
   'wompi-renew': WompiRenewJobPayload;
+  'usage-billing': UsageBillingJobPayload;
+  'billing-sweep': BillingSweepJobPayload;
   'cartilla-ending-sms': CartillaEndingSmsPayload;
   'campaign-dispatch': CampaignDispatchPayload;
   'campaign-pack-renew': CampaignPackRenewPayload;

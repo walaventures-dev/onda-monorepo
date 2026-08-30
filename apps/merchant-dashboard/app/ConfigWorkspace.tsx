@@ -25,12 +25,7 @@ import {
   derivePassPalette,
   formatMoneyInput,
   parseMoneyInput,
-  formatCop,
 } from '@onda/shared-utils';
-import {
-  PLAN_ONDA_MONTHLY_LIMIT,
-  CAMPAIGN_FREE_REACH_MONTHLY,
-} from '@onda/shared-types';
 import { PosPaymentMethodsConfig } from './PosPaymentMethodsConfig';
 import { PosAccountingConfig } from './PosAccountingConfig';
 
@@ -488,27 +483,18 @@ export function ConfigWorkspace({
               </div>
               <div className="onda-card space-y-3 p-5">
                 <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
-                  Uso del mes
+                  Plan y cobros
                 </h3>
-                <dl className="space-y-2 text-sm">
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-[var(--onda-muted)]">Ondas</dt>
-                    <dd className="tabular-nums text-[var(--onda-ink)]">
-                      {billing?.ondasUsed ?? 0}/{billing?.ondasLimit ?? PLAN_ONDA_MONTHLY_LIMIT}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-[var(--onda-muted)]">Alcance campañas</dt>
-                    <dd className="tabular-nums text-[var(--onda-ink)]">
-                      {billing?.reachUsed ?? billing?.smsCampaignsUsed ?? 0}/
-                      {billing?.reachLimit ?? billing?.smsCampaignsLimit ?? CAMPAIGN_FREE_REACH_MONTHLY}{' '}
-                      personas gratis
-                    </dd>
-                  </div>
-                  <p className="text-xs text-[var(--onda-muted)]">
-                    Excedente: {formatCop(billing?.reachUnitCop ?? 200)} por persona al enviar.
-                  </p>
-                </dl>
+                <p className="text-sm text-[var(--onda-muted)]">
+                  Cupos, extras y recibos están en Facturación. El corte del plan
+                  y el de consumos son independientes.
+                </p>
+                <Link
+                  href="/facturacion"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--onda-primary-500)]"
+                >
+                  Ir a Facturación →
+                </Link>
                 {billing?.planType === 'BASIC' ? (
                   <GradientButton type="button" onClick={onUpgrade}>
                     {OndaIcons.upgrade}

@@ -45,6 +45,25 @@ function safeReturnPath(path: string | null | undefined): string | null {
   return path;
 }
 
+function onboardingPathFromSearch(): string {
+  const params = new URLSearchParams(window.location.search);
+  params.delete("next");
+  const qs = params.toString();
+  return qs ? `/onboarding?${qs}` : "/onboarding";
+}
+
+function destForLoggedInMerchant(
+  stores: StoreSetupFields[],
+  next: string | null
+): string {
+  if (!stores.length) return onboardingPathFromSearch();
+  const home = merchantHomePath(stores);
+  if (home === "/completar") {
+    return next && isSetupAllowedPath(next) ? next : "/completar";
+  }
+  return next || home;
+}
+
 /** Keeps the workspace mounted across route changes so filters/state survive. */
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
@@ -77,53 +96,38 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (user && isOnboarding) {
-      let cancelled = false;
-      void (async () => {
-        try {
-          const stores = await api<StoreSetupFields[]>("/auth/merchant/stores");
-          if (!cancelled && Array.isArray(stores) && stores.length > 0) {
-            router.replace(merchantHomePath(stores));
-          }
-        } catch {
-          /* si falla el listado, deja completar el negocio */
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }
+    if (!user) return;
+    if (!isOnboarding && !isLogin) return;
 
-    if (user && isLogin) {
-      const raw = new URLSearchParams(window.location.search).get("next");
-      const next = safeReturnPath(raw);
-      let dest = next || "/resumen";
-      let cancelled = false;
-      void (async () => {
-        try {
-          const stores = await api<StoreSetupFields[]>("/auth/merchant/stores");
-          if (!Array.isArray(stores) || stores.length === 0) {
-            const params = new URLSearchParams(window.location.search);
-            params.delete("next");
-            const qs = params.toString();
-            dest = qs ? `/onboarding?${qs}` : "/onboarding";
-          } else {
-            const home = merchantHomePath(stores);
-            if (home === "/completar") {
-              dest = next && isSetupAllowedPath(next) ? next : "/completar";
-            } else {
-              dest = next || "/resumen";
-            }
-          }
-        } catch {
-          /* si falla el listado, entra al panel */
+    let cancelled = false;
+    void (async () => {
+      let stores: StoreSetupFields[] | null = null;
+      try {
+        const list = await api<StoreSetupFields[]>("/auth/merchant/stores");
+        stores = Array.isArray(list) ? list : [];
+      } catch {
+        /* sin listado no hay perfil de negocio: no entrar al panel vacío */
+      }
+      if (cancelled) return;
+
+      if (isOnboarding) {
+        if (stores && stores.length > 0) {
+          router.replace(merchantHomePath(stores));
         }
-        if (!cancelled) router.replace(dest);
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }
+        return;
+      }
+
+      if (!stores || stores.length === 0) {
+        router.replace(onboardingPathFromSearch());
+        return;
+      }
+
+      const raw = new URLSearchParams(window.location.search).get("next");
+      router.replace(destForLoggedInMerchant(stores, safeReturnPath(raw)));
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [
     ready,
     firebaseEnabled,

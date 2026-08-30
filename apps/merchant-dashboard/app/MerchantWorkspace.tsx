@@ -87,6 +87,7 @@ import { isSetupAllowedTab, storeSetupStatus } from "./setupStatus";
 import { useMerchantAuth } from "../lib/MerchantAuth";
 import { PosWorkspace } from "./PosWorkspace";
 import { ConfigWorkspace } from "./ConfigWorkspace";
+import { BillingWorkspace } from "./BillingWorkspace";
 import { useStoreRole, isAdmin, cajaAllowedMerchantPath } from "../lib/useStoreRole";
 import { useStoreSse } from "../lib/useStoreSse";
 
@@ -101,6 +102,7 @@ type Tab =
   | "eventos"
   | "referidos"
   | "config"
+  | "facturacion"
   | "pos"
   | "caja";
 
@@ -130,6 +132,7 @@ const SECTIONS: Tab[] = [
   "referidos",
   "pos",
   "caja",
+  "facturacion",
   "config",
 ];
 
@@ -1093,6 +1096,13 @@ export function MerchantWorkspace() {
     const footerItems = admin
       ? [
           {
+            href: "/facturacion",
+            label: "Facturación",
+            icon: OndaIcons.receipt,
+            active: tab === "facturacion",
+            footer: true,
+          },
+          {
             href: "/config",
             label: "Configuración",
             icon: OndaIcons.gear,
@@ -1266,25 +1276,51 @@ export function MerchantWorkspace() {
   );
 
   useEffect(() => {
-    api<any[]>("/auth/merchant/stores").then((list) => {
-      setStores(list);
-      let preferred = "";
-      try {
-        preferred = localStorage.getItem("onda-merchant-store-id") || "";
-      } catch {
-        /* ignore */
-      }
-      const initial =
-        list.find((s) => s.id === preferred)?.id || list[0]?.id || "";
-      if (initial) setStoreId(initial);
-      setCompareStoreIds(list.map((s) => s.id));
-      setStoresReady(true);
-    });
-    api<any[]>("/events").then((list) => {
-      setEvents(list);
-      if (list[0]) setEventId(list[0].id);
-    });
+    let cancelled = false;
+    api<any[]>("/auth/merchant/stores")
+      .then((list) => {
+        if (cancelled) return;
+        const storesList = Array.isArray(list) ? list : [];
+        setStores(storesList);
+        let preferred = "";
+        try {
+          preferred = localStorage.getItem("onda-merchant-store-id") || "";
+        } catch {
+          /* ignore */
+        }
+        const initial =
+          storesList.find((s) => s.id === preferred)?.id ||
+          storesList[0]?.id ||
+          "";
+        if (initial) setStoreId(initial);
+        setCompareStoreIds(storesList.map((s) => s.id));
+        setStoresReady(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStores([]);
+        setStoresReady(true);
+      });
+    api<any[]>("/events")
+      .then((list) => {
+        if (cancelled || !Array.isArray(list)) return;
+        setEvents(list);
+        if (list[0]) setEventId(list[0].id);
+      })
+      .catch(() => {
+        /* el panel puede vivir sin el listado de eventos */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  useEffect(() => {
+    if (!storesReady || !firebaseEnabled) return;
+    if (stores.length === 0) {
+      router.replace("/onboarding");
+    }
+  }, [storesReady, stores.length, firebaseEnabled, router]);
 
   useEffect(() => {
     if (!storesReady || admin) return;
@@ -3195,6 +3231,10 @@ export function MerchantWorkspace() {
 
         {tab === "campanas" && !campaignNew && !campaignId && storeId ? (
           <CampaignsHome storeId={storeId} confirm={confirm} />
+        ) : null}
+
+        {tab === "facturacion" && storeId ? (
+          <BillingWorkspace storeId={storeId} />
         ) : null}
 
         {!isPosArea && tab === "config" && storeId ? (

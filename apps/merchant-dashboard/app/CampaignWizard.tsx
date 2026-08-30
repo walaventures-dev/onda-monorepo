@@ -36,7 +36,7 @@ import {
   type ObjectiveDetails,
   type ObjectiveKind,
 } from '@onda/shared-utils';
-import { CAMPAIGN_FREE_REACH_MONTHLY, CAMPAIGN_REACH_PRICE_COP, StoreSegment, StoreSubcategory } from '@onda/shared-types';
+import { CAMPAIGN_FREE_REACH_MONTHLY, SMS_OVERAGE_COP, StoreSegment, StoreSubcategory } from '@onda/shared-types';
 
 const STEPS = [
   { id: 0, label: '1. Objetivo' },
@@ -146,7 +146,7 @@ export function CampaignWizard({
     return campaignReachQuote({
       audienceCount: count,
       reachUsedThisMonth: used,
-      unitCop: quota?.unitCop ?? CAMPAIGN_REACH_PRICE_COP,
+      unitCop: quota?.unitCop ?? SMS_OVERAGE_COP,
       freeMonthly: quota?.reachLimit ?? CAMPAIGN_FREE_REACH_MONTHLY,
     });
   }, [audience?.count, quota]);
@@ -313,7 +313,7 @@ export function CampaignWizard({
         String(msg).includes('Wompi') ||
         String(msg).includes('PAYMENT')
       ) {
-        router.push('/config');
+        router.push('/facturacion');
       }
     } finally {
       setSaving(false);
@@ -517,7 +517,7 @@ export function CampaignWizard({
                           </div>
                         ) : null}
                         <div className="flex justify-between gap-4 border-t border-[var(--onda-border)] pt-2">
-                          <dt className="font-semibold text-[var(--onda-ink)]">Costo estimado</dt>
+                          <dt className="font-semibold text-[var(--onda-ink)]">En la próxima factura</dt>
                           <dd className="font-display text-lg font-bold text-[var(--onda-ink)]">
                             {formatCop(reachQuote.costCop)}
                           </dd>
@@ -525,8 +525,9 @@ export function CampaignWizard({
                       </dl>
                       {reachQuote.paidCount > 0 && quota && !quota.hasPaymentMethod ? (
                         <p className="mt-3 rounded-xl bg-[var(--onda-warning)]/10 px-3 py-2 text-xs text-[var(--onda-ink)]">
-                          Necesitas tarjeta en Configuración para superar las{' '}
-                          {reachQuote.freeMonthly} personas gratis al mes.
+                          Necesitas tarjeta para superar las{' '}
+                          {reachQuote.freeMonthly} personas incluidas. El extra
+                          se cobra en la factura de consumos.
                         </p>
                       ) : null}
                     </div>

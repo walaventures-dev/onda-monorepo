@@ -484,6 +484,7 @@ model Pass {
   pushToken    String?
   walletRef    String?
   lastFeedbackSmsAt DateTime?
+  createdAt    DateTime      @default(now())
   user         User          @relation(fields: [userId], references: [id])
   store        Store?        @relation(fields: [storeId], references: [id])
   event        Event?        @relation(fields: [eventId], references: [id])

@@ -53,6 +53,7 @@ import { SignOutIcon as SignOut } from '@phosphor-icons/react/dist/csr/SignOut';
 import { MegaphoneIcon as Megaphone } from '@phosphor-icons/react/dist/csr/Megaphone';
 import { CameraIcon as Camera } from '@phosphor-icons/react/dist/csr/Camera';
 import { QrCodeIcon as QrCode } from '@phosphor-icons/react/dist/csr/QrCode';
+import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
 
 const SIZE = 16;
 const CLASS = 'h-3 w-3 shrink-0';
@@ -111,6 +112,7 @@ export const OndaIcons = {
   megaphone: <Megaphone size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   camera: <Camera size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   qr: <QrCode size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
+  receipt: <Receipt size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   /** Mano de marca — único ícono para «Ondas». Hereda `currentColor`. */
   ondas: (
     <span

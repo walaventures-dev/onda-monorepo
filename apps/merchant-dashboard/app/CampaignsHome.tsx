@@ -20,13 +20,13 @@ import {
   OndaIcons,
   SkeletonList,
 } from '@onda/shared-ui';
+import { PLAN_SMS_REACH_MONTHLY, SMS_OVERAGE_COP } from '@onda/shared-types';
 import {
   formatCampaignRoi,
   formatCop,
   OBJECTIVE_TITLES,
   type ObjectiveKind,
 } from '@onda/shared-utils';
-import { CAMPAIGN_FREE_REACH_MONTHLY } from '@onda/shared-types';
 
 type Recommendation = {
   id: string;
@@ -135,9 +135,9 @@ export function CampaignsHome({
     setCampaigns(list.campaigns || []);
     setQuota({
       reachUsed: list.reachUsed ?? 0,
-      reachLimit: list.reachLimit ?? CAMPAIGN_FREE_REACH_MONTHLY,
+      reachLimit: list.reachLimit ?? PLAN_SMS_REACH_MONTHLY.BASIC,
       freeRemaining: list.freeRemaining ?? 0,
-      unitCop: list.unitCop ?? 200,
+      unitCop: list.unitCop ?? SMS_OVERAGE_COP,
       hasPaymentMethod: Boolean(list.hasPaymentMethod),
     });
   };
@@ -215,10 +215,10 @@ export function CampaignsHome({
         <div>
           <h2 className="font-display text-2xl font-semibold">Campañas</h2>
           <p className="mt-1 text-sm text-[var(--onda-muted)]">
-            Objetivo → audiencia → revisión. Cobro por personas alcanzadas:{' '}
-            {CAMPAIGN_FREE_REACH_MONTHLY} gratis al mes
+            Objetivo → audiencia → revisión. El extra de SMS se cobra en la
+            siguiente factura de consumos
             {quota
-              ? ` · ${quota.reachUsed}/${quota.reachLimit} usadas · ${formatCop(quota.unitCop)}/persona extra`
+              ? ` · ${quota.reachUsed}/${quota.reachLimit} SMS usados · ${formatCop(quota.unitCop)}/SMS extra`
               : ''}
             {quota && !quota.hasPaymentMethod ? (
               <>
@@ -227,9 +227,9 @@ export function CampaignsHome({
                 <button
                   type="button"
                   className="font-medium underline underline-offset-2"
-                  onClick={() => router.push('/config')}
+                  onClick={() => router.push('/facturacion')}
                 >
-                  Agrega tarjeta en Config
+                  Agrega tarjeta
                 </button>
               </>
             ) : null}

@@ -215,7 +215,7 @@ export class CartillaService {
 
     for (const cartilla of cartillas) {
       if (!cartilla.passDesign) {
-        await this.attachStoreDesign(storeId, cartilla.id);
+        await this.attachStoreDesign(storeId, cartilla.id, this.prisma);
         continue;
       }
       const design = cartilla.passDesign;

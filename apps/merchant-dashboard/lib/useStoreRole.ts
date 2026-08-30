@@ -34,6 +34,7 @@ export function cajaAllowedMerchantPath(pathname: string): boolean {
     'comparativa',
     'completar',
     'config',
+    'facturacion',
     'pase',
     'cartillas',
   ];

@@ -26,6 +26,7 @@ import type {
   WalletNotifyJobPayload,
   WhatsappJobPayload,
   WompiRenewJobPayload,
+  UsageBillingJobPayload,
 } from './jobs.types';
 import { CartillaService } from './cartilla.service';
 import { CampaignsService } from './campaigns.service';
@@ -62,6 +63,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     if (this.usesCloudTasks) {
       this.logger.log('Jobs: Cloud Tasks (GCP)');
+      await this.enqueue('billing-sweep', {}, { delayMs: 60_000 });
       return;
     }
     try {
@@ -81,6 +83,15 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
         this.logger.error(`Job ${job?.name} ${job?.id} failed: ${err.message}`);
       });
       this.logger.log('Jobs: BullMQ/Redis');
+      await this.queue.add(
+        'billing-sweep',
+        {},
+        {
+          jobId: 'billing-sweep-daily',
+          repeat: { every: 24 * 60 * 60 * 1000 },
+          removeOnComplete: 20,
+        }
+      );
     } catch (e) {
       this.logger.warn(`Jobs: inline (Redis unavailable): ${e}`);
     }
@@ -153,6 +164,19 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       }
       case 'wompi-renew':
         await this.dispatchWompiRenew(payload as WompiRenewJobPayload);
+        return;
+      case 'usage-billing':
+        await this.billing.runUsageBilling(
+          (payload as UsageBillingJobPayload).storeId
+        );
+        return;
+      case 'billing-sweep':
+        await this.billing.sweepDueBilling();
+        if (this.usesCloudTasks) {
+          await this.enqueue('billing-sweep', {}, {
+            delayMs: 24 * 60 * 60 * 1000,
+          });
+        }
         return;
       case 'cartilla-ending-sms':
         await this.cartillas.sendEndingSms(payload as CartillaEndingSmsPayload);

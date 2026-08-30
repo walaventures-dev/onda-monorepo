@@ -16,10 +16,10 @@ import {
   AnalyticsController,
   DrawsController,
   LeadsController,
-  BillingController,
   FeedbackController,
   WebhooksController,
 } from './analytics.controller';
+import { BillingController } from './billing.controller';
 import { AuthController } from './auth.controller';
 import { CustomerAuthController } from './customer-auth.controller';
 import { UploadsController } from './uploads.controller';
@@ -55,6 +55,8 @@ import { FirestoreService } from './firestore.service';
 import { PromoCodesService } from './promo-codes.service';
 import { CodeResolverService } from './code-resolver.service';
 import { BillingService } from './billing.service';
+import { InvoicePdfService } from './invoice-pdf.service';
+import { BillingStorageService } from './billing-storage.service';
 import { PlacesController } from './places.controller';
 import { FeedbackService } from './feedback.service';
 import { GooglePlacesService } from './google-places.service';
@@ -126,6 +128,8 @@ import { GooglePlacesService } from './google-places.service';
     PromoCodesService,
     CodeResolverService,
     BillingService,
+    InvoicePdfService,
+    BillingStorageService,
     FeedbackService,
     GooglePlacesService,
   ],
