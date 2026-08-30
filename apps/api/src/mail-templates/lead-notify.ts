@@ -23,6 +23,7 @@ export type LeadNotifyInput = {
   city: string;
   role: string;
   source: string;
+  logoUrl?: string;
 };
 
 export function leadNotifySubject(businessName: string, now = new Date()): string {
@@ -51,7 +52,7 @@ function row(label: string, value: string, href?: string) {
 }
 
 export function leadNotifyEmailHtml(input: LeadNotifyInput): string {
-  const logo = escapeHtml(wordmarkUrl());
+  const logo = escapeHtml(input.logoUrl || wordmarkUrl());
   const home = escapeHtml(landingBaseUrl());
   const year = new Date().getFullYear();
   const telHref = input.phone.startsWith('+')

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { FirebaseAuthService } from './firebase-auth.service';
 import { MailService } from './mail.service';
+import { BillingStorageService } from './billing-storage.service';
 import {
   extractOobCodeFromFirebaseLink,
   passwordResetEmailHtml,
@@ -41,7 +42,8 @@ export class MerchantPasswordResetService {
 
   constructor(
     @Inject(FirebaseAuthService) private firebase: FirebaseAuthService,
-    @Inject(MailService) private mail: MailService
+    @Inject(MailService) private mail: MailService,
+    @Inject(BillingStorageService) private storage: BillingStorageService
   ) {}
 
   async request(emailRaw: string): Promise<{ ok: true }> {
@@ -83,10 +85,11 @@ export class MerchantPasswordResetService {
     if (!appResetUrl) return { ok: true };
 
     try {
+      const logoUrl = await this.storage.ensureWordmarkUrl();
       await this.mail.send({
         to: { email },
         subject: 'Cambia tu contraseña — Onda',
-        html: passwordResetEmailHtml({ resetUrl: appResetUrl }),
+        html: passwordResetEmailHtml({ resetUrl: appResetUrl, logoUrl }),
         text: passwordResetEmailText({ resetUrl: appResetUrl }),
       });
     } catch (err) {

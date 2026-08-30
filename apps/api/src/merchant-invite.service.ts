@@ -14,6 +14,7 @@ import {
 import { maxCajaSeats } from '@onda/shared-utils';
 import { PrismaService } from './prisma.service';
 import { JobsService } from './jobs.service';
+import { BillingStorageService } from './billing-storage.service';
 import {
   teamInviteEmailHtml,
   teamInviteEmailText,
@@ -28,7 +29,8 @@ function newInviteToken() {
 export class MerchantInviteService {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
-    @Inject(JobsService) private jobs: JobsService
+    @Inject(JobsService) private jobs: JobsService,
+    @Inject(BillingStorageService) private storage: BillingStorageService
   ) {}
 
   async listMembers(storeId: string) {
@@ -111,6 +113,7 @@ export class MerchantInviteService {
     });
 
     const inviteUrl = inviteAcceptUrl(token);
+    const logoUrl = await this.storage.ensureWordmarkUrl();
     await this.jobs.enqueue('brevo-email', {
       to: email,
       toName: name,
@@ -120,6 +123,7 @@ export class MerchantInviteService {
         storeName: store.name,
         roleLabel: 'Caja',
         inviteUrl,
+        logoUrl,
       }),
       text: teamInviteEmailText({
         inviteeName: name,
@@ -149,6 +153,7 @@ export class MerchantInviteService {
       });
     }
     const inviteUrl = inviteAcceptUrl(token);
+    const logoUrl = await this.storage.ensureWordmarkUrl();
     await this.jobs.enqueue('brevo-email', {
       to: member.email,
       toName: member.name,
@@ -158,6 +163,7 @@ export class MerchantInviteService {
         storeName: member.store.name,
         roleLabel: 'Caja',
         inviteUrl,
+        logoUrl,
       }),
       text: teamInviteEmailText({
         inviteeName: member.name,

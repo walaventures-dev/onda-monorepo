@@ -36,14 +36,16 @@ export function merchantBaseUrl(): string {
 export function funnelHeroImageUrl(): string {
   const explicit = process.env.FUNNEL_HERO_IMAGE_URL?.trim();
   if (explicit) return explicit;
-  return 'https://entraenlaonda.com/brand/funnel_image.png';
+  return `${landingBaseUrl()}/brand/funnel_image.png`;
 }
 
+export function wordmarkImageUrl(): string {
+  const explicit = process.env.MAIL_WORDMARK_IMAGE_URL?.trim();
+  if (explicit) return explicit;
+  return `${landingBaseUrl()}/brand/onda-wordmark.png`;
+}
+
+/** @deprecated Usar wordmarkImageUrl — alias por compatibilidad. */
 export function wordmarkUrl(): string {
-  const merchant = (
-    process.env.NEXT_PUBLIC_MERCHANT_URL ||
-    process.env.NEXT_PUBLIC_LANDING_URL ||
-    'https://admin.entraenlaonda.com'
-  ).replace(/\/$/, '');
-  return `${merchant}/brand/onda-wordmark.png`;
+  return wordmarkImageUrl();
 }

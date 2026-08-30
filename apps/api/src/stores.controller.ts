@@ -29,6 +29,7 @@ import {
   storeCreatedEmailText,
 } from './mail-templates/store-created';
 import { BillingService } from './billing.service';
+import { BillingStorageService } from './billing-storage.service';
 import { GooglePlacesService } from './google-places.service';
 import { CodeResolverService } from './code-resolver.service';
 import { WompiService } from './wompi.service';
@@ -101,7 +102,8 @@ export class StoresController {
     @Inject(BillingService) private billing: BillingService,
     @Inject(CodeResolverService) private codeResolver: CodeResolverService,
     @Inject(WompiService) private wompi: WompiService,
-    @Inject(GooglePlacesService) private googlePlaces: GooglePlacesService
+    @Inject(GooglePlacesService) private googlePlaces: GooglePlacesService,
+    @Inject(BillingStorageService) private storage: BillingStorageService
   ) {}
 
   @Get()
@@ -396,6 +398,7 @@ export class StoresController {
 
     if (store.ownerEmail) {
       try {
+        const logoUrl = await this.storage.ensureWordmarkUrl();
         await this.jobs.enqueue('brevo-email', {
           to: store.ownerEmail,
           toName: store.ownerName,
@@ -404,6 +407,7 @@ export class StoresController {
             ownerName: store.ownerName,
             storeName: store.name,
             referralCode: store.referralCode,
+            logoUrl,
           }),
           text: storeCreatedEmailText({
             ownerName: store.ownerName,

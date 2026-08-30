@@ -12,6 +12,7 @@ export function billingInvoiceEmailHtml(input: {
   lines: Array<{ label: string; amountCop: number }>;
   nextPlanAt?: Date | null;
   nextUsageAt?: Date | null;
+  logoUrl?: string;
 }): string {
   const greeting = input.ownerName
     ? `Hola ${escapeHtml(input.ownerName)}`
@@ -32,7 +33,7 @@ export function billingInvoiceEmailHtml(input: {
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="background:${BRAND.card};border-radius:24px;padding:32px;border:1px solid ${BRAND.border}">
         <tr><td>
-          <img src="${wordmarkUrl()}" alt="Onda" height="28" />
+          <img src="${escapeHtml(input.logoUrl || wordmarkUrl())}" alt="Onda" height="28" />
           <p style="margin:24px 0 8px;font-size:13px;color:${BRAND.muted}">${escapeHtml(input.kindLabel)} · ${escapeHtml(input.invoiceNumber)}</p>
           <h1 style="margin:0 0 12px;font-size:22px">Resumen de cobro</h1>
           <p style="margin:0 0 20px;color:${BRAND.muted};font-size:15px">${greeting}, este es el recibo de ${escapeHtml(input.storeName)} (${escapeHtml(input.planName)}) para ${escapeHtml(input.periodLabel)}.</p>

@@ -1,10 +1,11 @@
-import { BRAND, escapeHtml, merchantBaseUrl } from './brand';
+import { BRAND, escapeHtml, merchantBaseUrl, wordmarkUrl } from './brand';
 
 export type TeamInviteEmailInput = {
   inviteeName: string;
   storeName: string;
   roleLabel: string;
   inviteUrl: string;
+  logoUrl?: string;
 };
 
 export function teamInviteEmailHtml(input: TeamInviteEmailInput): string {
@@ -12,7 +13,7 @@ export function teamInviteEmailHtml(input: TeamInviteEmailInput): string {
   const store = escapeHtml(input.storeName);
   const role = escapeHtml(input.roleLabel);
   const url = escapeHtml(input.inviteUrl);
-  const logo = escapeHtml(`${merchantBaseUrl()}/brand/onda-wordmark.png`);
+  const logo = escapeHtml(input.logoUrl || wordmarkUrl());
 
   return `<!DOCTYPE html>
 <html lang="es">

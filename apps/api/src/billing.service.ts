@@ -891,6 +891,7 @@ export class BillingService {
     const periodLabel = `${formatChargeDate(invoice.periodStart)} – ${formatChargeDate(invoice.periodEnd)}`;
     const planName =
       PLAN_META[this.normalizePlan(invoice.planType)].name;
+    const logoUrl = await this.storage.ensureWordmarkUrl();
     try {
       await this.mail.send({
         to: { email: to, name: store.ownerName },
@@ -906,6 +907,7 @@ export class BillingService {
           lines,
           nextPlanAt: store.nextBillingAt,
           nextUsageAt: store.nextUsageBillingAt,
+          logoUrl,
         }),
         text: billingInvoiceEmailText({
           storeName: store.name,

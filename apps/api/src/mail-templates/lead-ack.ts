@@ -10,6 +10,7 @@ export type LeadAckInput = {
   name: string;
   businessName: string;
   imageUrl?: string;
+  logoUrl?: string;
 };
 
 function firstName(name: string) {
@@ -30,7 +31,7 @@ export function leadAckSms(name: string, businessName: string): string {
 export function leadAckEmailHtml(input: LeadAckInput): string {
   const who = escapeHtml(firstName(input.name));
   const biz = escapeHtml(input.businessName);
-  const logo = escapeHtml(wordmarkUrl());
+  const logo = escapeHtml(input.logoUrl || wordmarkUrl());
   const photo = escapeHtml(input.imageUrl || funnelHeroImageUrl());
   const home = escapeHtml(landingBaseUrl());
   const year = new Date().getFullYear();

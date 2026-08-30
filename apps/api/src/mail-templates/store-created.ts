@@ -10,12 +10,13 @@ export type StoreCreatedEmailInput = {
   ownerName: string;
   storeName: string;
   referralCode?: string;
+  logoUrl?: string;
 };
 
 export function storeCreatedEmailHtml(input: StoreCreatedEmailInput): string {
   const ownerName = escapeHtml(input.ownerName);
   const storeName = escapeHtml(input.storeName);
-  const logo = escapeHtml(wordmarkUrl());
+  const logo = escapeHtml(input.logoUrl || wordmarkUrl());
   const dashboardUrl = escapeHtml(merchantBaseUrl());
   const home = escapeHtml(landingBaseUrl());
   const year = new Date().getFullYear();

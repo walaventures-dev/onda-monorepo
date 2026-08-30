@@ -1,16 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Storage } from '@google-cloud/storage';
+import { randomUUID } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { funnelHeroImageUrl } from './mail-templates/brand';
+import {
+  funnelHeroImageUrl,
+  wordmarkImageUrl,
+} from './mail-templates/brand';
 
 const DEFAULT_BUCKET = 'join-onda.firebasestorage.app';
 const LOCAL_DIR = join(process.cwd(), 'uploads', 'billing');
+
+export type MailBrandUrls = {
+  wordmark: string;
+  funnelHero: string;
+};
 
 @Injectable()
 export class BillingStorageService {
   private readonly logger = new Logger(BillingStorageService.name);
   private storage: Storage | null = null;
+  private readonly assetCache = new Map<string, string>();
 
   get bucketName(): string {
     return (
@@ -101,56 +111,134 @@ export class BillingStorageService {
     const storage = this.ensureStorage();
     const file = storage.bucket(this.bucketName).file(objectPath);
     const [exists] = await file.exists();
+    let token: string | undefined;
+
     if (!exists) {
+      token = randomUUID();
       await file.save(buffer, {
         contentType,
         resumable: false,
-        metadata: { cacheControl: 'public, max-age=31536000' },
+        metadata: {
+          cacheControl: 'public, max-age=31536000',
+          metadata: { firebaseStorageDownloadTokens: token },
+        },
       });
       this.logger.log(`Imagen pública subida gs://${this.bucketName}/${objectPath}`);
+    } else {
+      const [meta] = await file.getMetadata();
+      const rawToken = meta.metadata?.firebaseStorageDownloadTokens;
+      token =
+        typeof rawToken === 'string'
+          ? rawToken.split(',')[0]?.trim()
+          : undefined;
+      if (!token) {
+        token = randomUUID();
+        await file.setMetadata({
+          metadata: {
+            ...(meta.metadata || {}),
+            firebaseStorageDownloadTokens: token,
+          },
+        });
+      }
     }
-    try {
-      await file.makePublic();
-    } catch (e) {
-      this.logger.warn(
-        `makePublic ${objectPath}: ${e instanceof Error ? e.message : e}`
-      );
-    }
-    return `https://storage.googleapis.com/${this.bucketName}/${objectPath}`;
+
+    return this.firebaseDownloadUrl(objectPath, token);
   }
 
-  private funnelHeroCached: string | null = null;
+  private firebaseDownloadUrl(objectPath: string, token: string): string {
+    const encoded = encodeURIComponent(objectPath);
+    return `https://firebasestorage.googleapis.com/v0/b/${this.bucketName}/o/${encoded}?alt=media&token=${token}`;
+  }
+
+  /** URLs HTTPS estables para logo y foto en correos (Firebase Storage público). */
+  async ensureMailBrandUrls(): Promise<MailBrandUrls> {
+    const [wordmark, funnelHero] = await Promise.all([
+      this.ensureWordmarkUrl(),
+      this.ensureFunnelHeroUrl(),
+    ]);
+    return { wordmark, funnelHero };
+  }
+
+  async ensureWordmarkUrl(): Promise<string> {
+    return this.ensurePublicBrandAsset({
+      cacheKey: 'wordmark',
+      objectPath: 'brand/onda-wordmark.png',
+      localPaths: [
+        join(process.cwd(), 'apps/landing/public/brand/onda-wordmark.png'),
+        join(process.cwd(), 'libs/shared/ui/assets/brand/onda-wordmark.png'),
+        join(process.cwd(), 'apps/merchant-dashboard/public/brand/onda-wordmark.png'),
+      ],
+      fallback: wordmarkImageUrl,
+      contentType: 'image/png',
+    });
+  }
 
   async ensureFunnelHeroUrl(): Promise<string> {
-    if (this.funnelHeroCached) return this.funnelHeroCached;
-    const fallback = funnelHeroImageUrl();
-    const localPath = join(
-      process.cwd(),
-      'apps/landing/public/brand/funnel_image.png'
-    );
-    if (!existsSync(localPath)) {
-      this.funnelHeroCached = fallback;
+    return this.ensurePublicBrandAsset({
+      cacheKey: 'funnelHero',
+      objectPath: 'brand/funnel_image.png',
+      localPaths: [
+        join(process.cwd(), 'apps/landing/public/brand/funnel_image.png'),
+      ],
+      fallback: funnelHeroImageUrl,
+      contentType: 'image/png',
+    });
+  }
+
+  private async ensurePublicBrandAsset(options: {
+    cacheKey: string;
+    objectPath: string;
+    localPaths: string[];
+    fallback: () => string;
+    contentType: string;
+  }): Promise<string> {
+    const cached = this.assetCache.get(options.cacheKey);
+    if (cached) return cached;
+
+    const fallback = options.fallback();
+    const localPath = options.localPaths.find((p) => existsSync(p));
+    if (!localPath) {
+      this.assetCache.set(options.cacheKey, fallback);
       return fallback;
     }
+
     try {
       const url = await this.savePublicImage(
-        'brand/funnel_image.png',
+        options.objectPath,
         readFileSync(localPath),
-        'image/png'
+        options.contentType
       );
-      this.funnelHeroCached = url;
+      this.assetCache.set(options.cacheKey, url);
       return url;
     } catch (e) {
       this.logger.warn(
-        `No se subió funnel_image: ${e instanceof Error ? e.message : e}`
+        `No se subió ${options.objectPath}: ${
+          e instanceof Error ? e.message : e
+        }`
       );
-      this.funnelHeroCached = fallback;
+      this.assetCache.set(options.cacheKey, fallback);
       return fallback;
     }
   }
 
   private ensureStorage(): Storage {
-    if (!this.storage) this.storage = new Storage();
+    if (!this.storage) {
+      const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
+      const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+      if (clientEmail && privateKey) {
+        this.storage = new Storage({
+          projectId:
+            process.env.FIREBASE_PROJECT_ID?.trim() ||
+            process.env.GCP_PROJECT?.trim(),
+          credentials: {
+            client_email: clientEmail,
+            private_key: privateKey,
+          },
+        });
+      } else {
+        this.storage = new Storage();
+      }
+    }
     return this.storage;
   }
 }

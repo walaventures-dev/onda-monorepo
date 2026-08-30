@@ -4,11 +4,12 @@ import { BRAND, escapeHtml, landingBaseUrl, wordmarkUrl } from './brand';
 
 export type PasswordResetEmailInput = {
   resetUrl: string;
+  logoUrl?: string;
 };
 
 export function passwordResetEmailHtml(input: PasswordResetEmailInput): string {
   const resetUrl = escapeHtml(input.resetUrl);
-  const logo = escapeHtml(wordmarkUrl());
+  const logo = escapeHtml(input.logoUrl || wordmarkUrl());
   const year = new Date().getFullYear();
   const home = escapeHtml(landingBaseUrl());
 
