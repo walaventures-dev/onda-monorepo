@@ -12,7 +12,7 @@ import { CashRegisterIcon as CashRegister } from "@phosphor-icons/react/dist/csr
 import { GiftIcon as Gift } from "@phosphor-icons/react/dist/csr/Gift";
 import { MegaphoneIcon as Megaphone } from "@phosphor-icons/react/dist/csr/Megaphone";
 import { WalletIcon as Wallet } from "@phosphor-icons/react/dist/csr/Wallet";
-import { onboardingUrl, SHOW_POS_LANDING } from "../lib/pricing";
+import { demoUrl, onboardingUrl, SHOW_POS_LANDING } from "../lib/pricing";
 import {
   easeSoft,
   heroItem,
@@ -161,14 +161,22 @@ export function HeroSection() {
             variants={heroItem}
             className="mt-9 flex flex-col items-start gap-3"
           >
-            <a
-              href={onboardingUrl()}
-              className="inline-flex rounded-full bg-[var(--onda-primary-500)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(5,45,222,0.28)] transition hover:bg-[var(--onda-primary-600)] active:scale-[0.98]"
-            >
-              Poner mi negocio en la Onda →
-            </a>
+            <div className="flex flex-wrap items-center gap-3">
+              <a
+                href={onboardingUrl()}
+                className="inline-flex rounded-full bg-[var(--onda-primary-500)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(5,45,222,0.28)] transition hover:bg-[var(--onda-primary-600)] active:scale-[0.98]"
+              >
+                Poner mi negocio en la Onda →
+              </a>
+              <a
+                href={demoUrl()}
+                className="inline-flex rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 py-3.5 text-sm font-semibold text-[var(--onda-primary-500)] transition hover:bg-[var(--onda-primary-50)] active:scale-[0.98]"
+              >
+                Pedir un demo
+              </a>
+            </div>
             <p className="text-sm text-[var(--onda-muted)]">
-              Toma menos de 5 minutos empezar.
+              Empieza ahora, o te llamamos para mostrártelo.
             </p>
           </motion.div>
         </motion.div>

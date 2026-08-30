@@ -491,12 +491,36 @@ export interface RedeemRequest {
   promotionId: string;
 }
 
+export const LEAD_ROLES = [
+  'Dueño / Socia(o)',
+  'Gerente',
+  'Marketing',
+  'Otro',
+] as const;
+
+export type LeadRole = (typeof LEAD_ROLES)[number];
+
+export const LEAD_SOURCES = [
+  'Instagram',
+  'Facebook',
+  'TikTok',
+  'WhatsApp',
+  'Referido',
+  'Otro',
+] as const;
+
+export type LeadSource = (typeof LEAD_SOURCES)[number];
+
 export interface LeadRequest {
   name: string;
   email: string;
-  phone?: string;
-  businessName?: string;
-  message?: string;
+  phone: string;
+  businessName: string;
+  city: string;
+  role: LeadRole;
+  source: LeadSource;
+  /** Honeypot — si viene lleno, el API ignora el envío. */
+  website?: string;
 }
 
 export interface KpiSummary {

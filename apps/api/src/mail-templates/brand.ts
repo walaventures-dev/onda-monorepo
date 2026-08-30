@@ -33,6 +33,12 @@ export function merchantBaseUrl(): string {
   ).replace(/\/$/, '');
 }
 
+export function funnelHeroImageUrl(): string {
+  const explicit = process.env.FUNNEL_HERO_IMAGE_URL?.trim();
+  if (explicit) return explicit;
+  return 'https://entraenlaonda.com/brand/funnel_image.png';
+}
+
 export function wordmarkUrl(): string {
   const merchant = (
     process.env.NEXT_PUBLIC_MERCHANT_URL ||

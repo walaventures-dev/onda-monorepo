@@ -6,6 +6,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Headers,
+  Logger,
   NotFoundException,
   Param,
   Post,
@@ -31,7 +32,22 @@ import {
   monthlyOndasUsed,
   usageWindow,
 } from './plan-quota';
-import { computeRoi, planNewCustomersLimit, parsePlanId } from '@onda/shared-utils';
+import { computeRoi, isColombiaCity, planNewCustomersLimit, parsePlanId } from '@onda/shared-utils';
+import { LEAD_ROLES, LEAD_SOURCES } from '@onda/shared-types';
+import { BrevoService } from './brevo.service';
+import { BillingStorageService } from './billing-storage.service';
+import {
+  leadNotifyEmailHtml,
+  leadNotifyEmailText,
+  leadNotifySubject,
+  type LeadNotifyInput,
+} from './mail-templates/lead-notify';
+import {
+  leadAckEmailHtml,
+  leadAckEmailText,
+  leadAckSms,
+  leadAckSubject,
+} from './mail-templates/lead-ack';
 
 const COMPARE_MAX_STORES = 20;
 
@@ -1870,34 +1886,126 @@ export class DrawsController {
   }
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const LEAD_ROLE_SET = new Set<string>(LEAD_ROLES);
+const LEAD_SOURCE_SET = new Set<string>(LEAD_SOURCES);
+
 @Controller('leads')
 export class LeadsController {
+  private readonly logger = new Logger(LeadsController.name);
+
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
-    @Inject(JobsService) private jobs: JobsService
+    @Inject(JobsService) private jobs: JobsService,
+    @Inject(BrevoService) private brevo: BrevoService,
+    @Inject(BillingStorageService) private storage: BillingStorageService
   ) {}
 
   @Post()
   async create(
     @Body()
     body: {
-      name: string;
-      email: string;
+      name?: string;
+      email?: string;
       phone?: string;
       businessName?: string;
-      message?: string;
+      city?: string;
+      role?: string;
+      source?: string;
+      website?: string;
     }
   ) {
-    const lead = await this.prisma.lead.create({ data: body });
-    if (body.email) {
-      await this.jobs.enqueue('brevo-email', {
-        to: body.email,
-        toName: body.name,
-        subject: 'Recibimos tu mensaje — Onda',
-        html: `<p>Hola ${body.name || ''},</p><p>Gracias por escribirnos. El equipo de Onda te contactará pronto.</p>`,
-        text: `Hola ${body.name || ''}, gracias por escribirnos. El equipo de Onda te contactará pronto.`,
-      });
+    if (typeof body.website === 'string' && body.website.trim()) {
+      return { ok: true };
     }
+
+    const name = (body.name || '').trim();
+    const email = (body.email || '').trim();
+    const phone = (body.phone || '').trim();
+    const businessName = (body.businessName || '').trim();
+    const city = (body.city || '').trim();
+    const role = (body.role || '').trim();
+    const source = (body.source || '').trim();
+
+    if (!name) throw new BadRequestException('El nombre es requerido');
+    if (!businessName) {
+      throw new BadRequestException('El nombre del negocio es requerido');
+    }
+    if (!email || !EMAIL_RE.test(email)) {
+      throw new BadRequestException('El correo no es válido');
+    }
+    if (!phone) throw new BadRequestException('El WhatsApp es requerido');
+    if (!isColombiaCity(city)) {
+      throw new BadRequestException('Elige un municipio válido');
+    }
+    if (!LEAD_ROLE_SET.has(role)) {
+      throw new BadRequestException('El cargo no es válido');
+    }
+    if (!LEAD_SOURCE_SET.has(source)) {
+      throw new BadRequestException('La fuente no es válida');
+    }
+
+    const lead = await this.prisma.lead.create({
+      data: { name, email, phone, businessName, city, role, source },
+    });
+
+    const notifyTo =
+      process.env.LEADS_NOTIFY_EMAIL?.trim() || 'hola@entraenlaonda.com';
+    const payload: LeadNotifyInput = {
+      name,
+      email,
+      phone,
+      businessName,
+      city,
+      role,
+      source,
+    };
+    const imageUrl = await this.storage.ensureFunnelHeroUrl();
+    await Promise.all([
+      this.jobs
+        .enqueue('brevo-email', {
+          to: notifyTo,
+          toName: 'Onda',
+          subject: leadNotifySubject(businessName),
+          html: leadNotifyEmailHtml(payload),
+          text: leadNotifyEmailText(payload),
+        })
+        .catch((err) =>
+          this.logger.warn(
+            `Lead ${lead.id}: correo interno falló: ${
+              err instanceof Error ? err.message : err
+            }`
+          )
+        ),
+      this.jobs
+        .enqueue('brevo-email', {
+          to: email,
+          toName: name,
+          subject: leadAckSubject(),
+          html: leadAckEmailHtml({ name, businessName, imageUrl }),
+          text: leadAckEmailText({ name, businessName }),
+        })
+        .catch((err) =>
+          this.logger.warn(
+            `Lead ${lead.id}: correo al interesado falló: ${
+              err instanceof Error ? err.message : err
+            }`
+          )
+        ),
+      this.brevo
+        .sendSms({
+          to: phone,
+          message: leadAckSms(name, businessName),
+        })
+        .catch((err) =>
+          this.logger.warn(
+            `Lead ${lead.id}: SMS al interesado falló: ${
+              err instanceof Error ? err.message : err
+            }`
+          )
+        ),
+    ]);
+
     return lead;
   }
 

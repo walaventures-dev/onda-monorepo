@@ -16,6 +16,8 @@ export { PasswordInput } from './PasswordInput';
 export type { PasswordInputProps } from './PasswordInput';
 export { OndaSelect } from './OndaSelect';
 export type { OndaSelectProps, OndaSelectOption } from './OndaSelect';
+export { ColombiaPlaceFields } from './ColombiaPlaceFields';
+export type { ColombiaPlaceFieldsProps } from './ColombiaPlaceFields';
 export { ObjectiveDetailsEditor } from './ObjectiveDetailsEditor';
 export type { ObjectiveDetailsEditorProps } from './ObjectiveDetailsEditor';
 export { OndaDatePicker } from './OndaDatePicker';

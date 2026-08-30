@@ -934,19 +934,25 @@ button.onda-gradient:focus-visible:not(:disabled) {
   cursor: pointer;
 }
 
-.onda-select-trigger [data-slot="indicator"],
-.onda-select-trigger svg:last-child {
+.onda-select-trigger .select__indicator,
+.onda-select-trigger [data-slot="select-default-indicator"],
+.onda-select-trigger [data-slot="select-indicator"] {
   position: absolute;
-  right: 0.7rem;
-  top: 50%;
-  transform: translateY(-50%);
+  inset-block: 0;
+  inset-inline-end: 0.75rem;
+  inset-inline-start: auto;
+  width: 1rem;
+  height: 1rem;
+  margin-block: auto;
   flex-shrink: 0;
   pointer-events: none;
+  /* No uses transform: HeroUI rota con `rotate` al abrir. */
 }
 
-.onda-select--compact .onda-select-trigger [data-slot="indicator"],
-.onda-select--compact .onda-select-trigger svg:last-child {
-  right: 0.55rem;
+.onda-select--compact .onda-select-trigger .select__indicator,
+.onda-select--compact .onda-select-trigger [data-slot="select-default-indicator"],
+.onda-select--compact .onda-select-trigger [data-slot="select-indicator"] {
+  inset-inline-end: 0.55rem;
 }
 
 @media (min-width: 768px) {
@@ -985,6 +991,8 @@ button.onda-gradient:focus-visible:not(:disabled) {
   min-width: max(var(--trigger-width, 280px), 280px) !important;
   width: max-content;
   max-width: min(92vw, 420px);
+  max-height: min(18rem, 70vh);
+  overflow-y: auto;
 }
 
 .onda-select-popover [data-slot="list-box-item"],

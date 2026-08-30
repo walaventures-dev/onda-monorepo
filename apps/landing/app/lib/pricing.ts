@@ -29,3 +29,10 @@ export function onboardingUrl(plan?: PlanId, billing?: BillingPeriod) {
 export function loginUrl() {
   return `${MERCHANT_BASE}/login`;
 }
+
+/** Funnel de ventas: pedir que te llamen para un demo. */
+export const DEMO_FUNNEL_PATH = '/demo';
+
+export function demoUrl() {
+  return DEMO_FUNNEL_PATH;
+}

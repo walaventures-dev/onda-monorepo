@@ -11,7 +11,7 @@ import { ShieldCheckIcon as ShieldCheck } from '@phosphor-icons/react/dist/csr/S
 import { WalletIcon as Wallet } from '@phosphor-icons/react/dist/csr/Wallet';
 import { OndaLogo, OndaWordmark } from '@onda/shared-ui';
 import { fadeUp, inViewStagger, staggerItem } from '../lib/motion';
-import { onboardingUrl, SHOW_POS_LANDING } from '../lib/pricing';
+import { demoUrl, onboardingUrl, SHOW_POS_LANDING } from '../lib/pricing';
 
 const BADGES = [
   ...(SHOW_POS_LANDING
@@ -29,6 +29,7 @@ const PRODUCT_LINKS = [
   },
   ...(SHOW_POS_LANDING ? [{ href: '#pos', label: 'Punto de venta' }] : []),
   { href: '#demo', label: 'Pruébalo en vivo' },
+  { href: demoUrl(), label: 'Pedir un demo' },
   { href: '#campanas', label: 'Campañas' },
   { href: '#pricing', label: 'Planes y precios' },
 ];
@@ -76,13 +77,23 @@ export function FooterCta() {
               ))}
             </motion.div>
           </div>
-          <motion.a
+          <motion.div
             variants={staggerItem}
-            href={onboardingUrl()}
-            className="inline-flex shrink-0 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-[var(--onda-primary-500)] shadow-lg transition hover:bg-[var(--onda-primary-50)] active:scale-[0.98]"
+            className="flex shrink-0 flex-col items-stretch gap-3 sm:items-center md:items-end"
           >
-            Poner mi negocio en la Onda →
-          </motion.a>
+            <a
+              href={onboardingUrl()}
+              className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-[var(--onda-primary-500)] shadow-lg transition hover:bg-[var(--onda-primary-50)] active:scale-[0.98]"
+            >
+              Poner mi negocio en la Onda →
+            </a>
+            <a
+              href={demoUrl()}
+              className="inline-flex items-center justify-center rounded-full border border-white/40 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-white/10 active:scale-[0.98]"
+            >
+              Pedir un demo
+            </a>
+          </motion.div>
         </motion.div>
       </section>
 

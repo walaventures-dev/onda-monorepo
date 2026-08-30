@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Storage } from '@google-cloud/storage';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { funnelHeroImageUrl } from './mail-templates/brand';
 
 const DEFAULT_BUCKET = 'join-onda.firebasestorage.app';
 const LOCAL_DIR = join(process.cwd(), 'uploads', 'billing');
@@ -89,6 +90,62 @@ export class BillingStorageService {
         `Signed URL falló: ${e instanceof Error ? e.message : e}`
       );
       return null;
+    }
+  }
+
+  async savePublicImage(
+    objectPath: string,
+    buffer: Buffer,
+    contentType: string
+  ): Promise<string> {
+    const storage = this.ensureStorage();
+    const file = storage.bucket(this.bucketName).file(objectPath);
+    const [exists] = await file.exists();
+    if (!exists) {
+      await file.save(buffer, {
+        contentType,
+        resumable: false,
+        metadata: { cacheControl: 'public, max-age=31536000' },
+      });
+      this.logger.log(`Imagen pública subida gs://${this.bucketName}/${objectPath}`);
+    }
+    try {
+      await file.makePublic();
+    } catch (e) {
+      this.logger.warn(
+        `makePublic ${objectPath}: ${e instanceof Error ? e.message : e}`
+      );
+    }
+    return `https://storage.googleapis.com/${this.bucketName}/${objectPath}`;
+  }
+
+  private funnelHeroCached: string | null = null;
+
+  async ensureFunnelHeroUrl(): Promise<string> {
+    if (this.funnelHeroCached) return this.funnelHeroCached;
+    const fallback = funnelHeroImageUrl();
+    const localPath = join(
+      process.cwd(),
+      'apps/landing/public/brand/funnel_image.png'
+    );
+    if (!existsSync(localPath)) {
+      this.funnelHeroCached = fallback;
+      return fallback;
+    }
+    try {
+      const url = await this.savePublicImage(
+        'brand/funnel_image.png',
+        readFileSync(localPath),
+        'image/png'
+      );
+      this.funnelHeroCached = url;
+      return url;
+    } catch (e) {
+      this.logger.warn(
+        `No se subió funnel_image: ${e instanceof Error ? e.message : e}`
+      );
+      this.funnelHeroCached = fallback;
+      return fallback;
     }
   }
 

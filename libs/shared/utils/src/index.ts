@@ -383,6 +383,19 @@ export {
 } from './pricing';
 
 export {
+  COLOMBIA_DEPARTMENTS,
+  colombiaDepartmentNames,
+  municipalitiesOf,
+  isColombiaMunicipality,
+  formatColombiaCity,
+  isColombiaCity,
+  filterMunicipalities,
+  matchColombiaMunicipality,
+  foldColombiaName,
+  type ColombiaDepartment,
+} from './colombia-geo';
+
+export {
   SUCCESS_WINDOW_DAYS,
   SUCCESS_RATE_THRESHOLD,
   successWindowDays,

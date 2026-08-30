@@ -20,6 +20,71 @@ html.lenis body {
   }
 }
 
+/* Dark blue foci sit off-canvas; only their blur is visible on the page. */
+.onda-404-studio {
+  background-color: var(--onda-primary-500);
+}
+
+.onda-404-glow {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.onda-404-focus {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  border-radius: 50%;
+}
+
+.onda-404-focus--nw {
+  left: -6%;
+  top: -8%;
+  box-shadow: 0 0 52vw 28vw
+    color-mix(in srgb, var(--onda-primary-500) 45%, var(--onda-primary-600));
+}
+
+.onda-404-focus--ne {
+  right: -8%;
+  top: -10%;
+  box-shadow: 0 0 58vw 26vw var(--onda-primary-600);
+}
+
+.onda-404-focus--e {
+  right: -10%;
+  top: 40%;
+  box-shadow: 0 0 64vw 32vw
+    color-mix(in srgb, var(--onda-primary-500) 30%, var(--onda-primary-600));
+}
+
+.onda-404-focus--sw {
+  left: -8%;
+  bottom: -10%;
+  box-shadow: 0 0 56vw 30vw var(--onda-primary-600);
+}
+
+.onda-404-focus--s {
+  left: 46%;
+  bottom: -12%;
+  box-shadow: 0 0 60vw 28vw
+    color-mix(in srgb, var(--onda-primary-500) 40%, var(--onda-primary-600));
+}
+
+.onda-404-photo {
+  -webkit-mask-image: linear-gradient(to top, #000 62%, transparent);
+  mask-image: linear-gradient(to top, #000 62%, transparent);
+}
+
+@media (min-width: 768px) {
+  .onda-404-photo {
+    -webkit-mask-image: linear-gradient(to right, #000 82%, transparent 100%);
+    mask-image: linear-gradient(to right, #000 82%, transparent 100%);
+  }
+}
+
 @keyframes onda-confetti {
   0% {
     opacity: 0;

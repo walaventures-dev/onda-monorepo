@@ -666,6 +666,9 @@ model Lead {
   email        String
   phone        String?
   businessName String?
+  city         String?
+  role         String?
+  source       String?
   message      String?
   createdAt    DateTime @default(now())
 }
