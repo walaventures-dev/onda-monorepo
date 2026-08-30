@@ -151,12 +151,21 @@ export class BillingService {
     if (!tokens.acceptanceToken || !tokens.acceptPersonalAuth) {
       throw new BadRequestException('Debes aceptar los términos de Wompi');
     }
-    const source = await this.wompi.createPaymentSource({
-      token: tokens.cardToken,
-      customerEmail: email,
-      acceptanceToken: tokens.acceptanceToken,
-      acceptPersonalAuth: tokens.acceptPersonalAuth,
-    });
+    let source: { id: string; stub?: boolean };
+    try {
+      source = await this.wompi.createPaymentSource({
+        token: tokens.cardToken,
+        customerEmail: email,
+        acceptanceToken: tokens.acceptanceToken,
+        acceptPersonalAuth: tokens.acceptPersonalAuth,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.error(`Wompi payment_source store=${store.id}: ${msg}`);
+      throw new BadRequestException(
+        'No se pudo registrar la tarjeta. Revisa los datos o intenta con otra.'
+      );
+    }
     await this.prisma.store.update({
       where: { id: store.id },
       data: { wompiPaymentSourceId: source.id },
@@ -179,13 +188,22 @@ export class BillingService {
       input.discountPercentage ?? 0
     );
     const reference = `onda-${input.referenceKind || 'sub'}-${input.storeId}-${Date.now()}`;
-    await this.wompi.chargePaymentSource({
-      paymentSourceId: input.paymentSourceId,
-      storeId: input.storeId,
-      amountInCents: quote.amountDue * 100,
-      reference,
-      customerEmail: input.customerEmail || undefined,
-    });
+    try {
+      await this.wompi.chargePaymentSource({
+        paymentSourceId: input.paymentSourceId,
+        storeId: input.storeId,
+        amountInCents: quote.amountDue * 100,
+        reference,
+        customerEmail: input.customerEmail || undefined,
+      });
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.error(`Wompi charge store=${input.storeId}: ${msg}`);
+      throw new BadRequestException(
+        'No se pudo cobrar la tarjeta. Revisa los datos o intenta con otra.'
+      );
+    }
     return { reference, amountCop: quote.amountDue, quote };
   }
 

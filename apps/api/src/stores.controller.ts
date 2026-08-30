@@ -5,6 +5,7 @@ import {
   ConflictException,
   Controller,
   Get,
+  HttpException,
   Logger,
   NotFoundException,
   Param,
@@ -179,13 +180,23 @@ export class StoresController {
       throw new BadRequestException('Tarjeta requerida para activar el plan');
     }
 
-    const store = await this.insertStore(body, {
-      planType,
-      billingPeriod,
-      referredByStoreId: codeMeta.referredByStoreId,
-      promoCodeUsed: codeMeta.promoCode,
-      billingStatus: 'PENDING',
-    });
+    let store: Awaited<ReturnType<StoresController['insertStore']>>;
+    try {
+      store = await this.insertStore(body, {
+        planType,
+        billingPeriod,
+        referredByStoreId: codeMeta.referredByStoreId,
+        promoCodeUsed: codeMeta.promoCode,
+        billingStatus: 'PENDING',
+      });
+    } catch (e) {
+      if (e instanceof HttpException) throw e;
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.error(`insertStore falló: ${msg}`);
+      throw new BadRequestException(
+        'No se pudo crear el negocio. Intenta de nuevo.'
+      );
+    }
 
     try {
       if (quote.skipPayment) {
@@ -230,7 +241,17 @@ export class StoresController {
       };
     } catch (e) {
       await this.prisma.store.delete({ where: { id: store.id } }).catch(() => {});
-      throw e;
+      if (e instanceof HttpException) throw e;
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.error(`with-subscription falló store=${store.id}: ${msg}`);
+      if (/Wompi/i.test(msg)) {
+        throw new BadRequestException(
+          'No se pudo cobrar la tarjeta. Revisa los datos o intenta con otra.'
+        );
+      }
+      throw new BadRequestException(
+        'No se pudo activar el negocio. Intenta de nuevo.'
+      );
     }
   }
 
