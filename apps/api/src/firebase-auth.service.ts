@@ -82,4 +82,83 @@ export class FirebaseAuthService {
       handleCodeInApp: false,
     });
   }
+
+  /**
+   * Si ya hay un usuario con ese email (p.ej. registrado con contraseña y
+   * email sin verificar), Firebase rechaza Google. Marcamos el email como
+   * verificado y enlazamos el proveedor para que el cliente pueda reintentar.
+   */
+  async prepareGoogleMerchantSignIn(
+    accessToken: string
+  ): Promise<{ retry: boolean }> {
+    if (!this.isConfigured || !accessToken.trim()) return { retry: false };
+    const profile = await this.googleUserinfo(accessToken);
+    const email = profile?.email?.trim().toLowerCase();
+    if (!profile || !email || profile.email_verified === false) {
+      return { retry: false };
+    }
+    try {
+      const auth = getAuth(this.ensureApp());
+      const user = await auth.getUserByEmail(email);
+      const hasGoogle = user.providerData.some(
+        (p) => p.providerId === 'google.com'
+      );
+      const updates: {
+        emailVerified?: boolean;
+        providerToLink?: {
+          uid: string;
+          providerId: string;
+          email: string;
+          displayName?: string;
+          photoURL?: string;
+        };
+      } = {};
+      if (!user.emailVerified) updates.emailVerified = true;
+      if (!hasGoogle && profile.sub) {
+        updates.providerToLink = {
+          uid: profile.sub,
+          providerId: 'google.com',
+          email,
+          displayName: profile.name,
+          photoURL: profile.picture,
+        };
+      }
+      if (Object.keys(updates).length > 0) {
+        await auth.updateUser(user.uid, updates);
+      }
+      return { retry: true };
+    } catch (err) {
+      const code =
+        typeof err === 'object' && err && 'code' in err
+          ? String((err as { code: unknown }).code)
+          : '';
+      if (code.includes('user-not-found')) return { retry: false };
+      this.logger.warn(`prepareGoogleMerchantSignIn: ${code || err}`);
+      return { retry: false };
+    }
+  }
+
+  private async googleUserinfo(accessToken: string): Promise<{
+    email?: string;
+    email_verified?: boolean;
+    sub?: string;
+    name?: string;
+    picture?: string;
+  } | null> {
+    try {
+      const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) return null;
+      return (await res.json()) as {
+        email?: string;
+        email_verified?: boolean;
+        sub?: string;
+        name?: string;
+        picture?: string;
+      };
+    } catch {
+      return null;
+    }
+  }
 }

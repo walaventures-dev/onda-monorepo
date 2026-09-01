@@ -58,6 +58,12 @@ export class AuthController {
     return this.passwordReset.request(body.email || '');
   }
 
+  /** Público. Alista una cuenta existente para entrar con Google. */
+  @Post('merchant/google')
+  prepareGoogle(@Body() body: { accessToken?: string }) {
+    return this.firebase.prepareGoogleMerchantSignIn(body.accessToken || '');
+  }
+
   @Post('merchant')
   async merchantLogin(
     @Headers('authorization') authHeader: string | undefined,

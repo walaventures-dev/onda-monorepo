@@ -16,15 +16,16 @@ import {
   createUserWithEmailAndPassword,
   getRedirectResult,
   onAuthStateChanged,
+  signInWithCredential,
   signInWithEmailAndPassword,
-  signInWithPopup,
-  signInWithRedirect,
   signOut,
   updateProfile,
+  type Auth,
   type User,
 } from 'firebase/auth';
 import { api, setApiAuthTokenGetter } from '@onda/shared-ui';
 import { getMerchantAuth, isMerchantFirebaseConfigured } from './firebase';
+import { requestGoogleAccessToken } from './googleSignIn';
 
 type MerchantAuthValue = {
   ready: boolean;
@@ -59,30 +60,27 @@ function isGoogleCancel(err: unknown): boolean {
   );
 }
 
-function prefersRedirectSignIn(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) return true;
-  try {
-    if (window.matchMedia('(display-mode: standalone)').matches) return true;
-  } catch {
-    /* ignore */
+let redirectResultPromise: Promise<unknown> | null = null;
+
+function consumeGoogleRedirect(auth: Auth) {
+  if (!redirectResultPromise) {
+    redirectResultPromise = getRedirectResult(auth, browserPopupRedirectResolver);
   }
-  return false;
+  return redirectResultPromise;
 }
 
-function shouldFallbackToRedirect(err: unknown): boolean {
-  if (isGoogleCancel(err)) return false;
-  return /popup-blocked|internal-error|network-request-failed|web-storage-unsupported|missing-or-invalid-nonce|fedcm|timeout|Cross-Origin-Opener|window\.closed/i.test(
-    errorHay(err)
-  );
-}
-
-function googleAuthProvider() {
-  const provider = new GoogleAuthProvider();
-  provider.addScope('email');
-  provider.addScope('profile');
-  provider.setCustomParameters({ prompt: 'select_account' });
-  return provider;
+async function signInWithGoogleAccessToken(auth: Auth, accessToken: string) {
+  const credential = GoogleAuthProvider.credential(null, accessToken);
+  try {
+    await signInWithCredential(auth, credential);
+  } catch (err) {
+    const prepared = await api<{ retry?: boolean }>('/auth/merchant/google', {
+      method: 'POST',
+      body: JSON.stringify({ accessToken }),
+    }).catch(() => ({ retry: false as const }));
+    if (!prepared?.retry) throw err;
+    await signInWithCredential(auth, credential);
+  }
 }
 
 /** Mensaje en español. `null` = el usuario canceló (no mostrar error). */
@@ -98,14 +96,17 @@ export function mapFirebaseAuthError(
   if (/popup-blocked/i.test(hay)) {
     return 'Permite las ventanas emergentes para continuar con Google.';
   }
-  if (/unauthorized-domain/i.test(hay)) {
-    return 'Este dominio no está autorizado. Agrégalo en Firebase Authentication.';
+  if (/unauthorized-domain|origin.*not allowed|idpiframe_initialization/i.test(hay)) {
+    return 'Este dominio no está autorizado para Google. Agrégalo en Firebase Authentication y en el cliente OAuth (orígenes de JavaScript).';
   }
   if (/operation-not-allowed|configuration-not-found/i.test(hay)) {
     return 'Google no está habilitado. Actívalo en Firebase → Authentication.';
   }
   if (/invalid-api-key|api-key-not-valid/i.test(hay)) {
     return 'La configuración de Firebase no es válida. Revisa las claves públicas.';
+  }
+  if (/INVALID_IDP_RESPONSE|invalid.idp/i.test(hay)) {
+    return 'Google rechazó la conexión. Revisa el cliente OAuth en Firebase Authentication.';
   }
   if (/internal-error|fedcm|missing-or-invalid-nonce|Cross-Origin-Opener/i.test(hay)) {
     return 'No se pudo completar el inicio de sesión en este navegador. Intenta de nuevo o usa Chrome o Safari.';
@@ -172,7 +173,7 @@ export function MerchantAuthProvider({ children }: { children: ReactNode }) {
       if (!current) return null;
       return current.getIdToken();
     });
-    void getRedirectResult(auth, browserPopupRedirectResolver).catch((err) => {
+    void consumeGoogleRedirect(auth).catch((err) => {
       const msg = mapFirebaseAuthError(
         err,
         'No se pudo continuar con Google. Intenta de nuevo.'
@@ -216,21 +217,8 @@ export function MerchantAuthProvider({ children }: { children: ReactNode }) {
         setGoogleRedirectError(null);
         const auth = getMerchantAuth();
         auth.languageCode = 'es';
-        const provider = googleAuthProvider();
-        const resolver = browserPopupRedirectResolver;
-        if (prefersRedirectSignIn()) {
-          await signInWithRedirect(auth, provider, resolver);
-          return;
-        }
-        try {
-          await signInWithPopup(auth, provider, resolver);
-        } catch (err) {
-          if (shouldFallbackToRedirect(err)) {
-            await signInWithRedirect(auth, provider, resolver);
-            return;
-          }
-          throw err;
-        }
+        const accessToken = await requestGoogleAccessToken();
+        await signInWithGoogleAccessToken(auth, accessToken);
       },
       resetPassword: async (email) => {
         await api('/auth/merchant/password-reset', {
