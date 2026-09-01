@@ -22,19 +22,43 @@ export type PlacesAddressFieldProps = {
   hideLabel?: boolean;
 };
 
-declare global {
-  interface Window {
-    google?: any;
-    __ondaPlacesReady?: Promise<void>;
-  }
+type GoogleMapsPlacesWindow = Window & {
+  google?: {
+    maps?: {
+      places?: {
+        Autocomplete: new (
+          input: HTMLInputElement,
+          opts?: {
+            fields?: string[];
+            componentRestrictions?: { country: string[] };
+          }
+        ) => {
+          addListener: (event: string, cb: () => void) => void;
+          getPlace: () => {
+            formatted_address?: string;
+            place_id?: string;
+            geometry?: {
+              location?: { lat: () => number; lng: () => number };
+            };
+          };
+        };
+      };
+    };
+  };
+  __ondaPlacesReady?: Promise<void>;
+};
+
+function mapsWindow(): GoogleMapsPlacesWindow {
+  return window as GoogleMapsPlacesWindow;
 }
 
 function loadGooglePlaces(apiKey: string): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve();
-  if (window.google?.maps?.places) return Promise.resolve();
-  if (window.__ondaPlacesReady) return window.__ondaPlacesReady;
+  const w = mapsWindow();
+  if (w.google?.maps?.places) return Promise.resolve();
+  if (w.__ondaPlacesReady) return w.__ondaPlacesReady;
 
-  window.__ondaPlacesReady = new Promise((resolve, reject) => {
+  w.__ondaPlacesReady = new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
       apiKey
@@ -45,7 +69,7 @@ function loadGooglePlaces(apiKey: string): Promise<void> {
     document.head.appendChild(script);
   });
 
-  return window.__ondaPlacesReady;
+  return w.__ondaPlacesReady;
 }
 
 /** Dirección con autocomplete de Google Places; sin API key funciona como texto libre. */
@@ -92,8 +116,9 @@ export function PlacesAddressField({
     let cancelled = false;
     loadGooglePlaces(apiKey)
       .then(() => {
-        if (cancelled || !inputRef.current || !window.google?.maps?.places) return;
-        const autocomplete = new window.google.maps.places.Autocomplete(
+        const g = mapsWindow().google;
+        if (cancelled || !inputRef.current || !g?.maps?.places) return;
+        const autocomplete = new g.maps.places.Autocomplete(
           inputRef.current,
           {
             fields: ['formatted_address', 'place_id', 'geometry'],
