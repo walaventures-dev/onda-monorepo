@@ -40,6 +40,27 @@ const nextConfig = {
   env: publicEnv,
   transpilePackages: ['@onda/shared-ui', '@onda/shared-types', '@onda/shared-utils'],
   reactStrictMode: true,
+  allowedDevOrigins: [
+    '**.devtunnels.ms',
+    '**.ngrok-free.app',
+    '**.ngrok-free.dev',
+    '**.ngrok.io',
+    '**.ngrok.app',
+    '192.168.40.5',
+  ],
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin-allow-popups',
+          },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     return [{ source: '/api/:path*', destination: `${apiUrl}/api/:path*` }];
   },

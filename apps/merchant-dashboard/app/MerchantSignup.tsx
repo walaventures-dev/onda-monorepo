@@ -16,7 +16,12 @@ import { persistOnboardingQuery, rememberOwnerName } from './onboardingQuery';
 
 export function MerchantSignup() {
   const searchParams = useSearchParams();
-  const { signUp, signInWithGoogle } = useMerchantAuth();
+  const {
+    signUp,
+    signInWithGoogle,
+    firebaseEnabled,
+    googleRedirectError,
+  } = useMerchantAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,6 +35,10 @@ export function MerchantSignup() {
   useEffect(() => {
     document.title = 'Onda - Crear cuenta';
   }, []);
+
+  useEffect(() => {
+    if (googleRedirectError) setError(googleRedirectError);
+  }, [googleRedirectError]);
 
   useEffect(() => {
     persistOnboardingQuery(searchParams);
@@ -170,19 +179,23 @@ export function MerchantSignup() {
                 </GradientButton>
               </form>
 
-              <div className="my-4 flex items-center gap-3">
-                <span className="h-px flex-1 bg-[var(--onda-border)]" />
-                <span className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--onda-muted)]">
-                  o
-                </span>
-                <span className="h-px flex-1 bg-[var(--onda-border)]" />
-              </div>
+              {firebaseEnabled ? (
+                <>
+                  <div className="my-4 flex items-center gap-3">
+                    <span className="h-px flex-1 bg-[var(--onda-border)]" />
+                    <span className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--onda-muted)]">
+                      o
+                    </span>
+                    <span className="h-px flex-1 bg-[var(--onda-border)]" />
+                  </div>
 
-              <GoogleSignInButton
-                busy={busy}
-                label="Registrarse con Google"
-                onClick={() => void onGoogle()}
-              />
+                  <GoogleSignInButton
+                    busy={busy}
+                    label="Registrarse con Google"
+                    onClick={() => void onGoogle()}
+                  />
+                </>
+              ) : null}
 
               <p className="mt-5 text-center text-sm text-[var(--onda-muted)]">
                 ¿Ya tienes cuenta?{' '}

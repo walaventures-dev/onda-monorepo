@@ -10,12 +10,15 @@ import {
 } from 'react';
 import {
   GoogleAuthProvider,
+  browserPopupRedirectResolver,
   checkActionCode,
   confirmPasswordReset as firebaseConfirmPasswordReset,
   createUserWithEmailAndPassword,
+  getRedirectResult,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   updateProfile,
   type User,
@@ -28,6 +31,8 @@ type MerchantAuthValue = {
   firebaseEnabled: boolean;
   user: User | null;
   email: string | null;
+  /** Error al volver del redirect de Google; `null` si no hay. */
+  googleRedirectError: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name?: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
@@ -39,26 +44,77 @@ type MerchantAuthValue = {
   logout: () => Promise<void>;
 };
 
+function errorHay(err: unknown): string {
+  const code =
+    typeof err === 'object' && err && 'code' in err
+      ? String((err as { code: unknown }).code)
+      : '';
+  const message = err instanceof Error ? err.message : String(err ?? '');
+  return `${code} ${message}`;
+}
+
+function isGoogleCancel(err: unknown): boolean {
+  return /popup-closed-by-user|cancelled-popup-request|auth\/user-cancelled/i.test(
+    errorHay(err)
+  );
+}
+
+function prefersRedirectSignIn(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) return true;
+  try {
+    if (window.matchMedia('(display-mode: standalone)').matches) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+function shouldFallbackToRedirect(err: unknown): boolean {
+  if (isGoogleCancel(err)) return false;
+  return /popup-blocked|internal-error|network-request-failed|web-storage-unsupported|missing-or-invalid-nonce|fedcm|timeout|Cross-Origin-Opener|window\.closed/i.test(
+    errorHay(err)
+  );
+}
+
+function googleAuthProvider() {
+  const provider = new GoogleAuthProvider();
+  provider.addScope('email');
+  provider.addScope('profile');
+  provider.setCustomParameters({ prompt: 'select_account' });
+  return provider;
+}
+
 /** Mensaje en español. `null` = el usuario canceló (no mostrar error). */
 export function mapFirebaseAuthError(
   err: unknown,
   fallback = 'No se pudo iniciar sesión. Revisa los datos e intenta de nuevo.'
 ): string | null {
-  const code =
-    typeof err === 'object' && err && 'code' in err
-      ? String((err as { code: unknown }).code)
-      : '';
-  const message = err instanceof Error ? err.message : '';
-  const hay = `${code} ${message}`;
-  if (/popup-closed-by-user|cancelled-popup-request/i.test(hay)) return null;
+  const hay = errorHay(err);
+  if (isGoogleCancel(err)) return null;
+  if (/Firebase no está configurado/i.test(hay)) {
+    return 'El inicio de sesión con Google no está disponible en este entorno.';
+  }
   if (/popup-blocked/i.test(hay)) {
     return 'Permite las ventanas emergentes para continuar con Google.';
   }
   if (/unauthorized-domain/i.test(hay)) {
     return 'Este dominio no está autorizado. Agrégalo en Firebase Authentication.';
   }
-  if (/operation-not-allowed/i.test(hay)) {
+  if (/operation-not-allowed|configuration-not-found/i.test(hay)) {
     return 'Google no está habilitado. Actívalo en Firebase → Authentication.';
+  }
+  if (/invalid-api-key|api-key-not-valid/i.test(hay)) {
+    return 'La configuración de Firebase no es válida. Revisa las claves públicas.';
+  }
+  if (/internal-error|fedcm|missing-or-invalid-nonce|Cross-Origin-Opener/i.test(hay)) {
+    return 'No se pudo completar el inicio de sesión en este navegador. Intenta de nuevo o usa Chrome o Safari.';
+  }
+  if (/network-request-failed/i.test(hay)) {
+    return 'Sin conexión. Revisa internet e intenta de nuevo.';
+  }
+  if (/web-storage-unsupported/i.test(hay)) {
+    return 'Este navegador bloquea el almacenamiento. Prueba en otra ventana.';
   }
   if (
     /account-exists-with-different-credential|credential-already-in-use/i.test(
@@ -100,6 +156,9 @@ export function MerchantAuthProvider({ children }: { children: ReactNode }) {
   const firebaseEnabled = isMerchantFirebaseConfigured();
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(!firebaseEnabled);
+  const [googleRedirectError, setGoogleRedirectError] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     if (!firebaseEnabled) {
@@ -107,10 +166,18 @@ export function MerchantAuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     const auth = getMerchantAuth();
+    auth.languageCode = 'es';
     setApiAuthTokenGetter(async () => {
       const current = auth.currentUser;
       if (!current) return null;
       return current.getIdToken();
+    });
+    void getRedirectResult(auth, browserPopupRedirectResolver).catch((err) => {
+      const msg = mapFirebaseAuthError(
+        err,
+        'No se pudo continuar con Google. Intenta de nuevo.'
+      );
+      if (msg) setGoogleRedirectError(msg);
     });
     const unsub = onAuthStateChanged(auth, (next) => {
       setUser(next);
@@ -128,6 +195,7 @@ export function MerchantAuthProvider({ children }: { children: ReactNode }) {
       firebaseEnabled,
       user,
       email: user?.email ?? null,
+      googleRedirectError,
       signIn: async (email, password) => {
         await signInWithEmailAndPassword(getMerchantAuth(), email, password);
       },
@@ -145,9 +213,24 @@ export function MerchantAuthProvider({ children }: { children: ReactNode }) {
         }
       },
       signInWithGoogle: async () => {
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
-        await signInWithPopup(getMerchantAuth(), provider);
+        setGoogleRedirectError(null);
+        const auth = getMerchantAuth();
+        auth.languageCode = 'es';
+        const provider = googleAuthProvider();
+        const resolver = browserPopupRedirectResolver;
+        if (prefersRedirectSignIn()) {
+          await signInWithRedirect(auth, provider, resolver);
+          return;
+        }
+        try {
+          await signInWithPopup(auth, provider, resolver);
+        } catch (err) {
+          if (shouldFallbackToRedirect(err)) {
+            await signInWithRedirect(auth, provider, resolver);
+            return;
+          }
+          throw err;
+        }
       },
       resetPassword: async (email) => {
         await api('/auth/merchant/password-reset', {
@@ -175,7 +258,7 @@ export function MerchantAuthProvider({ children }: { children: ReactNode }) {
         }
       },
     }),
-    [ready, firebaseEnabled, user]
+    [ready, firebaseEnabled, user, googleRedirectError]
   );
 
   return (

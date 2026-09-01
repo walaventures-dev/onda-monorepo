@@ -9,7 +9,13 @@ import { GoogleSignInButton } from "./GoogleSignInButton";
 type Mode = "login" | "reset" | "reset-sent";
 
 export function MerchantLogin() {
-  const { signIn, signInWithGoogle, resetPassword } = useMerchantAuth();
+  const {
+    signIn,
+    signInWithGoogle,
+    resetPassword,
+    firebaseEnabled,
+    googleRedirectError,
+  } = useMerchantAuth();
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,6 +28,10 @@ export function MerchantLogin() {
         ? "Onda - Iniciar sesión"
         : "Onda - Cambiar contraseña";
   }, [mode]);
+
+  useEffect(() => {
+    if (googleRedirectError) setError(googleRedirectError);
+  }, [googleRedirectError]);
 
   function goTo(next: Mode) {
     setError("");
@@ -126,7 +136,9 @@ export function MerchantLogin() {
                     Entra a tu cuenta
                   </h1>
                   <p className="mt-2 text-sm leading-relaxed text-[var(--onda-muted)]">
-                    Con Google o con tu email.
+                    {firebaseEnabled
+                      ? "Con Google o con tu email."
+                      : "Entra con el email de tu negocio."}
                   </p>
 
                   <form
@@ -177,18 +189,22 @@ export function MerchantLogin() {
                     </GradientButton>
                   </form>
 
-                  <div className="my-4 flex items-center gap-3">
-                    <span className="h-px flex-1 bg-[var(--onda-border)]" />
-                    <span className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--onda-muted)]">
-                      o
-                    </span>
-                    <span className="h-px flex-1 bg-[var(--onda-border)]" />
-                  </div>
+                  {firebaseEnabled ? (
+                    <>
+                      <div className="my-4 flex items-center gap-3">
+                        <span className="h-px flex-1 bg-[var(--onda-border)]" />
+                        <span className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--onda-muted)]">
+                          o
+                        </span>
+                        <span className="h-px flex-1 bg-[var(--onda-border)]" />
+                      </div>
 
-                  <GoogleSignInButton
-                    busy={busy}
-                    onClick={() => void onGoogle()}
-                  />
+                      <GoogleSignInButton
+                        busy={busy}
+                        onClick={() => void onGoogle()}
+                      />
+                    </>
+                  ) : null}
 
                   <p className="mt-5 text-center text-sm text-[var(--onda-muted)]">
                     ¿Primera vez en Onda?{" "}
