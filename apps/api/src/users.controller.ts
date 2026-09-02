@@ -7,6 +7,7 @@ import { WalletService } from './wallet.service';
 import { BrevoService } from './brevo.service';
 import { CartillaService } from './cartilla.service';
 import { resolvePassDesign, toPassDesignInput } from './pass-design.util';
+import { storePublicSelect } from './store-select';
 
 function toE164Colombia(input: string): string {
   const digits = input.replace(/\D/g, '');
@@ -55,7 +56,7 @@ export class UsersController {
     const phone = toE164Colombia(body.phone);
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: body.storeId },
-      include: { passDesign: true },
+      select: storePublicSelect,
     });
 
     const user = await this.prisma.user.upsert({
@@ -169,7 +170,7 @@ export class UsersController {
       pass: await this.prisma.pass.findUnique({
         where: { id: pass.id },
         include: {
-          store: { include: { passDesign: true } },
+          store: { select: storePublicSelect },
           event: { include: { passDesign: true, promotions: true } },
         },
       }),

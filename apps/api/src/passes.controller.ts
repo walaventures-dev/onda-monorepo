@@ -1,9 +1,10 @@
-import { Inject, Body, Controller, Get, Headers, Param, Post, Query } from '@nestjs/common';
+import { Inject, Body, Controller, Get, Headers, Param, Post, Query, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { CustomerAuthService } from './customer-auth.service';
 import { CartillaService } from './cartilla.service';
 import { resolvePassDesign, toPassDesignInput } from './pass-design.util';
+import { storePassHydrateSelect } from './store-select';
 
 function randomSerial() {
   return `ONDA-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
@@ -11,7 +12,7 @@ function randomSerial() {
 
 function bearerToken(header?: string): string {
   if (!header?.startsWith('Bearer ')) {
-    throw new Error('Falta token de sesión');
+    throw new UnauthorizedException('Falta token de sesión');
   }
   return header.slice('Bearer '.length);
 }
@@ -61,7 +62,7 @@ export class PassesController {
       where: { id },
       include: {
         user: true,
-        store: { include: { passDesign: true, promotions: true } },
+        store: { select: { ...storePassHydrateSelect } },
         event: { include: { passDesign: true, promotions: true } },
         cartilla: { include: { passDesign: true } },
         promoAssignments: {

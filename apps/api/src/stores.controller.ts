@@ -34,41 +34,8 @@ import { GooglePlacesService } from './google-places.service';
 import { CodeResolverService } from './code-resolver.service';
 import { WompiService } from './wompi.service';
 import { quotePlanWithDiscount } from '@onda/shared-utils';
-
-const storePublicSelect = {
-  id: true,
-  name: true,
-  slug: true,
-  category: true,
-  subcategory: true,
-  segment: true,
-  googlePlaceId: true,
-  googleRating: true,
-  googleReviewCount: true,
-  googleRatingUpdatedAt: true,
-  address: true,
-  planType: true,
-  billingStatus: true,
-  billingPeriod: true,
-  nextBillingAt: true,
-  nextUsageBillingAt: true,
-  whatsappUsed: true,
-  maxStamps: true,
-  currency: true,
-  ondaValue: true,
-  lat: true,
-  lng: true,
-  ownerName: true,
-  ownerEmail: true,
-  referralCode: true,
-  freeMonthsBalance: true,
-  referralBonusApplied: true,
-  promoCodeUsed: true,
-  referredByStoreId: true,
-  createdAt: true,
-  passDesign: true,
-  promotions: true,
-} as const;
+import { resolvePassDesign } from './pass-design.util';
+import { storePublicSelect } from './store-select';
 
 type CreateStoreBody = {
   name: string;
@@ -126,7 +93,12 @@ export class StoresController {
     if (!store) {
       throw new NotFoundException('Comercio no encontrado');
     }
-    return store;
+    const active = await this.cartillas.resolveActiveCartilla(store.id);
+    return {
+      ...store,
+      passDesign: resolvePassDesign(active.passDesign, store.passDesign),
+      activeCartillaId: active.id,
+    };
   }
 
   @Post()

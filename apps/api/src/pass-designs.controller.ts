@@ -121,6 +121,7 @@ export class PassDesignsController {
       storeId,
       {
         logoUrl: updated.logoUrl,
+        stripImageUrl: updated.stripImageUrl,
         backgroundColor: updated.backgroundColor,
         foregroundColor: updated.foregroundColor,
         labelColor: updated.labelColor || updated.foregroundColor,
@@ -128,6 +129,7 @@ export class PassDesignsController {
       previous
         ? {
             logoUrl: previous.logoUrl,
+            stripImageUrl: previous.stripImageUrl,
             backgroundColor: previous.backgroundColor,
             labelColor: previous.labelColor,
           }

@@ -195,12 +195,14 @@ export class CartillaService {
     storeId: string,
     next: {
       logoUrl?: string | null;
+      stripImageUrl?: string | null;
       backgroundColor: string;
       foregroundColor: string;
       labelColor: string;
     },
     prev?: {
       logoUrl?: string | null;
+      stripImageUrl?: string | null;
       backgroundColor?: string | null;
       labelColor?: string | null;
     } | null,
@@ -212,6 +214,7 @@ export class CartillaService {
     const prevBg = prev?.backgroundColor?.trim().toUpperCase() || "";
     const prevLabel = prev?.labelColor?.trim().toUpperCase() || "";
     const prevLogo = prev?.logoUrl?.trim() || "";
+    const prevStrip = prev?.stripImageUrl?.trim() || "";
 
     for (const cartilla of cartillas) {
       if (!cartilla.passDesign) {
@@ -229,8 +232,13 @@ export class CartillaService {
         !prevLogo ||
         !(design.logoUrl || "").trim() ||
         (design.logoUrl || "").trim() === prevLogo;
+      const sameStrip =
+        cartilla.isDefault ||
+        !prevStrip ||
+        !(design.stripImageUrl || "").trim() ||
+        (design.stripImageUrl || "").trim() === prevStrip;
 
-      if (!samePalette && !sameLogo) continue;
+      if (!samePalette && !sameLogo && !sameStrip) continue;
 
       await this.prisma.passDesign.update({
         where: { id: design.id },
@@ -244,6 +252,9 @@ export class CartillaService {
             : {}),
           ...(sameLogo && next.logoUrl !== undefined
             ? { logoUrl: next.logoUrl }
+            : {}),
+          ...(sameStrip && next.stripImageUrl !== undefined
+            ? { stripImageUrl: next.stripImageUrl }
             : {}),
         },
       });

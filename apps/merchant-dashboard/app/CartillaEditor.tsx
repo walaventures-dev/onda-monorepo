@@ -271,6 +271,7 @@ export function CartillaEditor({
         method: "PUT",
         body: JSON.stringify({
           logoUrl: design.logoUrl?.trim() || storeLogoUrl.trim() || null,
+          stripImageUrl: design.stripImageUrl?.trim() || null,
           title: design.title || store?.name,
           backgroundColor: design.backgroundColor,
           foregroundColor: design.foregroundColor,

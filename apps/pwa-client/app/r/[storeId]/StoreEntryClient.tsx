@@ -26,6 +26,27 @@ import {
 
 type Step = "loading" | "otp" | "name" | "home" | "pendingWait";
 
+function isInvalidSessionError(message: string) {
+  const m = message.toLowerCase();
+  return (
+    m.includes("sesión inválida") ||
+    m.includes("sesión requerida") ||
+    m.includes("falta token de sesión")
+  );
+}
+
+async function validateSession(sess: CustomerSession): Promise<CustomerSession | null> {
+  try {
+    const res = await api<{ user: CustomerSession["user"] }>("/customer-auth/session", {
+      headers: { Authorization: `Bearer ${sess.token}` },
+    });
+    return { token: sess.token, user: res.user };
+  } catch (err: any) {
+    if (isInvalidSessionError(err?.message || "")) return null;
+    throw err;
+  }
+}
+
 function getGreeting() {
   const hour = new Date().getHours();
   if (hour < 12) return "Buenos días";
@@ -73,7 +94,15 @@ export default function StoreEntryPage() {
         setPass(created);
       }
     } catch (err: any) {
-      setError(err.message || "No se pudo cargar tu tarjeta");
+      const message = err.message || "No se pudo cargar tu tarjeta";
+      if (isInvalidSessionError(message)) {
+        clearSession();
+        setSession(null);
+        setError("Tu sesión expiró. Inicia sesión de nuevo.");
+        setStep("otp");
+        return;
+      }
+      setError(message);
     } finally {
       setStep("home");
       replaceLoginHistory();
@@ -97,12 +126,21 @@ export default function StoreEntryPage() {
           setStep("otp");
           return;
         }
-        setSession(existing);
-        if (!existing.user.name.trim()) {
+        const live = await validateSession(existing);
+        if (cancelled) return;
+        if (!live) {
+          clearSession();
+          setError("Tu sesión expiró. Inicia sesión de nuevo.");
+          setStep("otp");
+          return;
+        }
+        saveSession(live);
+        setSession(live);
+        if (!live.user.name.trim()) {
           setStep("name");
           return;
         }
-        await loadOrClaim(existing, s.id);
+        await loadOrClaim(live, s.id);
       } catch (err: any) {
         if (!cancelled) {
           setError(err.message || "No se pudo conectar");

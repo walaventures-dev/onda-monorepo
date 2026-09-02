@@ -35,14 +35,29 @@ export function paletteFromStoreBrand(
   };
 }
 
+function pickMediaUrl(
+  primary: PassDesignLike | null | undefined,
+  fallback: PassDesignLike | null | undefined,
+  key: 'logoUrl' | 'stripImageUrl'
+) {
+  const own = primary?.[key]?.trim();
+  if (own) return own;
+  const inherited = fallback?.[key]?.trim();
+  return inherited || null;
+}
+
 function pickLogo(
   primary: PassDesignLike | null | undefined,
   fallback: PassDesignLike | null | undefined
 ) {
-  const own = primary?.logoUrl?.trim();
-  if (own) return own;
-  const inherited = fallback?.logoUrl?.trim();
-  return inherited || null;
+  return pickMediaUrl(primary, fallback, 'logoUrl');
+}
+
+function pickStripImage(
+  primary: PassDesignLike | null | undefined,
+  fallback: PassDesignLike | null | undefined
+) {
+  return pickMediaUrl(primary, fallback, 'stripImageUrl');
 }
 
 /** Cartilla/event design with store logo as fallback when the cartilla has no override. */
@@ -55,6 +70,7 @@ export function resolvePassDesign(
     ...storeFallback,
     ...primary,
     logoUrl: pickLogo(primary, storeFallback),
+    stripImageUrl: pickStripImage(primary, storeFallback),
   };
 }
 
