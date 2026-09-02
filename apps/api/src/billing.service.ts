@@ -945,11 +945,20 @@ export class BillingService {
         billingPeriod: true,
         nextBillingAt: true,
         nextUsageBillingAt: true,
-        usageBalanceCop: true,
         wompiPaymentSourceId: true,
         freeMonthsBalance: true,
       },
     });
+    let usageBalanceCop = 0;
+    try {
+      const balanceRow = await this.prisma.store.findUnique({
+        where: { id: storeId },
+        select: { usageBalanceCop: true },
+      });
+      usageBalanceCop = balanceRow?.usageBalanceCop ?? 0;
+    } catch {
+      usageBalanceCop = 0;
+    }
     const planType = this.normalizePlan(store.planType);
     const billingPeriod = this.normalizePeriod(store.billingPeriod);
     const pricing = campaignReachPricing({ planType });
@@ -968,7 +977,7 @@ export class BillingService {
       plan: planType,
       newCustomersUsed,
       smsUsed,
-      carriedInCop: store.usageBalanceCop,
+      carriedInCop: usageBalanceCop,
     });
     const planQuote = quotePlanWithDiscount(planType, billingPeriod, 0);
     return {
@@ -989,7 +998,7 @@ export class BillingService {
       extraSmsCop: overage.extraSmsCop,
       campaignsCount,
       usageProjectedCop: overage.subtotal,
-      carriedBalanceCop: store.usageBalanceCop,
+      carriedBalanceCop: usageBalanceCop,
       planPriceCop: planQuote.monthlyList,
       reachUsed: smsUsed,
       reachLimit: overage.smsLimit,
