@@ -89,7 +89,7 @@ export async function monthlyNewCustomersUsed(
   return db.pass.count({
     where: {
       storeId,
-      createdAt: { gte: from, lt: to },
+      user: { createdAt: { gte: from, lt: to } },
     },
   });
 }
