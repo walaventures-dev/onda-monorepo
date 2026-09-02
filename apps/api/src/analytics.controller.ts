@@ -146,7 +146,14 @@ export class AnalyticsController {
       promoTypes?: string;
     }
   ) {
-    const store = await this.prisma.store.findUniqueOrThrow({ where: { id: storeId } });
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: storeId },
+      select: {
+        planType: true,
+        whatsappUsed: true,
+        nextUsageBillingAt: true,
+      },
+    });
     const to = parseDateEnd(query.to) || (() => {
       const d = new Date();
       d.setHours(23, 59, 59, 999);
@@ -563,7 +570,7 @@ export class AnalyticsController {
       }
     }
 
-    if (store.posEnabled && ventasPOSVal > 0 && posSales._count > 0) {
+    if (ventasPOSVal > 0 && posSales._count > 0) {
       insights.push({
         id: 'pos-sales',
         tone: 'accent',

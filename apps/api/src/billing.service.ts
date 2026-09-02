@@ -938,6 +938,17 @@ export class BillingService {
   async summary(storeId: string) {
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: storeId },
+      select: {
+        id: true,
+        planType: true,
+        billingStatus: true,
+        billingPeriod: true,
+        nextBillingAt: true,
+        nextUsageBillingAt: true,
+        usageBalanceCop: true,
+        wompiPaymentSourceId: true,
+        freeMonthsBalance: true,
+      },
     });
     const planType = this.normalizePlan(store.planType);
     const billingPeriod = this.normalizePeriod(store.billingPeriod);
