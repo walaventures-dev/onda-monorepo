@@ -269,7 +269,10 @@ export class AnalyticsController {
       }),
       this.prisma.pass.findMany({
         where: { storeId, ...(eventId ? { eventId } : {}) },
-        include: {
+        select: {
+          id: true,
+          points: true,
+          serialNumber: true,
           user: true,
           promoAssignments: { include: { promotion: true } },
           transactions: {

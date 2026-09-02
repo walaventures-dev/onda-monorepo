@@ -935,6 +935,73 @@ export class BillingService {
     }
   }
 
+  async summaryProbe(storeId: string) {
+    const steps: Record<string, string> = {};
+    const run = async (name: string, fn: () => Promise<unknown>) => {
+      try {
+        await fn();
+        steps[name] = 'ok';
+      } catch (e) {
+        const err = e as {
+          code?: string;
+          meta?: { column?: string; modelName?: string; table?: string };
+          message?: string;
+        };
+        steps[name] = [
+          err.code,
+          err.meta?.column || err.meta?.modelName || err.meta?.table,
+          err.message?.slice(0, 160),
+        ]
+          .filter(Boolean)
+          .join(' | ');
+      }
+    };
+
+    await run('storeSelect', () =>
+      this.prisma.store.findUniqueOrThrow({
+        where: { id: storeId },
+        select: {
+          id: true,
+          planType: true,
+          billingStatus: true,
+          billingPeriod: true,
+          nextBillingAt: true,
+          nextUsageBillingAt: true,
+          wompiPaymentSourceId: true,
+          freeMonthsBalance: true,
+        },
+      })
+    );
+    await run('usageBalanceCop', () =>
+      this.prisma.store.findUnique({
+        where: { id: storeId },
+        select: { usageBalanceCop: true },
+      })
+    );
+    const window = usageWindow(
+      (
+        await this.prisma.store.findUnique({
+          where: { id: storeId },
+          select: { nextUsageBillingAt: true },
+        })
+      )?.nextUsageBillingAt
+    );
+    await run('newCustomers', () =>
+      monthlyNewCustomersUsed(this.prisma, storeId, window.start, window.end)
+    );
+    await run('reach', () =>
+      monthlyReachUsed(this.prisma, storeId, window.start, window.end)
+    );
+    await run('campaigns', () =>
+      monthlyCampaignsSent(this.prisma, storeId, window.start, window.end)
+    );
+    await run('quote', async () => {
+      quotePlanWithDiscount('PRO', 'monthly', 0);
+      quoteUsageOverage({ plan: 'PRO', newCustomersUsed: 0, smsUsed: 0 });
+    });
+    return { storeId, steps };
+  }
+
   async summary(storeId: string) {
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: storeId },

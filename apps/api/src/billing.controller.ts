@@ -36,7 +36,13 @@ export class BillingController {
   }
 
   @Get('store/:storeId')
-  summary(@Param('storeId') storeId: string) {
+  summary(
+    @Param('storeId') storeId: string,
+    @Query('probe') probe?: string
+  ) {
+    if (probe === '1') {
+      return this.billing.summaryProbe(storeId);
+    }
     return this.billing.summary(storeId);
   }
 
