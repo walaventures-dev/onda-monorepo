@@ -9,6 +9,7 @@ import {
   api,
   setApiAuthTokenGetter,
   SkeletonScreen,
+  OndaWordmark,
   type PosVenderMemberSession,
 } from '@onda/shared-ui';
 import type { PosAttendantDto } from '@onda/shared-types';
@@ -106,10 +107,26 @@ function useCajaMemberAuth(storeId: string, cajaToken: string) {
   };
 }
 
+function CajaClosedScreen() {
+  return (
+    <main className="flex min-h-dvh flex-col items-center justify-center gap-3 p-6 text-center">
+      <OndaWordmark className="h-6 w-auto" />
+      <h1 className="font-display text-2xl font-bold text-[var(--onda-ink)]">
+        Caja cerrada
+      </h1>
+      <p className="max-w-xs text-sm text-[var(--onda-muted)]">
+        Esta sesión ya no es válida. Genera un enlace nuevo con «Abrir caja» en
+        el panel del comercio.
+      </p>
+    </main>
+  );
+}
+
 /** App única de caja (kiosk): acumular + vender + cuentas. */
 export function CajaKioskClient({ token }: { token: string }) {
   const [session, setSession] = useState<CajaSession | null>(null);
   const [error, setError] = useState('');
+  const [closed, setClosed] = useState(false);
 
   useEffect(() => {
     setApiAuthTokenGetter(async () => token);
@@ -139,6 +156,23 @@ export function CajaKioskClient({ token }: { token: string }) {
     resumeMemberSession,
   } = useCajaMemberAuth(storeId, token);
 
+  const handleLogout = useCallback(async () => {
+    try {
+      await api('/caja/close', { method: 'POST' });
+    } catch {
+      /* igual cerramos localmente */
+    }
+    setApiAuthTokenGetter(null);
+    if (isMerchantFirebaseConfigured()) {
+      void signOut(getMerchantAuth()).catch(() => undefined);
+    }
+    setClosed(true);
+  }, []);
+
+  if (closed) {
+    return <CajaClosedScreen />;
+  }
+
   if (error) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-2 p-6 text-center">
@@ -155,7 +189,7 @@ export function CajaKioskClient({ token }: { token: string }) {
   }
 
   return (
-    <main className="mx-auto min-h-dvh max-w-6xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <main className="mx-auto flex min-h-dvh max-w-6xl flex-col p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <CajaOperationsPanel
         storeId={session.storeId}
         storeName={session.storeName}
@@ -166,6 +200,7 @@ export function CajaKioskClient({ token }: { token: string }) {
         restoreCajaAuth={restoreCajaAuth}
         activateMemberAuth={activateMemberAuth}
         resumeMemberSession={resumeMemberSession}
+        onLogout={handleLogout}
       />
     </main>
   );
@@ -290,12 +325,28 @@ export function CajaHubClient() {
     resumeMemberSession,
   } = useCajaMemberAuth(storeId, cajaToken || '');
 
+  const handleLogout = useCallback(async () => {
+    if (cajaToken) {
+      setApiAuthTokenGetter(async () => cajaToken);
+      try {
+        await api('/caja/close', { method: 'POST' });
+      } catch {
+        /* igual salimos */
+      }
+    }
+    setApiAuthTokenGetter(null);
+    if (isMerchantFirebaseConfigured()) {
+      await signOut(getMerchantAuth()).catch(() => undefined);
+    }
+    router.replace('/login');
+  }, [cajaToken, router]);
+
   if (!storeId) {
     return <SkeletonScreen label="Cargando sede" />;
   }
 
   return (
-    <main className="mx-auto min-h-dvh max-w-6xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <main className="mx-auto flex min-h-dvh max-w-6xl flex-col p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <CajaOperationsPanel
         storeId={storeId}
         storeName={storeName || undefined}
@@ -306,6 +357,7 @@ export function CajaHubClient() {
         restoreCajaAuth={cajaToken ? restoreCajaAuth : undefined}
         activateMemberAuth={cajaToken ? activateMemberAuth : undefined}
         resumeMemberSession={cajaToken ? resumeMemberSession : undefined}
+        onLogout={handleLogout}
       />
     </main>
   );

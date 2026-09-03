@@ -384,6 +384,7 @@ export function CajaScanClient({
   embedded = false,
   hideHeader = false,
   posEnabled: posEnabledProp,
+  active = true,
 }: {
   token?: string;
   /** Si no hay token (p. ej. merchant con Firebase), se obtiene vía POST /caja/link */
@@ -392,6 +393,8 @@ export function CajaScanClient({
   hideHeader?: boolean;
   /** Si se conoce desde el merchant; si no, viene de /caja/session */
   posEnabled?: boolean;
+  /** Cuando es false, detiene la cámara (p. ej. pane de solicitudes activo). */
+  active?: boolean;
 } = {}) {
   const [token, setToken] = useState(tokenProp);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -487,7 +490,12 @@ export function CajaScanClient({
   }, [token, embedded, tokenQs]);
 
   useEffect(() => {
-    if (!storeId) return;
+    if (!storeId || !active) {
+      controlsRef.current?.stop();
+      controlsRef.current = null;
+      setCamReady(false);
+      return;
+    }
     const video = videoRef.current;
     if (!video) return;
     let cancelled = false;
@@ -527,9 +535,10 @@ export function CajaScanClient({
       cancelled = true;
       controlsRef.current?.stop();
       controlsRef.current = null;
+      setCamReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId]);
+  }, [storeId, active]);
 
   function clearBurst() {
     window.clearTimeout(burstTimerRef.current);

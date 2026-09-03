@@ -351,9 +351,137 @@
   }
 }
 
-.onda-caja-queue,
 .onda-caja-tabs {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.3rem;
+  border-radius: 999px;
+  background: var(--onda-card);
+  border: 1px solid var(--onda-border);
+  box-shadow: 0 8px 24px rgba(26, 27, 46, 0.06);
+}
+
+.onda-caja-tab {
+  position: relative;
+  display: inline-flex;
+  flex: 1;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--onda-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.onda-caja-tab.is-active {
+  background: var(--onda-sky-soft);
+  color: var(--onda-ink);
+}
+
+.onda-caja-tab-badge {
+  display: inline-flex;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--onda-primary-500);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.onda-caja-swipe {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.onda-caja-swipe::-webkit-scrollbar {
   display: none;
+}
+
+.onda-caja-swipe-pane {
+  display: flex;
+  width: 100%;
+  min-width: 100%;
+  min-height: 0;
+  flex-shrink: 0;
+  flex-direction: column;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.onda-caja-queue {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.15rem 0.1rem 0.5rem;
+  overflow: hidden;
+}
+
+.onda-caja-queue-meta {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--onda-muted);
+  text-align: center;
+}
+
+.onda-caja-queue-list {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.65rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.5rem;
+}
+
+.onda-caja-queue-empty {
+  margin: auto 0;
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--onda-muted);
+}
+
+.onda-caja-queue-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--onda-border);
+  background: var(--onda-card);
+  padding: 0.85rem 0.9rem;
+  box-shadow: 0 8px 24px rgba(26, 27, 46, 0.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onda-caja-swipe {
+    scroll-behavior: auto;
+  }
+
+  .onda-caja-tab {
+    transition: none;
+  }
 }
 
 .onda-caja-shell.is-scan-only .onda-caja-body {

@@ -81,6 +81,22 @@ export class CajaController {
     return { url: cajaPublicUrl(created.token), token: created.token };
   }
 
+  /** Cierra la sesión de caja: revoca el CajaLink del token actual. */
+  @Post('close')
+  async close(
+    @Headers('authorization') authHeader: string | undefined,
+    @Query('token') queryToken?: string
+  ) {
+    const token = queryToken || this.access.bearerToken(authHeader);
+    if (!token) throw new UnauthorizedException('Falta el enlace de caja');
+    const link = await this.access.resolveCajaToken(token);
+    await this.prisma.cajaLink.update({
+      where: { id: link.id },
+      data: { revokedAt: new Date() },
+    });
+    return { ok: true as const };
+  }
+
   @Post('scan')
   async scan(
     @Headers('authorization') authHeader: string | undefined,

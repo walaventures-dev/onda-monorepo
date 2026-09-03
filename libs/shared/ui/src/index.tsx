@@ -90,6 +90,8 @@ export {
 } from './TxActivity';
 export type { TxActivityItem, TxKind } from './TxActivity';
 export { CajaScanClient } from './CajaScanClient';
+export { CajaPendingQueue } from './CajaPendingQueue';
+export type { CajaPendingItem } from './CajaPendingQueue';
 export {
   CajaOperationsPanel,
   AsociarVentaList,

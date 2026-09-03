@@ -10,11 +10,14 @@ import { QrCodeIcon as QrCode } from '@phosphor-icons/react/dist/csr/QrCode';
 import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
 import { UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
 import { CurrencyDollarIcon as CurrencyDollar } from '@phosphor-icons/react/dist/csr/CurrencyDollar';
+import { ListBulletsIcon as ListBullets } from '@phosphor-icons/react/dist/csr/ListBullets';
 import { api } from './api';
 import { CajaScanClient } from './CajaScanClient';
+import { CajaPendingQueue } from './CajaPendingQueue';
 import { PhoneInput } from './PhoneInput';
 import { PasswordInput } from './PasswordInput';
-import { OndaWordmark, OndaHandMark } from './brand';
+import { OndaWordmark } from './brand';
+import { OndaIcons } from './icons';
 import {
   PosVenderCore,
   type PosVenderMemberSession,
@@ -44,15 +47,173 @@ function CajaIdentity({ storeName }: { storeName?: string }) {
 }
 
 /** Cabecera compacta al entrar a Acumular / Cuentas. */
-function CajaIdentityBar({ storeName }: { storeName?: string }) {
+function CajaIdentityBar({
+  storeName,
+  onLogout,
+  logoutBusy,
+}: {
+  storeName?: string;
+  onLogout?: () => void;
+  logoutBusy?: boolean;
+}) {
   const name = storeName?.trim() || 'tu comercio';
   return (
     <header className="flex items-center justify-between gap-3">
       <OndaWordmark className="h-4 w-auto shrink-0" />
-      <p className="min-w-0 truncate text-right text-sm font-semibold text-[var(--onda-ink)]">
+      <p className="min-w-0 flex-1 truncate text-right text-sm font-semibold text-[var(--onda-ink)]">
         {name}
       </p>
+      {onLogout ? (
+        <button
+          type="button"
+          onClick={onLogout}
+          disabled={logoutBusy}
+          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-2.5 py-1.5 text-xs font-medium text-[var(--onda-muted)] transition hover:text-[var(--onda-ink)] disabled:opacity-50"
+          aria-label="Cerrar sesión"
+        >
+          {OndaIcons.logout}
+          <span className="hidden sm:inline">Salir</span>
+        </button>
+      ) : null}
     </header>
+  );
+}
+
+type CajaPane = 'camera' | 'queue';
+
+function CajaDualPane({
+  storeId,
+  token,
+  ondaValue,
+  posEnabled,
+  storeName,
+  onLogout,
+  logoutBusy,
+  onBack,
+}: {
+  storeId: string;
+  token?: string;
+  ondaValue?: number | null;
+  posEnabled?: boolean;
+  storeName?: string;
+  onLogout?: () => void;
+  logoutBusy?: boolean;
+  onBack?: () => void;
+}) {
+  const [pane, setPane] = useState<CajaPane>('camera');
+  const [pendingCount, setPendingCount] = useState(0);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const syncingRef = useRef(false);
+
+  const scrollToPane = useCallback((next: CajaPane) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const index = next === 'camera' ? 0 : 1;
+    syncingRef.current = true;
+    track.scrollTo({
+      left: index * track.clientWidth,
+      behavior: 'smooth',
+    });
+    setPane(next);
+    window.setTimeout(() => {
+      syncingRef.current = false;
+    }, 350);
+  }, []);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+
+    function onScroll() {
+      if (syncingRef.current || !track) return;
+      const index = Math.round(track.scrollLeft / Math.max(track.clientWidth, 1));
+      const next: CajaPane = index >= 1 ? 'queue' : 'camera';
+      setPane((prev) => (prev === next ? prev : next));
+    }
+
+    track.addEventListener('scroll', onScroll, { passive: true });
+    return () => track.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const badge = pendingCount > 99 ? '99+' : String(pendingCount);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <CajaIdentityBar
+        storeName={storeName}
+        onLogout={onLogout}
+        logoutBusy={logoutBusy}
+      />
+
+      <div className="onda-caja-tabs" role="tablist" aria-label="Vista de caja">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={pane === 'camera'}
+          className={`onda-caja-tab${pane === 'camera' ? ' is-active' : ''}`}
+          onClick={() => scrollToPane('camera')}
+        >
+          <QrCode className="h-4 w-4" weight="regular" aria-hidden />
+          Cámara
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={pane === 'queue'}
+          className={`onda-caja-tab${pane === 'queue' ? ' is-active' : ''}`}
+          onClick={() => scrollToPane('queue')}
+        >
+          <ListBullets className="h-4 w-4" weight="regular" aria-hidden />
+          Solicitudes
+          {pendingCount > 0 ? (
+            <span className="onda-caja-tab-badge">{badge}</span>
+          ) : null}
+        </button>
+      </div>
+
+      <div ref={trackRef} className="onda-caja-swipe">
+        <section
+          className="onda-caja-swipe-pane"
+          aria-label="Escanear QR"
+          aria-hidden={pane !== 'camera'}
+        >
+          <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl">
+            <CajaScanClient
+              storeId={storeId}
+              token={token}
+              embedded
+              hideHeader
+              posEnabled={posEnabled}
+              active={pane === 'camera'}
+            />
+          </div>
+        </section>
+        <section
+          className="onda-caja-swipe-pane"
+          aria-label="Solicitudes pendientes"
+          aria-hidden={pane !== 'queue'}
+        >
+          <CajaPendingQueue
+            storeId={storeId}
+            ondaValue={ondaValue}
+            onCountChange={setPendingCount}
+          />
+        </section>
+      </div>
+
+      {onBack ? (
+        <div className="flex justify-center pt-1">
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex min-h-12 min-w-[12rem] cursor-pointer items-center justify-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 text-sm font-semibold text-[var(--onda-ink)] shadow-[0_8px_24px_rgba(26,27,46,0.06)] transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary-500)]/35"
+          >
+            <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
+            Inicio
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -450,6 +611,7 @@ export function CajaOperationsPanel({
   restoreCajaAuth,
   activateMemberAuth,
   resumeMemberSession,
+  onLogout,
 }: {
   storeId: string;
   defaultMode?: 'acumular' | 'asociar';
@@ -468,6 +630,8 @@ export function CajaOperationsPanel({
   activateMemberAuth?: () => Promise<void>;
   /** Silent resume if Firebase already has a user for this device. */
   resumeMemberSession?: () => Promise<PosVenderMemberSession | null>;
+  /** Cerrar sesión de caja (Firebase hub o revocar enlace kiosk). */
+  onLogout?: () => void | Promise<void>;
 }) {
   const [mode, setMode] = useState<
     'home' | 'acumular' | 'asociar' | 'vender' | 'vender-login'
@@ -482,10 +646,21 @@ export function CajaOperationsPanel({
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [openingVender, setOpeningVender] = useState(false);
+  const [logoutBusy, setLogoutBusy] = useState(false);
 
   useEffect(() => {
     if (!posEnabled) setMode('acumular');
   }, [posEnabled]);
+
+  async function handleLogout() {
+    if (!onLogout || logoutBusy) return;
+    setLogoutBusy(true);
+    try {
+      await onLogout();
+    } finally {
+      setLogoutBusy(false);
+    }
+  }
 
   function leaveVender() {
     restoreCajaAuth?.();
@@ -538,7 +713,11 @@ export function CajaOperationsPanel({
   if (selectedTabId) {
     return (
       <div className="flex min-h-[70dvh] flex-col gap-3">
-        <CajaIdentityBar storeName={storeName} />
+        <CajaIdentityBar
+          storeName={storeName}
+          onLogout={onLogout ? () => void handleLogout() : undefined}
+          logoutBusy={logoutBusy}
+        />
         <AsociarVentaDetail
           storeId={storeId}
           tabId={selectedTabId}
@@ -553,7 +732,11 @@ export function CajaOperationsPanel({
   if (mode === 'vender-login') {
     return (
       <div className="flex min-h-[70dvh] flex-col gap-4">
-        <CajaIdentityBar storeName={storeName} />
+        <CajaIdentityBar
+          storeName={storeName}
+          onLogout={onLogout ? () => void handleLogout() : undefined}
+          logoutBusy={logoutBusy}
+        />
         {!signInMember ? (
           <p className="text-center text-sm text-[var(--onda-danger)]">
             Esta caja no tiene login de miembro configurado.
@@ -625,7 +808,13 @@ export function CajaOperationsPanel({
         ondaValue={ondaValue}
         variant="kiosk"
         memberSession={memberSession}
-        headerExtra={<CajaIdentityBar storeName={storeName} />}
+        headerExtra={
+          <CajaIdentityBar
+            storeName={storeName}
+            onLogout={onLogout ? () => void handleLogout() : undefined}
+            logoutBusy={logoutBusy}
+          />
+        }
         onLeave={leaveVender}
       />
     );
@@ -633,46 +822,27 @@ export function CajaOperationsPanel({
 
   if (mode === 'acumular') {
     return (
-      <div className="flex min-h-[70dvh] flex-col gap-3">
-        <CajaIdentityBar storeName={storeName} />
-        <div className="flex items-center justify-center gap-2 text-[var(--onda-sky)]">
-          <OndaHandMark className="h-5 w-auto" />
-          <p className="font-display text-lg font-semibold text-[var(--onda-ink)]">
-            Acumular
-          </p>
-        </div>
-        <p className="text-center text-sm text-[var(--onda-muted)]">
-          Escanea el pase del cliente
-        </p>
-        <div className="min-h-0 flex-1 overflow-hidden rounded-2xl">
-          <CajaScanClient
-            storeId={storeId}
-            token={token}
-            embedded
-            hideHeader
-            posEnabled={posEnabled}
-          />
-        </div>
-        {posEnabled ? (
-          <div className="flex justify-center pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1">
-            <button
-              type="button"
-              onClick={() => setMode('home')}
-              className="inline-flex min-h-12 min-w-[12rem] cursor-pointer items-center justify-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 text-sm font-semibold text-[var(--onda-ink)] shadow-[0_8px_24px_rgba(26,27,46,0.06)] transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary-500)]/35"
-            >
-              <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
-              Inicio
-            </button>
-          </div>
-        ) : null}
-      </div>
+      <CajaDualPane
+        storeId={storeId}
+        token={token}
+        ondaValue={ondaValue}
+        posEnabled={posEnabled}
+        storeName={storeName}
+        onLogout={onLogout ? () => void handleLogout() : undefined}
+        logoutBusy={logoutBusy}
+        onBack={posEnabled ? () => setMode('home') : undefined}
+      />
     );
   }
 
   if (mode === 'asociar') {
     return (
       <div className="flex min-h-[70dvh] flex-col gap-4">
-        <CajaIdentityBar storeName={storeName} />
+        <CajaIdentityBar
+          storeName={storeName}
+          onLogout={onLogout ? () => void handleLogout() : undefined}
+          logoutBusy={logoutBusy}
+        />
         <div className="flex items-center justify-center gap-2">
           <PlusCircle
             className="h-5 w-5 text-[var(--onda-primary-500)]"
@@ -707,6 +877,20 @@ export function CajaOperationsPanel({
   /* Home: acciones grandes */
   return (
     <div className="flex min-h-[70dvh] flex-col">
+      <div className="mb-2 flex justify-end">
+        {onLogout ? (
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            disabled={logoutBusy}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium text-[var(--onda-muted)] transition hover:text-[var(--onda-ink)] disabled:opacity-50"
+            aria-label="Cerrar sesión"
+          >
+            {OndaIcons.logout}
+            Cerrar sesión
+          </button>
+        ) : null}
+      </div>
       <div className="mb-8">
         <CajaIdentity storeName={storeName} />
       </div>
@@ -724,7 +908,7 @@ export function CajaOperationsPanel({
             Acumular
           </span>
           <span className="text-sm font-medium text-[var(--onda-ink)]/70">
-            Escanear pase
+            Cámara y solicitudes
           </span>
         </button>
 
