@@ -52,20 +52,13 @@ function FeedbackIcon({ name, className }: { name: string; className?: string })
 function SuccessAnimation({ positive }: { positive: boolean }) {
   return (
     <div className="flex flex-col items-center py-8 text-center">
-      <div
-        className={`relative flex h-28 w-28 items-center justify-center rounded-full ${
-          positive
-            ? 'bg-[var(--onda-success)]/15 text-[var(--onda-success)]'
-            : 'bg-[var(--onda-sky-soft)] text-[var(--onda-sky)]'
-        } animate-[onda-pop_0.5s_ease-out]`}
-      >
-        <span className="text-5xl">{positive ? '🎉' : '💙'}</span>
-        {positive ? (
-          <>
-            <span className="absolute -left-2 top-2 text-xl animate-bounce">✨</span>
-            <span className="absolute -right-1 bottom-4 text-lg animate-bounce [animation-delay:120ms]">✨</span>
-          </>
-        ) : null}
+      <div className="relative flex h-28 w-28 items-center justify-center animate-[onda-pop_0.5s_ease-out]">
+        <img
+          src={positive ? '/brand/positive.png' : '/brand/negative.png'}
+          alt=""
+          className="h-24 w-24 object-contain"
+          draggable={false}
+        />
       </div>
       <h2 className="onda-pwa-headline mt-6">
         {positive ? '¡Gracias por contarnos!' : 'Gracias por tu honestidad'}
@@ -260,7 +253,12 @@ function FeedbackFlowInner() {
                 }}
                 disabled={store?.planType !== 'PRO'}
               >
-                <span className="text-4xl">😊</span>
+                <img
+                  src="/brand/positive.png"
+                  alt=""
+                  className="h-16 w-16 object-contain"
+                  draggable={false}
+                />
                 <span className="font-semibold text-[var(--onda-ink)]">¡Genial!</span>
               </button>
               <button
@@ -272,7 +270,12 @@ function FeedbackFlowInner() {
                 }}
                 disabled={store?.planType !== 'PRO'}
               >
-                <span className="text-4xl">😕</span>
+                <img
+                  src="/brand/negative.png"
+                  alt=""
+                  className="h-16 w-16 object-contain"
+                  draggable={false}
+                />
                 <span className="font-semibold text-[var(--onda-ink)]">Regular o mal</span>
               </button>
             </div>
