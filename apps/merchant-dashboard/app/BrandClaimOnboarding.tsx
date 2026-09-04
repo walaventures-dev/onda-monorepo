@@ -11,6 +11,7 @@ import {
 } from '@onda/shared-ui';
 import {
   formatCop,
+  isReferralCodeComplete,
   parseBillingPeriod,
   parsePlanId,
   PLAN_META,
@@ -33,7 +34,7 @@ import {
   formatReferralCodeInput,
 } from './onboardingQuery';
 
-type Step = 'preview' | 'auth' | 'plan' | 'pay';
+type Step = 'preview' | 'auth' | 'plan' | 'pay' | 'activating';
 
 type ClaimPreview = {
   storeName: string;
@@ -43,18 +44,16 @@ type ClaimPreview = {
   address?: string | null;
 };
 
+type CodeResolveResponse =
+  | { kind: 'referral'; code: string; storeName: string }
+  | { kind: 'promo'; code: string; discountPercentage: number }
+  | { kind: 'expired'; code: string };
+
 export function BrandClaimOnboarding() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token') || '';
-  const {
-    user,
-    ready,
-    signUp,
-    signIn,
-    firebaseEnabled,
-    email: sessionEmail,
-  } = useMerchantAuth();
+  const { user, ready, signUp, signIn } = useMerchantAuth();
 
   const [step, setStep] = useState<Step>('preview');
   const [preview, setPreview] = useState<ClaimPreview | null>(null);
@@ -73,8 +72,16 @@ export function BrandClaimOnboarding() {
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(
     () => parseBillingPeriod(searchParams.get('billing')) ?? '12'
   );
-  const [referralCode, setReferralCode] = useState('');
+  const [referralCode, setReferralCode] = useState(() =>
+    sanitizeReferralCode(searchParams.get('ref'))
+  );
   const [discountPercentage, setDiscountPercentage] = useState(0);
+  const [codeKind, setCodeKind] = useState<
+    'promo' | 'referral' | 'expired' | 'invalid' | null
+  >(null);
+  const [codeReady, setCodeReady] = useState(
+    () => !sanitizeReferralCode(searchParams.get('ref'))
+  );
   const [wompiConfigured, setWompiConfigured] = useState(false);
   const [wompiPublicKey, setWompiPublicKey] = useState<string | null>(null);
 
@@ -98,9 +105,73 @@ export function BrandClaimOnboarding() {
   }, []);
 
   useEffect(() => {
-    if (!ready || !user || !token || storeId) return;
+    const normalized = sanitizeReferralCode(referralCode);
+    if (!normalized) {
+      setCodeKind(null);
+      setDiscountPercentage(0);
+      setCodeReady(true);
+      return;
+    }
+    if (!isReferralCodeComplete(normalized)) {
+      setCodeKind(null);
+      setDiscountPercentage(0);
+      setCodeReady(false);
+      return;
+    }
+
+    setCodeReady(false);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      api<CodeResolveResponse>(
+        `/referrals/resolve/${encodeURIComponent(normalized)}`
+      )
+        .then((r) => {
+          if (cancelled) return;
+          if (r.kind === 'promo') {
+            setCodeKind('promo');
+            setDiscountPercentage(r.discountPercentage);
+            if (r.discountPercentage > 30) setBillingPeriod('monthly');
+            setCodeReady(true);
+            return;
+          }
+          if (r.kind === 'referral') {
+            setCodeKind('referral');
+            setDiscountPercentage(0);
+            setCodeReady(true);
+            return;
+          }
+          if (r.kind === 'expired') {
+            setCodeKind('expired');
+            setDiscountPercentage(0);
+            setCodeReady(true);
+          }
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setCodeKind('invalid');
+          setDiscountPercentage(0);
+          setCodeReady(true);
+        });
+    }, 200);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [referralCode]);
+
+  const activeQuote = quotePlanWithDiscount(
+    planType,
+    billingPeriod,
+    discountPercentage
+  );
+  const freeViaPromo =
+    codeKind === 'promo' && activeQuote.skipPayment && codeReady;
+
+  useEffect(() => {
+    if (!ready || !user || !token || storeId || !codeReady) return;
     void acceptClaim();
-  }, [ready, user, token, storeId]);
+  }, [ready, user, token, storeId, codeReady, freeViaPromo]);
 
   async function acceptClaim() {
     if (!user || !token) return;
@@ -117,7 +188,30 @@ export function BrandClaimOnboarding() {
         }
       );
       setStoreId(res.storeId);
-      setStep('plan');
+      if (freeViaPromo) {
+        setStep('activating');
+        setBusy(true);
+        rememberPlanChoice(planType, billingPeriod);
+        try {
+          await api(`/billing/store/${res.storeId}/activate`, {
+            method: 'POST',
+            body: JSON.stringify({
+              planType,
+              billingPeriod,
+              referralCode: sanitizeReferralCode(referralCode) || undefined,
+            }),
+          });
+          router.replace('/resumen');
+          return;
+        } catch (err: unknown) {
+          setError(
+            err instanceof Error ? err.message : 'No se pudo activar el plan'
+          );
+          setStep('plan');
+        }
+      } else {
+        setStep('plan');
+      }
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : 'No se pudo asociar el negocio'
@@ -155,12 +249,6 @@ export function BrandClaimOnboarding() {
     }
   }
 
-  const activeQuote = quotePlanWithDiscount(
-    planType,
-    billingPeriod,
-    discountPercentage
-  );
-
   async function activateStore(payment?: PaymentCardResult) {
     if (!storeId) return;
     setError('');
@@ -185,6 +273,7 @@ export function BrandClaimOnboarding() {
       router.replace('/resumen');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo activar el plan');
+      if (freeViaPromo) setStep('plan');
     } finally {
       setBusy(false);
     }
@@ -212,12 +301,26 @@ export function BrandClaimOnboarding() {
     STORE_SUBCATEGORY_LABELS[preview.subcategory as StoreSubcategory] ||
     preview.subcategory;
 
+  const urlCode = sanitizeReferralCode(searchParams.get('ref'));
+  const codeHint =
+    urlCode && codeKind === 'promo' && activeQuote.skipPayment
+      ? `Código ${urlCode} aplicado — activación sin costo.`
+      : urlCode && codeKind === 'promo'
+        ? `Código ${urlCode}: −${discountPercentage}%.`
+        : urlCode && codeKind === 'expired'
+          ? 'El código del enlace expiró.'
+          : urlCode && codeKind === 'invalid'
+            ? 'El código del enlace no es válido.'
+            : null;
+
   return (
     <div className="flex min-h-screen flex-col bg-[var(--onda-bg)] px-4 py-8">
       <div className="mx-auto w-full max-w-lg space-y-6">
         <OndaLogo />
 
-        {step === 'preview' || (step === 'auth' && !user) ? (
+        {step === 'preview' ||
+        step === 'activating' ||
+        (step === 'auth' && !user) ? (
           <div className="onda-card space-y-4 p-6">
             <div className="flex items-center gap-4">
               {preview.logoUrl ? (
@@ -242,6 +345,17 @@ export function BrandClaimOnboarding() {
             <p className="text-sm text-[var(--onda-muted)]">
               Crea tu cuenta o inicia sesión para administrar este negocio en Onda.
             </p>
+            {codeHint ? (
+              <p
+                className={`text-sm ${
+                  codeKind === 'promo'
+                    ? 'text-[var(--onda-sky)]'
+                    : 'text-[var(--onda-danger)]'
+                }`}
+              >
+                {codeHint}
+              </p>
+            ) : null}
 
             {!user ? (
               <form onSubmit={submitAuth} className="space-y-3">
@@ -294,12 +408,23 @@ export function BrandClaimOnboarding() {
                 {error ? (
                   <p className="text-sm text-[var(--onda-danger)]">{error}</p>
                 ) : null}
-                <GradientButton type="submit" disabled={busy} className="w-full">
+                <GradientButton
+                  type="submit"
+                  disabled={busy || (!!urlCode && !codeReady)}
+                  className="w-full"
+                >
                   {busy ? 'Entrando…' : 'Continuar'}
                 </GradientButton>
               </form>
-            ) : busy ? (
-              <p className="text-sm text-[var(--onda-muted)]">Asociando negocio…</p>
+            ) : busy || step === 'activating' ? (
+              <p className="text-sm text-[var(--onda-muted)]">
+                {freeViaPromo
+                  ? 'Asociando y activando tu negocio…'
+                  : 'Asociando negocio…'}
+              </p>
+            ) : null}
+            {error && user ? (
+              <p className="text-sm text-[var(--onda-danger)]">{error}</p>
             ) : null}
           </div>
         ) : null}
@@ -332,7 +457,7 @@ export function BrandClaimOnboarding() {
               onChange={(e) =>
                 setReferralCode(formatReferralCodeInput(e.target.value))
               }
-              placeholder="Código de referido (opcional)"
+              placeholder="Código de referido o promo (opcional)"
             />
             {error ? <p className="text-sm text-[var(--onda-danger)]">{error}</p> : null}
             <GradientButton type="submit" disabled={busy}>

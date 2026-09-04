@@ -4,8 +4,11 @@ export function inviteAcceptUrl(token: string) {
   return `${merchantBaseUrl()}/login/invitacion?token=${encodeURIComponent(token)}`;
 }
 
-export function storeClaimUrl(token: string) {
-  return `${merchantBaseUrl()}/onboarding/asociar?token=${encodeURIComponent(token)}`;
+export function storeClaimUrl(token: string, promoCode?: string | null) {
+  const base = `${merchantBaseUrl()}/onboarding/asociar?token=${encodeURIComponent(token)}`;
+  const code = promoCode?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!code) return base;
+  return `${base}&ref=${encodeURIComponent(code)}`;
 }
 
 export function cajaBaseUrl() {

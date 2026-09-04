@@ -885,15 +885,13 @@ function MerchantBusinessSetup() {
                       </p>
                       {wompiConfigured ? (
                         wompiPublicKey ? (
-                          <div id="onda-pay-form">
-                            <PaymentCardForm
-                              publicKey={wompiPublicKey}
-                              busy={busy}
-                              onSubmit={(payment) =>
-                                submitWithSubscription(payment)
-                              }
-                            />
-                          </div>
+                          <PaymentCardForm
+                            publicKey={wompiPublicKey}
+                            busy={busy}
+                            onSubmit={(payment) =>
+                              submitWithSubscription(payment)
+                            }
+                          />
                         ) : (
                           <p className="text-sm text-[var(--onda-danger)]">
                             Wompi no está configurado. Revisa las llaves en el

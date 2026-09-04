@@ -29,17 +29,20 @@ export function formatCardNumber(raw: string): string {
   return digits.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
 }
 
-function wompiApiBase() {
-  return (
-    process.env.NEXT_PUBLIC_WOMPI_API_URL ||
-    'https://sandbox.wompi.co/v1'
-  ).replace(/\/$/, '');
+/** Sandbox vs producción según la llave; override opcional con NEXT_PUBLIC_WOMPI_API_URL. */
+function wompiApiBase(publicKey?: string) {
+  const fromEnv = process.env.NEXT_PUBLIC_WOMPI_API_URL?.trim();
+  if (fromEnv) return fromEnv.replace(/\/$/, '');
+  if (publicKey?.startsWith('pub_prod_')) {
+    return 'https://production.wompi.co/v1';
+  }
+  return 'https://sandbox.wompi.co/v1';
 }
 
 export async function fetchWompiAcceptance(
   publicKey: string
 ): Promise<WompiAcceptance> {
-  const res = await fetch(`${wompiApiBase()}/merchants/${publicKey}`);
+  const res = await fetch(`${wompiApiBase(publicKey)}/merchants/${publicKey}`);
   if (!res.ok) {
     throw new Error('No se pudieron cargar los términos de Wompi');
   }
@@ -74,7 +77,7 @@ async function tokenizeCard(
   publicKey: string,
   card: CardFormValues
 ): Promise<string> {
-  const res = await fetch(`${wompiApiBase()}/tokens/cards`, {
+  const res = await fetch(`${wompiApiBase(publicKey)}/tokens/cards`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

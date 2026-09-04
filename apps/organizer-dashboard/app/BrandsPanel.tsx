@@ -14,6 +14,10 @@ import {
   STORE_CATEGORY_LABELS,
   STORE_SUBCATEGORY_LABELS,
 } from '@onda/shared-types';
+import {
+  formatReferralCodeInput,
+  sanitizeReferralCode,
+} from '@onda/shared-utils';
 import { useOrganizerAuth } from '../lib/organizerAuth';
 
 type DraftRow = {
@@ -31,6 +35,34 @@ type DraftRow = {
   claimUrl: string | null;
   logoUrl: string | null;
 };
+
+const CLAIM_PROMO_KEY = 'onda-organizer-claim-promo';
+
+function readStoredClaimPromo(): string {
+  try {
+    return sanitizeReferralCode(localStorage.getItem(CLAIM_PROMO_KEY));
+  } catch {
+    return '';
+  }
+}
+
+/** Añade `ref` al link de asociación si hay código global. */
+export function withClaimPromoCode(
+  url: string | null | undefined,
+  promoCode: string | null | undefined
+): string | null {
+  if (!url) return null;
+  const code = sanitizeReferralCode(promoCode);
+  if (!code) return url;
+  try {
+    const u = new URL(url);
+    u.searchParams.set('ref', code);
+    return u.toString();
+  } catch {
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}ref=${encodeURIComponent(code)}`;
+  }
+}
 
 function toFormValues(d: Partial<DraftRow>): StoreProfileFormValues {
   return {
@@ -74,6 +106,27 @@ export function BrandsPanel() {
   const [lastClaimUrl, setLastClaimUrl] = useState('');
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [claimPromoCode, setClaimPromoCode] = useState('');
+
+  useEffect(() => {
+    setClaimPromoCode(readStoredClaimPromo());
+  }, []);
+
+  function persistClaimPromo(raw: string) {
+    const formatted = formatReferralCodeInput(raw);
+    setClaimPromoCode(formatted);
+    try {
+      const clean = sanitizeReferralCode(formatted);
+      if (clean) localStorage.setItem(CLAIM_PROMO_KEY, clean);
+      else localStorage.removeItem(CLAIM_PROMO_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function claimLink(url: string | null | undefined) {
+    return withClaimPromoCode(url, claimPromoCode);
+  }
 
   async function loadDrafts() {
     if (!token) return;
@@ -112,7 +165,7 @@ export function BrandsPanel() {
         method: 'POST',
         body: JSON.stringify(payloadFromValues(values)),
       });
-      setLastClaimUrl(res.claimUrl);
+      setLastClaimUrl(claimLink(res.claimUrl) || res.claimUrl);
       await loadDrafts();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo crear el draft');
@@ -148,7 +201,7 @@ export function BrandsPanel() {
       { method: 'POST' }
     );
     await loadDrafts();
-    setLastClaimUrl(res.claimUrl);
+    setLastClaimUrl(claimLink(res.claimUrl) || res.claimUrl);
   }
 
   if (!token) {
@@ -188,6 +241,8 @@ export function BrandsPanel() {
     );
   }
 
+  const promoClean = sanitizeReferralCode(claimPromoCode);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
@@ -205,6 +260,35 @@ export function BrandsPanel() {
         >
           Salir
         </button>
+      </div>
+
+      <div className="onda-card space-y-3 p-5">
+        <h4 className="font-display font-semibold">Código promo en links</h4>
+        <p className="text-sm text-[var(--onda-muted)]">
+          Si defines un código aquí, se añade a todos los links de asociación
+          (`?ref=…`). Si el código es válido al 100%, el dueño no ve planes ni
+          tarjeta al reclamar.
+        </p>
+        <label className="block space-y-1 text-sm">
+          <span className="text-[var(--onda-muted)]">Código (opcional)</span>
+          <input
+            className="onda-input w-full max-w-xs uppercase tracking-wide"
+            value={claimPromoCode}
+            onChange={(e) => persistClaimPromo(e.target.value)}
+            placeholder="Ej. DEMO2026"
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+        {promoClean ? (
+          <p className="text-xs text-[var(--onda-sky)]">
+            Activo: los links incluirán <code>ref={promoClean}</code>
+          </p>
+        ) : (
+          <p className="text-xs text-[var(--onda-muted)]">
+            Sin código: los links van solo con el token.
+          </p>
+        )}
       </div>
 
       <div className="onda-card p-5">
@@ -237,78 +321,81 @@ export function BrandsPanel() {
           <p className="text-sm text-[var(--onda-muted)]">No hay drafts activos.</p>
         ) : (
           <ul className="space-y-3">
-            {drafts.map((d) => (
-              <li
-                key={d.id}
-                className="rounded-xl border border-[var(--onda-border)] p-3"
-              >
-                {editingId === d.id ? (
-                  <StoreProfileForm
-                    initial={toFormValues(d)}
-                    busy={busy}
-                    error={error}
-                    submitLabel="Guardar cambios"
-                    onSubmit={(values) => saveDraft(d.id, values)}
-                  />
-                ) : (
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      {d.logoUrl ? (
-                        <img
-                          src={d.logoUrl}
-                          alt=""
-                          className="h-10 w-10 rounded-lg object-cover"
-                        />
-                      ) : (
-                        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--onda-card)]">
-                          {OndaIcons.product}
-                        </span>
-                      )}
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{d.name}</p>
-                        <p className="text-xs text-[var(--onda-muted)]">
-                          {STORE_CATEGORY_LABELS[d.category as StoreCategory] ||
-                            d.category}
-                          {' · '}
-                          {STORE_SUBCATEGORY_LABELS[
-                            d.subcategory as StoreSubcategory
-                          ] || d.subcategory}
-                          {d.address ? ` · ${d.address}` : ''}
-                        </p>
+            {drafts.map((d) => {
+              const link = claimLink(d.claimUrl);
+              return (
+                <li
+                  key={d.id}
+                  className="rounded-xl border border-[var(--onda-border)] p-3"
+                >
+                  {editingId === d.id ? (
+                    <StoreProfileForm
+                      initial={toFormValues(d)}
+                      busy={busy}
+                      error={error}
+                      submitLabel="Guardar cambios"
+                      onSubmit={(values) => saveDraft(d.id, values)}
+                    />
+                  ) : (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        {d.logoUrl ? (
+                          <img
+                            src={d.logoUrl}
+                            alt=""
+                            className="h-10 w-10 rounded-lg object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--onda-card)]">
+                            {OndaIcons.product}
+                          </span>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{d.name}</p>
+                          <p className="text-xs text-[var(--onda-muted)]">
+                            {STORE_CATEGORY_LABELS[d.category as StoreCategory] ||
+                              d.category}
+                            {' · '}
+                            {STORE_SUBCATEGORY_LABELS[
+                              d.subcategory as StoreSubcategory
+                            ] || d.subcategory}
+                            {d.address ? ` · ${d.address}` : ''}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className="rounded-full border px-3 py-1 text-xs"
-                        onClick={() => {
-                          setEditingId(d.id);
-                          setError('');
-                        }}
-                      >
-                        Editar
-                      </button>
-                      {d.claimUrl ? (
+                      <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          className="rounded-full bg-[var(--onda-sky-soft)] px-3 py-1 text-xs text-[var(--onda-sky)]"
-                          onClick={() => void copyLink(d.claimUrl!)}
+                          className="rounded-full border px-3 py-1 text-xs"
+                          onClick={() => {
+                            setEditingId(d.id);
+                            setError('');
+                          }}
                         >
-                          Copiar link
+                          Editar
                         </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="rounded-full border px-3 py-1 text-xs"
-                        onClick={() => void rotateClaim(d.id)}
-                      >
-                        Rotar link
-                      </button>
+                        {link ? (
+                          <button
+                            type="button"
+                            className="rounded-full bg-[var(--onda-sky-soft)] px-3 py-1 text-xs text-[var(--onda-sky)]"
+                            onClick={() => void copyLink(link)}
+                          >
+                            Copiar link
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="rounded-full border px-3 py-1 text-xs"
+                          onClick={() => void rotateClaim(d.id)}
+                        >
+                          Rotar link
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </li>
-            ))}
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
