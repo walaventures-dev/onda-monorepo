@@ -362,6 +362,52 @@ export class StoreDraftService {
     };
   }
 
+  /** Revierte una asociación errónea: quita dueño/miembros y vuelve a draft con claim link. */
+  async unclaimDraft(storeIdOrSlug: string) {
+    const store = await this.prisma.store.findFirst({
+      where: {
+        OR: [{ id: storeIdOrSlug }, { slug: storeIdOrSlug }],
+      },
+    });
+    if (!store) throw new NotFoundException('Negocio no encontrado');
+    if (store.claimToken && !store.ownerEmail) {
+      throw new BadRequestException('Este negocio ya está pendiente de asociar');
+    }
+
+    const claimToken = newClaimToken();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.storeMember.updateMany({
+        where: {
+          storeId: store.id,
+          status: { not: StoreMemberStatus.REVOKED },
+        },
+        data: {
+          status: StoreMemberStatus.REVOKED,
+          revokedAt: new Date(),
+          inviteToken: null,
+        },
+      });
+
+      await tx.store.update({
+        where: { id: store.id },
+        data: {
+          ownerEmail: null,
+          ownerName: 'Pendiente',
+          claimToken,
+          claimTokenCreatedAt: new Date(),
+        },
+      });
+    });
+
+    return {
+      storeId: store.id,
+      storeName: store.name,
+      slug: store.slug,
+      previousOwnerEmail: store.ownerEmail,
+      claimUrl: storeClaimUrl(claimToken),
+    };
+  }
+
   async previewClaim(token: string) {
     const store = await this.prisma.store.findFirst({
       where: { claimToken: token },

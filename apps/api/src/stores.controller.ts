@@ -118,6 +118,15 @@ export class StoresController {
     return this.drafts.rotateClaim(id);
   }
 
+  @Post('draft/:id/unclaim')
+  async unclaimDraft(
+    @Headers('authorization') authHeader: string | undefined,
+    @Param('id') id: string
+  ) {
+    await this.organizerAuth.requireOrganizer(authHeader);
+    return this.drafts.unclaimDraft(id);
+  }
+
   @Patch('draft/:id')
   async updateDraft(
     @Headers('authorization') authHeader: string | undefined,

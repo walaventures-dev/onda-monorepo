@@ -1,0 +1,34 @@
+# One-shot: desvincula un negocio reclamado por error y lo deja como draft.
+name: Ops unclaim store draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      store_slug:
+        description: Slug o id del negocio a desvincular
+        required: true
+        default: el-pancetazo
+
+jobs:
+  unclaim:
+    name: Unclaim store
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Unclaim store draft
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          STORE_SLUG: ${{ inputs.store_slug }}
+          NEXT_PUBLIC_MERCHANT_URL: https://admin.entraenlaonda.com
+        run: pnpm exec tsx libs/database/scripts/unclaim-store-draft.ts
