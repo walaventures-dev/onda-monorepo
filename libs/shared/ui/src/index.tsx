@@ -34,6 +34,8 @@ export type {
   PlacesAddressFieldProps,
   PlacesAddressValue,
 } from './PlacesAddressField';
+export { StoreProfileForm } from './StoreProfileForm';
+export type { StoreProfileFormValues } from './StoreProfileForm';
 export { OndaColorPicker } from './OndaColorPicker';
 export type { OndaColorPickerProps } from './OndaColorPicker';
 export { useOndaDialogs } from './OndaDialogs';

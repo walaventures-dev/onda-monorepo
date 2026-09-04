@@ -41,7 +41,7 @@ export function PrivacyPolicyContent() {
       <section>
         <h2 className="font-display text-xl font-semibold">1. Quiénes somos</h2>
         <p className="mt-2 text-[var(--onda-muted)]">
-          Onda (Wala / onda.lat) opera una plataforma de lealtad digital mediante pases en Apple
+          Onda (Wala / entraenlaonda.com) opera una plataforma de lealtad digital mediante pases en Apple
           Wallet y Google Wallet, acumulación de “ondas” y comunicaciones por WhatsApp a través de
           un número de plataforma.
         </p>
@@ -84,8 +84,8 @@ export function PrivacyPolicyContent() {
         <h2 className="font-display text-xl font-semibold">6. Tus derechos</h2>
         <p className="mt-2 text-[var(--onda-muted)]">
           Puedes solicitar acceso, corrección o eliminación de tus datos escribiendo a{' '}
-          <a className="text-[var(--onda-violet)] underline" href="mailto:privacidad@onda.lat">
-            privacidad@onda.lat
+          <a className="text-[var(--onda-violet)] underline" href="mailto:privacidad@entraenlaonda.com">
+            privacidad@entraenlaonda.com
           </a>
           . También puedes dejar de recibir mensajes respondiendo según las opciones de WhatsApp.
         </p>
@@ -93,7 +93,7 @@ export function PrivacyPolicyContent() {
       <section>
         <h2 className="font-display text-xl font-semibold">7. Contacto</h2>
         <p className="mt-2 text-[var(--onda-muted)]">
-          Onda · Colombia · privacidad@onda.lat
+          Onda · Colombia · privacidad@entraenlaonda.com
         </p>
       </section>
     </>
@@ -144,14 +144,14 @@ export function TermsContent() {
       <section>
         <h2 className="font-display text-xl font-semibold">6. Cambios</h2>
         <p className="mt-2 text-[var(--onda-muted)]">
-          Podemos actualizar estos términos. La versión vigente se publica en onda.lat/terminos.
+          Podemos actualizar estos términos. La versión vigente se publica en entraenlaonda.com/terminos.
           El uso continuado tras un cambio implica aceptación.
         </p>
       </section>
       <section>
         <h2 className="font-display text-xl font-semibold">7. Contacto</h2>
         <p className="mt-2 text-[var(--onda-muted)]">
-          Consultas legales: legal@onda.lat
+          Consultas legales: legal@entraenlaonda.com
         </p>
       </section>
     </>

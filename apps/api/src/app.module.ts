@@ -51,6 +51,8 @@ import { CampaignsService } from './campaigns.service';
 import { PosService } from './pos.service';
 import { PosSseService } from './pos-sse.service';
 import { MerchantInviteService } from './merchant-invite.service';
+import { OrganizerAuthService } from './organizer-auth.service';
+import { StoreDraftService } from './store-draft.service';
 import { FirestoreService } from './firestore.service';
 import { PromoCodesService } from './promo-codes.service';
 import { CodeResolverService } from './code-resolver.service';
@@ -124,6 +126,8 @@ import { GooglePlacesService } from './google-places.service';
     PosService,
     PosSseService,
     MerchantInviteService,
+    OrganizerAuthService,
+    StoreDraftService,
     FirestoreService,
     PromoCodesService,
     CodeResolverService,

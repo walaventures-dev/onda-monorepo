@@ -94,7 +94,7 @@ export class BrevoService implements MailProvider {
         email:
           process.env.MAIL_FROM_EMAIL ||
           process.env.BREVO_SENDER_EMAIL ||
-          'hola@onda.lat',
+          'hola@entraenlaonda.com',
         name:
           process.env.MAIL_FROM_NAME ||
           process.env.BREVO_SENDER_NAME ||

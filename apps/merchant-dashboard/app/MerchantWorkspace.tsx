@@ -3257,6 +3257,12 @@ export function MerchantWorkspace() {
             onSaveLogo={(e) => void saveStoreLogo(e)}
             onSaveEconomics={(e) => void saveStoreEconomics(e)}
             onUpgrade={() => void upgrade()}
+            onStoreUpdated={(updated) => {
+              setStores((prev) =>
+                prev.map((s) => (s.id === storeId ? { ...s, ...updated } : s)),
+              );
+              toast.success('Perfil actualizado');
+            }}
           />
         ) : null}
       </AppShell>

@@ -26,6 +26,7 @@ export enum StoreCategory {
   RESTAURANT = 'RESTAURANT',
   SERVICE = 'SERVICE',
   HOSPITALITY = 'HOSPITALITY',
+  BRAND = 'BRAND',
 }
 
 /** Categoría dentro del tipo (belleza, café, hotel…). */
@@ -46,6 +47,20 @@ export enum StoreSubcategory {
   HOSTEL = 'HOSTEL',
   VACATION_RENTAL = 'VACATION_RENTAL',
   EVENT_VENUE = 'EVENT_VENUE',
+  BEVERAGE = 'BEVERAGE',
+  ALCOHOL = 'ALCOHOL',
+  SNACKS = 'SNACKS',
+  PACKAGED_FOOD = 'PACKAGED_FOOD',
+  COFFEE_TEA = 'COFFEE_TEA',
+  DAIRY = 'DAIRY',
+  PERSONAL_CARE = 'PERSONAL_CARE',
+  COSMETICS = 'COSMETICS',
+  FASHION = 'FASHION',
+  SPORTS = 'SPORTS',
+  TECH = 'TECH',
+  HOME_CARE = 'HOME_CARE',
+  PETS = 'PETS',
+  OTHER_BRAND = 'OTHER_BRAND',
 }
 
 /** Tercer nivel: subcategoría dentro de cada categoría. */
@@ -101,6 +116,20 @@ export enum StoreSegment {
   STAY_APARTMENT = 'STAY_APARTMENT',
   VENUE_HALL = 'VENUE_HALL',
   VENUE_TERRACE = 'VENUE_TERRACE',
+  BEVERAGE_GENERIC = 'BEVERAGE_GENERIC',
+  ALCOHOL_GENERIC = 'ALCOHOL_GENERIC',
+  SNACKS_GENERIC = 'SNACKS_GENERIC',
+  PACKAGED_FOOD_GENERIC = 'PACKAGED_FOOD_GENERIC',
+  COFFEE_TEA_GENERIC = 'COFFEE_TEA_GENERIC',
+  DAIRY_GENERIC = 'DAIRY_GENERIC',
+  PERSONAL_CARE_GENERIC = 'PERSONAL_CARE_GENERIC',
+  COSMETICS_GENERIC = 'COSMETICS_GENERIC',
+  FASHION_GENERIC = 'FASHION_GENERIC',
+  SPORTS_GENERIC = 'SPORTS_GENERIC',
+  TECH_GENERIC = 'TECH_GENERIC',
+  HOME_CARE_GENERIC = 'HOME_CARE_GENERIC',
+  PETS_GENERIC = 'PETS_GENERIC',
+  OTHER_BRAND_GENERIC = 'OTHER_BRAND_GENERIC',
 }
 
 export const STORE_SUBCATEGORIES_BY_CATEGORY: Record<
@@ -129,12 +158,29 @@ export const STORE_SUBCATEGORIES_BY_CATEGORY: Record<
     StoreSubcategory.VACATION_RENTAL,
     StoreSubcategory.EVENT_VENUE,
   ],
+  [StoreCategory.BRAND]: [
+    StoreSubcategory.BEVERAGE,
+    StoreSubcategory.ALCOHOL,
+    StoreSubcategory.SNACKS,
+    StoreSubcategory.PACKAGED_FOOD,
+    StoreSubcategory.COFFEE_TEA,
+    StoreSubcategory.DAIRY,
+    StoreSubcategory.PERSONAL_CARE,
+    StoreSubcategory.COSMETICS,
+    StoreSubcategory.FASHION,
+    StoreSubcategory.SPORTS,
+    StoreSubcategory.TECH,
+    StoreSubcategory.HOME_CARE,
+    StoreSubcategory.PETS,
+    StoreSubcategory.OTHER_BRAND,
+  ],
 };
 
 export const STORE_CATEGORY_LABELS: Record<StoreCategory, string> = {
   [StoreCategory.RESTAURANT]: 'Restaurante',
   [StoreCategory.SERVICE]: 'Servicios',
   [StoreCategory.HOSPITALITY]: 'Hospitalidad',
+  [StoreCategory.BRAND]: 'Marca de producto',
 };
 
 export const STORE_SUBCATEGORY_LABELS: Record<StoreSubcategory, string> = {
@@ -154,6 +200,20 @@ export const STORE_SUBCATEGORY_LABELS: Record<StoreSubcategory, string> = {
   [StoreSubcategory.HOSTEL]: 'Hostel',
   [StoreSubcategory.VACATION_RENTAL]: 'Alojamiento',
   [StoreSubcategory.EVENT_VENUE]: 'Venue de eventos',
+  [StoreSubcategory.BEVERAGE]: 'Bebidas',
+  [StoreSubcategory.ALCOHOL]: 'Cerveza y licores',
+  [StoreSubcategory.SNACKS]: 'Snacks y dulces',
+  [StoreSubcategory.PACKAGED_FOOD]: 'Alimentos empacados',
+  [StoreSubcategory.COFFEE_TEA]: 'Café y té',
+  [StoreSubcategory.DAIRY]: 'Lácteos',
+  [StoreSubcategory.PERSONAL_CARE]: 'Cuidado personal',
+  [StoreSubcategory.COSMETICS]: 'Belleza y cosmética',
+  [StoreSubcategory.FASHION]: 'Moda y accesorios',
+  [StoreSubcategory.SPORTS]: 'Deportes',
+  [StoreSubcategory.TECH]: 'Tecnología',
+  [StoreSubcategory.HOME_CARE]: 'Hogar y limpieza',
+  [StoreSubcategory.PETS]: 'Mascotas',
+  [StoreSubcategory.OTHER_BRAND]: 'Otra marca',
 };
 
 export const STORE_SEGMENT_LABELS: Record<StoreSegment, string> = {
@@ -208,6 +268,20 @@ export const STORE_SEGMENT_LABELS: Record<StoreSegment, string> = {
   [StoreSegment.STAY_APARTMENT]: 'Apartamento',
   [StoreSegment.VENUE_HALL]: 'Salón de eventos',
   [StoreSegment.VENUE_TERRACE]: 'Terraza',
+  [StoreSegment.BEVERAGE_GENERIC]: 'Bebidas',
+  [StoreSegment.ALCOHOL_GENERIC]: 'Cerveza y licores',
+  [StoreSegment.SNACKS_GENERIC]: 'Snacks y dulces',
+  [StoreSegment.PACKAGED_FOOD_GENERIC]: 'Alimentos empacados',
+  [StoreSegment.COFFEE_TEA_GENERIC]: 'Café y té',
+  [StoreSegment.DAIRY_GENERIC]: 'Lácteos',
+  [StoreSegment.PERSONAL_CARE_GENERIC]: 'Cuidado personal',
+  [StoreSegment.COSMETICS_GENERIC]: 'Belleza y cosmética',
+  [StoreSegment.FASHION_GENERIC]: 'Moda y accesorios',
+  [StoreSegment.SPORTS_GENERIC]: 'Deportes',
+  [StoreSegment.TECH_GENERIC]: 'Tecnología',
+  [StoreSegment.HOME_CARE_GENERIC]: 'Hogar y limpieza',
+  [StoreSegment.PETS_GENERIC]: 'Mascotas',
+  [StoreSegment.OTHER_BRAND_GENERIC]: 'Otra marca',
 };
 
 export const STORE_SEGMENTS_BY_SUBCATEGORY: Record<
@@ -295,6 +369,20 @@ export const STORE_SEGMENTS_BY_SUBCATEGORY: Record<
     StoreSegment.VENUE_HALL,
     StoreSegment.VENUE_TERRACE,
   ],
+  [StoreSubcategory.BEVERAGE]: [StoreSegment.BEVERAGE_GENERIC],
+  [StoreSubcategory.ALCOHOL]: [StoreSegment.ALCOHOL_GENERIC],
+  [StoreSubcategory.SNACKS]: [StoreSegment.SNACKS_GENERIC],
+  [StoreSubcategory.PACKAGED_FOOD]: [StoreSegment.PACKAGED_FOOD_GENERIC],
+  [StoreSubcategory.COFFEE_TEA]: [StoreSegment.COFFEE_TEA_GENERIC],
+  [StoreSubcategory.DAIRY]: [StoreSegment.DAIRY_GENERIC],
+  [StoreSubcategory.PERSONAL_CARE]: [StoreSegment.PERSONAL_CARE_GENERIC],
+  [StoreSubcategory.COSMETICS]: [StoreSegment.COSMETICS_GENERIC],
+  [StoreSubcategory.FASHION]: [StoreSegment.FASHION_GENERIC],
+  [StoreSubcategory.SPORTS]: [StoreSegment.SPORTS_GENERIC],
+  [StoreSubcategory.TECH]: [StoreSegment.TECH_GENERIC],
+  [StoreSubcategory.HOME_CARE]: [StoreSegment.HOME_CARE_GENERIC],
+  [StoreSubcategory.PETS]: [StoreSegment.PETS_GENERIC],
+  [StoreSubcategory.OTHER_BRAND]: [StoreSegment.OTHER_BRAND_GENERIC],
 };
 
 export function defaultSegmentFor(

@@ -188,7 +188,7 @@ export class WompiService {
       body: JSON.stringify({
         amount_in_cents: input.amountInCents,
         currency: 'COP',
-        customer_email: input.customerEmail || 'billing@onda.lat',
+        customer_email: input.customerEmail || 'billing@entraenlaonda.com',
         payment_source_id:
           Number(input.paymentSourceId) || input.paymentSourceId,
         reference: input.reference,

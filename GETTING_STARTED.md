@@ -182,7 +182,7 @@ pnpm dev:api
 Tras `pnpm db:seed`:
 
 - Evento: `festival-neiva`
-- Merchant: `owner0@onda.lat`
+- Merchant: `owner0@entraenlaonda.com`
 - Usuario demo: `+573001112233`
 
 ## Estructura relevante

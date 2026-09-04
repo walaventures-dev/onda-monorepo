@@ -235,12 +235,27 @@ const SUBCATEGORY_DIMENSIONS: Partial<
   [StoreSubcategory.HOSTEL]: HOSPITALITY_DIMENSIONS,
   [StoreSubcategory.VACATION_RENTAL]: HOSPITALITY_DIMENSIONS,
   [StoreSubcategory.EVENT_VENUE]: HOSPITALITY_DIMENSIONS,
+  [StoreSubcategory.BEVERAGE]: RETAIL_DIMENSIONS,
+  [StoreSubcategory.ALCOHOL]: RETAIL_DIMENSIONS,
+  [StoreSubcategory.SNACKS]: RETAIL_DIMENSIONS,
+  [StoreSubcategory.PACKAGED_FOOD]: RETAIL_DIMENSIONS,
+  [StoreSubcategory.COFFEE_TEA]: RETAIL_DIMENSIONS,
+  [StoreSubcategory.DAIRY]: RETAIL_DIMENSIONS,
+  [StoreSubcategory.PERSONAL_CARE]: RETAIL_DIMENSIONS,
+  [StoreSubcategory.COSMETICS]: BEAUTY_DIMENSIONS,
+  [StoreSubcategory.FASHION]: RETAIL_DIMENSIONS,
+  [StoreSubcategory.SPORTS]: RETAIL_DIMENSIONS,
+  [StoreSubcategory.TECH]: RETAIL_DIMENSIONS,
+  [StoreSubcategory.HOME_CARE]: RETAIL_DIMENSIONS,
+  [StoreSubcategory.PETS]: RETAIL_DIMENSIONS,
+  [StoreSubcategory.OTHER_BRAND]: RETAIL_DIMENSIONS,
 };
 
 const CATEGORY_FALLBACK: Record<StoreCategory, FeedbackDimensionDef[]> = {
   [StoreCategory.RESTAURANT]: FOOD_DIMENSIONS,
   [StoreCategory.SERVICE]: SERVICE_DIMENSIONS,
   [StoreCategory.HOSPITALITY]: HOSPITALITY_DIMENSIONS,
+  [StoreCategory.BRAND]: RETAIL_DIMENSIONS,
 };
 
 export function feedbackDimensionsFor(

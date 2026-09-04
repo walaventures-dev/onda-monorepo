@@ -31,7 +31,7 @@ Building a single app/lib goes through Nx: `pnpm exec nx build <project>` / `pnp
 
 **No lint or test tooling is configured anywhere in this repo** (no eslint config, no jest/vitest config, no `*.spec.ts`/`*.test.ts` files) despite `@nx/eslint*` being present as a devDependency. Don't assume a `pnpm lint` or `pnpm test` command exists — verify manually (build + read + exercise the running app) instead.
 
-Seed data: event `festival-neiva`, merchant login `owner0@onda.lat`, demo user `+573001112233`.
+Seed data: event `festival-neiva`, merchant login `owner0@entraenlaonda.com`, demo user `+573001112233`.
 
 ## Architecture
 

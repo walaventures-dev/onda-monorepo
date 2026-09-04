@@ -173,7 +173,7 @@ async function main() {
         lat: s.lat,
         lng: s.lng,
         ownerName: s.ownerName,
-        ownerEmail: `owner${i}@onda.lat`,
+        ownerEmail: `owner${i}@entraenlaonda.com`,
         referralCode: s.referralCode,
         freeMonthsBalance: s.freeMonthsBalance,
         referredByStoreId,

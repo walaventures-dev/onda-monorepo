@@ -30,7 +30,7 @@ Email/password para dueños de sede. El PWA **no** usa Firebase.
 
 1. Entra a [Firebase Console](https://console.firebase.google.com/) y crea un proyecto (o usa el mismo de Google Cloud).
 2. Authentication → Sign-in method → habilita **Email/Password** y **Google**.
-3. Authentication → Settings → Authorized domains: agrega `localhost` y el dominio del dashboard (ej. `app.onda.lat`).
+3. Authentication → Settings → Authorized domains: agrega `localhost` y el dominio del dashboard (ej. `app.entraenlaonda.com`).
 4. Project settings → General → Your apps → agrega una app **Web**. Copia `apiKey`, `authDomain`, `projectId`, `appId`.
 5. Project settings → Service accounts → Generate new private key. Guarda el JSON (no lo subas al git).
 
@@ -54,7 +54,7 @@ En `.env` la private key va en una línea con `\n` reales escapados.
 ### Cómo probar
 
 1. Crea un usuario en Authentication, usa “Crear cuenta” en `http://localhost:4202/onboarding`, o entra con Google en `http://localhost:4202/login`.
-2. En Postgres, esa sede debe tener `Store.ownerEmail` igual al email de Firebase (seed: `owner0@onda.lat`).
+2. En Postgres, esa sede debe tener `Store.ownerEmail` igual al email de Firebase (seed: `owner0@entraenlaonda.com`).
 3. Sin estas vars, el dashboard **no** muestra login y sigue el picker de sedes local.
 
 ### Fallos típicos
@@ -99,7 +99,7 @@ gcloud tasks queues create onda-jobs --location=us-central1
 GCP_PROJECT="tu-proyecto"
 GCP_LOCATION="us-central1"
 CLOUD_TASKS_QUEUE="onda-jobs"
-JOBS_WORKER_URL="https://api.onda.lat"
+JOBS_WORKER_URL="https://api.entraenlaonda.com"
 JOBS_SECRET="un-secreto-largo"
 CLOUD_TASKS_SA_EMAIL="onda-tasks@tu-proyecto.iam.gserviceaccount.com"
 ```
@@ -161,7 +161,7 @@ Sin llaves, el botón activa PRO **sin cobro** (modo desarrollo).
 
 ```bash
 BREVO_API_KEY=""
-BREVO_SENDER_EMAIL="hola@onda.lat"
+BREVO_SENDER_EMAIL="hola@entraenlaonda.com"
 BREVO_SENDER_NAME="Onda"
 BREVO_SMS_SENDER="Onda"
 ```

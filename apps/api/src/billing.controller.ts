@@ -2,7 +2,9 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  BadRequestException,
   Get,
+  HttpException,
   Inject,
   Param,
   Post,
@@ -16,6 +18,8 @@ import { WompiService } from './wompi.service';
 import { JobsService } from './jobs.service';
 import { BillingService } from './billing.service';
 import { WalletService } from './wallet.service';
+import { CodeResolverService } from './code-resolver.service';
+import { quotePlanWithDiscount } from '@onda/shared-utils';
 
 @Controller('billing')
 export class BillingController {
@@ -24,7 +28,8 @@ export class BillingController {
     @Inject(WompiService) private wompi: WompiService,
     @Inject(JobsService) private jobs: JobsService,
     @Inject(BillingService) private billing: BillingService,
-    @Inject(WalletService) private wallet: WalletService
+    @Inject(WalletService) private wallet: WalletService,
+    @Inject(CodeResolverService) private codeResolver: CodeResolverService
   ) {}
 
   @Get('config')
@@ -120,6 +125,128 @@ export class BillingController {
       data: { wompiTransactionId: checkout.reference },
     });
     return { stub: false as const, checkout };
+  }
+
+  @Post('store/:storeId/activate')
+  async activate(
+    @Param('storeId') storeId: string,
+    @Body()
+    body: {
+      planType?: 'BASIC' | 'PRO';
+      billingPeriod?: 'monthly' | '6' | '12';
+      referralCode?: string;
+      cardToken?: string;
+      acceptanceToken?: string;
+      acceptPersonalAuth?: string;
+    }
+  ) {
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: storeId },
+      include: { passDesign: true },
+    });
+    if (store.billingStatus === 'ACTIVE' && store.ownerEmail) {
+      throw new BadRequestException('Este negocio ya está activo');
+    }
+
+    const planType = this.billing.normalizePlan(body.planType);
+    let billingPeriod = this.billing.normalizePeriod(body.billingPeriod);
+
+    let codeMeta: {
+      referredByStoreId?: string;
+      promoCode?: string;
+      discountPercentage: number;
+    };
+    try {
+      codeMeta = await this.codeResolver.resolveForSubscription(
+        body.referralCode
+      );
+    } catch (e) {
+      throw new BadRequestException(
+        e instanceof Error ? e.message : 'Código inválido'
+      );
+    }
+
+    if (codeMeta.discountPercentage > 30) {
+      billingPeriod = 'monthly';
+    }
+    this.billing.assertBillingAllowed(
+      billingPeriod,
+      codeMeta.discountPercentage
+    );
+
+    const quote = quotePlanWithDiscount(
+      planType,
+      billingPeriod,
+      codeMeta.discountPercentage
+    );
+
+    if (quote.amountDue > 0 && this.wompi.isConfigured && !body.cardToken) {
+      throw new BadRequestException('Tarjeta requerida para activar el plan');
+    }
+
+    await this.prisma.store.update({
+      where: { id: storeId },
+      data: {
+        planType,
+        billingPeriod,
+        referredByStoreId: codeMeta.referredByStoreId,
+        promoCodeUsed: codeMeta.promoCode,
+      },
+    });
+
+    try {
+      if (quote.skipPayment) {
+        const result = await this.billing.activateComplimentarySubscription({
+          storeId,
+          planType,
+          billingPeriod,
+          promoCode: codeMeta.promoCode,
+          referred: Boolean(codeMeta.referredByStoreId),
+        });
+        return {
+          ...result.store,
+          passDesign: store.passDesign,
+          amountCop: 0,
+          quote: result.quote,
+          stub: true,
+          complimentary: true,
+        };
+      }
+
+      const result = await this.billing.activatePaidSubscription({
+        storeId,
+        planType,
+        billingPeriod,
+        discountPercentage: codeMeta.discountPercentage,
+        promoCode: codeMeta.promoCode,
+        tokens: body.cardToken
+          ? {
+              cardToken: body.cardToken,
+              acceptanceToken: body.acceptanceToken || '',
+              acceptPersonalAuth: body.acceptPersonalAuth || '',
+              customerEmail: store.ownerEmail || 'billing@entraenlaonda.com',
+            }
+          : undefined,
+      });
+      return {
+        ...result.store,
+        passDesign: store.passDesign,
+        amountCop: result.amountCop,
+        quote: result.quote,
+        stub: result.stub,
+      };
+    } catch (e) {
+      if (e instanceof HttpException) throw e;
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/Wompi/i.test(msg)) {
+        throw new BadRequestException(
+          'No se pudo cobrar la tarjeta. Revisa los datos o intenta con otra.'
+        );
+      }
+      throw new BadRequestException(
+        'No se pudo activar el negocio. Intenta de nuevo.'
+      );
+    }
   }
 
   @Post('wompi/webhook')

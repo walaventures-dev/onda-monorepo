@@ -10,6 +10,7 @@
     "dev:pwa": "pnpm exec next dev apps/pwa-client -p 4201",
     "dev:merchant": "pnpm exec next dev apps/merchant-dashboard -p 4202",
     "dev:organizer": "pnpm exec next dev apps/organizer-dashboard -p 4203",
+    "dev:organizer:remote": "API_URL=https://api.entraenlaonda.com NEXT_PUBLIC_API_URL=https://api.entraenlaonda.com pnpm exec next dev apps/organizer-dashboard -p 4203",
     "dev:caja": "pnpm exec next dev apps/pwa-caja -p 4204",
     "db:generate": "prisma generate --schema=libs/database/prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema=libs/database/prisma/schema.prisma",

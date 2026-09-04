@@ -114,11 +114,11 @@ export function FooterCta() {
                 Colombia
               </p>
               <a
-                href="mailto:hola@onda.lat"
+                href="mailto:hola@entraenlaonda.com"
                 className="inline-flex items-center gap-2 transition-colors hover:text-[var(--onda-ink)]"
               >
                 <EnvelopeSimple size={16} className="text-[var(--onda-primary-500)]" weight="fill" />
-                hola@onda.lat
+                hola@entraenlaonda.com
               </a>
             </div>
           </div>
@@ -182,18 +182,18 @@ export function FooterCta() {
               </li>
               <li>
                 <a
-                  href="mailto:privacidad@onda.lat"
+                  href="mailto:privacidad@entraenlaonda.com"
                   className="text-[var(--onda-ink)] transition-colors hover:text-[var(--onda-primary-500)]"
                 >
-                  privacidad@onda.lat
+                  privacidad@entraenlaonda.com
                 </a>
               </li>
               <li>
                 <a
-                  href="mailto:hola@onda.lat"
+                  href="mailto:hola@entraenlaonda.com"
                   className="text-[var(--onda-ink)] transition-colors hover:text-[var(--onda-primary-500)]"
                 >
-                  Soporte · hola@onda.lat
+                  Soporte · hola@entraenlaonda.com
                 </a>
               </li>
             </ul>
@@ -202,7 +202,7 @@ export function FooterCta() {
 
         <div className="border-t border-[var(--onda-border)]">
           <div className="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-6 text-xs text-[var(--onda-muted)] sm:flex-row sm:items-center sm:justify-between">
-            <p>© {year} Onda · onda.lat · Operamos en Colombia</p>
+            <p>© {year} Onda · entraenlaonda.com · Operamos en Colombia</p>
             <p>Wallet, WhatsApp y datos tratados conforme a nuestra política de privacidad.</p>
           </div>
         </div>

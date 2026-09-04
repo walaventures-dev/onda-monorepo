@@ -18,6 +18,22 @@ export const STORE_SUBCATEGORIES_BY_CATEGORY: Record<string, string[]> = {
     'OTHER_SERVICE',
   ],
   HOSPITALITY: ['HOTEL', 'HOSTEL', 'VACATION_RENTAL', 'EVENT_VENUE'],
+  BRAND: [
+    'BEVERAGE',
+    'ALCOHOL',
+    'SNACKS',
+    'PACKAGED_FOOD',
+    'COFFEE_TEA',
+    'DAIRY',
+    'PERSONAL_CARE',
+    'COSMETICS',
+    'FASHION',
+    'SPORTS',
+    'TECH',
+    'HOME_CARE',
+    'PETS',
+    'OTHER_BRAND',
+  ],
 };
 
 export const STORE_SEGMENTS_BY_SUBCATEGORY: Record<string, string[]> = {
@@ -50,6 +66,20 @@ export const STORE_SEGMENTS_BY_SUBCATEGORY: Record<string, string[]> = {
   HOSTEL: ['HOSTEL_STANDARD'],
   VACATION_RENTAL: ['STAY_CABIN', 'STAY_GLAMPING', 'STAY_APARTMENT'],
   EVENT_VENUE: ['VENUE_HALL', 'VENUE_TERRACE'],
+  BEVERAGE: ['BEVERAGE_GENERIC'],
+  ALCOHOL: ['ALCOHOL_GENERIC'],
+  SNACKS: ['SNACKS_GENERIC'],
+  PACKAGED_FOOD: ['PACKAGED_FOOD_GENERIC'],
+  COFFEE_TEA: ['COFFEE_TEA_GENERIC'],
+  DAIRY: ['DAIRY_GENERIC'],
+  PERSONAL_CARE: ['PERSONAL_CARE_GENERIC'],
+  COSMETICS: ['COSMETICS_GENERIC'],
+  FASHION: ['FASHION_GENERIC'],
+  SPORTS: ['SPORTS_GENERIC'],
+  TECH: ['TECH_GENERIC'],
+  HOME_CARE: ['HOME_CARE_GENERIC'],
+  PETS: ['PETS_GENERIC'],
+  OTHER_BRAND: ['OTHER_BRAND_GENERIC'],
 };
 
 export function normalizeStoreSlug(input: string): string {
@@ -81,6 +111,10 @@ export function isSegmentOfSubcategory(
 
 export function defaultSegmentFor(subcategory: string): string | undefined {
   return STORE_SEGMENTS_BY_SUBCATEGORY[subcategory]?.[0];
+}
+
+export function defaultSubcategoryFor(category: string): string | undefined {
+  return STORE_SUBCATEGORIES_BY_CATEGORY[category]?.[0];
 }
 
 export function generateReferralCode(length = 8): string {

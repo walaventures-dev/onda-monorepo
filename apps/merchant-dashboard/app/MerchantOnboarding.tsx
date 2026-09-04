@@ -681,15 +681,17 @@ function MerchantBusinessSetup() {
                           />
                         </div>
                       </Field>
-                      <PlacesAddressField
-                        value={address}
-                        onChange={(next) => {
-                          setAddress(next.address);
-                          setGooglePlaceId(next.googlePlaceId);
-                          setLat(next.lat);
-                          setLng(next.lng);
-                        }}
-                      />
+                      {category !== StoreCategory.BRAND ? (
+                        <PlacesAddressField
+                          value={address}
+                          onChange={(next) => {
+                            setAddress(next.address);
+                            setGooglePlaceId(next.googlePlaceId);
+                            setLat(next.lat);
+                            setLng(next.lng);
+                          }}
+                        />
+                      ) : null}
                       <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-3">
                         <Field label="Tipo de negocio">
                           <OndaSelect

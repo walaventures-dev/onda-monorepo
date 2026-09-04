@@ -197,7 +197,7 @@ export class BillingService {
       return stubId;
     }
     const email =
-      tokens.customerEmail || store.ownerEmail || 'billing@onda.lat';
+      tokens.customerEmail || store.ownerEmail || 'billing@entraenlaonda.com';
     if (!tokens.acceptanceToken || !tokens.acceptPersonalAuth) {
       throw new BadRequestException('Debes aceptar los términos de Wompi');
     }

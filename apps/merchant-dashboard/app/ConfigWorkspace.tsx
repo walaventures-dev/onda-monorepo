@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { FormEvent, ReactNode } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { BooksIcon as Books } from '@phosphor-icons/react/dist/csr/Books';
 import { BuildingsIcon as Buildings } from '@phosphor-icons/react/dist/csr/Buildings';
 import { CameraIcon as Camera } from '@phosphor-icons/react/dist/csr/Camera';
@@ -17,7 +17,15 @@ import {
   OndaColorPicker,
   OndaIcons,
   OndaSelect,
+  StoreProfileForm,
+  type StoreProfileFormValues,
+  api,
 } from '@onda/shared-ui';
+import {
+  StoreCategory,
+  StoreSubcategory,
+  StoreSegment,
+} from '@onda/shared-types';
 import {
   DEFAULT_BRAND_PRIMARY,
   DEFAULT_BRAND_SECONDARY,
@@ -255,6 +263,7 @@ export function ConfigWorkspace({
   onSaveLogo,
   onSaveEconomics,
   onUpgrade,
+  onStoreUpdated,
 }: {
   storeId: string;
   store: any;
@@ -274,10 +283,57 @@ export function ConfigWorkspace({
   onSaveLogo: (e: FormEvent) => void;
   onSaveEconomics: (e: FormEvent) => void;
   onUpgrade: () => void;
+  onStoreUpdated?: (store: any) => void;
 }) {
   const pathname = usePathname();
   const section = parseConfigSection(pathname);
   const posEnabled = Boolean(store?.posEnabled);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
+
+  async function saveProfile(values: StoreProfileFormValues) {
+    if (!storeId) return;
+    setProfileError('');
+    setSavingProfile(true);
+    try {
+      const updated = await api<any>(`/stores/${storeId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: values.name.trim(),
+          logoUrl: values.logoUrl.trim() || null,
+          category: values.category,
+          subcategory: values.subcategory,
+          segment: values.segment,
+          slug: values.slug.trim() || undefined,
+          address: values.address.trim() || undefined,
+          googlePlaceId: values.googlePlaceId,
+          lat: values.lat,
+          lng: values.lng,
+        }),
+      });
+      onStoreUpdated?.(updated);
+    } catch (err: unknown) {
+      setProfileError(
+        err instanceof Error ? err.message : 'No se pudo guardar el negocio'
+      );
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  const profileInitial: StoreProfileFormValues = {
+    name: store?.name || '',
+    logoUrl: store?.passDesign?.logoUrl || '',
+    category: (store?.category as StoreCategory) || StoreCategory.RESTAURANT,
+    subcategory:
+      (store?.subcategory as StoreSubcategory) || StoreSubcategory.CAFE,
+    segment: (store?.segment as StoreSegment) || StoreSegment.CAFE_COFFEE,
+    slug: store?.slug || '',
+    address: store?.address || '',
+    googlePlaceId: store?.googlePlaceId || undefined,
+    lat: store?.lat ?? undefined,
+    lng: store?.lng ?? undefined,
+  };
 
   const navGroups = NAV_GROUPS.filter(
     (group) => group.id !== 'pos' || posEnabled,
@@ -422,23 +478,25 @@ export function ConfigWorkspace({
           <>
             <SectionHeader
               title="General"
-              description="Información de la sede, plan y límites de uso."
+              description="Datos del negocio, sede y plan."
             />
+            <div className="onda-card max-w-3xl space-y-5 p-5">
+              <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
+                Perfil del negocio
+              </h3>
+              <StoreProfileForm
+                initial={profileInitial}
+                busy={savingProfile}
+                error={profileError}
+                submitLabel="Guardar perfil"
+                onSubmit={saveProfile}
+              />
+            </div>
             <div className="onda-card max-w-xl space-y-3 p-5">
               <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
-                Sede
+                Plan
               </h3>
               <dl className="space-y-2 text-sm">
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--onda-muted)]">Nombre</dt>
-                  <dd className="font-medium text-[var(--onda-ink)]">{store?.name || '—'}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--onda-muted)]">Place ID</dt>
-                  <dd className="font-mono text-xs text-[var(--onda-ink)]">
-                    {store?.googlePlaceId || '—'}
-                  </dd>
-                </div>
                 <div className="flex justify-between gap-4">
                   <dt className="text-[var(--onda-muted)]">Plan</dt>
                   <dd className="font-medium text-[var(--onda-ink)]">

@@ -8,6 +8,7 @@ import { MerchantOnboarding } from "./MerchantOnboarding";
 import { MerchantLogin } from "./MerchantLogin";
 import { MerchantChangePassword } from "./MerchantChangePassword";
 import { MerchantInviteAccept } from "./MerchantInviteAccept";
+import { BrandClaimOnboarding } from "./BrandClaimOnboarding";
 import { MerchantAuthProvider, useMerchantAuth } from "../lib/MerchantAuth";
 import {
   isSetupAllowedPath,
@@ -35,6 +36,13 @@ function isChangePasswordPath(pathname: string) {
 
 function isOnboardingPath(pathname: string) {
   return pathname === "/onboarding" || pathname.startsWith("/onboarding/");
+}
+
+function isAsociarPath(pathname: string) {
+  return (
+    pathname === "/onboarding/asociar" ||
+    pathname.startsWith("/onboarding/asociar/")
+  );
 }
 
 /** Destino interno seguro para volver después del login. */
@@ -77,6 +85,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isOnboarding = isOnboardingPath(pathname);
+  const isAsociar = isAsociarPath(pathname);
   const isLogin = isLoginPath(pathname);
   const isChangePassword = isChangePasswordPath(pathname);
   const isInvite = isInvitePath(pathname);
@@ -86,7 +95,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     if (!ready) return;
 
     // Cambio de contraseña: sesión = oobCode en el URL; no redirigir.
-    if (isChangePassword || isInvite) return;
+    if (isChangePassword || isInvite || isAsociar) return;
 
     if (firebaseEnabled && !user) {
       if (!isOnboarding && !isLogin) {
@@ -110,12 +119,14 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       }
       if (cancelled) return;
 
-      if (isOnboarding) {
+      if (isOnboarding && !isAsociar) {
         if (stores && stores.length > 0) {
           router.replace(merchantHomePath(stores));
         }
         return;
       }
+
+      if (isAsociar) return;
 
       if (!stores || stores.length === 0) {
         router.replace(onboardingPathFromSearch());
@@ -135,6 +146,8 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     isOnboarding,
     isLogin,
     isChangePassword,
+    isInvite,
+    isAsociar,
     pathname,
     router,
   ]);
@@ -162,6 +175,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     screen = <SkeletonScreen />;
   } else if (user && isLogin) {
     screen = <SkeletonScreen />;
+  } else if (isAsociar) {
+    screen = (
+      <Suspense fallback={<SkeletonScreen />}>
+        <BrandClaimOnboarding />
+      </Suspense>
+    );
   } else if (isOnboarding) {
     screen = (
       <Suspense fallback={<SkeletonScreen />}>

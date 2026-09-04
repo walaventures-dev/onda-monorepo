@@ -70,7 +70,7 @@ export function storeCreatedEmailHtml(input: StoreCreatedEmailInput): string {
           <tr>
             <td style="padding:0 32px 28px;">
               <p style="margin:0;font-size:13px;line-height:1.5;color:${BRAND.muted};">
-                Si tienes dudas, responde a este correo o escríbenos a hola@onda.lat.
+                Si tienes dudas, responde a este correo o escríbenos a hola@entraenlaonda.com.
               </p>
             </td>
           </tr>

@@ -5,6 +5,7 @@ import {
   ConflictException,
   Controller,
   Get,
+  Headers,
   HttpException,
   Logger,
   NotFoundException,
@@ -12,6 +13,7 @@ import {
   Patch,
   Post,
   Query,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { JobsService } from './jobs.service';
@@ -36,6 +38,9 @@ import { WompiService } from './wompi.service';
 import { quotePlanWithDiscount } from '@onda/shared-utils';
 import { resolvePassDesign } from './pass-design.util';
 import { storePublicSelect } from './store-select';
+import { OrganizerAuthService } from './organizer-auth.service';
+import { StoreDraftService } from './store-draft.service';
+import { FirebaseAuthService } from './firebase-auth.service';
 
 type CreateStoreBody = {
   name: string;
@@ -70,7 +75,10 @@ export class StoresController {
     @Inject(CodeResolverService) private codeResolver: CodeResolverService,
     @Inject(WompiService) private wompi: WompiService,
     @Inject(GooglePlacesService) private googlePlaces: GooglePlacesService,
-    @Inject(BillingStorageService) private storage: BillingStorageService
+    @Inject(BillingStorageService) private storage: BillingStorageService,
+    @Inject(OrganizerAuthService) private organizerAuth: OrganizerAuthService,
+    @Inject(StoreDraftService) private drafts: StoreDraftService,
+    @Inject(FirebaseAuthService) private firebase: FirebaseAuthService
   ) {}
 
   @Get()
@@ -79,6 +87,64 @@ export class StoresController {
       select: storePublicSelect,
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  @Get('drafts')
+  async listDrafts(@Headers('authorization') authHeader?: string) {
+    await this.organizerAuth.requireOrganizer(authHeader);
+    return this.drafts.listDrafts();
+  }
+
+  @Get('claim/:token')
+  previewClaim(@Param('token') token: string) {
+    return this.drafts.previewClaim(token);
+  }
+
+  @Post('draft')
+  async createDraft(
+    @Headers('authorization') authHeader: string | undefined,
+    @Body() body: Parameters<StoreDraftService['createDraft']>[0]
+  ) {
+    await this.organizerAuth.requireOrganizer(authHeader);
+    return this.drafts.createDraft(body);
+  }
+
+  @Post('draft/:id/rotate-claim')
+  async rotateClaim(
+    @Headers('authorization') authHeader: string | undefined,
+    @Param('id') id: string
+  ) {
+    await this.organizerAuth.requireOrganizer(authHeader);
+    return this.drafts.rotateClaim(id);
+  }
+
+  @Patch('draft/:id')
+  async updateDraft(
+    @Headers('authorization') authHeader: string | undefined,
+    @Param('id') id: string,
+    @Body() body: Parameters<StoreDraftService['updateProfile']>[1]
+  ) {
+    await this.organizerAuth.requireOrganizer(authHeader);
+    const store = await this.prisma.store.findUnique({ where: { id } });
+    if (!store?.claimToken) {
+      throw new BadRequestException(
+        'Solo se pueden editar negocios pendientes de asociar'
+      );
+    }
+    return this.drafts.updateProfile(id, body);
+  }
+
+  @Post('claim/:token/accept')
+  async acceptClaim(
+    @Param('token') token: string,
+    @Headers('authorization') authHeader: string | undefined,
+    @Body() body: { ownerName?: string }
+  ) {
+    if (!this.firebase.isConfigured) {
+      throw new UnauthorizedException('Firebase requerido');
+    }
+    const email = await this.firebase.emailFromAuthHeader(authHeader);
+    return this.drafts.acceptClaim(token, email, body?.ownerName);
   }
 
   @Get(':id')
@@ -203,7 +269,7 @@ export class StoresController {
               cardToken: body.cardToken,
               acceptanceToken: body.acceptanceToken || '',
               acceptPersonalAuth: body.acceptPersonalAuth || '',
-              customerEmail: body.ownerEmail || 'billing@onda.lat',
+              customerEmail: body.ownerEmail || 'billing@entraenlaonda.com',
             }
           : undefined,
       });
@@ -405,10 +471,15 @@ export class StoresController {
     @Body()
     body: Partial<{
       name: string;
+      slug: string;
+      category: string;
+      subcategory: string;
+      segment: string;
       googlePlaceId: string;
       address: string;
       lat: number;
       lng: number;
+      logoUrl: string | null;
       planType: 'BASIC' | 'PRO';
       billingStatus: string;
       maxStamps: number;
@@ -418,6 +489,38 @@ export class StoresController {
       ownerName: string;
     }>
   ) {
+    const profileKeys = [
+      'name',
+      'slug',
+      'category',
+      'subcategory',
+      'segment',
+      'googlePlaceId',
+      'address',
+      'lat',
+      'lng',
+      'logoUrl',
+      'ownerName',
+    ] as const;
+    const hasProfile = profileKeys.some((k) => k in body);
+    let store: Awaited<ReturnType<StoreDraftService['updateProfile']>> | null =
+      null;
+    if (hasProfile) {
+      store = await this.drafts.updateProfile(id, {
+        name: body.name,
+        slug: body.slug,
+        category: body.category,
+        subcategory: body.subcategory,
+        segment: body.segment,
+        googlePlaceId: body.googlePlaceId,
+        address: body.address,
+        lat: body.lat,
+        lng: body.lng,
+        logoUrl: body.logoUrl,
+        ownerName: body.ownerName,
+      });
+    }
+
     let maxStamps: number | undefined;
     if (body.maxStamps != null) {
       maxStamps = Number(body.maxStamps);
@@ -449,9 +552,32 @@ export class StoresController {
     if ('posEnabled' in body && body.posEnabled != null) {
       posEnabled = Boolean(body.posEnabled);
     }
+
+    const billingKeys = [
+      'planType',
+      'billingStatus',
+      'maxStamps',
+      'currency',
+      'ondaValue',
+      'posEnabled',
+    ] as const;
+    const hasBilling = billingKeys.some((k) => k in body);
+    if (!hasBilling) {
+      return store ?? this.prisma.store.findUniqueOrThrow({ where: { id } });
+    }
+
+    const billingData: Record<string, unknown> = {};
+    if (body.planType != null) billingData.planType = body.planType;
+    if (body.billingStatus != null) billingData.billingStatus = body.billingStatus;
+    if (maxStamps != null) billingData.maxStamps = maxStamps;
+    if (currency != null) billingData.currency = currency;
+    if (ondaValue !== undefined) billingData.ondaValue = ondaValue;
+    if (posEnabled !== undefined) billingData.posEnabled = posEnabled;
+
     return this.prisma.store.update({
       where: { id },
-      data: { ...body, maxStamps, currency, ondaValue, posEnabled },
+      data: billingData,
+      include: { passDesign: true },
     });
   }
 
