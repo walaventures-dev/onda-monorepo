@@ -25,6 +25,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: pnpm exec prisma generate --schema=libs/database/prisma/schema.prisma
+
       - name: Unclaim store draft
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
