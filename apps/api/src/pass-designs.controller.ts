@@ -49,12 +49,11 @@ export class PassDesignsController {
       description?: string;
     }
   ) {
-    await this.cartillas.assertCanEdit(cartillaId);
-    const cartilla = await this.prisma.cartilla.findUniqueOrThrow({
+    await this.prisma.cartilla.findUniqueOrThrow({
       where: { id: cartillaId },
-      select: { storeId: true },
+      select: { id: true },
     });
-    return this.prisma.passDesign.upsert({
+    const updated = await this.prisma.passDesign.upsert({
       where: { cartillaId },
       create: {
         cartillaId,
@@ -74,6 +73,8 @@ export class PassDesignsController {
           : {}),
       },
     });
+    await this.cartillas.pushCartillaWallets(cartillaId);
+    return updated;
   }
 
   @Put('store/:storeId')

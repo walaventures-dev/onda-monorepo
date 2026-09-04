@@ -97,7 +97,6 @@ export function CartillaEditor({
   const [endsAt, setEndsAt] = useState("");
   const [isDefault, setIsDefault] = useState(embedded);
   const [status, setStatus] = useState("DRAFT");
-  const [locked, setLocked] = useState(false);
   const [passCount, setPassCount] = useState(0);
   const [maxStamps, setMaxStamps] = useState(() =>
     snapCycle(store?.maxStamps ?? 12),
@@ -173,7 +172,6 @@ export function CartillaEditor({
       setName(c.name);
       setIsDefault(Boolean(c.isDefault));
       setStatus(c.status);
-      setLocked(Boolean(c.locked));
       setPassCount(Number(c.passCount) || 0);
       setMaxStamps(snapCycle(c.maxStamps ?? store?.maxStamps ?? 12));
       setStartsAt(c.startsAt ? String(c.startsAt).slice(0, 10) : "");
@@ -312,13 +310,6 @@ export function CartillaEditor({
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
-    if (locked) {
-      toast.danger("Cartilla bloqueada", {
-        description:
-          "Ya hay clientes con esta cartilla. No se puede modificar.",
-      });
-      return;
-    }
     if (embedded && selected.length === 0) {
       toast.danger("Falta una promo", {
         description: "Crea o agrega al menos una promo a la cartilla.",
@@ -425,27 +416,21 @@ export function CartillaEditor({
                 : name}
           </h2>
           <p className="text-sm text-[var(--onda-muted)]">
-            {locked
-              ? "Esta cartilla ya tiene clientes. No se puede modificar."
-              : "Elige cuántas ondas tiene, crea o agrega promos y decide en qué onda se reclaman."}
+            Elige cuántas ondas tiene, crea o agrega promos y decide en qué onda
+            se reclaman.
           </p>
         </div>
 
-        {locked ? (
-          <p className="flex items-start gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <span className="mt-0.5 shrink-0">{OndaIcons.lock}</span>
-            <span>
-              Bloqueada
-              {passCount > 0
-                ? ` · ${passCount} cliente${passCount === 1 ? "" : "s"} la tiene registrada.`
-                : "."}{" "}
-              Crea una cartilla nueva si quieres cambiar promos u ondas.
-            </span>
+        {passCount > 0 ? (
+          <p className="rounded-2xl bg-[var(--onda-sky-soft)] px-4 py-3 text-sm text-[var(--onda-ink)]">
+            {passCount} cliente{passCount === 1 ? "" : "s"} ya{" "}
+            {passCount === 1 ? "tiene" : "tienen"} esta cartilla. Los cambios se
+            aplican a {passCount === 1 ? "su pase" : "sus pases"}.
           </p>
         ) : null}
 
         <form onSubmit={onSave} className="onda-card space-y-4 p-5">
-          <fieldset disabled={locked} className="space-y-4">
+          <fieldset className="space-y-4">
             <input
               required
               className="w-full rounded-xl border border-[var(--onda-border)] px-3 py-2.5 text-sm"
@@ -493,34 +478,32 @@ export function CartillaEditor({
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium">Promos en esta cartilla</p>
-                {locked ? null : (
-                  <div className="flex flex-wrap gap-2">
-                    {promos.length === 0 ? (
-                      <GradientButton type="button" onClick={openCreatePromo}>
+                <div className="flex flex-wrap gap-2">
+                  {promos.length === 0 ? (
+                    <GradientButton type="button" onClick={openCreatePromo}>
+                      {OndaIcons.plus}
+                      Crear promo
+                    </GradientButton>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm font-medium"
+                        onClick={openCreatePromo}
+                      >
                         {OndaIcons.plus}
                         Crear promo
-                      </GradientButton>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm font-medium"
-                          onClick={openCreatePromo}
-                        >
-                          {OndaIcons.plus}
-                          Crear promo
-                        </button>
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm font-medium"
-                          onClick={() => setPicking(true)}
-                        >
-                          Agregar promo
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm font-medium"
+                        onClick={() => setPicking(true)}
+                      >
+                        Agregar promo
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
 
               {selected.length === 0 ? (
@@ -544,16 +527,14 @@ export function CartillaEditor({
                           {formatPromoBenefit({ ...p, pointsRequired: 0 })}
                         </p>
                       </div>
-                      {locked ? null : (
-                        <button
-                          type="button"
-                          className="shrink-0 rounded-full p-1.5 text-[var(--onda-muted)] hover:text-[var(--onda-danger)]"
-                          aria-label={`Quitar ${p.title}`}
-                          onClick={() => removePromo(p.id)}
-                        >
-                          {OndaIcons.close}
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-full p-1.5 text-[var(--onda-muted)] hover:text-[var(--onda-danger)]"
+                        aria-label={`Quitar ${p.title}`}
+                        onClick={() => removePromo(p.id)}
+                      >
+                        {OndaIcons.close}
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -567,7 +548,7 @@ export function CartillaEditor({
               ) : null}
             </div>
 
-            {picking && !locked ? (
+            {picking ? (
               <div className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-bg)] p-4">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-medium">Elige una promo</p>
@@ -673,13 +654,11 @@ export function CartillaEditor({
           </fieldset>
 
           <div className="flex flex-wrap gap-2">
-            {locked ? null : (
-              <GradientButton type="submit" disabled={busy}>
-                {OndaIcons.save}
-                {busy ? "Guardando…" : "Guardar"}
-              </GradientButton>
-            )}
-            {!locked && !isDefault && status !== "ACTIVE" ? (
+            <GradientButton type="submit" disabled={busy}>
+              {OndaIcons.save}
+              {busy ? "Guardando…" : "Guardar"}
+            </GradientButton>
+            {!isDefault && status !== "ACTIVE" ? (
               <button
                 type="button"
                 className="rounded-full border border-[var(--onda-border)] px-4 py-2 text-sm font-medium"
@@ -709,7 +688,6 @@ export function CartillaEditor({
           onMaxStampsChange={() => undefined}
           milestoneStamps={selected.map((p: any) => Number(p.pointsRequired))}
           lockCycle
-          readOnly={locked}
           requireLogo={embedded}
           storeLogoUrl={storeLogoUrl}
           logoHint={
