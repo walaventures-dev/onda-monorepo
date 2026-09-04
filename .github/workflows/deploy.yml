@@ -116,6 +116,7 @@ jobs:
           NEXT_PUBLIC_LANDING_URL: ${{ secrets.LANDING_URL }}
           NEXT_PUBLIC_PWA_URL: ${{ secrets.PWA_URL }}
           NEXT_PUBLIC_CAJA_URL: ${{ secrets.CAJA_URL }}
+          NEXT_PUBLIC_ORGANIZER_URL: ${{ secrets.ORGANIZER_URL }}
         run: |
           python3 <<'PY'
           import json, os
@@ -146,6 +147,7 @@ jobs:
               "JOBS_SECRET",
               "NEXT_PUBLIC_MERCHANT_URL", "NEXT_PUBLIC_LANDING_URL",
               "NEXT_PUBLIC_PWA_URL", "NEXT_PUBLIC_CAJA_URL",
+              "NEXT_PUBLIC_ORGANIZER_URL",
           ]
           for key in passthrough:
               value = os.environ.get(key, "")
@@ -193,6 +195,8 @@ jobs:
             service: onda-merchant
           - app: pwa-caja
             service: onda-caja
+          - app: organizer-dashboard
+            service: onda-organizer
     steps:
       - uses: actions/checkout@v5
 
@@ -201,7 +205,7 @@ jobs:
           API_URL: ${{ secrets.API_URL }}
         run: |
           if [ -z "$API_URL" ]; then
-            echo "Falta el secret API_URL. Tras el primer deploy del API, pégalo (y LANDING_URL, PWA_URL, MERCHANT_URL, CAJA_URL) y vuelve a disparar el workflow."
+            echo "Falta el secret API_URL. Tras el primer deploy del API, pégalo (y LANDING_URL, PWA_URL, MERCHANT_URL, CAJA_URL, ORGANIZER_URL) y vuelve a disparar el workflow."
             exit 1
           fi
 
@@ -240,6 +244,7 @@ jobs:
             NEXT_PUBLIC_PWA_URL=${{ secrets.PWA_URL }}
             NEXT_PUBLIC_MERCHANT_URL=${{ secrets.MERCHANT_URL }}
             NEXT_PUBLIC_CAJA_URL=${{ secrets.CAJA_URL }}
+            NEXT_PUBLIC_ORGANIZER_URL=${{ secrets.ORGANIZER_URL }}
             NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
             NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
             NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
