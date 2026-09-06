@@ -806,14 +806,9 @@ export class CartillaService {
       });
     }
 
-    const accumulateCount = await this.prisma.transaction.count({
-      where: { passId, storeId: pass.storeId, type: "ACCUMULATE" },
-    });
-    const pool: PromotionPool =
-      accumulateCount > 0 ? "RETENCION" : "BIENVENIDA";
-
+    // Cartilla / redeem solo usa Retención. Adquisición (BIENVENIDA) es para campañas.
     const items = active.items.filter(
-      (i) => i.pool === pool && i.pointsRequired <= active.maxStamps,
+      (i) => i.pool === "RETENCION" && i.pointsRequired <= active.maxStamps,
     );
     const assigned: { pointsRequired: number; promotionId: string }[] = [];
 
