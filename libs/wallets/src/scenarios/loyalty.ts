@@ -18,6 +18,14 @@ function validUntilDay(input: Date | string): string {
   return String(typeof input === 'string' ? input : input.toISOString()).slice(0, 10);
 }
 
+/** Días hasta la caducidad, clamped al rango 1–3650 que exige la API. */
+function expirationDaysFrom(validUntil?: Date | string | null): number | undefined {
+  if (!validUntil) return undefined;
+  const ms = new Date(validUntil).getTime() - Date.now();
+  if (Number.isNaN(ms)) return undefined;
+  return Math.max(1, Math.min(3650, Math.ceil(ms / 86400000)));
+}
+
 function formatValidUntil(input: Date | string, month: 'long' | 'short'): string {
   const [y, m, d] = validUntilDay(input).split('-').map(Number);
   return new Date(y, m - 1, d)
@@ -114,6 +122,8 @@ export async function buildLoyaltyPassSpec(
       : []),
   ];
 
+  const expirationDays = expirationDaysFrom(ctx.validUntil);
+
   const base: PassSpec = {
     barcodeValue: ctx.barcodeSerial,
     barcodeFormat: 'QR',
@@ -121,6 +131,7 @@ export async function buildLoyaltyPassSpec(
     description: ctx.design.description?.trim() || `${ctx.design.title}: ${progress} ondas`,
     organizationName: (ctx.organizationName || ctx.design.title).slice(0, 64),
     sharingProhibited: true,
+    ...(expirationDays ? { expirationDays } : {}),
     headerFields: [
       {
         label: pointsLabel,
