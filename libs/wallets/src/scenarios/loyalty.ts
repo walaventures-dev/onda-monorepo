@@ -25,15 +25,21 @@ function formatValidUntil(input: Date | string, month: 'long' | 'short'): string
     .replace('.', '');
 }
 
-async function applyVisuals(spec: PassSpec, ctx: LoyaltyPassContext): Promise<PassSpec> {
+async function applyVisuals(
+  spec: PassSpec,
+  ctx: LoyaltyPassContext,
+  proFeatures: boolean
+): Promise<PassSpec> {
   const design = ctx.design;
   const hex = normalizeHexColor(design.backgroundColor);
   const next: PassSpec = { ...spec };
 
   next.colorPreset = nearestColorPreset(design.backgroundColor || '#052DDE');
-  if (hex) {
+  if (proFeatures && hex) {
     next.color = hex;
   }
+
+  if (!proFeatures) return next;
 
   const strip = await buildPunchCardStripDataUri({
     points: ctx.points,
@@ -66,7 +72,7 @@ async function applyVisuals(spec: PassSpec, ctx: LoyaltyPassContext): Promise<Pa
  */
 export async function buildLoyaltyPassSpec(
   ctx: LoyaltyPassContext,
-  _opts?: { proFeatures?: boolean }
+  opts?: { proFeatures?: boolean }
 ): Promise<PassSpec> {
   const pointsLabel = ctx.pointsLabel ?? DEFAULT_POINTS_LABEL;
   const pointsChange = ctx.pointsChangeMessage ?? DEFAULT_POINTS_CHANGE;
@@ -135,7 +141,9 @@ export async function buildLoyaltyPassSpec(
     ...(ctx.locations?.length ? { locations: ctx.locations.slice(0, 10) } : {}),
   };
 
-  return ensureNotificationAnchor(await applyVisuals(base, ctx));
+  return ensureNotificationAnchor(
+    await applyVisuals(base, ctx, opts?.proFeatures ?? false)
+  );
 }
 
 export const loyaltyPassBuilder: PassScenarioBuilder<LoyaltyPassContext> = {
