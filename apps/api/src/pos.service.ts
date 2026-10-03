@@ -98,6 +98,7 @@ export class PosService {
         unitPrice: l.unitPrice,
         variantId: l.variantId,
         variantName: l.variantName,
+        note: l.note,
         addons: (l.addons || []).map((a) => ({
           id: a.id,
           addonId: a.addonId,
@@ -136,6 +137,7 @@ export class PosService {
       isActive: boolean;
       sortOrder: number;
       imageUrl: string | null;
+      externalSku?: string | null;
       variants?: Array<{
         id: string;
         itemId: string;
@@ -169,6 +171,7 @@ export class PosService {
       isActive: item.isActive,
       sortOrder: item.sortOrder,
       imageUrl: item.imageUrl,
+      externalSku: item.externalSku ?? null,
       variants: (item.variants || [])
         .filter((v) => v.isActive)
         .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
@@ -652,6 +655,7 @@ export class PosService {
       lineId?: string;
       variantId?: string | null;
       addonIds?: string[];
+      note?: string | null;
     }
   ) {
     const tab = await this.fetchTab(tabId);
@@ -739,9 +743,11 @@ export class PosService {
     const unitPrice = basePrice + addonsTotal;
 
     // Misma config → sumar cantidad
+    const note = body.note?.trim() || null;
     const same = tab.lines.find((l) => {
       if (l.itemId !== item.id) return false;
       if ((l.variantId || null) !== variantId) return false;
+      if ((l.note || null) !== note) return false;
       const existingIds = (l.addons || [])
         .map((a) => a.addonId)
         .filter(Boolean)
@@ -769,6 +775,7 @@ export class PosService {
           unitPrice,
           variantId,
           variantName,
+          note,
           addons: {
             create: selectedAddons.map((a) => ({
               addonId: a.id,

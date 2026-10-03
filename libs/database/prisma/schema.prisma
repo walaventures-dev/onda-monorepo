@@ -319,7 +319,7 @@ model Store {
   maxStamps         Int                    @default(12)
   currency          String                 @default("COP")
   ondaValue         Float?
-  posEnabled        Boolean                @default(false)
+  posEnabled        Boolean                @default(true)
   lat               Float?
   lng               Float?
   ownerName         String
@@ -884,6 +884,7 @@ model PosTabLine {
   unitPrice   Int
   variantId   String?
   variantName String?
+  note        String?
   addons      PosTabLineAddon[]
 
   @@index([tabId])

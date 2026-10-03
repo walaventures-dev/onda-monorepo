@@ -316,14 +316,6 @@ export function CartillaEditor({
       });
       return;
     }
-    const effectiveLogo = design?.logoUrl?.trim() || storeLogoUrl.trim();
-    if (embedded && !effectiveLogo) {
-      toast.danger("Falta el logo", {
-        description:
-          "Sube el logo de tu negocio. Quedará guardado para todas tus cartillas.",
-      });
-      return;
-    }
     setBusy(true);
     try {
       const saved = await saveMeta();
@@ -688,11 +680,10 @@ export function CartillaEditor({
           onMaxStampsChange={() => undefined}
           milestoneStamps={selected.map((p: any) => Number(p.pointsRequired))}
           lockCycle
-          requireLogo={embedded}
           storeLogoUrl={storeLogoUrl}
           logoHint={
             embedded
-              ? "Obligatorio. Se guarda como logo del negocio, junto con los colores, y aparece en todas tus cartillas."
+              ? "Opcional. Si lo subes, se guarda como logo del negocio y aparece en todas tus cartillas."
               : undefined
           }
           deadlineLabel={cartillaDeadlineLabel(

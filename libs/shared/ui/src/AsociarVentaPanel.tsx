@@ -11,9 +11,12 @@ import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
 import { UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
 import { CurrencyDollarIcon as CurrencyDollar } from '@phosphor-icons/react/dist/csr/CurrencyDollar';
 import { ListBulletsIcon as ListBullets } from '@phosphor-icons/react/dist/csr/ListBullets';
+import { CpuIcon as Cpu } from '@phosphor-icons/react/dist/csr/Cpu';
 import { api } from './api';
 import { CajaScanClient } from './CajaScanClient';
 import { CajaPendingQueue } from './CajaPendingQueue';
+import { CajaDevicePanel } from './CajaDevicePanel';
+import { CajaPosFlow } from './CajaPosFlow';
 import { PhoneInput } from './PhoneInput';
 import { PasswordInput } from './PasswordInput';
 import { OndaWordmark } from './brand';
@@ -31,22 +34,6 @@ import {
 import { SkeletonList } from './Skeleton';
 import type { PosTabDto } from '@onda/shared-types';
 
-function CajaIdentity({ storeName }: { storeName?: string }) {
-  const name = storeName?.trim() || 'tu comercio';
-  return (
-    <div className="flex flex-col items-center gap-3 text-center">
-      <OndaWordmark className="h-6 w-auto" />
-      <h1 className="font-display text-xl font-bold leading-snug text-[var(--onda-ink)] sm:text-2xl">
-        <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--onda-muted)]">
-          Caja móvil de
-        </span>
-        <span className="mt-1 block">{name}</span>
-      </h1>
-    </div>
-  );
-}
-
-/** Cabecera compacta al entrar a Acumular / Cuentas. */
 function CajaIdentityBar({
   storeName,
   onLogout,
@@ -79,7 +66,8 @@ function CajaIdentityBar({
   );
 }
 
-type CajaPane = 'camera' | 'queue';
+const CAJA_PANES = ['camera', 'queue', 'device'] as const;
+type CajaPane = (typeof CAJA_PANES)[number];
 
 function CajaDualPane({
   storeId,
@@ -108,7 +96,7 @@ function CajaDualPane({
   const scrollToPane = useCallback((next: CajaPane) => {
     const track = trackRef.current;
     if (!track) return;
-    const index = next === 'camera' ? 0 : 1;
+    const index = CAJA_PANES.indexOf(next);
     syncingRef.current = true;
     track.scrollTo({
       left: index * track.clientWidth,
@@ -127,7 +115,7 @@ function CajaDualPane({
     function onScroll() {
       if (syncingRef.current || !track) return;
       const index = Math.round(track.scrollLeft / Math.max(track.clientWidth, 1));
-      const next: CajaPane = index >= 1 ? 'queue' : 'camera';
+      const next = CAJA_PANES[Math.min(Math.max(index, 0), CAJA_PANES.length - 1)];
       setPane((prev) => (prev === next ? prev : next));
     }
 
@@ -169,6 +157,16 @@ function CajaDualPane({
             <span className="onda-caja-tab-badge">{badge}</span>
           ) : null}
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={pane === 'device'}
+          className={`onda-caja-tab${pane === 'device' ? ' is-active' : ''}`}
+          onClick={() => scrollToPane('device')}
+        >
+          <Cpu className="h-4 w-4" weight="regular" aria-hidden />
+          Sensores
+        </button>
       </div>
 
       <div ref={trackRef} className="onda-caja-swipe">
@@ -198,6 +196,13 @@ function CajaDualPane({
             ondaValue={ondaValue}
             onCountChange={setPendingCount}
           />
+        </section>
+        <section
+          className="onda-caja-swipe-pane"
+          aria-label="Sensores del dispositivo"
+          aria-hidden={pane !== 'device'}
+        >
+          <CajaDevicePanel />
         </section>
       </div>
 
@@ -633,10 +638,8 @@ export function CajaOperationsPanel({
   /** Cerrar sesión de caja (Firebase hub o revocar enlace kiosk). */
   onLogout?: () => void | Promise<void>;
 }) {
-  const [mode, setMode] = useState<
-    'home' | 'acumular' | 'asociar' | 'vender' | 'vender-login'
-  >(() =>
-    posEnabled ? (defaultMode === 'asociar' ? 'asociar' : 'home') : 'acumular',
+  const [mode, setMode] = useState<'home' | 'acumular' | 'asociar' | 'vender' | 'vender-login'>(
+    () => (posEnabled ? 'home' : 'acumular'),
   );
   const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
   const [memberSession, setMemberSession] =
@@ -874,81 +877,15 @@ export function CajaOperationsPanel({
     );
   }
 
-  /* Home: acciones grandes */
+  /* Inicio: cuentas abiertas */
   return (
-    <div className="flex min-h-[70dvh] flex-col">
-      <div className="mb-2 flex justify-end">
-        {onLogout ? (
-          <button
-            type="button"
-            onClick={() => void handleLogout()}
-            disabled={logoutBusy}
-            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium text-[var(--onda-muted)] transition hover:text-[var(--onda-ink)] disabled:opacity-50"
-            aria-label="Cerrar sesión"
-          >
-            {OndaIcons.logout}
-            Cerrar sesión
-          </button>
-        ) : null}
-      </div>
-      <div className="mb-8">
-        <CajaIdentity storeName={storeName} />
-      </div>
-
-      <div className="grid flex-1 content-center gap-3">
-        <button
-          type="button"
-          onClick={() => setMode('acumular')}
-          className="flex flex-col items-center gap-3 rounded-[1.5rem] bg-[var(--onda-sky)] px-6 py-8 text-[var(--onda-ink)] shadow-[0_16px_40px_rgba(61,185,232,0.35)] transition duration-150 hover:-translate-y-0.5 hover:shadow-[0_20px_48px_rgba(61,185,232,0.45)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-sky)] focus-visible:ring-offset-2"
-        >
-          <span className="flex h-14 w-14 items-center justify-center rounded-3xl bg-white/55 text-[var(--onda-ink)]">
-            <QrCode className="h-8 w-8" weight="regular" aria-hidden />
-          </span>
-          <span className="font-display text-xl font-bold tracking-tight">
-            Acumular
-          </span>
-          <span className="text-sm font-medium text-[var(--onda-ink)]/70">
-            Cámara y solicitudes
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => void openVender()}
-          disabled={openingVender}
-          className="flex flex-col items-center gap-3 rounded-[1.5rem] bg-[var(--onda-primary-500)] px-6 py-8 text-white shadow-[0_16px_40px_rgba(5,45,222,0.28)] transition duration-150 hover:-translate-y-0.5 hover:bg-[var(--onda-primary-600)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary-500)] focus-visible:ring-offset-2 disabled:opacity-70"
-        >
-          <span className="flex h-14 w-14 items-center justify-center rounded-3xl bg-white/15">
-            <CurrencyDollar className="h-8 w-8" weight="regular" aria-hidden />
-          </span>
-          <span className="font-display text-xl font-bold tracking-tight">
-            Vender
-          </span>
-          <span className="text-sm font-medium text-white/80">
-            {memberSession
-              ? `Como ${memberSession.name}`
-              : openingVender
-                ? 'Abriendo…'
-                : 'Cuentas, cobro y catálogo'}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setMode('asociar')}
-          className="flex flex-col items-center gap-3 rounded-[1.5rem] border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 py-8 text-[var(--onda-ink)] shadow-[0_12px_28px_rgba(26,27,46,0.08)] transition duration-150 hover:-translate-y-0.5 hover:border-[var(--onda-primary-500)]/30 hover:shadow-[0_16px_36px_rgba(26,27,46,0.12)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary-500)]/35 focus-visible:ring-offset-2"
-        >
-          <span className="flex h-14 w-14 items-center justify-center rounded-3xl bg-[var(--onda-primary-100)] text-[var(--onda-primary-500)]">
-            <Receipt className="h-8 w-8" weight="regular" aria-hidden />
-          </span>
-          <span className="font-display text-xl font-bold tracking-tight">
-            Cuentas
-          </span>
-          <span className="text-sm font-medium text-[var(--onda-muted)]">
-            Asociar cliente a venta
-          </span>
-        </button>
-      </div>
-    </div>
+    <CajaPosFlow
+      storeId={storeId}
+      storeName={storeName}
+      ondaValue={ondaValue}
+      onAcumular={() => setMode('acumular')}
+      onLogout={onLogout ? () => void handleLogout() : undefined}
+      logoutBusy={logoutBusy}
+    />
   );
 }

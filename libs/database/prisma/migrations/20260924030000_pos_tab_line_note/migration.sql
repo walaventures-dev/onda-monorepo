@@ -1,0 +1,1 @@
+ALTER TABLE "PosTabLine" ADD COLUMN "note" TEXT;

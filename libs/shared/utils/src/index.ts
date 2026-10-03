@@ -332,6 +332,16 @@ export {
 export { ONDA_CLAIM_QR_PREFIX, claimQrPayload, parseCajaQr } from './caja-qr';
 
 export {
+  DEVICE_BASE,
+  DEVICE_ACTIONS,
+  devicePing,
+  runDeviceAction,
+  type DeviceEnvelope,
+  type DeviceHealth,
+  type DeviceAction,
+} from './device';
+
+export {
   calcChange,
   posLineSubtotal,
   TEAM_LIMITS,

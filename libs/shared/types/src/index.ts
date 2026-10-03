@@ -718,6 +718,7 @@ export interface PosItemDto {
   isActive: boolean;
   sortOrder: number;
   imageUrl?: string | null;
+  externalSku?: string | null;
   variants?: PosItemVariantDto[];
   addons?: PosAddonDto[];
 }
@@ -736,6 +737,7 @@ export interface PosTabLineDto {
   unitPrice: number;
   variantId?: string | null;
   variantName?: string | null;
+  note?: string | null;
   addons?: PosTabLineAddonDto[];
   item?: PosItemDto;
 }
