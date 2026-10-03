@@ -263,11 +263,15 @@ export class BillingService {
     billingPeriod: BillingPeriod;
     promoCode?: string;
     referred?: boolean;
+    trialDays?: number;
   }) {
     const now = new Date();
-    const nextBillingAt = initialNextBillingAt(input.billingPeriod, now, {
-      referred: Boolean(input.referred),
-    });
+    const nextBillingAt =
+      input.trialDays && input.trialDays > 0
+        ? addBillingDays(now, input.trialDays)
+        : initialNextBillingAt(input.billingPeriod, now, {
+            referred: Boolean(input.referred),
+          });
     const nextUsageBillingAt = initialNextUsageBillingAt(now);
     const reference = `onda-promo-${input.storeId}-${Date.now()}`;
     const quote = quotePlanWithDiscount(

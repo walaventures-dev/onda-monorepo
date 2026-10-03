@@ -30,6 +30,7 @@ export class ReferralsController {
         kind: 'promo' as const,
         code: resolved.code,
         discountPercentage: resolved.discountPercentage,
+        durationDays: resolved.durationDays,
       };
     }
     if (resolved.kind === 'expired') {

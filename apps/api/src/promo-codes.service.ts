@@ -4,12 +4,18 @@ import { FirestoreService } from './firestore.service';
 
 export type PromoCodeDoc = {
   discountPercentage: number;
+  durationDays: number | null;
   startDate: Date;
   endDate: Date;
 };
 
 export type PromoResolveResult =
-  | { status: 'valid'; code: string; discountPercentage: number }
+  | {
+      status: 'valid';
+      code: string;
+      discountPercentage: number;
+      durationDays: number | null;
+    }
   | { status: 'expired'; code: string }
   | { status: 'not_found' };
 
@@ -50,6 +56,14 @@ export class PromoCodesService {
     const startDate = toDate(data?.startDate);
     const endDate = toDate(data?.endDate);
 
+    let durationDays: number | null = null;
+    if (data?.durationDays != null && data.durationDays !== '') {
+      const parsed = Number(data.durationDays);
+      if (Number.isInteger(parsed) && parsed > 0) {
+        durationDays = parsed;
+      }
+    }
+
     if (
       !Number.isFinite(discountPercentage) ||
       discountPercentage < 0 ||
@@ -66,7 +80,7 @@ export class PromoCodesService {
       return { status: 'expired', code };
     }
 
-    return { status: 'valid', code, discountPercentage };
+    return { status: 'valid', code, discountPercentage, durationDays };
   }
 
   async getValid(code: string): Promise<PromoCodeDoc | null> {
@@ -83,6 +97,7 @@ export class PromoCodesService {
     if (!startDate || !endDate) return null;
     return {
       discountPercentage: result.discountPercentage,
+      durationDays: result.durationDays,
       startDate,
       endDate,
     };

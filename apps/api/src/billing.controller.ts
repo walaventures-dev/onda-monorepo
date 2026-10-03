@@ -155,6 +155,7 @@ export class BillingController {
       referredByStoreId?: string;
       promoCode?: string;
       discountPercentage: number;
+      trialDays?: number;
     };
     try {
       codeMeta = await this.codeResolver.resolveForSubscription(
@@ -166,21 +167,27 @@ export class BillingController {
       );
     }
 
-    if (codeMeta.discountPercentage > 30) {
+    const hasTrial = Boolean(codeMeta.trialDays && codeMeta.trialDays > 0);
+    if (codeMeta.discountPercentage > 30 && !hasTrial) {
       billingPeriod = 'monthly';
     }
     this.billing.assertBillingAllowed(
       billingPeriod,
-      codeMeta.discountPercentage
+      hasTrial ? 0 : codeMeta.discountPercentage
     );
 
     const quote = quotePlanWithDiscount(
       planType,
       billingPeriod,
-      codeMeta.discountPercentage
+      hasTrial ? 100 : codeMeta.discountPercentage
     );
 
-    if (quote.amountDue > 0 && this.wompi.isConfigured && !body.cardToken) {
+    if (
+      !hasTrial &&
+      quote.amountDue > 0 &&
+      this.wompi.isConfigured &&
+      !body.cardToken
+    ) {
       throw new BadRequestException('Tarjeta requerida para activar el plan');
     }
 
@@ -195,13 +202,14 @@ export class BillingController {
     });
 
     try {
-      if (quote.skipPayment) {
+      if (quote.skipPayment || hasTrial) {
         const result = await this.billing.activateComplimentarySubscription({
           storeId,
           planType,
           billingPeriod,
           promoCode: codeMeta.promoCode,
           referred: Boolean(codeMeta.referredByStoreId),
+          trialDays: hasTrial ? codeMeta.trialDays : undefined,
         });
         return {
           ...result.store,

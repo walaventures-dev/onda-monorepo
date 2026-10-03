@@ -55,7 +55,12 @@ type CodeKind = 'referral' | 'promo' | 'expired' | null;
 
 type CodeResolveResponse =
   | { kind: 'referral'; code: string; storeName: string }
-  | { kind: 'promo'; code: string; discountPercentage: number }
+  | {
+      kind: 'promo';
+      code: string;
+      discountPercentage: number;
+      durationDays: number | null;
+    }
   | { kind: 'expired'; code: string };
 
 const CATEGORY_OPTIONS = (
@@ -134,6 +139,7 @@ function MerchantBusinessSetup() {
   const [codeKind, setCodeKind] = useState<CodeKind>(null);
   const [referrerName, setReferrerName] = useState<string | null>(null);
   const [discountPercentage, setDiscountPercentage] = useState(0);
+  const [trialDays, setTrialDays] = useState(0);
   const [wompiConfigured, setWompiConfigured] = useState(false);
   const [wompiPublicKey, setWompiPublicKey] = useState<string | null>(null);
 
@@ -284,6 +290,7 @@ function MerchantBusinessSetup() {
       setReferrerName(null);
       setCodeKind(null);
       setDiscountPercentage(0);
+      setTrialDays(0);
       return;
     }
 
@@ -299,13 +306,16 @@ function MerchantBusinessSetup() {
             setCodeKind('referral');
             setReferrerName(r.storeName);
             setDiscountPercentage(0);
+            setTrialDays(0);
             return;
           }
           if (r.kind === 'promo') {
+            const days = r.durationDays ?? 0;
             setCodeKind('promo');
             setReferrerName('Promo Onda');
             setDiscountPercentage(r.discountPercentage);
-            if (r.discountPercentage > 30) {
+            setTrialDays(days);
+            if (r.discountPercentage > 30 && !days) {
               setBillingPeriod('monthly');
             }
             return;
@@ -314,6 +324,7 @@ function MerchantBusinessSetup() {
             setCodeKind('expired');
             setReferrerName('');
             setDiscountPercentage(0);
+            setTrialDays(0);
           }
         })
         .catch(() => {
@@ -321,6 +332,7 @@ function MerchantBusinessSetup() {
           setCodeKind(null);
           setReferrerName('');
           setDiscountPercentage(0);
+          setTrialDays(0);
         });
     }, 350);
 
@@ -386,14 +398,16 @@ function MerchantBusinessSetup() {
     billingPeriod,
     discountPercentage
   );
-  const forceMonthlyOnly = discountPercentage > 30;
+  const hasTrial = codeKind === 'promo' && trialDays > 0;
+  const noCardNeeded = activeQuote.skipPayment || hasTrial;
+  const forceMonthlyOnly = discountPercentage > 30 && !hasTrial;
   const isReferred = codeKind === 'referral';
 
   function goNextFromPlan(e: FormEvent) {
     e.preventDefault();
     setError('');
     rememberPlanChoice(planType, billingPeriod);
-    if (activeQuote.skipPayment) {
+    if (noCardNeeded) {
       void submitWithSubscription();
       return;
     }
@@ -407,7 +421,7 @@ function MerchantBusinessSetup() {
       setError('El slug es inválido');
       return;
     }
-    if (!activeQuote.skipPayment && wompiConfigured && !payment?.cardToken) {
+    if (!noCardNeeded && wompiConfigured && !payment?.cardToken) {
       setError('Completa los datos de la tarjeta');
       return;
     }
@@ -458,8 +472,10 @@ function MerchantBusinessSetup() {
       : step === 'plan'
         ? {
             title: 'Elige tu plan',
-            sub: activeQuote.skipPayment
-              ? 'Total $0 con tu código. Activas sin tarjeta.'
+            sub: noCardNeeded
+              ? hasTrial
+                ? `${trialDays} días gratis con tu código. Activas sin tarjeta; el primer cobro es al finalizar el trial.`
+                : 'Total $0 con tu código. Activas sin tarjeta.'
               : 'Pagas hoy el periodo elegido. Guardamos tu tarjeta para renovar.',
           }
         : {
@@ -501,11 +517,13 @@ function MerchantBusinessSetup() {
             <div className="mt-8 inline-flex items-center gap-2 rounded-full bg-[var(--onda-violet-soft)] px-4 py-2 text-sm font-medium text-[var(--onda-violet)]">
               {OndaIcons.sparkle}
               {PLAN_META[planType].name}
-              {discountPercentage > 0
-                ? ` · −${discountPercentage}%`
-                : isReferred
-                  ? ' · referido'
-                  : ''}
+              {hasTrial
+                ? ` · ${trialDays} días gratis`
+                : discountPercentage > 0
+                  ? ` · −${discountPercentage}%`
+                  : isReferred
+                    ? ' · referido'
+                    : ''}
             </div>
 
             <ul className="mt-10 space-y-4">
@@ -617,14 +635,18 @@ function MerchantBusinessSetup() {
                 <div>
                   <p className="font-medium">
                     {codeKind === 'promo'
-                      ? `Descuento del ${discountPercentage}%`
+                      ? hasTrial
+                        ? `${trialDays} días gratis`
+                        : `Descuento del ${discountPercentage}%`
                       : `Invitado por ${referrerName}`}
                   </p>
                   <p className="text-[var(--onda-muted)]">
                     {codeKind === 'promo'
-                      ? forceMonthlyOnly
-                        ? 'Solo aplica en plan mensual.'
-                        : 'Se aplica al total del periodo que elijas.'
+                      ? hasTrial
+                        ? 'Activas sin tarjeta; el primer cobro es al finalizar los días gratis.'
+                        : forceMonthlyOnly
+                          ? 'Solo aplica en plan mensual.'
+                          : 'Se aplica al total del periodo que elijas.'
                       : 'Al pagar, ambos ganan +30 días en la fecha de cobro.'}
                   </p>
                 </div>
@@ -800,7 +822,7 @@ function MerchantBusinessSetup() {
                         >
                           {busy
                             ? 'Activando…'
-                            : activeQuote.skipPayment
+                            : noCardNeeded
                               ? `Activar ${PLAN_META[planType].shortName}`
                               : 'Continuar al pago'}
                         </GradientButton>
