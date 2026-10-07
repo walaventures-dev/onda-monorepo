@@ -9,7 +9,6 @@ import {
   api,
   setApiAuthTokenGetter,
   SkeletonScreen,
-  OndaWordmark,
   type PosVenderMemberSession,
 } from '@onda/shared-ui';
 import type { PosAttendantDto } from '@onda/shared-types';
@@ -107,26 +106,10 @@ function useCajaMemberAuth(storeId: string, cajaToken: string) {
   };
 }
 
-function CajaClosedScreen() {
-  return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-3 p-6 text-center">
-      <OndaWordmark className="h-6 w-auto" />
-      <h1 className="font-display text-2xl font-bold text-[var(--onda-ink)]">
-        Caja cerrada
-      </h1>
-      <p className="max-w-xs text-sm text-[var(--onda-muted)]">
-        Esta sesión ya no es válida. Genera un enlace nuevo con «Abrir caja» en
-        el panel del comercio.
-      </p>
-    </main>
-  );
-}
-
 /** App única de caja (kiosk): acumular + vender + cuentas. */
 export function CajaKioskClient({ token }: { token: string }) {
+  const router = useRouter();
   const [session, setSession] = useState<CajaSession | null>(null);
-  const [error, setError] = useState('');
-  const [closed, setClosed] = useState(false);
 
   useEffect(() => {
     setApiAuthTokenGetter(async () => token);
@@ -135,18 +118,22 @@ export function CajaKioskClient({ token }: { token: string }) {
       .then((s) => {
         if (!cancelled) setSession(s);
       })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : 'Enlace de caja inválido',
-          );
+      .catch(() => {
+        if (cancelled) return;
+        // Enlace revocado/caduco: limpiar sesión local y volver a login.
+        setApiAuthTokenGetter(null);
+        if (isMerchantFirebaseConfigured()) {
+          void signOut(getMerchantAuth()).catch(() => undefined);
+          router.replace('/login');
+        } else {
+          router.replace('/');
         }
       });
     return () => {
       cancelled = true;
       setApiAuthTokenGetter(null);
     };
-  }, [token]);
+  }, [token, router]);
 
   const storeId = session?.storeId || '';
   const {
@@ -156,33 +143,16 @@ export function CajaKioskClient({ token }: { token: string }) {
     resumeMemberSession,
   } = useCajaMemberAuth(storeId, token);
 
+  /** Cierra la sesión solo en este dispositivo; el enlace sigue vivo para los demás. */
   const handleLogout = useCallback(async () => {
-    try {
-      await api('/caja/close', { method: 'POST' });
-    } catch {
-      /* igual cerramos localmente */
-    }
     setApiAuthTokenGetter(null);
     if (isMerchantFirebaseConfigured()) {
-      void signOut(getMerchantAuth()).catch(() => undefined);
+      await signOut(getMerchantAuth()).catch(() => undefined);
+      router.replace('/login');
+    } else {
+      router.replace('/');
     }
-    setClosed(true);
-  }, []);
-
-  if (closed) {
-    return <CajaClosedScreen />;
-  }
-
-  if (error) {
-    return (
-      <main className="flex min-h-dvh flex-col items-center justify-center gap-2 p-6 text-center">
-        <p className="text-sm font-medium text-[var(--onda-danger)]">{error}</p>
-        <p className="text-xs text-[var(--onda-muted)]">
-          Genera un enlace nuevo con «Abrir caja» en el panel del comercio.
-        </p>
-      </main>
-    );
-  }
+  }, [router]);
 
   if (!session) {
     return <SkeletonScreen label="Abriendo caja" />;
@@ -325,21 +295,14 @@ export function CajaHubClient() {
     resumeMemberSession,
   } = useCajaMemberAuth(storeId, cajaToken || '');
 
+  /** Cierra la sesión solo en este dispositivo; el enlace sigue vivo. */
   const handleLogout = useCallback(async () => {
-    if (cajaToken) {
-      setApiAuthTokenGetter(async () => cajaToken);
-      try {
-        await api('/caja/close', { method: 'POST' });
-      } catch {
-        /* igual salimos */
-      }
-    }
     setApiAuthTokenGetter(null);
     if (isMerchantFirebaseConfigured()) {
       await signOut(getMerchantAuth()).catch(() => undefined);
     }
     router.replace('/login');
-  }, [cajaToken, router]);
+  }, [router]);
 
   if (!storeId) {
     return <SkeletonScreen label="Cargando sede" />;
