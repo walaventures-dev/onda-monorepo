@@ -25,7 +25,11 @@ function hasProVisuals(spec: PassSpec) {
 }
 
 function isProPlanError(err: unknown) {
-  return isWalletApiError(err) && err.code === 'VALIDATION' && /pro plan/i.test(err.message);
+  return (
+    isWalletApiError(err) &&
+    err.code === 'VALIDATION' &&
+    /pro[- ]?(plan|only)|upgrade/i.test(err.message)
+  );
 }
 
 type ResolvedConfig = ReturnType<typeof resolveWalletConfig>;

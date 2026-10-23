@@ -5,7 +5,7 @@ import { PromoCodesService } from './promo-codes.service';
 
 export type ResolvedCode =
   | { kind: 'referral'; code: string; storeName: string }
-  | { kind: 'promo'; code: string; discountPercentage: number }
+  | { kind: 'promo'; code: string; discountPercentage: number; durationDays: number | null }
   | { kind: 'expired'; code: string }
   | { kind: 'invalid' };
 
@@ -42,6 +42,7 @@ export class CodeResolverService {
         kind: 'promo',
         code: promo.code,
         discountPercentage: promo.discountPercentage,
+        durationDays: promo.durationDays,
       };
     }
     if (promo.status === 'expired') {
@@ -55,6 +56,7 @@ export class CodeResolverService {
     referredByStoreId?: string;
     promoCode?: string;
     discountPercentage: number;
+    trialDays?: number;
   }> {
     const resolved = await this.resolve(raw);
     if (resolved.kind === 'referral') {
@@ -71,6 +73,7 @@ export class CodeResolverService {
       return {
         promoCode: resolved.code,
         discountPercentage: resolved.discountPercentage,
+        trialDays: resolved.durationDays ?? undefined,
       };
     }
     if (resolved.kind === 'expired') {

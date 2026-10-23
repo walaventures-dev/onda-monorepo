@@ -51,23 +51,23 @@ export function PendingRequestsPanel({
   onStoreActivity?: () => void;
 }) {
   const [count, setCount] = useState(0);
-  const [rotating, setRotating] = useState(false);
+  const [openingLink, setOpeningLink] = useState(false);
   const [open, setOpen] = useState(false);
   const badge = count > 99 ? '99+' : String(count);
 
-  async function rotateLink() {
+  async function openLink() {
     if (!storeId) return;
-    setRotating(true);
+    setOpeningLink(true);
     try {
       const { url } = await api<{ url: string }>('/caja/link', {
         method: 'POST',
-        body: JSON.stringify({ storeId, rotate: true }),
+        body: JSON.stringify({ storeId }),
       });
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'No se pudo regenerar el enlace');
+      toast(err instanceof Error ? err.message : 'No se pudo abrir el enlace');
     } finally {
-      setRotating(false);
+      setOpeningLink(false);
     }
   }
 
@@ -125,10 +125,10 @@ export function PendingRequestsPanel({
         <button
           type="button"
           className="rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-xs font-medium text-[var(--onda-muted)] disabled:opacity-50"
-          disabled={rotating || !storeId}
-          onClick={() => void rotateLink()}
+          disabled={openingLink || !storeId}
+          onClick={() => void openLink()}
         >
-          Regenerar enlace de caja
+          Abrir enlace de caja
         </button>
       </aside>
     </>

@@ -46,7 +46,12 @@ type ClaimPreview = {
 
 type CodeResolveResponse =
   | { kind: 'referral'; code: string; storeName: string }
-  | { kind: 'promo'; code: string; discountPercentage: number }
+  | {
+      kind: 'promo';
+      code: string;
+      discountPercentage: number;
+      durationDays: number | null;
+    }
   | { kind: 'expired'; code: string };
 
 export function BrandClaimOnboarding() {
@@ -76,6 +81,7 @@ export function BrandClaimOnboarding() {
     sanitizeReferralCode(searchParams.get('ref'))
   );
   const [discountPercentage, setDiscountPercentage] = useState(0);
+  const [trialDays, setTrialDays] = useState(0);
   const [codeKind, setCodeKind] = useState<
     'promo' | 'referral' | 'expired' | 'invalid' | null
   >(null);
@@ -109,12 +115,14 @@ export function BrandClaimOnboarding() {
     if (!normalized) {
       setCodeKind(null);
       setDiscountPercentage(0);
+      setTrialDays(0);
       setCodeReady(true);
       return;
     }
     if (!isReferralCodeComplete(normalized)) {
       setCodeKind(null);
       setDiscountPercentage(0);
+      setTrialDays(0);
       setCodeReady(false);
       return;
     }
@@ -128,21 +136,27 @@ export function BrandClaimOnboarding() {
         .then((r) => {
           if (cancelled) return;
           if (r.kind === 'promo') {
+            const days = r.durationDays ?? 0;
             setCodeKind('promo');
             setDiscountPercentage(r.discountPercentage);
-            if (r.discountPercentage > 30) setBillingPeriod('monthly');
+            setTrialDays(days);
+            if (r.discountPercentage > 30 && !days) {
+              setBillingPeriod('monthly');
+            }
             setCodeReady(true);
             return;
           }
           if (r.kind === 'referral') {
             setCodeKind('referral');
             setDiscountPercentage(0);
+            setTrialDays(0);
             setCodeReady(true);
             return;
           }
           if (r.kind === 'expired') {
             setCodeKind('expired');
             setDiscountPercentage(0);
+            setTrialDays(0);
             setCodeReady(true);
           }
         })
@@ -150,6 +164,7 @@ export function BrandClaimOnboarding() {
           if (cancelled) return;
           setCodeKind('invalid');
           setDiscountPercentage(0);
+          setTrialDays(0);
           setCodeReady(true);
         });
     }, 200);
@@ -166,7 +181,9 @@ export function BrandClaimOnboarding() {
     discountPercentage
   );
   const freeViaPromo =
-    codeKind === 'promo' && activeQuote.skipPayment && codeReady;
+    codeKind === 'promo' &&
+    (activeQuote.skipPayment || trialDays > 0) &&
+    codeReady;
 
   useEffect(() => {
     if (!ready || !user || !token || storeId || !codeReady) return;
@@ -252,7 +269,12 @@ export function BrandClaimOnboarding() {
   async function activateStore(payment?: PaymentCardResult) {
     if (!storeId) return;
     setError('');
-    if (!activeQuote.skipPayment && wompiConfigured && !payment?.cardToken) {
+    if (
+      !activeQuote.skipPayment &&
+      trialDays <= 0 &&
+      wompiConfigured &&
+      !payment?.cardToken
+    ) {
       setError('Completa los datos de la tarjeta');
       return;
     }
@@ -303,15 +325,17 @@ export function BrandClaimOnboarding() {
 
   const urlCode = sanitizeReferralCode(searchParams.get('ref'));
   const codeHint =
-    urlCode && codeKind === 'promo' && activeQuote.skipPayment
-      ? `Código ${urlCode} aplicado — activación sin costo.`
-      : urlCode && codeKind === 'promo'
-        ? `Código ${urlCode}: −${discountPercentage}%.`
-        : urlCode && codeKind === 'expired'
-          ? 'El código del enlace expiró.'
-          : urlCode && codeKind === 'invalid'
-            ? 'El código del enlace no es válido.'
-            : null;
+    urlCode && codeKind === 'promo' && trialDays > 0
+      ? `Código ${urlCode} aplicado — ${trialDays} días gratis, sin tarjeta.`
+      : urlCode && codeKind === 'promo' && activeQuote.skipPayment
+        ? `Código ${urlCode} aplicado — activación sin costo.`
+        : urlCode && codeKind === 'promo'
+          ? `Código ${urlCode}: −${discountPercentage}%.`
+          : urlCode && codeKind === 'expired'
+            ? 'El código del enlace expiró.'
+            : urlCode && codeKind === 'invalid'
+              ? 'El código del enlace no es válido.'
+              : null;
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--onda-bg)] px-4 py-8">
@@ -433,7 +457,7 @@ export function BrandClaimOnboarding() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (activeQuote.skipPayment) {
+              if (activeQuote.skipPayment || trialDays > 0) {
                 void activateStore();
                 return;
               }
@@ -448,7 +472,7 @@ export function BrandClaimOnboarding() {
               onPlan={setPlanType}
               onBilling={setBillingPeriod}
               discountPercentage={discountPercentage}
-              forceMonthlyOnly={discountPercentage > 30}
+              forceMonthlyOnly={discountPercentage > 30 && !(codeKind === 'promo' && trialDays > 0)}
               referred={false}
             />
             <input
@@ -461,7 +485,9 @@ export function BrandClaimOnboarding() {
             />
             {error ? <p className="text-sm text-[var(--onda-danger)]">{error}</p> : null}
             <GradientButton type="submit" disabled={busy}>
-              {activeQuote.skipPayment ? 'Activar' : 'Continuar al pago'}
+              {activeQuote.skipPayment || trialDays > 0
+                ? 'Activar'
+                : 'Continuar al pago'}
             </GradientButton>
           </form>
         ) : null}

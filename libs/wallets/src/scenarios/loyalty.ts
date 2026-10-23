@@ -18,6 +18,14 @@ function validUntilDay(input: Date | string): string {
   return String(typeof input === 'string' ? input : input.toISOString()).slice(0, 10);
 }
 
+/** Días hasta la caducidad, clamped al rango 1–3650 que exige la API. */
+function expirationDaysFrom(validUntil?: Date | string | null): number | undefined {
+  if (!validUntil) return undefined;
+  const ms = new Date(validUntil).getTime() - Date.now();
+  if (Number.isNaN(ms)) return undefined;
+  return Math.max(1, Math.min(3650, Math.ceil(ms / 86400000)));
+}
+
 function formatValidUntil(input: Date | string, month: 'long' | 'short'): string {
   const [y, m, d] = validUntilDay(input).split('-').map(Number);
   return new Date(y, m - 1, d)
@@ -25,15 +33,21 @@ function formatValidUntil(input: Date | string, month: 'long' | 'short'): string
     .replace('.', '');
 }
 
-async function applyVisuals(spec: PassSpec, ctx: LoyaltyPassContext): Promise<PassSpec> {
+async function applyVisuals(
+  spec: PassSpec,
+  ctx: LoyaltyPassContext,
+  proFeatures: boolean
+): Promise<PassSpec> {
   const design = ctx.design;
   const hex = normalizeHexColor(design.backgroundColor);
   const next: PassSpec = { ...spec };
 
   next.colorPreset = nearestColorPreset(design.backgroundColor || '#052DDE');
-  if (hex) {
+  if (proFeatures && hex) {
     next.color = hex;
   }
+
+  if (!proFeatures) return next;
 
   const strip = await buildPunchCardStripDataUri({
     points: ctx.points,
@@ -66,7 +80,7 @@ async function applyVisuals(spec: PassSpec, ctx: LoyaltyPassContext): Promise<Pa
  */
 export async function buildLoyaltyPassSpec(
   ctx: LoyaltyPassContext,
-  _opts?: { proFeatures?: boolean }
+  opts?: { proFeatures?: boolean }
 ): Promise<PassSpec> {
   const pointsLabel = ctx.pointsLabel ?? DEFAULT_POINTS_LABEL;
   const pointsChange = ctx.pointsChangeMessage ?? DEFAULT_POINTS_CHANGE;
@@ -108,6 +122,8 @@ export async function buildLoyaltyPassSpec(
       : []),
   ];
 
+  const expirationDays = expirationDaysFrom(ctx.validUntil);
+
   const base: PassSpec = {
     barcodeValue: ctx.barcodeSerial,
     barcodeFormat: 'QR',
@@ -115,6 +131,7 @@ export async function buildLoyaltyPassSpec(
     description: ctx.design.description?.trim() || `${ctx.design.title}: ${progress} ondas`,
     organizationName: (ctx.organizationName || ctx.design.title).slice(0, 64),
     sharingProhibited: true,
+    ...(expirationDays ? { expirationDays } : {}),
     headerFields: [
       {
         label: pointsLabel,
@@ -135,7 +152,9 @@ export async function buildLoyaltyPassSpec(
     ...(ctx.locations?.length ? { locations: ctx.locations.slice(0, 10) } : {}),
   };
 
-  return ensureNotificationAnchor(await applyVisuals(base, ctx));
+  return ensureNotificationAnchor(
+    await applyVisuals(base, ctx, opts?.proFeatures ?? false)
+  );
 }
 
 export const loyaltyPassBuilder: PassScenarioBuilder<LoyaltyPassContext> = {

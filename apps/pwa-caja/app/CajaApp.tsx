@@ -144,9 +144,15 @@ export function CajaKioskClient({
       })
       .catch(() => {
         if (cancelled) return;
+        // Enlace revocado/caduco: limpiar sesión local y volver a login.
         if (readCajaToken() === token) clearCajaToken();
+        setApiAuthTokenGetter(null);
+        const firebaseConfigured = isMerchantFirebaseConfigured();
+        if (firebaseConfigured) {
+          void signOut(getMerchantAuth()).catch(() => undefined);
+        }
         if (onInvalid) onInvalid();
-        else router.replace('/login');
+        else router.replace(firebaseConfigured ? '/login' : '/');
       });
     return () => {
       cancelled = true;
@@ -162,18 +168,15 @@ export function CajaKioskClient({
     resumeMemberSession,
   } = useCajaMemberAuth(storeId, token);
 
+  /** Cierra la sesión solo en este dispositivo; el enlace sigue vivo para los demás. */
   const handleLogout = useCallback(async () => {
-    try {
-      await api('/caja/close', { method: 'POST' });
-    } catch {
-      /* igual cerramos localmente */
-    }
     clearCajaToken();
     setApiAuthTokenGetter(null);
-    if (isMerchantFirebaseConfigured()) {
+    const firebaseConfigured = isMerchantFirebaseConfigured();
+    if (firebaseConfigured) {
       await signOut(getMerchantAuth()).catch(() => undefined);
     }
-    router.replace('/login');
+    router.replace(firebaseConfigured ? '/login' : '/');
   }, [router]);
 
   if (!session) {
@@ -414,22 +417,15 @@ export function CajaHubClient() {
     resumeMemberSession,
   } = useCajaMemberAuth(storeId, cajaToken || '');
 
+  /** Cierra la sesión solo en este dispositivo; el enlace sigue vivo. */
   const handleLogout = useCallback(async () => {
-    if (cajaToken) {
-      setApiAuthTokenGetter(async () => cajaToken);
-      try {
-        await api('/caja/close', { method: 'POST' });
-      } catch {
-        /* igual salimos */
-      }
-    }
     clearCajaToken();
     setApiAuthTokenGetter(null);
     if (isMerchantFirebaseConfigured()) {
       await signOut(getMerchantAuth()).catch(() => undefined);
     }
     router.replace('/login');
-  }, [cajaToken, router]);
+  }, [router]);
 
   if (boot === 'checking' || !ready) {
     return <SkeletonScreen label="Abriendo caja" />;

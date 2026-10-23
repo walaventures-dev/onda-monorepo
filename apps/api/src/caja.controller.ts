@@ -55,25 +55,24 @@ export class CajaController {
     };
   }
 
+  /**
+   * Devuelve el enlace activo de la sede, creándolo si no existe.
+   * El enlace solo se revoca de forma explícita (POST /caja/close); cerrar
+   * sesión en un dispositivo o «regenerar» nunca dejan enlaces muertos
+   * circulando por WhatsApp.
+   */
   @Post('link')
   async link(
     @Headers('authorization') authHeader: string | undefined,
     @Body() body: { storeId: string; rotate?: boolean }
   ) {
     await this.access.requireStore(body.storeId, authHeader);
-    if (body.rotate) {
-      await this.prisma.cajaLink.updateMany({
-        where: { storeId: body.storeId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-    } else {
-      const existing = await this.prisma.cajaLink.findFirst({
-        where: { storeId: body.storeId, revokedAt: null },
-        orderBy: { createdAt: 'desc' },
-      });
-      if (existing) {
-        return { url: cajaPublicUrl(existing.token), token: existing.token };
-      }
+    const existing = await this.prisma.cajaLink.findFirst({
+      where: { storeId: body.storeId, revokedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existing) {
+      return { url: cajaPublicUrl(existing.token), token: existing.token };
     }
     const created = await this.prisma.cajaLink.create({
       data: { storeId: body.storeId, token: newCajaToken() },
