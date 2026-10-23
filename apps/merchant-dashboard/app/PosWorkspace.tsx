@@ -9,6 +9,8 @@ import { PosSalesList } from './PosSalesList';
 import { PosSaleDetail } from './PosSaleDetail';
 import { PosSummaryPanel } from './PosSummaryPanel';
 import { PosVenderPanel } from './PosVenderPanel';
+import { PosTablesConfig } from './PosTablesConfig';
+import { PosStationsConfig } from './PosStationsConfig';
 import { MerchantCajaPanel } from './MerchantCajaPanel';
 import { isAdmin } from '../lib/useStoreRole';
 
@@ -65,6 +67,16 @@ export function PosWorkspace({
   if (pathname.startsWith('/pos/inventario')) {
     if (!admin) return <p className="text-sm text-[var(--onda-muted)]">Sin acceso</p>;
     return <PosInventory storeId={storeId} />;
+  }
+
+  if (pathname.startsWith('/pos/mesas')) {
+    if (!admin) return <p className="text-sm text-[var(--onda-muted)]">Sin acceso</p>;
+    return <PosTablesConfig storeId={storeId} />;
+  }
+
+  if (pathname.startsWith('/pos/estaciones')) {
+    if (!admin) return <p className="text-sm text-[var(--onda-muted)]">Sin acceso</p>;
+    return <PosStationsConfig storeId={storeId} />;
   }
 
   if (pathname.startsWith('/pos/ventas')) {

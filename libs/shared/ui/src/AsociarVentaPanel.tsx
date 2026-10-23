@@ -617,6 +617,7 @@ export function CajaOperationsPanel({
   activateMemberAuth,
   resumeMemberSession,
   onLogout,
+  kitchenHref,
 }: {
   storeId: string;
   defaultMode?: 'acumular' | 'asociar';
@@ -637,6 +638,8 @@ export function CajaOperationsPanel({
   resumeMemberSession?: () => Promise<PosVenderMemberSession | null>;
   /** Cerrar sesión de caja (Firebase hub o revocar enlace kiosk). */
   onLogout?: () => void | Promise<void>;
+  /** URL de la pantalla de cocina (solo PWA caja con token de caja). */
+  kitchenHref?: string;
 }) {
   const [mode, setMode] = useState<'home' | 'acumular' | 'asociar' | 'vender' | 'vender-login'>(
     () => (posEnabled ? 'home' : 'acumular'),
@@ -886,6 +889,8 @@ export function CajaOperationsPanel({
       onAcumular={() => setMode('acumular')}
       onLogout={onLogout ? () => void handleLogout() : undefined}
       logoutBusy={logoutBusy}
+      token={token}
+      kitchenHref={kitchenHref}
     />
   );
 }

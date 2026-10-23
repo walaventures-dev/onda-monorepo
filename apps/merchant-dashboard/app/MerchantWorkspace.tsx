@@ -1082,6 +1082,18 @@ export function MerchantWorkspace() {
                   icon: OndaIcons.product,
                   active: pathname.startsWith("/pos/inventario"),
                 },
+                {
+                  href: "/pos/mesas",
+                  label: "Mesas y salones",
+                  icon: OndaIcons.near,
+                  active: pathname.startsWith("/pos/mesas"),
+                },
+                {
+                  href: "/pos/estaciones",
+                  label: "Estaciones",
+                  icon: OndaIcons.flame,
+                  active: pathname.startsWith("/pos/estaciones"),
+                },
               ]
             : []),
           {

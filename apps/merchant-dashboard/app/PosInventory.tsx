@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Button,
   api,
@@ -16,6 +17,7 @@ import type {
   PosAddonDto,
   PosItemDto,
   PosItemKind,
+  PosStationDto,
 } from '@onda/shared-types';
 import { UploadSimpleIcon as UploadSimple } from '@phosphor-icons/react/dist/csr/UploadSimple';
 
@@ -374,9 +376,72 @@ function ItemOptionsEditor({
   );
 }
 
+function ItemStationEditor({
+  storeId,
+  item,
+  stations,
+  onSaved,
+}: {
+  storeId: string;
+  item: PosItemDto;
+  stations: PosStationDto[];
+  onSaved: (item: PosItemDto) => void;
+}) {
+  const [value, setValue] = useState(item.stationId ?? '');
+  const [saving, setSaving] = useState(false);
+
+  async function change(next: string) {
+    const previous = item.stationId ?? '';
+    if (next === previous || saving) return;
+    setValue(next);
+    setSaving(true);
+    try {
+      const updated = await api<PosItemDto>(
+        `/pos/stores/${storeId}/items/${item.id}`,
+        { method: 'POST', body: JSON.stringify({ stationId: next }) },
+      );
+      onSaved(updated);
+      toast.success('Estación actualizada');
+    } catch (e) {
+      setValue(previous);
+      toast.danger('Error', {
+        description: e instanceof Error ? e.message : 'No se pudo guardar',
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!stations.length) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t border-[var(--onda-border)] bg-[var(--onda-bg)]/40 px-4 py-3">
+      <span className="text-xs font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+        Estación
+      </span>
+      <div className="w-56">
+        <OndaSelect
+          aria-label="Estación del ítem"
+          value={value}
+          onChange={(v) => void change(v)}
+          options={[
+            { id: '', label: 'Sin estación' },
+            ...stations.map((s) => ({ id: s.id, label: s.name })),
+          ]}
+        />
+      </div>
+      {saving ? (
+        <span className="text-xs text-[var(--onda-muted)]">Guardando…</span>
+      ) : null}
+    </div>
+  );
+}
+
 export function PosInventory({ storeId }: { storeId: string }) {
+  const router = useRouter();
   const [items, setItems] = useState<PosItemDto[]>([]);
   const [addons, setAddons] = useState<PosAddonDto[]>([]);
+  const [stations, setStations] = useState<PosStationDto[]>([]);
   const [view, setView] = useState<InventoryView>('items');
   const [modal, setModal] = useState<'item' | 'addon' | null>(null);
   const [name, setName] = useState('');
@@ -385,6 +450,7 @@ export function PosInventory({ storeId }: { storeId: string }) {
   const [trackStock, setTrackStock] = useState(false);
   const [stockQty, setStockQty] = useState('0');
   const [imageUrl, setImageUrl] = useState('');
+  const [stationId, setStationId] = useState('');
   const [addonName, setAddonName] = useState('');
   const [addonPrice, setAddonPrice] = useState('');
   const [loading, setLoading] = useState(true);
@@ -398,12 +464,14 @@ export function PosInventory({ storeId }: { storeId: string }) {
   async function load() {
     setLoading(true);
     try {
-      const [itemRows, addonRows] = await Promise.all([
+      const [itemRows, addonRows, stationRows] = await Promise.all([
         api<PosItemDto[]>(`/pos/stores/${storeId}/items`),
         api<PosAddonDto[]>(`/pos/stores/${storeId}/addons`),
+        api<PosStationDto[]>(`/pos/stores/${storeId}/stations`),
       ]);
       setItems(itemRows);
       setAddons(addonRows);
+      setStations(stationRows);
     } finally {
       setLoading(false);
     }
@@ -420,6 +488,7 @@ export function PosInventory({ storeId }: { storeId: string }) {
     setTrackStock(false);
     setStockQty('0');
     setImageUrl('');
+    setStationId('');
   }
 
   function resetAddonForm() {
@@ -447,6 +516,7 @@ export function PosInventory({ storeId }: { storeId: string }) {
           trackStock: tracking,
           stockQty: tracking ? Number(stockQty) : null,
           imageUrl: imageUrl.trim() || null,
+          stationId: stationId || null,
         }),
       });
       toast.success('Producto agregado');
@@ -625,6 +695,20 @@ export function PosInventory({ storeId }: { storeId: string }) {
         >
           {OndaIcons.accumulate} Adicionales ({addons.length})
         </button>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium text-[var(--onda-muted)] transition hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
+          onClick={() => router.push('/pos/mesas')}
+        >
+          {OndaIcons.near} Salones y mesas
+        </button>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium text-[var(--onda-muted)] transition hover:bg-[var(--onda-bg)] hover:text-[var(--onda-ink)]"
+          onClick={() => router.push('/pos/estaciones')}
+        >
+          {OndaIcons.gear} Estaciones
+        </button>
       </div>
 
       {view === 'items' ? (
@@ -727,6 +811,18 @@ export function PosInventory({ storeId }: { storeId: string }) {
                     {expandedId === item.id ? (
                       <tr>
                         <td colSpan={7} className="p-0">
+                          <ItemStationEditor
+                            storeId={storeId}
+                            item={item}
+                            stations={stations}
+                            onSaved={(updated) => {
+                              setItems((rows) =>
+                                rows.map((r) =>
+                                  r.id === updated.id ? { ...r, ...updated } : r,
+                                ),
+                              );
+                            }}
+                          />
                           <ItemOptionsEditor
                             storeId={storeId}
                             item={item}
@@ -885,6 +981,22 @@ export function PosInventory({ storeId }: { storeId: string }) {
                   aria-label="Stock inicial"
                 />
               </div>
+            </div>
+
+            <div className="space-y-1 text-sm">
+              <span className="text-[var(--onda-muted)]">Estación de preparación</span>
+              <OndaSelect
+                aria-label="Estación de preparación"
+                value={stationId}
+                onChange={(v) => setStationId(v)}
+                options={[
+                  { id: '', label: 'Sin estación (comanda general)' },
+                  ...stations.map((s) => ({ id: s.id, label: s.name })),
+                ]}
+              />
+              <p className="text-[11px] text-[var(--onda-muted)]">
+                Los productos con estación van a su comanda (cocina, barra…).
+              </p>
             </div>
 
             <div className="onda-dialog-footer flex justify-end gap-2 pt-2">

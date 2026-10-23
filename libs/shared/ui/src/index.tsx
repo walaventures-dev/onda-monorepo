@@ -100,6 +100,14 @@ export {
   AsociarVentaDetail,
 } from './AsociarVentaPanel';
 export {
+  PosTablesPanel,
+  type PosTablesPanelProps,
+} from './PosTablesPanel';
+export {
+  KitchenDisplay,
+  type KitchenDisplayProps,
+} from './KitchenDisplay';
+export {
   PosVenderCore,
   type PosVenderMemberSession,
   type AttendFilter,

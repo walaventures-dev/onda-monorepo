@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, toast } from '@heroui/react';
 import { OndaIcons } from './icons';
 import { PhoneInput } from './PhoneInput';
+import { PosTablesPanel } from './PosTablesPanel';
 import { SkeletonCards } from './Skeleton';
 import { api } from './api';
 import {
@@ -21,6 +22,8 @@ import type {
   PosTabDto,
 } from '@onda/shared-types';
 import { MoneyIcon as Money } from '@phosphor-icons/react/dist/csr/Money';
+import { ArmchairIcon as Armchair } from '@phosphor-icons/react/dist/csr/Armchair';
+import { CookingPotIcon as CookingPot } from '@phosphor-icons/react/dist/csr/CookingPot';
 import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/CreditCard';
 import { BankIcon as Bank } from '@phosphor-icons/react/dist/csr/Bank';
 import { CaretLeftIcon as CaretLeft } from '@phosphor-icons/react/dist/csr/CaretLeft';
@@ -247,6 +250,9 @@ export function PosVenderCore({
   const [attendFilter, setAttendFilter] = useState<AttendFilter>('all');
   const [attendants, setAttendants] = useState<PosAttendantDto[]>([]);
   const [assignBusy, setAssignBusy] = useState(false);
+  const [showTables, setShowTables] = useState(false);
+  const [readyCount, setReadyCount] = useState(0);
+  const readyIdsRef = useRef<Set<string>>(new Set());
   const skipRemoteSyncUntil = useRef(0);
 
   const selectedTab = useMemo(
@@ -350,7 +356,42 @@ export function PosVenderCore({
 
   useEffect(() => {
     const es = new EventSource(`/api/pos/stream?storeId=${storeId}`);
-    es.onmessage = () => void loadTabs();
+    es.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        const ticket = data?.ticket;
+        if (
+          (data?.kind === 'kitchen_ticket_updated' ||
+            data?.kind === 'kitchen_ticket_created') &&
+          ticket?.id
+        ) {
+          if (ticket.status === 'READY' && !readyIdsRef.current.has(ticket.id)) {
+            readyIdsRef.current.add(ticket.id);
+            setReadyCount(readyIdsRef.current.size);
+            toast.success('Comanda lista', {
+              description: ticket.tabLabel
+                ? `${ticket.tabLabel}${ticket.stationName ? ` · ${ticket.stationName}` : ''} lista para entregar`
+                : 'Productos listos en cocina',
+            });
+          } else if (
+            (ticket.status === 'DELIVERED' ||
+              ticket.status === 'CANCELLED') &&
+            readyIdsRef.current.has(ticket.id)
+          ) {
+            readyIdsRef.current.delete(ticket.id);
+            setReadyCount(readyIdsRef.current.size);
+          }
+        } else if (data?.kind === 'kitchen_ticket_cancelled' && ticket?.id) {
+          if (readyIdsRef.current.has(ticket.id)) {
+            readyIdsRef.current.delete(ticket.id);
+            setReadyCount(readyIdsRef.current.size);
+          }
+        }
+      } catch {
+        /* ping u otro evento sin JSON */
+      }
+      void loadTabs();
+    };
     return () => es.close();
   }, [storeId, loadTabs]);
 
@@ -363,6 +404,54 @@ export function PosVenderCore({
     upsertTab(tab);
     setSelectedTabId(tab.id);
     return tab;
+  }
+
+  async function createTabForTable(input: {
+    tableId: string;
+    label: string;
+    guestCount?: number | null;
+  }) {
+    markLocalMutation();
+    try {
+      const tab = await api<PosTabDto>(`/pos/tabs?storeId=${storeId}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          tableId: input.tableId,
+          label: input.label,
+          guestCount: input.guestCount ?? null,
+        }),
+      });
+      upsertTab(tab);
+      setSelectedTabId(tab.id);
+      setShowTables(false);
+    } catch (e) {
+      toast.danger('Error', {
+        description: e instanceof Error ? e.message : 'No se pudo abrir la mesa',
+      });
+    }
+  }
+
+  async function sendToKitchen() {
+    if (!selectedTab || busy) return;
+    setBusy(true);
+    try {
+      const res = await api<{ tickets: unknown[] }>(
+        `/pos/tabs/${selectedTab.id}/send?storeId=${storeId}`,
+        { method: 'POST', body: JSON.stringify({}) },
+      );
+      toast.success(
+        res.tickets.length
+          ? `Comandas enviadas (${res.tickets.length})`
+          : 'Todo ya estaba enviado',
+      );
+    } catch (e) {
+      toast.danger('Error', {
+        description: e instanceof Error ? e.message : 'No se pudo enviar',
+      });
+    } finally {
+      setBusy(false);
+      await loadTabs({ force: true });
+    }
   }
 
   async function addProduct(
@@ -649,6 +738,14 @@ export function PosVenderCore({
           />
           <Button
             type="button"
+            variant="outline"
+            onClick={() => setShowTables(true)}
+          >
+            <Armchair className="h-4 w-4 shrink-0" weight="regular" aria-hidden />
+            Mesas
+          </Button>
+          <Button
+            type="button"
             onClick={() => void createNewTab()}
             isDisabled={busy}
           >
@@ -658,6 +755,13 @@ export function PosVenderCore({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        {readyCount > 0 ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+            <CookingPot className="h-3.5 w-3.5" weight="regular" aria-hidden />
+            {readyCount} comanda{readyCount === 1 ? '' : 's'} lista
+            {readyCount === 1 ? '' : 's'} en cocina
+          </span>
+        ) : null}
         {filterChips.map((chip) => (
           <button
             key={chip.id}
@@ -697,6 +801,26 @@ export function PosVenderCore({
         ) : null}
       </div>
 
+      {showTables ? (
+        <div className="flex flex-1 flex-col gap-3">
+          <button
+            type="button"
+            className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-[var(--onda-muted)]"
+            onClick={() => setShowTables(false)}
+          >
+            <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
+            Vender
+          </button>
+          <PosTablesPanel
+            storeId={storeId}
+            onOpenTab={(tabId) => {
+              setSelectedTabId(tabId);
+              setShowTables(false);
+            }}
+            onCreateTab={(input) => createTabForTable(input)}
+          />
+        </div>
+      ) : (
       <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,13rem)_1fr_minmax(0,18rem)]">
         <aside className="onda-card flex flex-col overflow-hidden p-0">
           <div className="border-b border-[var(--onda-border)] px-3 py-2">
@@ -824,6 +948,11 @@ export function PosVenderCore({
                     </h3>
                     <p className="text-xs text-[var(--onda-muted)]">
                       {tabStatusLabel(selectedTab.status)}
+                      {selectedTab.tableId
+                        ? selectedTab.guestCount
+                          ? ` · Mesa · ${selectedTab.guestCount} comensal${selectedTab.guestCount === 1 ? '' : 'es'}`
+                          : ' · Mesa'
+                        : ''}
                     </p>
                   </div>
                   <span className="text-lg font-semibold tabular-nums">
@@ -1024,6 +1153,17 @@ export function PosVenderCore({
               <div className="space-y-2 border-t border-[var(--onda-border)] p-3">
                 {selectedTab.status === 'OPEN' ? (
                   <>
+                    {selectedTab.lines.some((l) => !l.sentAt) ? (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void sendToKitchen()}
+                        className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-[var(--onda-border)] bg-[var(--onda-sky-soft)] px-3 py-2 text-sm font-semibold text-[var(--onda-ink)] transition hover:border-[var(--onda-primary)]/35 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <CookingPot className="h-4 w-4" weight="regular" aria-hidden />
+                        Enviar a cocina
+                      </button>
+                    ) : null}
                     <Button
                       type="button"
                       className="w-full"
@@ -1145,6 +1285,7 @@ export function PosVenderCore({
           )}
         </aside>
       </div>
+      )}
 
       {pickerItem ? (
         <ItemPickerModal

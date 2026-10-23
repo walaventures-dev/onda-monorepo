@@ -48,6 +48,7 @@ export type ConfigSectionId =
   | 'marca'
   | 'lealtad'
   | 'equipo'
+  | 'pos'
   | 'pos-pagos'
   | 'contabilidad';
 
@@ -60,6 +61,8 @@ export function parseConfigSection(pathname: string): ConfigSectionId {
       return 'lealtad';
     case 'equipo':
       return 'equipo';
+    case 'pos':
+      return 'pos';
     case 'pos-pagos':
       return 'pos-pagos';
     case 'contabilidad':
@@ -125,6 +128,13 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'POS',
     icon: <CashRegister size={14} weight="regular" aria-hidden />,
     items: [
+      {
+        id: 'pos',
+        href: '/config/pos',
+        label: 'Punto de venta',
+        description: 'Activación y módulos',
+        icon: <CashRegister size={NAV_ICON_SIZE} weight="regular" aria-hidden />,
+      },
       {
         id: 'pos-pagos',
         href: '/config/pos-pagos',
@@ -321,6 +331,28 @@ export function ConfigWorkspace({
     }
   }
 
+  const [savingPosEnable, setSavingPosEnable] = useState(false);
+  const [posEnableError, setPosEnableError] = useState('');
+
+  async function enablePos() {
+    if (!storeId) return;
+    setPosEnableError('');
+    setSavingPosEnable(true);
+    try {
+      const updated = await api<any>(`/stores/${storeId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ posEnabled: true }),
+      });
+      onStoreUpdated?.(updated);
+    } catch (err: unknown) {
+      setPosEnableError(
+        err instanceof Error ? err.message : 'No se pudo habilitar el POS',
+      );
+    } finally {
+      setSavingPosEnable(false);
+    }
+  }
+
   const profileInitial: StoreProfileFormValues = {
     name: store?.name || '',
     logoUrl: store?.passDesign?.logoUrl || '',
@@ -357,6 +389,68 @@ export function ConfigWorkspace({
     }
 
     switch (section) {
+      case 'pos':
+        if (!posEnabled) {
+          return (
+            <>
+              <SectionHeader
+                title="Punto de venta"
+                description="Vende en caja y habilita mesas, comandas de cocina y cobros con fidelización."
+              />
+              <div className="onda-card max-w-xl space-y-4 p-5">
+                <p className="text-sm leading-relaxed text-[var(--onda-muted)]">
+                  El punto de venta está desactivado para esta sede. Al
+                  habilitarlo aparecen en el menú los módulos de Vender,
+                  Inventario, Ventas, Mesas y salones, Estaciones y Resumen POS.
+                </p>
+                <GradientButton
+                  onClick={() => void enablePos()}
+                  disabled={savingPosEnable || !storeId}
+                >
+                  {OndaIcons.power}
+                  {savingPosEnable ? 'Habilitando…' : 'Habilitar POS'}
+                </GradientButton>
+                {posEnableError ? (
+                  <p className="text-sm text-[var(--onda-danger)]">{posEnableError}</p>
+                ) : null}
+              </div>
+            </>
+          );
+        }
+        return (
+          <>
+            <SectionHeader
+              title="Punto de venta"
+              description="El POS está habilitado para esta sede. Accede a sus módulos:"
+            />
+            <div className="onda-card max-w-xl divide-y divide-[var(--onda-border)] p-0">
+              {[
+                { href: '/pos', label: 'Resumen POS', hint: 'Ventas y métricas' },
+                { href: '/pos/vender', label: 'Vender', hint: 'Cuentas y cobro' },
+                { href: '/pos/inventario', label: 'Inventario', hint: 'Productos y precios' },
+                { href: '/pos/ventas', label: 'Ventas', hint: 'Historial y reembolsos' },
+                { href: '/pos/mesas', label: 'Mesas y salones', hint: 'Zonas y mesas del local' },
+                { href: '/pos/estaciones', label: 'Estaciones', hint: 'Cocina, barra, postres…' },
+              ].map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="flex items-center justify-between gap-3 px-5 py-3.5 text-sm transition-colors hover:bg-[var(--onda-bg)]"
+                >
+                  <span className="font-medium text-[var(--onda-ink)]">
+                    {item.label}
+                    <span className="ml-2 text-xs text-[var(--onda-muted)]">
+                      {item.hint}
+                    </span>
+                  </span>
+                  <span className="text-[var(--onda-muted)]">
+                    {OndaIcons.chevronRight}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </>
+        );
       case 'pos-pagos':
         return (
           <>

@@ -191,6 +191,7 @@ export function CajaKioskClient({
         posEnabled={Boolean(session.posEnabled)}
         ondaValue={session.ondaValue}
         token={token}
+        kitchenHref={`/cocina?token=${encodeURIComponent(token)}`}
         signInMember={signInMember}
         restoreCajaAuth={restoreCajaAuth}
         activateMemberAuth={activateMemberAuth}
@@ -452,6 +453,9 @@ export function CajaHubClient() {
         posEnabled={posEnabled}
         ondaValue={ondaValue}
         token={cajaToken}
+        kitchenHref={
+          cajaToken ? `/cocina?token=${encodeURIComponent(cajaToken)}` : undefined
+        }
         signInMember={cajaToken ? signInMember : undefined}
         restoreCajaAuth={cajaToken ? restoreCajaAuth : undefined}
         activateMemberAuth={cajaToken ? activateMemberAuth : undefined}

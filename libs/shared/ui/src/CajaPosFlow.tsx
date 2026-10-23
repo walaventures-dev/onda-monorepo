@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, toast } from '@heroui/react';
 import { BankIcon as Bank } from '@phosphor-icons/react/dist/csr/Bank';
+import { ArmchairIcon as Armchair } from '@phosphor-icons/react/dist/csr/Armchair';
 import { CaretLeftIcon as CaretLeft } from '@phosphor-icons/react/dist/csr/CaretLeft';
+import { CookingPotIcon as CookingPot } from '@phosphor-icons/react/dist/csr/CookingPot';
 import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/CreditCard';
 import { MoneyIcon as Money } from '@phosphor-icons/react/dist/csr/Money';
 import { QrCodeIcon as QrCode } from '@phosphor-icons/react/dist/csr/QrCode';
@@ -25,9 +27,10 @@ import type {
 import { api } from './api';
 import { OndaIcons } from './icons';
 import { PhoneInput } from './PhoneInput';
+import { PosTablesPanel } from './PosTablesPanel';
 import { SkeletonCards, SkeletonList } from './Skeleton';
 
-type View = 'list' | 'cart' | 'grid' | 'identify' | 'pay';
+type View = 'list' | 'tables' | 'cart' | 'grid' | 'identify' | 'pay';
 
 const SCREEN_TEXT = 'Pasa el QR de tu pase Onda en el sensor';
 
@@ -233,6 +236,8 @@ export function CajaPosFlow({
   onAcumular,
   onLogout,
   logoutBusy,
+  token,
+  kitchenHref,
 }: {
   storeId: string;
   storeName?: string;
@@ -240,6 +245,10 @@ export function CajaPosFlow({
   onAcumular: () => void;
   onLogout?: () => void | Promise<void>;
   logoutBusy?: boolean;
+  /** Token de CajaLink (SSE y creación de cuentas con mesa). */
+  token?: string;
+  /** URL de la pantalla de cocina (solo PWA caja); si falta, no se muestra. */
+  kitchenHref?: string;
 }) {
   const [view, setView] = useState<View>('list');
   const [items, setItems] = useState<PosItemDto[]>([]);
@@ -321,10 +330,26 @@ export function CajaPosFlow({
   }, [storeId, loadTabs]);
 
   useEffect(() => {
-    const es = new EventSource(`/api/pos/stream?storeId=${storeId}`);
-    es.onmessage = () => void loadTabs();
+    const qs = new URLSearchParams({ storeId });
+    if (token) qs.set('token', token);
+    const es = new EventSource(`/api/pos/stream?${qs.toString()}`);
+    es.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        if (data?.kind === 'kitchen_ticket_updated' && data?.ticket?.status === 'READY') {
+          toast.success('Comanda lista', {
+            description: data.ticket.tabLabel
+              ? `${data.ticket.tabLabel}${data.ticket.stationName ? ` · ${data.ticket.stationName}` : ''} lista para entregar`
+              : 'Productos listos en cocina',
+          });
+        }
+      } catch {
+        /* ping u otro evento sin JSON */
+      }
+      void loadTabs();
+    };
     return () => es.close();
-  }, [storeId, loadTabs]);
+  }, [storeId, token, loadTabs]);
 
   function markLocal() {
     skipSyncUntil.current = Date.now() + 800;
@@ -340,6 +365,56 @@ export function CajaPosFlow({
     setSelectedId(created.id);
     setSearch('');
     setView('grid');
+  }
+
+  async function createTabForTable(input: {
+    tableId: string;
+    label: string;
+    guestCount?: number | null;
+  }) {
+    markLocal();
+    try {
+      const created = await api<PosTabDto>(`/pos/tabs?storeId=${storeId}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          tableId: input.tableId,
+          label: input.label,
+          guestCount: input.guestCount ?? null,
+        }),
+      });
+      upsert(created);
+      setSelectedId(created.id);
+      setSearch('');
+      setView('grid');
+    } catch (e) {
+      toast.danger('Error', {
+        description: e instanceof Error ? e.message : 'No se pudo abrir la mesa',
+      });
+    }
+  }
+
+  async function sendToKitchen() {
+    if (!tab || busy) return;
+    setBusy(true);
+    try {
+      const res = await api<{ tickets: unknown[] }>(
+        `/pos/tabs/${tab.id}/send?storeId=${storeId}`,
+        { method: 'POST', body: JSON.stringify({}) },
+      );
+      toast.success(
+        res.tickets.length
+          ? `Comandas enviadas (${res.tickets.length})`
+          : 'Todo ya estaba enviado',
+      );
+    } catch (e) {
+      toast.danger('Error', {
+        description: e instanceof Error ? e.message : 'No se pudo enviar',
+      });
+    } finally {
+      setBusy(false);
+      skipSyncUntil.current = 0;
+      await loadTabs();
+    }
   }
 
   async function addLine(
@@ -713,13 +788,54 @@ export function CajaPosFlow({
             </Button>
             <button
               type="button"
+              onClick={() => setView('tables')}
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-4 text-sm font-semibold text-[var(--onda-ink)]"
+            >
+              <Armchair className="h-4 w-4" weight="regular" aria-hidden />
+              Mesas
+            </button>
+            <button
+              type="button"
               onClick={onAcumular}
-              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-[var(--onda-sky)] px-4 text-sm font-semibold text-[var(--onda-ink)]"
+              className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-[var(--onda-sky)] px-4 text-sm font-semibold text-[var(--onda-ink)] ${
+                kitchenHref ? '' : 'col-span-2'
+              }`}
             >
               <QrCode className="h-4 w-4" weight="regular" aria-hidden />
               Acumular
             </button>
+            {kitchenHref ? (
+              <a
+                href={kitchenHref}
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-4 text-sm font-semibold text-[var(--onda-ink)]"
+              >
+                <CookingPot className="h-4 w-4" weight="regular" aria-hidden />
+                Cocina
+              </a>
+            ) : null}
           </div>
+        </>
+      ) : null}
+
+      {view === 'tables' ? (
+        <>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 text-sm font-medium text-[var(--onda-muted)]"
+            onClick={() => setView('list')}
+          >
+            <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
+            Cuentas
+          </button>
+          <PosTablesPanel
+            storeId={storeId}
+            token={token}
+            onOpenTab={(tabId) => {
+              setSelectedId(tabId);
+              setView('cart');
+            }}
+            onCreateTab={(input) => createTabForTable(input)}
+          />
         </>
       ) : null}
 
@@ -737,6 +853,16 @@ export function CajaPosFlow({
             <h2 className="font-display text-lg font-semibold">{tabTitle(tab)}</h2>
             <span className="text-lg font-semibold tabular-nums">{formatCop(tab.total)}</span>
           </div>
+          {tab.tableId ? (
+            <p className="text-xs text-[var(--onda-muted)]">
+              {tab.guestCount
+                ? `${tab.guestCount} comensal${tab.guestCount === 1 ? '' : 'es'}`
+                : 'Cuenta de mesa'}
+              {tab.lines.length > 0 && tab.lines.every((l) => l.sentAt)
+                ? ' · Enviada a cocina'
+                : ''}
+            </p>
+          ) : null}
           <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto">
             {tab.lines.length === 0 ? (
               <li className="py-8 text-center text-sm text-[var(--onda-muted)]">
@@ -763,6 +889,17 @@ export function CajaPosFlow({
             )}
           </ul>
           <div className="grid grid-cols-3 gap-2 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+            {tab.lines.some((l) => !l.sentAt) ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void sendToKitchen()}
+                className="col-span-3 inline-flex items-center justify-center gap-1.5 rounded-full bg-[var(--onda-sky)] px-3 py-2 text-sm font-semibold text-[var(--onda-ink)] disabled:opacity-50"
+              >
+                <CookingPot className="h-4 w-4" weight="regular" aria-hidden />
+                Enviar a cocina
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={busy}
