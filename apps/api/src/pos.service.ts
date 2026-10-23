@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -7,6 +8,8 @@ import {
 } from '@nestjs/common';
 import {
   AccountingProvider,
+  KitchenItemStatus,
+  KitchenTicketStatus,
   PosItemKind,
   PosRefundKind,
   PosSaleStatus,
@@ -91,6 +94,8 @@ export class PosService {
       passId: tab.passId,
       openedAt: tab.openedAt.toISOString(),
       checkoutAt: tab.checkoutAt?.toISOString() ?? null,
+      tableId: tab.tableId ?? null,
+      guestCount: tab.guestCount ?? null,
       lines: tab.lines.map((l) => ({
         id: l.id,
         itemId: l.itemId,
@@ -99,6 +104,8 @@ export class PosService {
         variantId: l.variantId,
         variantName: l.variantName,
         note: l.note,
+        stationId: l.stationId ?? null,
+        sentAt: l.sentAt?.toISOString() ?? null,
         addons: (l.addons || []).map((a) => ({
           id: a.id,
           addonId: a.addonId,
@@ -138,6 +145,7 @@ export class PosService {
       sortOrder: number;
       imageUrl: string | null;
       externalSku?: string | null;
+      stationId?: string | null;
       variants?: Array<{
         id: string;
         itemId: string;
@@ -172,6 +180,7 @@ export class PosService {
       sortOrder: item.sortOrder,
       imageUrl: item.imageUrl,
       externalSku: item.externalSku ?? null,
+      stationId: item.stationId ?? null,
       variants: (item.variants || [])
         .filter((v) => v.isActive)
         .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
@@ -191,6 +200,10 @@ export class PosService {
 
   private emitTab(storeId: string, kind: string, tabId: string) {
     this.sse.emit(storeId, { kind, tabId });
+  }
+
+  private emitKitchen(storeId: string, data: unknown) {
+    this.sse.emitKitchen(storeId, data);
   }
 
   async listItems(storeId: string) {
@@ -380,6 +393,7 @@ export class PosService {
       trackStock?: boolean;
       stockQty?: number | null;
       imageUrl?: string | null;
+      stationId?: string | null;
     }
   ) {
     const name = body.name?.trim();
@@ -387,6 +401,7 @@ export class PosService {
     const price = Math.round(Number(body.price));
     if (!(price >= 0)) throw new BadRequestException('Precio inválido');
     const trackStock = Boolean(body.trackStock) && body.kind === 'PRODUCT';
+    const stationId = await this.validateStation(storeId, body.stationId);
     return this.prisma.posItem.create({
       data: {
         storeId,
@@ -396,8 +411,22 @@ export class PosService {
         trackStock,
         stockQty: trackStock ? (body.stockQty ?? 0) : null,
         imageUrl: body.imageUrl?.trim() || null,
+        stationId,
       },
     });
+  }
+
+  private async validateStation(
+    storeId: string,
+    stationId?: string | null
+  ): Promise<string | null> {
+    if (stationId === undefined || stationId === null) return null;
+    if (stationId === '') return null;
+    const station = await this.prisma.posStation.findFirst({
+      where: { id: stationId, storeId },
+    });
+    if (!station) throw new BadRequestException('Estación no encontrada');
+    return stationId;
   }
 
   async createItemsBulk(
@@ -408,6 +437,7 @@ export class PosService {
       price: number;
       trackStock?: boolean;
       stockQty?: number | null;
+      stationId?: string | null;
     }>
   ) {
     if (!Array.isArray(items) || items.length === 0) {
@@ -424,6 +454,7 @@ export class PosService {
       price: number;
       trackStock: boolean;
       stockQty: number | null;
+      stationId: string | null;
     }> = [];
     const errors: Array<{ row: number; message: string }> = [];
 
@@ -449,6 +480,7 @@ export class PosService {
         price,
         trackStock,
         stockQty: trackStock ? Math.max(0, Math.round(Number(body.stockQty) || 0)) : null,
+        stationId: body.stationId?.trim() || null,
       });
     }
 
@@ -457,6 +489,18 @@ export class PosService {
         message: 'Ningún ítem válido',
         errors,
       });
+    }
+
+    const stationIds = Array.from(
+      new Set(rows.map((r) => r.stationId).filter((s): s is string => Boolean(s)))
+    );
+    if (stationIds.length) {
+      const count = await this.prisma.posStation.count({
+        where: { storeId, id: { in: stationIds } },
+      });
+      if (count !== stationIds.length) {
+        throw new BadRequestException('Una o más estaciones no son válidas');
+      }
     }
 
     const result = await this.prisma.posItem.createMany({ data: rows });
@@ -478,12 +522,19 @@ export class PosService {
       isActive: boolean;
       sortOrder: number;
       imageUrl: string | null;
+      stationId: string | null;
     }>
   ) {
     const item = await this.prisma.posItem.findFirst({
       where: { id: itemId, storeId },
     });
     if (!item) throw new NotFoundException('Ítem no encontrado');
+    const stationId =
+      body.stationId !== undefined
+        ? body.stationId === ''
+          ? null
+          : await this.validateStation(storeId, body.stationId)
+        : undefined;
     return this.prisma.posItem.update({
       where: { id: itemId },
       data: {
@@ -491,6 +542,7 @@ export class PosService {
         ...(body.price != null ? { price: Math.round(body.price) } : {}),
         ...(body.isActive != null ? { isActive: body.isActive } : {}),
         ...(body.sortOrder != null ? { sortOrder: body.sortOrder } : {}),
+        ...(stationId !== undefined ? { stationId } : {}),
         ...(body.trackStock != null && item.kind === 'PRODUCT'
           ? {
               trackStock: body.trackStock,
@@ -566,16 +618,39 @@ export class PosService {
 
   async createTab(
     storeId: string,
-    label?: string,
+    body: { label?: string; tableId?: string | null; guestCount?: number | null },
     memberId?: string | null
   ) {
+    let table: { id: string; isBlocked: boolean } | null = null;
+    if (body.tableId) {
+      table = await this.prisma.posTable.findFirst({
+        where: { id: body.tableId, storeId },
+      });
+      if (!table) throw new NotFoundException('Mesa no encontrada');
+      if (table.isBlocked) {
+        throw new BadRequestException('La mesa está bloqueada');
+      }
+      const existing = await this.prisma.posTab.count({
+        where: { tableId: table.id, status: { in: ['OPEN', 'CHECKOUT'] } },
+      });
+      if (existing) {
+        throw new ConflictException('La mesa ya tiene una cuenta activa');
+      }
+    }
+    const guestCount =
+      body.guestCount != null ? Math.round(Number(body.guestCount)) : null;
+    if (guestCount != null && (!Number.isFinite(guestCount) || guestCount < 1)) {
+      throw new BadRequestException('Número de comensales inválido');
+    }
     const count = await this.prisma.posTab.count({
       where: { storeId, status: { in: ['OPEN', 'CHECKOUT'] } },
     });
     const tab = await this.prisma.posTab.create({
       data: {
         storeId,
-        label: label?.trim() || `Cuenta #${count + 1}`,
+        label: body.label?.trim() || `Cuenta #${count + 1}`,
+        tableId: table?.id ?? null,
+        guestCount,
         openedByMemberId: memberId || null,
         attendedByMemberId: memberId || null,
       },
@@ -673,7 +748,25 @@ export class PosService {
       const line = tab.lines.find((l) => l.id === body.lineId);
       if (!line) throw new NotFoundException('Línea no encontrada');
       if (qty === 0) {
+        if (line.sentAt) {
+          // La línea ya fue enviada a preparación: la anulación queda
+          // visible en la comanda en lugar de borrarse en silencio.
+          await this.prisma.kitchenTicketItem.updateMany({
+            where: {
+              tabLineId: line.id,
+              status: {
+                in: [
+                  KitchenItemStatus.QUEUED,
+                  KitchenItemStatus.IN_PREPARATION,
+                  KitchenItemStatus.READY,
+                ],
+              },
+            },
+            data: { status: KitchenItemStatus.CANCELLED, cancelledAt: new Date() },
+          });
+        }
         await this.prisma.posTabLine.delete({ where: { id: line.id } });
+        await this.finalizeTicketsWithoutActiveItems(storeId, tabId);
       } else {
         if (line.item.trackStock && (line.item.stockQty ?? 0) < qty) {
           throw new BadRequestException('Stock insuficiente');
@@ -842,8 +935,600 @@ export class PosService {
       where: { id: tabId },
       data: { status: PosTabStatus.VOID },
     });
+    const now = new Date();
+    await this.prisma.kitchenTicket.updateMany({
+      where: {
+        tabId,
+        status: {
+          in: [
+            KitchenTicketStatus.PENDING,
+            KitchenTicketStatus.ACCEPTED,
+            KitchenTicketStatus.IN_PREPARATION,
+            KitchenTicketStatus.READY,
+          ],
+        },
+      },
+      data: {
+        status: KitchenTicketStatus.CANCELLED,
+        cancelledAt: now,
+        cancelReason: 'Cuenta anulada',
+      },
+    });
+    await this.prisma.kitchenTicketItem.updateMany({
+      where: {
+        ticket: { tabId },
+        status: {
+          in: [
+            KitchenItemStatus.QUEUED,
+            KitchenItemStatus.IN_PREPARATION,
+            KitchenItemStatus.READY,
+          ],
+        },
+      },
+      data: { status: KitchenItemStatus.CANCELLED, cancelledAt: now },
+    });
     this.emitTab(storeId, 'tab_void', tabId);
+    this.emitKitchen(storeId, { kind: 'kitchen_updated', tabId });
     return { ok: true };
+  }
+
+  // ── Salones (secciones) y mesas ───────────────────────────────────────────
+
+  async listSections(storeId: string) {
+    const sections = await this.prisma.posSection.findMany({
+      where: { storeId },
+      include: {
+        tables: {
+          orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+          include: {
+            tabs: {
+              where: { status: { in: [PosTabStatus.OPEN, PosTabStatus.CHECKOUT] } },
+              select: { id: true, status: true, guestCount: true, label: true },
+              take: 1,
+            },
+          },
+        },
+      },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+    return sections.map((s) => ({
+      id: s.id,
+      name: s.name,
+      sortOrder: s.sortOrder,
+      tables: s.tables.map((t) => {
+        const activeTab = t.tabs[0] ?? null;
+        const status = t.isBlocked
+          ? 'BLOCKED'
+          : activeTab?.status === PosTabStatus.CHECKOUT
+            ? 'CHECKOUT'
+            : activeTab
+              ? 'OCCUPIED'
+              : 'AVAILABLE';
+        return {
+          id: t.id,
+          sectionId: t.sectionId,
+          label: t.label,
+          sortOrder: t.sortOrder,
+          isBlocked: t.isBlocked,
+          status,
+          activeTab: activeTab
+            ? {
+                id: activeTab.id,
+                status: activeTab.status,
+                guestCount: activeTab.guestCount ?? null,
+                label: activeTab.label ?? null,
+              }
+            : null,
+        };
+      }),
+    }));
+  }
+
+  async createSection(storeId: string, body: { name?: string; sortOrder?: number }) {
+    const name = body.name?.trim();
+    if (!name) throw new BadRequestException('Nombre requerido');
+    return this.prisma.posSection.create({
+      data: {
+        storeId,
+        name,
+        ...(body.sortOrder != null ? { sortOrder: Math.round(body.sortOrder) } : {}),
+      },
+    });
+  }
+
+  async updateSection(
+    storeId: string,
+    sectionId: string,
+    body: { name?: string; sortOrder?: number }
+  ) {
+    const section = await this.prisma.posSection.findFirst({
+      where: { id: sectionId, storeId },
+    });
+    if (!section) throw new NotFoundException('Salón no encontrado');
+    return this.prisma.posSection.update({
+      where: { id: sectionId },
+      data: {
+        ...(body.name != null ? { name: body.name.trim() } : {}),
+        ...(body.sortOrder != null ? { sortOrder: Math.round(body.sortOrder) } : {}),
+      },
+    });
+  }
+
+  async createTable(
+    storeId: string,
+    body: { sectionId?: string; label?: string; sortOrder?: number }
+  ) {
+    if (!body.sectionId) throw new BadRequestException('sectionId requerido');
+    const label = body.label?.trim();
+    if (!label) throw new BadRequestException('Nombre de mesa requerido');
+    const section = await this.prisma.posSection.findFirst({
+      where: { id: body.sectionId, storeId },
+    });
+    if (!section) throw new NotFoundException('Salón no encontrado');
+    return this.prisma.posTable.create({
+      data: {
+        storeId,
+        sectionId: section.id,
+        label,
+        ...(body.sortOrder != null ? { sortOrder: Math.round(body.sortOrder) } : {}),
+      },
+    });
+  }
+
+  async updateTable(
+    storeId: string,
+    tableId: string,
+    body: { label?: string; sortOrder?: number; isBlocked?: boolean }
+  ) {
+    const table = await this.prisma.posTable.findFirst({
+      where: { id: tableId, storeId },
+    });
+    if (!table) throw new NotFoundException('Mesa no encontrada');
+    const updated = await this.prisma.posTable.update({
+      where: { id: tableId },
+      data: {
+        ...(body.label != null ? { label: body.label.trim() } : {}),
+        ...(body.sortOrder != null ? { sortOrder: Math.round(body.sortOrder) } : {}),
+        ...(body.isBlocked != null ? { isBlocked: body.isBlocked } : {}),
+      },
+    });
+    this.emitTab(storeId, 'tables_updated', tableId);
+    return updated;
+  }
+
+  // ── Estaciones de preparación ─────────────────────────────────────────────
+
+  async listStations(storeId: string) {
+    return this.prisma.posStation.findMany({
+      where: { storeId },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+  }
+
+  async createStation(
+    storeId: string,
+    body: { name?: string; sortOrder?: number }
+  ) {
+    const name = body.name?.trim();
+    if (!name) throw new BadRequestException('Nombre requerido');
+    return this.prisma.posStation.create({
+      data: {
+        storeId,
+        name,
+        ...(body.sortOrder != null ? { sortOrder: Math.round(body.sortOrder) } : {}),
+      },
+    });
+  }
+
+  async updateStation(
+    storeId: string,
+    stationId: string,
+    body: { name?: string; sortOrder?: number }
+  ) {
+    const station = await this.prisma.posStation.findFirst({
+      where: { id: stationId, storeId },
+    });
+    if (!station) throw new NotFoundException('Estación no encontrada');
+    return this.prisma.posStation.update({
+      where: { id: stationId },
+      data: {
+        ...(body.name != null ? { name: body.name.trim() } : {}),
+        ...(body.sortOrder != null ? { sortOrder: Math.round(body.sortOrder) } : {}),
+      },
+    });
+  }
+
+  // ── Comandas (kitchen tickets) ────────────────────────────────────────────
+
+  private kitchenTicketInclude() {
+    return {
+      items: { orderBy: { createdAt: 'asc' as const } },
+      station: { select: { id: true, name: true } },
+      tab: { select: { id: true, label: true } },
+      openedByMember: { select: { id: true, name: true } },
+    };
+  }
+
+  private serializeKitchenTicket(
+    ticket: Awaited<ReturnType<typeof this.fetchKitchenTicket>>
+  ) {
+    return {
+      id: ticket.id,
+      tabId: ticket.tabId,
+      tabLabel: ticket.tab?.label ?? null,
+      stationId: ticket.stationId ?? null,
+      stationName: ticket.station?.name ?? null,
+      status: ticket.status,
+      openedByName: ticket.openedByMember?.name ?? null,
+      items: ticket.items.map((i) => ({
+        id: i.id,
+        ticketId: i.ticketId,
+        tabLineId: i.tabLineId ?? null,
+        name: i.name,
+        quantity: i.quantity,
+        note: i.note ?? null,
+        status: i.status,
+      })),
+      createdAt: ticket.createdAt.toISOString(),
+      acceptedAt: ticket.acceptedAt?.toISOString() ?? null,
+      readyAt: ticket.readyAt?.toISOString() ?? null,
+      deliveredAt: ticket.deliveredAt?.toISOString() ?? null,
+    };
+  }
+
+  private async fetchKitchenTicket(ticketId: string) {
+    const ticket = await this.prisma.kitchenTicket.findUnique({
+      where: { id: ticketId },
+      include: this.kitchenTicketInclude(),
+    });
+    if (!ticket) throw new NotFoundException('Comanda no encontrada');
+    return ticket;
+  }
+
+  private async fetchTicketItem(ticketId: string, itemId: string) {
+    const item = await this.prisma.kitchenTicketItem.findFirst({
+      where: { id: itemId, ticketId },
+    });
+    if (!item) throw new NotFoundException('Ítem de comanda no encontrado');
+    return item;
+  }
+
+  async sendTab(storeId: string, tabId: string, memberId?: string | null) {
+    const tab = await this.fetchTab(tabId);
+    if (tab.storeId !== storeId) throw new ForbiddenException();
+    if (tab.status !== PosTabStatus.OPEN && tab.status !== PosTabStatus.CHECKOUT) {
+      throw new BadRequestException(
+        'La cuenta debe estar abierta o en checkout para enviar a preparación'
+      );
+    }
+    const unsent = tab.lines.filter((l) => !l.sentAt);
+    if (!unsent.length) {
+      return { tickets: [] };
+    }
+
+    const now = new Date();
+    const groups = new Map<string | null, typeof unsent>();
+    for (const line of unsent) {
+      const stationId = line.item.stationId ?? null;
+      const list = groups.get(stationId);
+      if (list) list.push(line);
+      else groups.set(stationId, [line]);
+    }
+
+    const tickets = await this.prisma.$transaction(async (tx) => {
+      const created = [];
+      for (const [stationId, lines] of groups) {
+        await tx.posTabLine.updateMany({
+          where: { id: { in: lines.map((l) => l.id) } },
+          data: { sentAt: now, stationId },
+        });
+        const ticket = await tx.kitchenTicket.create({
+          data: {
+            storeId,
+            tabId,
+            stationId,
+            openedByMemberId: memberId || null,
+            items: {
+              create: lines.map((l) => {
+                const addonSuffix = (l.addons || [])
+                  .map((a) => a.name)
+                  .join(', ');
+                const name = [
+                  l.item.name,
+                  l.variantName,
+                  addonSuffix ? `+ ${addonSuffix}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
+                return {
+                  tabLineId: l.id,
+                  name,
+                  quantity: l.quantity,
+                  note: l.note,
+                };
+              }),
+            },
+          },
+          include: this.kitchenTicketInclude(),
+        });
+        created.push(ticket);
+      }
+      return created;
+    });
+
+    for (const ticket of tickets) {
+      this.emitKitchen(storeId, {
+        kind: 'kitchen_ticket_created',
+        ticket: this.serializeKitchenTicket(ticket),
+      });
+    }
+    this.emitTab(storeId, 'tab_updated', tabId);
+    return { tickets: tickets.map((t) => this.serializeKitchenTicket(t)) };
+  }
+
+  async listKitchen(
+    storeId: string,
+    stationId?: string,
+    includeDone?: boolean
+  ) {
+    const activeStatuses = [
+      KitchenTicketStatus.PENDING,
+      KitchenTicketStatus.ACCEPTED,
+      KitchenTicketStatus.IN_PREPARATION,
+      KitchenTicketStatus.READY,
+    ];
+    const tickets = await this.prisma.kitchenTicket.findMany({
+      where: {
+        storeId,
+        OR: [
+          { status: { in: activeStatuses } },
+          ...(includeDone
+            ? [
+                {
+                  status: KitchenTicketStatus.DELIVERED,
+                  deliveredAt: { gte: new Date(Date.now() - 24 * 3600 * 1000) },
+                },
+              ]
+            : []),
+        ],
+      },
+      include: this.kitchenTicketInclude(),
+      orderBy: { createdAt: 'asc' },
+    });
+    // Las comandas generales (sin estación) se muestran en todas las vistas
+    // de estación.
+    const filtered = stationId
+      ? tickets.filter(
+          (t) => t.stationId === stationId || t.stationId === null
+        )
+      : tickets;
+    return filtered.map((t) => this.serializeKitchenTicket(t));
+  }
+
+  async acceptTicket(storeId: string, ticketId: string) {
+    const ticket = await this.fetchKitchenTicket(ticketId);
+    if (ticket.storeId !== storeId) throw new ForbiddenException();
+    if (ticket.status !== KitchenTicketStatus.PENDING) {
+      throw new BadRequestException('La comanda ya fue aceptada o está cerrada');
+    }
+    const updated = await this.prisma.kitchenTicket.update({
+      where: { id: ticketId },
+      data: { status: KitchenTicketStatus.ACCEPTED, acceptedAt: new Date() },
+      include: this.kitchenTicketInclude(),
+    });
+    const serialized = this.serializeKitchenTicket(updated);
+    this.emitKitchen(storeId, {
+      kind: 'kitchen_ticket_updated',
+      ticket: serialized,
+    });
+    return serialized;
+  }
+
+  async updateTicketItem(
+    storeId: string,
+    ticketId: string,
+    itemId: string,
+    status: KitchenItemStatus
+  ) {
+    const ticket = await this.fetchKitchenTicket(ticketId);
+    if (ticket.storeId !== storeId) throw new ForbiddenException();
+    if (
+      ticket.status === KitchenTicketStatus.CANCELLED ||
+      ticket.status === KitchenTicketStatus.DELIVERED
+    ) {
+      throw new BadRequestException('La comanda está cerrada');
+    }
+    const item = await this.fetchTicketItem(ticketId, itemId);
+    if (status === KitchenItemStatus.IN_PREPARATION) {
+      if (item.status !== KitchenItemStatus.QUEUED) {
+        throw new BadRequestException('El ítem ya está en preparación o listo');
+      }
+    } else if (status === KitchenItemStatus.READY) {
+      if (item.status !== KitchenItemStatus.IN_PREPARATION) {
+        throw new BadRequestException(
+          'El ítem debe estar en preparación antes de marcarse listo'
+        );
+      }
+    } else {
+      throw new BadRequestException('Estado de ítem no soportado');
+    }
+
+    await this.prisma.kitchenTicketItem.update({
+      where: { id: itemId },
+      data: {
+        status,
+        ...(status === KitchenItemStatus.IN_PREPARATION
+          ? { startedAt: new Date() }
+          : { readyAt: new Date() }),
+      },
+    });
+
+    const fresh = await this.fetchKitchenTicket(ticketId);
+    const active = fresh.items.filter(
+      (i) => i.status !== KitchenItemStatus.CANCELLED
+    );
+    let ticketStatus: KitchenTicketStatus | null = null;
+    let ticketData: Record<string, unknown> = {};
+    if (active.length && active.every((i) => i.status === KitchenItemStatus.READY)) {
+      ticketStatus = KitchenTicketStatus.READY;
+      ticketData = { readyAt: new Date() };
+    } else if (
+      active.some((i) => i.status === KitchenItemStatus.IN_PREPARATION) &&
+      (fresh.status === KitchenTicketStatus.PENDING ||
+        fresh.status === KitchenTicketStatus.ACCEPTED)
+    ) {
+      ticketStatus = KitchenTicketStatus.IN_PREPARATION;
+    }
+    if (ticketStatus) {
+      await this.prisma.kitchenTicket.update({
+        where: { id: ticketId },
+        data: { status: ticketStatus, ...ticketData },
+      });
+    }
+
+    const updated = await this.fetchKitchenTicket(ticketId);
+    const serialized = this.serializeKitchenTicket(updated);
+    this.emitKitchen(storeId, {
+      kind: 'kitchen_ticket_updated',
+      ticket: serialized,
+    });
+    return serialized;
+  }
+
+  async deliverTicketItem(
+    storeId: string,
+    ticketId: string,
+    itemId: string
+  ) {
+    const ticket = await this.fetchKitchenTicket(ticketId);
+    if (ticket.storeId !== storeId) throw new ForbiddenException();
+    if (
+      ticket.status === KitchenTicketStatus.CANCELLED ||
+      ticket.status === KitchenTicketStatus.DELIVERED
+    ) {
+      throw new BadRequestException('La comanda está cerrada');
+    }
+    const item = await this.fetchTicketItem(ticketId, itemId);
+    if (item.status !== KitchenItemStatus.READY) {
+      throw new BadRequestException('El ítem debe estar listo para entregar');
+    }
+    const now = new Date();
+    await this.prisma.kitchenTicketItem.update({
+      where: { id: itemId },
+      data: { status: KitchenItemStatus.DELIVERED, deliveredAt: now },
+    });
+
+    const fresh = await this.fetchKitchenTicket(ticketId);
+    const active = fresh.items.filter(
+      (i) =>
+        i.status !== KitchenItemStatus.CANCELLED &&
+        i.status !== KitchenItemStatus.DELIVERED
+    );
+    if (!active.length) {
+      await this.prisma.kitchenTicket.update({
+        where: { id: ticketId },
+        data: { status: KitchenTicketStatus.DELIVERED, deliveredAt: now },
+      });
+    }
+
+    const updated = await this.fetchKitchenTicket(ticketId);
+    const serialized = this.serializeKitchenTicket(updated);
+    this.emitKitchen(storeId, {
+      kind: 'kitchen_ticket_updated',
+      ticket: serialized,
+    });
+    return serialized;
+  }
+
+  async cancelTicket(
+    storeId: string,
+    ticketId: string,
+    reason?: string
+  ) {
+    const ticket = await this.fetchKitchenTicket(ticketId);
+    if (ticket.storeId !== storeId) throw new ForbiddenException();
+    const trimmed = reason?.trim();
+    if (!trimmed) throw new BadRequestException('Motivo de anulación requerido');
+    if (
+      ticket.status === KitchenTicketStatus.CANCELLED ||
+      ticket.status === KitchenTicketStatus.DELIVERED
+    ) {
+      throw new BadRequestException('La comanda ya está cerrada');
+    }
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.kitchenTicket.update({
+        where: { id: ticketId },
+        data: {
+          status: KitchenTicketStatus.CANCELLED,
+          cancelledAt: now,
+          cancelReason: trimmed,
+        },
+      }),
+      this.prisma.kitchenTicketItem.updateMany({
+        where: {
+          ticketId,
+          status: {
+            in: [
+              KitchenItemStatus.QUEUED,
+              KitchenItemStatus.IN_PREPARATION,
+              KitchenItemStatus.READY,
+            ],
+          },
+        },
+        data: { status: KitchenItemStatus.CANCELLED, cancelledAt: now },
+      }),
+    ]);
+    const updated = await this.fetchKitchenTicket(ticketId);
+    const serialized = this.serializeKitchenTicket(updated);
+    this.emitKitchen(storeId, {
+      kind: 'kitchen_ticket_cancelled',
+      ticket: serialized,
+    });
+    return serialized;
+  }
+
+  private async finalizeTicketsWithoutActiveItems(
+    storeId: string,
+    tabId: string
+  ) {
+    const tickets = await this.prisma.kitchenTicket.findMany({
+      where: {
+        tabId,
+        status: {
+          in: [
+            KitchenTicketStatus.PENDING,
+            KitchenTicketStatus.ACCEPTED,
+            KitchenTicketStatus.IN_PREPARATION,
+            KitchenTicketStatus.READY,
+          ],
+        },
+      },
+      include: { items: true },
+    });
+    const now = new Date();
+    for (const ticket of tickets) {
+      const hasActive = ticket.items.some(
+        (i) =>
+          i.status !== KitchenItemStatus.CANCELLED &&
+          i.status !== KitchenItemStatus.DELIVERED
+      );
+      if (!hasActive) {
+        await this.prisma.kitchenTicket.update({
+          where: { id: ticket.id },
+          data: {
+            status: KitchenTicketStatus.CANCELLED,
+            cancelledAt: now,
+            cancelReason: 'Ítems eliminados de la cuenta',
+          },
+        });
+        this.emitKitchen(storeId, {
+          kind: 'kitchen_ticket_cancelled',
+          ticketId: ticket.id,
+          tabId,
+        });
+      }
+    }
   }
 
   async linkPass(storeId: string, tabId: string, payload: string) {
@@ -1044,6 +1729,38 @@ export class PosService {
         where: { id: tabId },
         data: { status: PosTabStatus.PAID },
       });
+      const now = new Date();
+      await tx.kitchenTicket.updateMany({
+        where: {
+          tabId,
+          status: {
+            in: [
+              KitchenTicketStatus.PENDING,
+              KitchenTicketStatus.ACCEPTED,
+              KitchenTicketStatus.IN_PREPARATION,
+              KitchenTicketStatus.READY,
+            ],
+          },
+        },
+        data: {
+          status: KitchenTicketStatus.CANCELLED,
+          cancelledAt: now,
+          cancelReason: 'Cuenta pagada',
+        },
+      });
+      await tx.kitchenTicketItem.updateMany({
+        where: {
+          ticket: { tabId },
+          status: {
+            in: [
+              KitchenItemStatus.QUEUED,
+              KitchenItemStatus.IN_PREPARATION,
+              KitchenItemStatus.READY,
+            ],
+          },
+        },
+        data: { status: KitchenItemStatus.CANCELLED, cancelledAt: now },
+      });
       return created;
     });
 
@@ -1091,6 +1808,7 @@ export class PosService {
     }
 
     this.emitTab(storeId, 'tab_paid', tabId);
+    this.emitKitchen(storeId, { kind: 'kitchen_updated', tabId });
     return this.getSale(storeId, sale.id);
   }
 

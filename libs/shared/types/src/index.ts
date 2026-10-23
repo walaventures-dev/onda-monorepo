@@ -662,6 +662,20 @@ export type StoreMemberRole = 'ADMIN' | 'CAJA';
 export type StoreMemberStatus = 'PENDING' | 'ACTIVE' | 'REVOKED';
 export type PosItemKind = 'PRODUCT' | 'SERVICE';
 export type PosTabStatus = 'OPEN' | 'CHECKOUT' | 'PAID' | 'VOID';
+export type PosTableStatus = 'AVAILABLE' | 'OCCUPIED' | 'CHECKOUT' | 'BLOCKED';
+export type KitchenTicketStatus =
+  | 'PENDING'
+  | 'ACCEPTED'
+  | 'IN_PREPARATION'
+  | 'READY'
+  | 'DELIVERED'
+  | 'CANCELLED';
+export type KitchenItemStatus =
+  | 'QUEUED'
+  | 'IN_PREPARATION'
+  | 'READY'
+  | 'DELIVERED'
+  | 'CANCELLED';
 export type PosSaleStatus =
   | 'COMPLETED'
   | 'REFUNDED'
@@ -719,6 +733,7 @@ export interface PosItemDto {
   sortOrder: number;
   imageUrl?: string | null;
   externalSku?: string | null;
+  stationId?: string | null;
   variants?: PosItemVariantDto[];
   addons?: PosAddonDto[];
 }
@@ -738,8 +753,63 @@ export interface PosTabLineDto {
   variantId?: string | null;
   variantName?: string | null;
   note?: string | null;
+  stationId?: string | null;
+  sentAt?: string | null;
   addons?: PosTabLineAddonDto[];
   item?: PosItemDto;
+}
+
+export interface PosTableDto {
+  id: string;
+  sectionId: string;
+  label: string;
+  sortOrder: number;
+  isBlocked: boolean;
+  status: PosTableStatus;
+  activeTab?: {
+    id: string;
+    status: PosTabStatus;
+    guestCount?: number | null;
+    label?: string | null;
+  } | null;
+}
+
+export interface PosSectionDto {
+  id: string;
+  name: string;
+  sortOrder: number;
+  tables: PosTableDto[];
+}
+
+export interface PosStationDto {
+  id: string;
+  name: string;
+  sortOrder: number;
+}
+
+export interface KitchenTicketItemDto {
+  id: string;
+  ticketId: string;
+  tabLineId?: string | null;
+  name: string;
+  quantity: number;
+  note?: string | null;
+  status: KitchenItemStatus;
+}
+
+export interface KitchenTicketDto {
+  id: string;
+  tabId: string;
+  tabLabel?: string | null;
+  stationId?: string | null;
+  stationName?: string | null;
+  status: KitchenTicketStatus;
+  openedByName?: string | null;
+  items: KitchenTicketItemDto[];
+  createdAt: string;
+  acceptedAt?: string | null;
+  readyAt?: string | null;
+  deliveredAt?: string | null;
 }
 
 export interface PosTabDto {
@@ -750,6 +820,8 @@ export interface PosTabDto {
   guestName?: string | null;
   userId?: string | null;
   passId?: string | null;
+  tableId?: string | null;
+  guestCount?: number | null;
   openedAt: string;
   checkoutAt?: string | null;
   lines: PosTabLineDto[];

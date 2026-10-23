@@ -30,4 +30,8 @@ export class PosSseService {
   emit(storeId: string, data: unknown) {
     this.bus(storeId).next({ data } as MessageEvent);
   }
+
+  emitKitchen(storeId: string, data: unknown) {
+    this.bus(storeId).next({ data } as MessageEvent);
+  }
 }

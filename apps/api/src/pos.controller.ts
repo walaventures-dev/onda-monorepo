@@ -236,7 +236,7 @@ export class PosController {
   @Post('tabs')
   async createTab(
     @Query('storeId') storeId: string,
-    @Body() body: { label?: string },
+    @Body() body: { label?: string; tableId?: string | null; guestCount?: number | null },
     @Headers('authorization') auth?: string,
     @Query('token') token?: string
   ) {
@@ -247,8 +247,220 @@ export class PosController {
       StoreMemberRole.ADMIN,
       StoreMemberRole.CAJA
     );
-    return this.pos.createTab(storeId, body?.label, ctx.memberId);
+    return this.pos.createTab(storeId, body ?? {}, ctx.memberId);
   }
+
+  @Get('stores/:storeId/sections')
+  async listSections(
+    @Param('storeId') storeId: string,
+    @Headers('authorization') auth?: string,
+    @Query('token') token?: string
+  ) {
+    await this.guardPos(
+      storeId,
+      auth,
+      token,
+      StoreMemberRole.ADMIN,
+      StoreMemberRole.CAJA
+    );
+    return this.pos.listSections(storeId);
+  }
+
+  @Post('stores/:storeId/sections')
+  async createSection(
+    @Param('storeId') storeId: string,
+    @Headers('authorization') auth: string | undefined,
+    @Body() body: { name?: string; sortOrder?: number }
+  ) {
+    await this.guardPos(storeId, auth, undefined, StoreMemberRole.ADMIN);
+    return this.pos.createSection(storeId, body ?? {});
+  }
+
+  @Post('stores/:storeId/sections/:sectionId')
+  async updateSection(
+    @Param('storeId') storeId: string,
+    @Param('sectionId') sectionId: string,
+    @Headers('authorization') auth: string | undefined,
+    @Body() body: { name?: string; sortOrder?: number }
+  ) {
+    await this.guardPos(storeId, auth, undefined, StoreMemberRole.ADMIN);
+    return this.pos.updateSection(storeId, sectionId, body ?? {});
+  }
+
+  @Post('stores/:storeId/tables')
+  async createTable(
+    @Param('storeId') storeId: string,
+    @Headers('authorization') auth: string | undefined,
+    @Body() body: { sectionId?: string; label?: string; sortOrder?: number }
+  ) {
+    await this.guardPos(storeId, auth, undefined, StoreMemberRole.ADMIN);
+    return this.pos.createTable(storeId, body ?? {});
+  }
+
+  @Post('tables/:tableId')
+  async updateTable(
+    @Param('tableId') tableId: string,
+    @Query('storeId') storeId: string,
+    @Headers('authorization') auth: string | undefined,
+    @Body() body: { label?: string; sortOrder?: number; isBlocked?: boolean }
+  ) {
+    await this.guardPos(storeId, auth, undefined, StoreMemberRole.ADMIN);
+    return this.pos.updateTable(storeId, tableId, body ?? {});
+  }
+
+  @Get('stores/:storeId/stations')
+  async listStations(
+    @Param('storeId') storeId: string,
+    @Headers('authorization') auth?: string,
+    @Query('token') token?: string
+  ) {
+    await this.guardPos(
+      storeId,
+      auth,
+      token,
+      StoreMemberRole.ADMIN,
+      StoreMemberRole.CAJA
+    );
+    return this.pos.listStations(storeId);
+  }
+
+  @Post('stores/:storeId/stations')
+  async createStation(
+    @Param('storeId') storeId: string,
+    @Headers('authorization') auth: string | undefined,
+    @Body() body: { name?: string; sortOrder?: number }
+  ) {
+    await this.guardPos(storeId, auth, undefined, StoreMemberRole.ADMIN);
+    return this.pos.createStation(storeId, body ?? {});
+  }
+
+  @Post('stores/:storeId/stations/:stationId')
+  async updateStation(
+    @Param('storeId') storeId: string,
+    @Param('stationId') stationId: string,
+    @Headers('authorization') auth: string | undefined,
+    @Body() body: { name?: string; sortOrder?: number }
+  ) {
+    await this.guardPos(storeId, auth, undefined, StoreMemberRole.ADMIN);
+    return this.pos.updateStation(storeId, stationId, body ?? {});
+  }
+
+  @Post('tabs/:tabId/send')
+  async sendTab(
+    @Param('tabId') tabId: string,
+    @Query('storeId') storeId: string,
+    @Headers('authorization') auth?: string,
+    @Query('token') token?: string
+  ) {
+    const ctx = await this.guardPos(
+      storeId,
+      auth,
+      token,
+      StoreMemberRole.ADMIN,
+      StoreMemberRole.CAJA
+    );
+    return this.pos.sendTab(storeId, tabId, ctx.memberId);
+  }
+
+  @Get('stores/:storeId/kitchen')
+  async listKitchen(
+    @Param('storeId') storeId: string,
+    @Headers('authorization') auth?: string,
+    @Query('token') token?: string,
+    @Query('stationId') stationId?: string,
+    @Query('includeDone') includeDone?: string
+  ) {
+    await this.guardPos(
+      storeId,
+      auth,
+      token,
+      StoreMemberRole.ADMIN,
+      StoreMemberRole.CAJA
+    );
+    return this.pos.listKitchen(
+      storeId,
+      stationId || undefined,
+      includeDone === 'true' || includeDone === '1'
+    );
+  }
+
+  @Post('kitchen/tickets/:ticketId/accept')
+  async acceptTicket(
+    @Param('ticketId') ticketId: string,
+    @Query('storeId') storeId: string,
+    @Headers('authorization') auth?: string,
+    @Query('token') token?: string
+  ) {
+    await this.guardPos(
+      storeId,
+      auth,
+      token,
+      StoreMemberRole.ADMIN,
+      StoreMemberRole.CAJA
+    );
+    return this.pos.acceptTicket(storeId, ticketId);
+  }
+
+  @Post('kitchen/tickets/:ticketId/items/:itemId')
+  async updateTicketItem(
+    @Param('ticketId') ticketId: string,
+    @Param('itemId') itemId: string,
+    @Query('storeId') storeId: string,
+    @Headers('authorization') auth?: string,
+    @Query('token') token?: string,
+    @Body() body?: { status?: string }
+  ) {
+    await this.guardPos(
+      storeId,
+      auth,
+      token,
+      StoreMemberRole.ADMIN,
+      StoreMemberRole.CAJA
+    );
+    return this.pos.updateTicketItem(
+      storeId,
+      ticketId,
+      itemId,
+      body?.status as any
+    );
+  }
+
+  @Post('kitchen/tickets/:ticketId/items/:itemId/deliver')
+  async deliverTicketItem(
+    @Param('ticketId') ticketId: string,
+    @Param('itemId') itemId: string,
+    @Query('storeId') storeId: string,
+    @Headers('authorization') auth?: string,
+    @Query('token') token?: string
+  ) {
+    await this.guardPos(
+      storeId,
+      auth,
+      token,
+      StoreMemberRole.ADMIN,
+      StoreMemberRole.CAJA
+    );
+    return this.pos.deliverTicketItem(storeId, ticketId, itemId);
+  }
+
+  @Post('kitchen/tickets/:ticketId/cancel')
+  async cancelTicket(
+    @Param('ticketId') ticketId: string,
+    @Query('storeId') storeId: string,
+    @Headers('authorization') auth?: string,
+    @Query('token') token?: string,
+    @Body() body?: { reason?: string }
+  ) {
+    await this.guardPos(
+      storeId,
+      auth,
+      token,
+      StoreMemberRole.ADMIN,
+      StoreMemberRole.CAJA
+    );
+    return this.pos.cancelTicket(storeId, ticketId, body?.reason);
+  }
+
 
   @Post('tabs/:tabId/assign')
   async assignTab(
