@@ -617,10 +617,18 @@ export function AppShell({
   const Link = linkComponent || 'a';
   const [navOpen, setNavOpen] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState(false);
+  const [closedClusters, setClosedClusters] = React.useState<Record<string, boolean>>({});
 
   React.useEffect(() => {
     try {
       setCollapsed(localStorage.getItem('onda-sidebar-collapsed') === '1');
+    } catch {
+      /* ignore */
+    }
+    try {
+      setClosedClusters(
+        JSON.parse(localStorage.getItem('onda-sidebar-clusters') || '{}'),
+      );
     } catch {
       /* ignore */
     }
@@ -633,6 +641,14 @@ export function AppShell({
       /* ignore */
     }
   }, [collapsed]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('onda-sidebar-clusters', JSON.stringify(closedClusters));
+    } catch {
+      /* ignore */
+    }
+  }, [closedClusters]);
 
   React.useEffect(() => {
     if (!navOpen) return;
@@ -730,7 +746,12 @@ export function AppShell({
           </div>
         ) : null}
         <nav className="onda-sidebar-nav" aria-label="Principal">
-          {clusters.map((cluster) => (
+          {clusters.map((cluster) => {
+            // Un grupo con la sección activa siempre queda expandido.
+            const isClosed =
+              Boolean(closedClusters[cluster.id]) &&
+              !cluster.items.some((i) => i.active);
+            return (
             <div
               key={cluster.id}
               className={`onda-nav-cluster${
@@ -739,9 +760,25 @@ export function AppShell({
             >
               {cluster.label ? (
                 <>
-                  <p className="onda-nav-cluster-label px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
-                    {cluster.label}
-                  </p>
+                  <button
+                    type="button"
+                    className="onda-nav-cluster-label onda-nav-cluster-toggle px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--onda-muted)]"
+                    aria-expanded={!isClosed}
+                    onClick={() =>
+                      setClosedClusters((v) => ({
+                        ...v,
+                        [cluster.id]: !v[cluster.id],
+                      }))
+                    }
+                  >
+                    <span>{cluster.label}</span>
+                    <span
+                      className="onda-nav-cluster-chevron"
+                      aria-hidden
+                    >
+                      {isClosed ? OndaIcons.chevronRight : OndaIcons.chevronDown}
+                    </span>
+                  </button>
                   <div
                     className="onda-nav-cluster-sep"
                     role="separator"
@@ -758,9 +795,12 @@ export function AppShell({
                   </div>
                 </>
               ) : null}
-              {cluster.items.filter((i) => !i.footer).map(renderLink)}
+              {isClosed
+                ? null
+                : cluster.items.filter((i) => !i.footer).map(renderLink)}
             </div>
-          ))}
+            );
+          })}
         </nav>
         <div className="onda-sidebar-footer">
           {footerNav.length > 0 ? (

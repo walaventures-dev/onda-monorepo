@@ -509,6 +509,32 @@ button.onda-gradient:focus-visible:not(:disabled) {
   gap: 0.25rem;
 }
 
+.onda-nav-cluster-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  width: 100%;
+  border: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.onda-nav-cluster-toggle:hover {
+  color: var(--onda-ink);
+}
+
+.onda-nav-cluster-chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
 .onda-nav-cluster-sep {
   display: none;
   align-items: center;
