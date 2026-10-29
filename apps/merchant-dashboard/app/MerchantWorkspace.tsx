@@ -60,6 +60,8 @@ import {
   Area,
   Line,
 } from "recharts";
+import { format, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
 import { ChartBarIcon as ChartBar } from "@phosphor-icons/react/dist/csr/ChartBar";
 import { ChartLineUpIcon as ChartLineUp } from "@phosphor-icons/react/dist/csr/ChartLineUp";
 import { CurrencyCircleDollarIcon as CurrencyCircleDollar } from "@phosphor-icons/react/dist/csr/CurrencyCircleDollar";
@@ -74,9 +76,11 @@ import { PromoDetail } from "./PromoDetail";
 import { CreatePromo } from "./CreatePromo";
 import { CartillaEditor } from "./CartillaEditor";
 import { CartillaCalendar } from "./CartillaCalendar";
+import { PromoCalendar } from "./PromoCalendar";
 import { CustomerDetail } from "./CustomerDetail";
 import { CompareStores, type CompareResponse } from "./CompareStores";
 import { PendingRequestsPanel, CajaOpenButton } from "./PendingRequestsPanel";
+import { NewEventModal } from "./NewEventModal";
 import { ReferralsPanel } from "./ReferralsPanel";
 import { FeedbackWorkspace } from "./FeedbackWorkspace";
 import { CampaignsHome } from "./CampaignsHome";
@@ -118,7 +122,7 @@ type CustomerSegment =
 // Oculto temporalmente: poner en true para reactivar el módulo.
 const COMPARATIVA_ENABLED = false;
 const REGISTER_STORE_ENABLED = false;
-const EVENTOS_ENABLED = false;
+const EVENTOS_ENABLED = true;
 
 const SECTIONS: Tab[] = [
   "completar",
@@ -278,7 +282,6 @@ function promoInsightBadge(promo: any, canjes: number) {
 
 function PromoCatalogCard({
   promo,
-  view,
   stats,
   highlight,
   showTypeTag,
@@ -289,7 +292,6 @@ function PromoCatalogCard({
   onDelete,
 }: {
   promo: any;
-  view: "grid" | "list";
   stats: any;
   highlight: boolean;
   showTypeTag: boolean;
@@ -330,23 +332,6 @@ function PromoCatalogCard({
         ? poolOpt?.label
         : null;
 
-  const statsInline = (
-    <dl className="flex shrink-0 items-center gap-3 sm:gap-4">
-      <div className="flex items-baseline gap-1">
-        <dt className="text-[11px] text-[var(--onda-muted)]">Canjes</dt>
-        <dd className="tabular-nums text-sm font-semibold text-[var(--onda-ink)]">
-          {canjes}
-        </dd>
-      </div>
-      <div className="flex items-baseline gap-1">
-        <dt className="text-[11px] text-[var(--onda-muted)]">Elegibles</dt>
-        <dd className="tabular-nums text-sm font-semibold text-[var(--onda-ink)]">
-          {elegibles}
-        </dd>
-      </div>
-    </dl>
-  );
-
   const actions = (
     <div className="flex shrink-0 items-center">
       <PromoIconBtn
@@ -360,58 +345,6 @@ function PromoCatalogCard({
       </PromoIconBtn>
     </div>
   );
-
-  if (view === "list") {
-    return (
-      <article
-        role="button"
-        tabIndex={0}
-        onClick={onOpen}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onOpen();
-          }
-        }}
-        className={`onda-card flex cursor-pointer items-center gap-3 px-3 py-2 transition hover:shadow-[0_1px_2px_rgba(26,27,46,0.08)] ${highlightCls} ${inactiveCls}`}
-      >
-        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-[var(--onda-bg)]">
-          {promo.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={promo.imageUrl}
-              alt={promo.title}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center onda-gradient text-[10px] font-bold text-white">
-              O
-            </div>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-            {showTypeTag ? (
-              <span className="shrink-0 text-[var(--onda-violet)]" aria-hidden>
-                {promoTypeIcon(promo.type)}
-              </span>
-            ) : null}
-            <h3 className="truncate font-display text-sm font-semibold">
-              {promo.title}
-            </h3>
-            {insightTag}
-            {contextLine ? (
-              <span className="text-[11px] text-[var(--onda-muted)]">
-                · {contextLine}
-              </span>
-            ) : null}
-          </div>
-        </div>
-        {statsInline}
-        {actions}
-      </article>
-    );
-  }
 
   return (
     <article
@@ -748,6 +681,21 @@ function formatCartillaRange(startsAt?: string | null, endsAt?: string | null) {
   return `${fmt(startsAt)} – ${fmt(endsAt)}`;
 }
 
+function formatEventDate(iso?: string | null): string {
+  if (!iso) return "";
+  try {
+    return format(parseISO(iso), "d MMM yyyy", { locale: es }).replace(".", "");
+  } catch {
+    return String(iso).slice(0, 10);
+  }
+}
+
+const EVENT_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Borrador",
+  ACTIVE: "Activo",
+  FINISHED: "Finalizado",
+};
+
 function parseRoute(pathname: string): {
   tab: Tab;
   promoId: string | null;
@@ -838,12 +786,6 @@ export function MerchantWorkspace() {
     if (pathname === "/promos/cartilla/calendario") {
       router.replace("/promos");
     }
-    if (
-      !EVENTOS_ENABLED &&
-      (pathname === "/eventos" || pathname.startsWith("/eventos/"))
-    ) {
-      router.replace("/resumen");
-    }
     if (pathname === "/operacion" || pathname.startsWith("/operacion/")) {
       router.replace("/caja");
     }
@@ -865,7 +807,10 @@ export function MerchantWorkspace() {
   const [justCreatedPromoId, setJustCreatedPromoId] = useState<string | null>(
     null,
   );
-  const [promoView, setPromoView] = useState<"grid" | "list">("grid");
+  const [promoView, setPromoView] = useState<"calendar" | "grid">("grid");
+  const [cartillaView, setCartillaView] = useState<"calendar" | "grid">(
+    "calendar",
+  );
   const [showPulse, setShowPulse] = useState(true);
   const [promoStatusFilter, setPromoStatusFilter] = useState<
     "all" | "active" | "inactive"
@@ -886,6 +831,8 @@ export function MerchantWorkspace() {
   const [storesReady, setStoresReady] = useState(false);
   const [storeCurrency, setStoreCurrency] = useState("COP");
   const [storeOndaValue, setStoreOndaValue] = useState("");
+  const [storeShareCartillaProgress, setStoreShareCartillaProgress] =
+    useState(false);
   const [storeLogoUrl, setStoreLogoUrl] = useState("");
   const [storePrimaryColor, setStorePrimaryColor] = useState(
     DEFAULT_BRAND_PRIMARY,
@@ -922,6 +869,7 @@ export function MerchantWorkspace() {
   useEffect(() => {
     setStoreCurrency(store?.currency || "COP");
     setStoreOndaValue(store?.ondaValue != null ? String(store.ondaValue) : "");
+    setStoreShareCartillaProgress(Boolean(store?.shareCartillaProgress));
     setStoreLogoUrl(store?.passDesign?.logoUrl || "");
     if (store?.passDesign?.backgroundColor) {
       setStorePrimaryColor(store.passDesign.backgroundColor);
@@ -933,6 +881,7 @@ export function MerchantWorkspace() {
     store?.id,
     store?.currency,
     store?.ondaValue,
+    store?.shareCartillaProgress,
     store?.passDesign?.logoUrl,
     store?.passDesign?.backgroundColor,
     store?.passDesign?.labelColor,
@@ -962,6 +911,26 @@ export function MerchantWorkspace() {
   const customers = overview?.customers || [];
   const memberRole = useStoreRole(stores, storeId);
   const admin = isAdmin(memberRole);
+
+  const storeEvents = useMemo(() => {
+    if (!storeId) return [];
+    const memberEventIds = new Set(
+      (memberships || [])
+        .map((m: any) => m.event?.id)
+        .filter(Boolean),
+    );
+    return events.filter(
+      (ev: any) => ev.ownerStoreId === storeId || memberEventIds.has(ev.id),
+    );
+  }, [events, memberships, storeId]);
+
+  const ownEvents = useMemo(
+    () =>
+      storeId
+        ? events.filter((ev: any) => ev.ownerStoreId === storeId)
+        : [],
+    [events, storeId],
+  );
 
   const navClusters = useMemo((): NavCluster[] => {
     if (showSetupNav) {
@@ -1074,25 +1043,21 @@ export function MerchantWorkspace() {
             icon: OndaIcons.accumulate,
             active: pathname.startsWith("/pos/vender"),
           },
+        ]
+      : [];
+
+    const posGestionItems = posEnabled
+      ? [
           ...(admin
             ? [
                 {
                   href: "/pos/inventario",
                   label: "Inventario",
                   icon: OndaIcons.product,
-                  active: pathname.startsWith("/pos/inventario"),
-                },
-                {
-                  href: "/pos/mesas",
-                  label: "Mesas y salones",
-                  icon: OndaIcons.near,
-                  active: pathname.startsWith("/pos/mesas"),
-                },
-                {
-                  href: "/pos/estaciones",
-                  label: "Estaciones",
-                  icon: OndaIcons.flame,
-                  active: pathname.startsWith("/pos/estaciones"),
+                  active:
+                    pathname.startsWith("/pos/inventario") ||
+                    pathname.startsWith("/pos/mesas") ||
+                    pathname.startsWith("/pos/estaciones"),
                 },
               ]
             : []),
@@ -1129,7 +1094,18 @@ export function MerchantWorkspace() {
       clusters.push({ id: "loyalty", label: "Lealtad", items: loyaltyItems });
     }
     if (posItems.length) {
-      clusters.push({ id: "pos", label: "POS", items: posItems });
+      clusters.push({
+        id: "pos",
+        label: "POS",
+        items: posItems,
+        ...(posGestionItems.length
+          ? {
+              groups: [
+                { id: "gestion", label: "Gestión", items: posGestionItems },
+              ],
+            }
+          : {}),
+      });
     }
     if (footerItems.length) {
       clusters.push({ id: "footer", items: footerItems });
@@ -1210,6 +1186,75 @@ export function MerchantWorkspace() {
       ),
     );
   }, [storeId]);
+
+  const loadEvents = useCallback(async () => {
+    try {
+      const list = await api<any[]>("/events");
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const loadMemberships = useCallback(async () => {
+    if (!storeId) return;
+    try {
+      const list = await api<any[]>(`/memberships?storeId=${storeId}`);
+      setMemberships(Array.isArray(list) ? list : []);
+    } catch {
+      setMemberships([]);
+    }
+  }, [storeId]);
+
+  const [eventModal, setEventModal] = useState<{
+    open: boolean;
+    editing: any | null;
+  }>({ open: false, editing: null });
+
+  const refreshEventData = useCallback(() => {
+    void loadEvents().then(setEvents);
+    void loadCartillas();
+    void loadMemberships();
+  }, [loadEvents, loadCartillas, loadMemberships]);
+
+  async function updateEventStatus(ev: any, status: string) {
+    try {
+      await api(`/events/${ev.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      toast.success(
+        status === "ACTIVE" ? "Evento activado" : "Evento finalizado",
+      );
+      refreshEventData();
+    } catch (e) {
+      toast.danger("No se pudo actualizar el evento", {
+        description: e instanceof Error ? e.message : "Intenta de nuevo",
+      });
+    }
+  }
+
+  async function createCartillaForEvent(ev: any) {
+    try {
+      const cartilla = await api<{ id: string }>("/cartillas", {
+        method: "POST",
+        body: JSON.stringify({
+          storeId,
+          name: `Cartilla — ${ev.name}`,
+          eventId: ev.id,
+          startsAt: ev.startDate,
+          endsAt: ev.endDate,
+        }),
+      });
+      toast.success("Cartilla creada");
+      await loadCartillas();
+      router.push(`/promos/cartilla/${cartilla.id}`);
+    } catch (e) {
+      toast.danger("No se pudo crear la cartilla", {
+        description: e instanceof Error ? e.message : "Intenta de nuevo",
+      });
+    }
+  }
 
   const loadCustomerDetail = useCallback(async () => {
     if (!storeId || !selectedCustomerPassId) return;
@@ -1313,11 +1358,11 @@ export function MerchantWorkspace() {
         setStores([]);
         setStoresReady(true);
       });
-    api<any[]>("/events")
+    loadEvents()
       .then((list) => {
-        if (cancelled || !Array.isArray(list)) return;
+        if (cancelled) return;
         setEvents(list);
-        if (list[0]) setEventId(list[0].id);
+        if (list[0]) setEventId((prev) => prev || list[0].id);
       })
       .catch(() => {
         /* el panel puede vivir sin el listado de eventos */
@@ -1431,9 +1476,17 @@ export function MerchantWorkspace() {
     loadOverview();
     loadPromos();
     loadCartillas();
-    api<any[]>(`/memberships?storeId=${storeId}`).then(setMemberships);
+    void loadMemberships();
     api(`/billing/store/${storeId}`).then(setBilling);
-  }, [storeId, mode, eventId, loadOverview, loadPromos, loadCartillas]);
+  }, [
+    storeId,
+    mode,
+    eventId,
+    loadOverview,
+    loadPromos,
+    loadCartillas,
+    loadMemberships,
+  ]);
 
   useEffect(() => {
     if (!selectedPromoId || selectedPromoId === "nueva") {
@@ -1675,6 +1728,7 @@ export function MerchantWorkspace() {
         body: JSON.stringify({
           currency: storeCurrency || "COP",
           ondaValue: storeOndaValue === "" ? null : Number(storeOndaValue),
+          shareCartillaProgress: storeShareCartillaProgress,
         }),
       });
       setStores((prev) =>
@@ -1999,6 +2053,14 @@ export function MerchantWorkspace() {
                 Compartir
               </button>
             ) : null}
+            <button
+              type="button"
+              onClick={() => setEventModal({ open: true, editing: null })}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-1.5 text-xs font-medium text-[var(--onda-ink)] hover:bg-[var(--onda-bg)]"
+            >
+              {OndaIcons.ticket}
+              Nuevo evento
+            </button>
             <CajaOpenButton storeId={storeId} />
             {REGISTER_STORE_ENABLED ? (
               <Link
@@ -2027,7 +2089,7 @@ export function MerchantWorkspace() {
                     onChange={setEventId}
                     placeholder="Evento"
                     compact
-                    options={events.map((ev) => ({
+                    options={storeEvents.map((ev: any) => ({
                       id: ev.id,
                       label: ev.name,
                     }))}
@@ -2953,31 +3015,77 @@ export function MerchantWorkspace() {
               <KpiCard label="Canjes en rango" value={kpis?.redenciones ?? 0} />
             </div>
 
-            <CartillaCalendar
-              storeId={storeId}
-              embedded
-              onOpen={(id) => router.push(`/promos/cartilla/${id}`)}
-            />
-
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <h2 className="font-display text-xl font-semibold">
                   Cartillas
                 </h2>
                 <p className="text-sm text-[var(--onda-muted)]">
-                  La cartilla base está vigente salvo que una ocasional cubra
-                  hoy. Solo una a la vez; al cambiar se reinicia el ciclo.
+                  La base y las demás cartillas activas pueden coexistir — por
+                  temporada, por servicio o por productos. Tus clientes eligen
+                  cuál cargan en su pase.
+                </p>
+                <p className="mt-1 text-xs text-[var(--onda-muted)]">
+                  {(() => {
+                    const limit = store?.planType === "PRO" ? 4 : 2;
+                    const live = (cartillasData?.cartillas || []).filter(
+                      (c: any) =>
+                        !c.isDefault &&
+                        (cartillasData?.activeIds || []).includes(c.id),
+                    ).length;
+                    return `Plan ${store?.planType === "PRO" ? "Pro" : "Basic"}: ${live}/${limit} cartillas activas (la base no cuenta).`;
+                  })()}
                 </p>
               </div>
-              <GradientButton
-                type="button"
-                onClick={() => router.push("/promos/cartilla/nueva")}
-              >
-                {OndaIcons.plus}
-                Nueva cartilla
-              </GradientButton>
+              <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+                <SegmentedControl
+                  aria-label="Vista de cartillas"
+                  value={cartillaView}
+                  onChange={setCartillaView}
+                  options={[
+                    {
+                      id: "calendar",
+                      label: "Calendario",
+                      icon: OndaIcons.calendar,
+                    },
+                    {
+                      id: "grid",
+                      label: "Grilla",
+                      icon: (
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 16 16"
+                          fill="currentColor"
+                          aria-hidden
+                        >
+                          <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.2" />
+                          <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.2" />
+                          <rect x="1.5" y="9" width="5.5" height="5.5" rx="1.2" />
+                          <rect x="9" y="9" width="5.5" height="5.5" rx="1.2" />
+                        </svg>
+                      ),
+                    },
+                  ]}
+                />
+                <GradientButton
+                  type="button"
+                  onClick={() => router.push("/promos/cartilla/nueva")}
+                >
+                  {OndaIcons.plus}
+                  Nueva cartilla
+                </GradientButton>
+              </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            {cartillaView === "calendar" ? (
+              <CartillaCalendar
+                storeId={storeId}
+                embedded
+                onOpen={(id) => router.push(`/promos/cartilla/${id}`)}
+              />
+            ) : null}
+            {cartillaView === "grid" ? (
+              <div className="grid gap-3 sm:grid-cols-2">
               {(cartillasData?.cartillas || []).map((c: any) => (
                 <article
                   key={c.id}
@@ -3004,7 +3112,7 @@ export function MerchantWorkspace() {
                   </div>
                   <p className="mt-2 text-sm text-[var(--onda-muted)]">
                     {c.isDefault
-                      ? "Vigente cuando ninguna ocasional cubre hoy"
+                      ? "Cartilla base, siempre disponible"
                       : formatCartillaRange(c.startsAt, c.endsAt)}
                   </p>
                   <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
@@ -3059,7 +3167,8 @@ export function MerchantWorkspace() {
                   </dl>
                 </article>
               ))}
-            </div>
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -3080,64 +3189,32 @@ export function MerchantWorkspace() {
                     ...PROMO_POOL_OPTIONS,
                   ]}
                 />
-                <div
-                  className="inline-flex rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] p-0.5"
-                  role="group"
+                <SegmentedControl
                   aria-label="Vista de promociones"
-                >
-                  <button
-                    type="button"
-                    title="Grilla"
-                    aria-label="Vista grilla"
-                    aria-pressed={promoView === "grid"}
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition ${
-                      promoView === "grid"
-                        ? "bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]"
-                        : "text-[var(--onda-muted)] hover:text-[var(--onda-ink)]"
-                    }`}
-                    onClick={() => setPromoView("grid")}
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 16 16"
-                      fill="currentColor"
-                      aria-hidden
-                    >
-                      <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.2" />
-                      <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.2" />
-                      <rect x="1.5" y="9" width="5.5" height="5.5" rx="1.2" />
-                      <rect x="9" y="9" width="5.5" height="5.5" rx="1.2" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    title="Lista"
-                    aria-label="Vista lista"
-                    aria-pressed={promoView === "list"}
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition ${
-                      promoView === "list"
-                        ? "bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]"
-                        : "text-[var(--onda-muted)] hover:text-[var(--onda-ink)]"
-                    }`}
-                    onClick={() => setPromoView("list")}
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 16 16"
-                      fill="currentColor"
-                      aria-hidden
-                    >
-                      <rect x="1.5" y="2" width="3" height="3" rx="0.8" />
-                      <rect x="6.5" y="2.5" width="8" height="2" rx="1" />
-                      <rect x="1.5" y="6.5" width="3" height="3" rx="0.8" />
-                      <rect x="6.5" y="7" width="8" height="2" rx="1" />
-                      <rect x="1.5" y="11" width="3" height="3" rx="0.8" />
-                      <rect x="6.5" y="11.5" width="8" height="2" rx="1" />
-                    </svg>
-                  </button>
-                </div>
+                  value={promoView}
+                  onChange={setPromoView}
+                  options={[
+                    { id: "calendar", label: "Calendario", icon: OndaIcons.calendar },
+                    {
+                      id: "grid",
+                      label: "Grilla",
+                      icon: (
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 16 16"
+                          fill="currentColor"
+                          aria-hidden
+                        >
+                          <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.2" />
+                          <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.2" />
+                          <rect x="1.5" y="9" width="5.5" height="5.5" rx="1.2" />
+                          <rect x="9" y="9" width="5.5" height="5.5" rx="1.2" />
+                        </svg>
+                      ),
+                    },
+                  ]}
+                />
                 <GradientButton
                   type="button"
                   onClick={() => router.push("/promos/nueva")}
@@ -3154,56 +3231,148 @@ export function MerchantWorkspace() {
               </p>
             ) : null}
 
-            <div
-              className={
-                promoView === "grid"
-                  ? "grid justify-start gap-2 grid-cols-2 sm:[grid-template-columns:repeat(auto-fill,10.5rem)] lg:[grid-template-columns:repeat(auto-fill,15.25rem)]"
-                  : "flex flex-col gap-1.5"
-              }
-            >
-              {promos.map((p) => (
-                <PromoCatalogCard
-                  key={p.id}
-                  promo={p}
-                  view={promoView}
-                  stats={promoStatsMap.get(p.id)}
-                  highlight={p.id === justCreatedPromoId}
-                  showTypeTag={filters.promoTypes.length !== 1}
-                  showStatusTag={promoStatusFilter === "all"}
-                  showPoolTag={promoPoolFilter === "ALL"}
-                  onOpen={() => openPromoDetail(p.id)}
-                  onToggle={() => void togglePromo(p.id, p.isActive)}
-                  onDelete={() => void deletePromo(p.id)}
-                />
-              ))}
-              {!promos.length ? (
-                <p className="col-span-full text-sm text-[var(--onda-muted)]">
-                  No hay promociones con estos filtros. Crea una con “+ Nueva
-                  promo”.
-                </p>
-              ) : null}
-            </div>
+            {promoView === "calendar" ? (
+              <PromoCalendar promos={promos} onOpenPromo={openPromoDetail} />
+            ) : (
+              <div className="grid justify-start gap-2 grid-cols-2 sm:[grid-template-columns:repeat(auto-fill,10.5rem)] lg:[grid-template-columns:repeat(auto-fill,15.25rem)]">
+                {promos.map((p) => (
+                  <PromoCatalogCard
+                    key={p.id}
+                    promo={p}
+                    stats={promoStatsMap.get(p.id)}
+                    highlight={p.id === justCreatedPromoId}
+                    showTypeTag={filters.promoTypes.length !== 1}
+                    showStatusTag={promoStatusFilter === "all"}
+                    showPoolTag={promoPoolFilter === "ALL"}
+                    onOpen={() => openPromoDetail(p.id)}
+                    onToggle={() => void togglePromo(p.id, p.isActive)}
+                    onDelete={() => void deletePromo(p.id)}
+                  />
+                ))}
+                {!promos.length ? (
+                  <p className="col-span-full text-sm text-[var(--onda-muted)]">
+                    No hay promociones con estos filtros. Crea una con “+ Nueva
+                    promo”.
+                  </p>
+                ) : null}
+              </div>
+            )}
           </div>
         )}
 
         {EVENTOS_ENABLED && tab === "eventos" && (
-          <div className="space-y-3">
-            {memberships.map((m) => (
-              <div
-                key={m.id}
-                className="onda-card flex min-w-0 flex-wrap items-center justify-between gap-3 p-4"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{m.event?.name}</p>
-                  <p className="truncate text-sm text-[var(--onda-muted)]">
-                    {m.customPromo || "Sin promo"}
+          <div className="space-y-6">
+            <section className="space-y-3">
+              <h3 className="font-display text-lg font-semibold">Mis eventos</h3>
+              {ownEvents.map((ev: any) => {
+                const cartilla = (cartillasData?.cartillas || []).find(
+                  (c: any) => c.event?.id === ev.id || c.eventId === ev.id,
+                );
+                return (
+                  <div
+                    key={ev.id}
+                    className="onda-card flex min-w-0 flex-wrap items-center justify-between gap-3 p-4"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{ev.name}</p>
+                      <p className="truncate text-sm text-[var(--onda-muted)]">
+                        {formatEventDate(ev.startDate)} –{" "}
+                        {formatEventDate(ev.endDate)}
+                        {ev.address ? ` · ${ev.address}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-[var(--onda-violet-soft)] px-3 py-1 text-xs text-[var(--onda-violet)]">
+                        {EVENT_STATUS_LABEL[ev.status] || ev.status || "Borrador"}
+                      </span>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] px-3 py-1 text-xs font-medium text-[var(--onda-ink)] hover:bg-[var(--onda-bg)]"
+                        onClick={() =>
+                          setEventModal({ open: true, editing: ev })
+                        }
+                      >
+                        {OndaIcons.edit} Editar
+                      </button>
+                      {ev.status === "DRAFT" ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] px-3 py-1 text-xs font-medium text-[var(--onda-ink)] hover:bg-[var(--onda-bg)]"
+                          onClick={() => void updateEventStatus(ev, "ACTIVE")}
+                        >
+                          {OndaIcons.check} Activar
+                        </button>
+                      ) : null}
+                      {ev.status === "ACTIVE" ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] px-3 py-1 text-xs font-medium text-[var(--onda-ink)] hover:bg-[var(--onda-bg)]"
+                          onClick={() =>
+                            void updateEventStatus(ev, "FINISHED")
+                          }
+                        >
+                          Finalizar
+                        </button>
+                      ) : null}
+                      {cartilla ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] px-3 py-1 text-xs font-medium text-[var(--onda-ink)] hover:bg-[var(--onda-bg)]"
+                          onClick={() =>
+                            router.push(`/promos/cartilla/${cartilla.id}`)
+                          }
+                        >
+                          {OndaIcons.ticket} Ver cartilla
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] px-3 py-1 text-xs font-medium text-[var(--onda-ink)] hover:bg-[var(--onda-bg)]"
+                          onClick={() => void createCartillaForEvent(ev)}
+                        >
+                          {OndaIcons.plus} Crear cartilla
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {!ownEvents.length ? (
+                <div className="onda-card p-4">
+                  <p className="text-sm text-[var(--onda-muted)]">
+                    Aún no tienes eventos. Usa “Nuevo evento” para registrar tu
+                    primera feria.
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full bg-[var(--onda-violet-soft)] px-3 py-1 text-xs text-[var(--onda-violet)]">
-                  {m.status}
-                </span>
-              </div>
-            ))}
+              ) : null}
+            </section>
+
+            <section className="space-y-3">
+              <h3 className="font-display text-lg font-semibold">
+                Invitaciones
+              </h3>
+              {memberships.map((m) => (
+                <div
+                  key={m.id}
+                  className="onda-card flex min-w-0 flex-wrap items-center justify-between gap-3 p-4"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{m.event?.name}</p>
+                    <p className="truncate text-sm text-[var(--onda-muted)]">
+                      {m.customPromo || "Sin promo"}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-[var(--onda-violet-soft)] px-3 py-1 text-xs text-[var(--onda-violet)]">
+                    {m.status}
+                  </span>
+                </div>
+              ))}
+              {!memberships.length ? (
+                <p className="text-sm text-[var(--onda-muted)]">
+                  No tienes invitaciones a eventos por ahora.
+                </p>
+              ) : null}
+            </section>
           </div>
         )}
 
@@ -3263,6 +3432,8 @@ export function MerchantWorkspace() {
             setStoreCurrency={setStoreCurrency}
             storeOndaValue={storeOndaValue}
             setStoreOndaValue={setStoreOndaValue}
+            storeShareCartillaProgress={storeShareCartillaProgress}
+            setStoreShareCartillaProgress={setStoreShareCartillaProgress}
             savingStoreLogo={savingStoreLogo}
             savingStoreEconomics={savingStoreEconomics}
             onSaveLogo={(e) => void saveStoreLogo(e)}
@@ -3281,6 +3452,13 @@ export function MerchantWorkspace() {
         storeId={storeId}
         ondaValue={store?.ondaValue}
         onStoreActivity={refreshAfterStoreActivity}
+      />
+      <NewEventModal
+        storeId={storeId}
+        open={eventModal.open}
+        initialEvent={eventModal.editing}
+        onClose={() => setEventModal({ open: false, editing: null })}
+        onCreated={() => refreshEventData()}
       />
       {dialogs}
     </div>

@@ -642,6 +642,7 @@ model Promotion {
   intent           PromotionIntent      @default(INTERMEDIA)
   duplicatedFromId String?
   expiryMode       PromotionExpiryMode  @default(QUANTITY)
+  startsAt         DateTime?
   endsAt           DateTime?
   maxRedemptions   Int?
   store            Store?               @relation(fields: [storeId], references: [id])

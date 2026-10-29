@@ -26,6 +26,15 @@ import {
 
 type Step = "loading" | "otp" | "name" | "home" | "pendingWait";
 
+type ChoosableCartilla = {
+  id: string;
+  name: string;
+  isDefault?: boolean;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  maxStamps?: number;
+};
+
 function isInvalidSessionError(message: string) {
   const m = message.toLowerCase();
   return (
@@ -65,6 +74,7 @@ export default function StoreEntryPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [switchingCartilla, setSwitchingCartilla] = useState(false);
   const [pendingRequest, setPendingRequest] =
     useState<PendingRequestDto | null>(null);
 
@@ -313,6 +323,43 @@ export default function StoreEntryPage() {
     }
   }
 
+  async function switchCartilla(cartilla: ChoosableCartilla) {
+    if (!session || !pass || switchingCartilla) return;
+    const currentId = pass.cartillaId ?? pass.cartilla?.id;
+    if (cartilla.id === currentId) return;
+    if (!store?.shareCartillaProgress) {
+      const ok = window.confirm(
+        "Al cambiar de cartilla tu progreso reinicia de cero. ¿Continuar?",
+      );
+      if (!ok) return;
+    }
+    setSwitchingCartilla(true);
+    setError("");
+    try {
+      await api(`/passes/${pass.id}/cartilla`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ cartillaId: cartilla.id }),
+      });
+      const refreshed = await api<any>(`/passes/${pass.id}`, {
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      setPass((prev: any) =>
+        prev
+          ? {
+              ...refreshed,
+              appleUrl: refreshed.appleUrl || prev.appleUrl,
+              googleUrl: refreshed.googleUrl || prev.googleUrl,
+            }
+          : refreshed,
+      );
+    } catch (err: any) {
+      setError(err.message || "No se pudo cambiar la cartilla");
+    } finally {
+      setSwitchingCartilla(false);
+    }
+  }
+
   async function onPendingResolved(
     status: "CONFIRMED" | "REJECTED" | "EXPIRED",
   ) {
@@ -328,6 +375,12 @@ export default function StoreEntryPage() {
     if (pass?.promotions?.length) return pass.promotions;
     return [];
   }, [pass]);
+  const choosableCartillas = useMemo<ChoosableCartilla[]>(
+    () =>
+      Array.isArray(pass?.choosableCartillas) ? pass.choosableCartillas : [],
+    [pass],
+  );
+  const currentCartillaId = pass?.cartillaId ?? pass?.cartilla?.id;
   const milestoneStamps = useMemo(
     () => promotions.map((p: any) => p.pointsRequired as number),
     [promotions],
@@ -525,6 +578,52 @@ export default function StoreEntryPage() {
               memberName={session?.user.name}
               compact={false}
             />
+            {choosableCartillas.length > 1 ? (
+              <div className="mt-4">
+                <p className="onda-pwa-label">Elige tu cartilla</p>
+                <div className="mt-2 flex flex-col gap-2">
+                  {choosableCartillas.map((c) => {
+                    const isCurrent = c.id === currentCartillaId;
+                    const deadline = c.endsAt
+                      ? `hasta ${formatCartillaDay(c.endsAt, "short")}`
+                      : "sin vencimiento";
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        disabled={switchingCartilla}
+                        onClick={() => void switchCartilla(c)}
+                        className={`flex items-center justify-between gap-3 rounded-2xl border p-3 text-left transition-colors ${
+                          isCurrent
+                            ? "border-[var(--onda-violet)] bg-[var(--onda-violet-soft)]"
+                            : "border-[var(--onda-border)] bg-white active:scale-[0.99]"
+                        } ${switchingCartilla ? "opacity-60" : ""}`}
+                      >
+                        <span className="min-w-0">
+                          <span
+                            className={`block truncate text-sm font-semibold ${
+                              isCurrent
+                                ? "text-[var(--onda-violet)]"
+                                : "text-[var(--onda-ink)]"
+                            }`}
+                          >
+                            {c.name}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-[var(--onda-muted)]">
+                            {deadline}
+                          </span>
+                        </span>
+                        {isCurrent ? (
+                          <span className="shrink-0 text-xs font-semibold text-[var(--onda-violet)]">
+                            Actual
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
             {pass?.cartilla?.endsAt ? (
               <p className="mt-3 text-center text-sm text-[var(--onda-muted)]">
                 Tienes hasta el {formatCartillaDay(pass.cartilla.endsAt)} para

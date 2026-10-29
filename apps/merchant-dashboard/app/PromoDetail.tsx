@@ -15,6 +15,7 @@ import {
   OndaIcons,
   SegmentedControl,
   SkeletonDetail,
+  OndaDatePicker,
 } from "@onda/shared-ui";
 import {
   displayPhone,
@@ -87,6 +88,8 @@ export function PromoDetail({
     getQuantity: "1",
     productName: "",
     maxRedemptions: "",
+    startsAt: "",
+    endsAt: "",
   });
 
   useEffect(() => {
@@ -101,6 +104,8 @@ export function PromoDetail({
       productName: promo.productName || "",
       maxRedemptions:
         promo.maxRedemptions != null ? String(promo.maxRedemptions) : "",
+      startsAt: isoDateInput(promo.startsAt),
+      endsAt: isoDateInput(promo.endsAt),
     });
     setEditing(false);
     setError("");
@@ -154,6 +159,10 @@ export function PromoDetail({
 
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
+    if (!locked && form.startsAt && form.endsAt && form.endsAt < form.startsAt) {
+      setError("La fecha final debe ser posterior a la fecha inicial.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -172,6 +181,8 @@ export function PromoDetail({
           value: form.value ? Number(form.value) : null,
           buyQuantity: form.buyQuantity ? Number(form.buyQuantity) : null,
           getQuantity: form.getQuantity ? Number(form.getQuantity) : null,
+          startsAt: form.startsAt || null,
+          endsAt: form.endsAt || null,
         };
       }
       await api(`/promotions/${promo.id}`, {
@@ -232,6 +243,18 @@ export function PromoDetail({
             {" · "}
             Cupo: {detail?.redemptionCount ?? 0}/{promo.maxRedemptions ?? "∞"}{" "}
             redenciones
+            {" · "}
+            {promo.startsAt || promo.endsAt
+              ? `Vigencia: ${
+                  promo.startsAt
+                    ? new Date(promo.startsAt).toLocaleDateString("es-CO")
+                    : "sin inicio"
+                } – ${
+                  promo.endsAt
+                    ? new Date(promo.endsAt).toLocaleDateString("es-CO")
+                    : "sin fin"
+                }`
+              : `Creada el ${new Date(promo.createdAt).toLocaleDateString("es-CO")} · sin vigencia definida`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -471,6 +494,27 @@ export function PromoDetail({
                     }
                   />
                 </label>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-[var(--onda-ink)]">
+                    Vigencia (opcional)
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <OndaDatePicker
+                      label="Inicia"
+                      aria-label="Fecha de inicio de vigencia"
+                      value={form.startsAt}
+                      onChange={(startsAt) =>
+                        setForm((f) => ({ ...f, startsAt }))
+                      }
+                    />
+                    <OndaDatePicker
+                      label="Termina"
+                      aria-label="Fecha de fin de vigencia"
+                      value={form.endsAt}
+                      onChange={(endsAt) => setForm((f) => ({ ...f, endsAt }))}
+                    />
+                  </div>
+                </div>
               </>
             )}
             {error ? (

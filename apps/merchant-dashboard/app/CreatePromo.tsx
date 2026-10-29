@@ -12,6 +12,7 @@ import {
   toast,
   type PromoTypeKey,
   OndaIcons,
+  OndaDatePicker,
 } from "@onda/shared-ui";
 import { formatMoneyInput, parseMoneyInput } from "@onda/shared-utils";
 
@@ -26,6 +27,8 @@ type PromoFormState = {
   productName: string;
   pool: "BIENVENIDA" | "RETENCION";
   maxRedemptions: string;
+  startsAt: string;
+  endsAt: string;
 };
 
 type DialogTone = "default" | "success" | "warning" | "danger" | "accent";
@@ -41,6 +44,8 @@ const EMPTY_FORM: PromoFormState = {
   productName: "",
   pool: "RETENCION",
   maxRedemptions: "",
+  startsAt: "",
+  endsAt: "",
 };
 
 function formFromSource(source: any): PromoFormState {
@@ -56,6 +61,8 @@ function formFromSource(source: any): PromoFormState {
     pool: source.pool === "BIENVENIDA" ? "BIENVENIDA" : "RETENCION",
     maxRedemptions:
       source.maxRedemptions != null ? String(source.maxRedemptions) : "",
+    startsAt: source.startsAt ? String(source.startsAt).slice(0, 10) : "",
+    endsAt: source.endsAt ? String(source.endsAt).slice(0, 10) : "",
   };
 }
 
@@ -173,6 +180,14 @@ export function CreatePromo({
       });
       return;
     }
+    if (form.startsAt && form.endsAt && form.endsAt < form.startsAt) {
+      await alert({
+        title: "Vigencia inválida",
+        message: "La fecha final debe ser posterior a la fecha inicial.",
+        tone: "warning",
+      });
+      return;
+    }
     setBusy(true);
     const body: Record<string, unknown> = {
       storeId,
@@ -186,6 +201,8 @@ export function CreatePromo({
     if (form.maxRedemptions) {
       body.maxRedemptions = Number(form.maxRedemptions);
     }
+    if (form.startsAt) body.startsAt = form.startsAt;
+    if (form.endsAt) body.endsAt = form.endsAt;
     if (duplicateFrom?.id) body.duplicatedFromId = duplicateFrom.id;
     if (form.type === "PERCENT_OFF" || form.type === "AMOUNT_OFF") {
       body.value = Number(form.value) || 0;
@@ -441,6 +458,31 @@ export function CreatePromo({
                 placeholder="Sin límite si lo dejas vacío"
               />
             </label>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-[var(--onda-ink)]">
+                Vigencia (opcional)
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <OndaDatePicker
+                  label="Inicia"
+                  aria-label="Fecha de inicio de vigencia"
+                  value={form.startsAt}
+                  onChange={(startsAt) =>
+                    setForm((f) => ({ ...f, startsAt }))
+                  }
+                />
+                <OndaDatePicker
+                  label="Termina"
+                  aria-label="Fecha de fin de vigencia"
+                  value={form.endsAt}
+                  onChange={(endsAt) => setForm((f) => ({ ...f, endsAt }))}
+                />
+              </div>
+              <p className="text-xs text-[var(--onda-muted)]">
+                Si la dejas vacía, la promo aparece en el calendario desde el
+                día en que la creas y no vence.
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-4">

@@ -4,13 +4,10 @@ import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { AnalyticsFiltersValue } from '@onda/shared-ui';
 import type { StoreMemberRole } from '@onda/shared-types';
-import { PosInventory } from './PosInventory';
-import { PosSalesList } from './PosSalesList';
 import { PosSaleDetail } from './PosSaleDetail';
 import { PosSummaryPanel } from './PosSummaryPanel';
 import { PosVenderPanel } from './PosVenderPanel';
-import { PosTablesConfig } from './PosTablesConfig';
-import { PosStationsConfig } from './PosStationsConfig';
+import { PosGestionTabs } from './PosGestionTabs';
 import { MerchantCajaPanel } from './MerchantCajaPanel';
 import { isAdmin } from '../lib/useStoreRole';
 
@@ -64,23 +61,13 @@ export function PosWorkspace({
     return <PosSaleDetail storeId={storeId} saleId={saleId} />;
   }
 
-  if (pathname.startsWith('/pos/inventario')) {
-    if (!admin) return <p className="text-sm text-[var(--onda-muted)]">Sin acceso</p>;
-    return <PosInventory storeId={storeId} />;
-  }
-
-  if (pathname.startsWith('/pos/mesas')) {
-    if (!admin) return <p className="text-sm text-[var(--onda-muted)]">Sin acceso</p>;
-    return <PosTablesConfig storeId={storeId} />;
-  }
-
-  if (pathname.startsWith('/pos/estaciones')) {
-    if (!admin) return <p className="text-sm text-[var(--onda-muted)]">Sin acceso</p>;
-    return <PosStationsConfig storeId={storeId} />;
-  }
-
-  if (pathname.startsWith('/pos/ventas')) {
-    return <PosSalesList storeId={storeId} readOnly={!admin} />;
+  if (
+    pathname.startsWith('/pos/inventario') ||
+    pathname.startsWith('/pos/mesas') ||
+    pathname.startsWith('/pos/estaciones') ||
+    pathname.startsWith('/pos/ventas')
+  ) {
+    return <PosGestionTabs storeId={storeId} memberRole={memberRole} />;
   }
 
   if (pathname.startsWith('/pos/vender')) {

@@ -134,7 +134,12 @@ export class RedeemService {
     );
 
     const need = assignment.pointsRequired;
-    const isFinalReward = need === store.maxStamps;
+    const passCartilla = currentPass.cartillaId
+      ? await this.prisma.cartilla.findUnique({
+          where: { id: currentPass.cartillaId },
+        })
+      : null;
+    const isFinalReward = need === (passCartilla?.maxStamps ?? store.maxStamps);
 
     const { confirmedIds } = await this.prisma.$transaction(async (tx) => {
       const pendingWhere = {

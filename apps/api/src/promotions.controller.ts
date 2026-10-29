@@ -533,10 +533,18 @@ export class PromotionsController {
       intent?: PromotionIntent;
       duplicatedFromId?: string;
       expiryMode?: PromotionExpiryMode;
+      startsAt?: string;
       endsAt?: string;
       maxRedemptions?: number;
     },
   ) {
+    if (body.startsAt && body.endsAt) {
+      if (new Date(body.endsAt) < new Date(body.startsAt)) {
+        throw new BadRequestException(
+          "La fecha final debe ser posterior a la inicial",
+        );
+      }
+    }
     if (body.eventId && !body.storeId) {
       if (body.expiryMode === "TIME" && !body.endsAt) {
         throw new BadRequestException("Indica hasta cuándo estará disponible");
@@ -602,10 +610,12 @@ export class PromotionsController {
         intent: intent || "INTERMEDIA",
         duplicatedFromId: body.duplicatedFromId,
         expiryMode: body.eventId ? body.expiryMode || "TIME" : "QUANTITY",
-        endsAt:
-          body.eventId && body.expiryMode === "TIME" && body.endsAt
-            ? new Date(body.endsAt)
-            : null,
+        startsAt: body.startsAt ? new Date(body.startsAt) : null,
+        endsAt: body.endsAt
+          ? body.eventId && body.expiryMode !== "TIME"
+            ? null
+            : new Date(body.endsAt)
+          : null,
         maxRedemptions:
           body.maxRedemptions != null ? Number(body.maxRedemptions) : null,
       },
@@ -630,8 +640,17 @@ export class PromotionsController {
       pool: PromotionPool;
       intent: PromotionIntent;
       maxRedemptions: number | null;
+      startsAt: string | null;
+      endsAt: string | null;
     }>,
   ) {
+    if (body.startsAt && body.endsAt) {
+      if (new Date(body.endsAt) < new Date(body.startsAt)) {
+        throw new BadRequestException(
+          "La fecha final debe ser posterior a la inicial",
+        );
+      }
+    }
     const existing = await this.prisma.promotion.findUniqueOrThrow({
       where: { id },
     });
@@ -708,6 +727,17 @@ export class PromotionsController {
               maxRedemptions:
                 body.maxRedemptions != null
                   ? Number(body.maxRedemptions)
+                  : null,
+            }
+          : {}),
+        ...("startsAt" in body
+          ? { startsAt: body.startsAt ? new Date(body.startsAt) : null }
+          : {}),
+        ...("endsAt" in body
+          ? {
+              endsAt:
+                body.endsAt && !(existing.eventId && existing.expiryMode !== "TIME")
+                  ? new Date(body.endsAt)
                   : null,
             }
           : {}),

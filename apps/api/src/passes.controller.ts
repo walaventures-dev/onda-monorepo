@@ -1,4 +1,4 @@
-import { Inject, Body, Controller, Get, Headers, Param, Post, Query, UnauthorizedException } from '@nestjs/common';
+import { Inject, Body, Controller, ForbiddenException, Get, Headers, Param, Post, Query, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { CustomerAuthService } from './customer-auth.service';
@@ -46,12 +46,16 @@ export class PassesController {
     const raw = await this.prisma.pass.findUniqueOrThrow({
       where: { id },
     });
-    let activeId = raw.cartillaId;
     if (raw.storeId) {
-      const synced = await this.cartillas.syncPassCartilla(id);
-      activeId = synced.active?.id ?? raw.cartillaId;
+      await this.cartillas.syncPassCartilla(id);
+    }
+    const passRow = await this.prisma.pass.findUniqueOrThrow({
+      where: { id },
+    });
+    const passCartillaId = passRow.cartillaId;
+    if (raw.storeId) {
       const hasAssignments = await this.prisma.passPromoAssignment.count({
-        where: { passId: id, cartillaId: activeId || undefined },
+        where: { passId: id, cartillaId: passCartillaId || undefined },
       });
       if (!hasAssignments) {
         await this.cartillas.assignPassPromos(id);
@@ -66,7 +70,7 @@ export class PassesController {
         event: { include: { passDesign: true, promotions: true } },
         cartilla: { include: { passDesign: true } },
         promoAssignments: {
-          where: activeId ? { cartillaId: activeId } : undefined,
+          where: passCartillaId ? { cartillaId: passCartillaId } : undefined,
           include: { promotion: true },
         },
         transactions: { orderBy: { createdAt: 'desc' }, take: 20 },
@@ -108,6 +112,16 @@ export class PassesController {
 
     const withClaimed = await this.withClaimedThisCycle(pass);
     const walletLinks = pass.walletRef ? this.wallet.linksFor(pass.walletRef) : null;
+    const choosableCartillas = pass.storeId
+      ? (await this.cartillas.resolveLiveCartillas(pass.storeId)).map((c) => ({
+          id: c.id,
+          name: c.name,
+          isDefault: c.isDefault,
+          startsAt: c.startsAt,
+          endsAt: c.endsAt,
+          maxStamps: c.maxStamps,
+        }))
+      : [];
     return {
       ...withClaimed,
       promotions,
@@ -117,6 +131,7 @@ export class PassesController {
       appleUrl: walletLinks?.appleUrl ?? null,
       googleUrl: walletLinks?.googleUrl ?? null,
       maxStamps: pass.cartilla?.maxStamps ?? pass.store?.maxStamps ?? 12,
+      choosableCartillas,
       cartilla: pass.cartilla
         ? {
             id: pass.cartilla.id,
@@ -183,6 +198,23 @@ export class PassesController {
     return issued;
   }
 
+  @Post(':id/cartilla')
+  async switchCartilla(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader: string,
+    @Body() body: { cartillaId: string }
+  ) {
+    const user = await this.auth.requireSession(bearerToken(authHeader));
+    const existing = await this.prisma.pass.findUniqueOrThrow({
+      where: { id },
+    });
+    if (existing.userId !== user.id) {
+      throw new ForbiddenException('Este pase no es tuyo');
+    }
+    await this.cartillas.switchPassCartilla(id, body.cartillaId);
+    return this.hydratePass(id);
+  }
+
   @Post('store/:storeId/claim')
   async claimStorePass(
     @Param('storeId') storeId: string,
@@ -194,12 +226,12 @@ export class PassesController {
       where: { userId: user.id, storeId },
     });
     if (!pass) {
-      const active = await this.cartillas.resolveActiveCartilla(storeId);
+      const base = await this.cartillas.ensureDefaultCartilla(storeId);
       pass = await this.prisma.pass.create({
         data: {
           userId: user.id,
           storeId,
-          cartillaId: active.id,
+          cartillaId: base.id,
           serialNumber: randomSerial(),
           points: 0,
         },

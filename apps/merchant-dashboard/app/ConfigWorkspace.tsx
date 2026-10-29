@@ -268,6 +268,8 @@ export function ConfigWorkspace({
   setStoreCurrency,
   storeOndaValue,
   setStoreOndaValue,
+  storeShareCartillaProgress,
+  setStoreShareCartillaProgress,
   savingStoreLogo,
   savingStoreEconomics,
   onSaveLogo,
@@ -288,6 +290,8 @@ export function ConfigWorkspace({
   setStoreCurrency: (v: string) => void;
   storeOndaValue: string;
   setStoreOndaValue: (v: string) => void;
+  storeShareCartillaProgress: boolean;
+  setStoreShareCartillaProgress: (v: boolean) => void;
   savingStoreLogo: boolean;
   savingStoreEconomics: boolean;
   onSaveLogo: (e: FormEvent) => void;
@@ -367,9 +371,7 @@ export function ConfigWorkspace({
     lng: store?.lng ?? undefined,
   };
 
-  const navGroups = NAV_GROUPS.filter(
-    (group) => group.id !== 'pos' || posEnabled,
-  ).map((group) => ({
+  const navGroups = NAV_GROUPS.map((group) => ({
     ...group,
     // Temporal: ocultar Equipo del menú de config
     items: group.items.filter((item) => item.id !== 'equipo'),
@@ -559,6 +561,23 @@ export function ConfigWorkspace({
                 precio de la onda). Si lo dejas vacío, en caja pedirás el monto; las ondas son
                 opcionales (1 por defecto).
               </p>
+              <label className="flex items-start gap-2 text-sm text-[var(--onda-muted)]">
+                <input
+                  type="checkbox"
+                  checked={storeShareCartillaProgress}
+                  onChange={(e) => setStoreShareCartillaProgress(e.target.checked)}
+                  className="accent-[var(--onda-violet)] mt-0.5"
+                />
+                <span>
+                  <span className="block font-medium text-[var(--onda-ink)]">
+                    Las cartillas se ceden progreso entre sí
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-snug">
+                    Si está activo, cuando un cliente cambia de cartilla conserva
+                    sus ondas; si no, reinicia de cero.
+                  </span>
+                </span>
+              </label>
               <GradientButton type="submit" disabled={savingStoreEconomics || !storeId}>
                 {OndaIcons.save}
                 {savingStoreEconomics ? 'Guardando…' : 'Guardar'}

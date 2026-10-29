@@ -152,6 +152,7 @@ function MerchantBusinessSetup() {
 
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
+  const [operatesAtFairs, setOperatesAtFairs] = useState(false);
   const [googlePlaceId, setGooglePlaceId] = useState<string | undefined>();
   const [lat, setLat] = useState<number | undefined>();
   const [lng, setLng] = useState<number | undefined>();
@@ -704,15 +705,42 @@ function MerchantBusinessSetup() {
                         </div>
                       </Field>
                       {category !== StoreCategory.BRAND ? (
-                        <PlacesAddressField
-                          value={address}
-                          onChange={(next) => {
-                            setAddress(next.address);
-                            setGooglePlaceId(next.googlePlaceId);
-                            setLat(next.lat);
-                            setLng(next.lng);
-                          }}
-                        />
+                        <div className="flex flex-col gap-3">
+                          <label className="flex items-center gap-2 text-sm text-[var(--onda-muted)]">
+                            <input
+                              type="checkbox"
+                              checked={operatesAtFairs}
+                              onChange={(e) => {
+                                setOperatesAtFairs(e.target.checked);
+                                if (e.target.checked) {
+                                  setAddress('');
+                                  setGooglePlaceId(undefined);
+                                  setLat(undefined);
+                                  setLng(undefined);
+                                }
+                              }}
+                              className="accent-[var(--onda-violet)]"
+                            />
+                            No tengo local fijo — opero en ferias y eventos
+                          </label>
+                          {!operatesAtFairs ? (
+                            <PlacesAddressField
+                              label="Dirección (opcional)"
+                              value={address}
+                              onChange={(next) => {
+                                setAddress(next.address);
+                                setGooglePlaceId(next.googlePlaceId);
+                                setLat(next.lat);
+                                setLng(next.lng);
+                              }}
+                            />
+                          ) : (
+                            <p className="text-xs text-[var(--onda-muted)]">
+                              Podrás registrar la dirección de cada feria o
+                              evento cuando lo crees desde tu panel.
+                            </p>
+                          )}
+                        </div>
                       ) : null}
                       <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-3">
                         <Field label="Tipo de negocio">

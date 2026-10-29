@@ -304,6 +304,7 @@ button.onda-gradient:focus-visible:not(:disabled) {
   width: 260px;
   min-width: 260px;
   height: 100vh;
+  height: 100dvh;
   padding: 1.25rem 0.85rem;
   background: var(--onda-card);
   border-right: 1px solid var(--onda-border);
@@ -460,39 +461,43 @@ button.onda-gradient:focus-visible:not(:disabled) {
 }
 
 @media (min-width: 768px) {
-  .onda-sidebar.is-collapsed .onda-nav-link:hover .onda-nav-label,
-  .onda-sidebar.is-collapsed .onda-nav-link:focus-visible .onda-nav-label,
-  .onda-sidebar.is-collapsed .onda-sidebar-collapse:hover .onda-nav-label,
-  .onda-sidebar.is-collapsed .onda-sidebar-collapse:focus-visible .onda-nav-label {
-    left: calc(100% + 0.55rem);
-    top: 50%;
-    width: max-content;
-    height: auto;
-    max-width: 14rem;
-    margin: 0;
-    padding: 0.4rem 0.7rem;
-    overflow: visible;
-    clip: auto;
-    border-radius: 0.55rem;
-    background: var(--onda-ink);
-    color: #fff;
-    font-size: 0.75rem;
-    font-weight: 500;
-    letter-spacing: -0.01em;
-    line-height: 1.2;
-    box-shadow: 0 6px 18px rgba(26, 27, 46, 0.18);
-    opacity: 1;
-    z-index: 60;
-    transform: translateY(-50%);
-  }
-
   .onda-sidebar.is-collapsed {
     overflow: visible;
   }
 
+  /* El rail colapsado sigue pudiendo hacer scroll interno; si se pone
+     overflow visible, el sidebar crece más allá del viewport y el logo
+     y el footer se salen de la pantalla. */
   .onda-sidebar.is-collapsed .onda-sidebar-nav {
-    overflow: visible;
+    overflow-x: visible;
+    overflow-y: auto;
+    min-height: 0;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
   }
+
+  .onda-sidebar.is-collapsed .onda-sidebar-nav::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Tooltip del rail colapsado (se renderiza en document.body por portal,
+   así no lo clippea el overflow del nav) */
+.onda-nav-tooltip {
+  position: fixed;
+  z-index: 80;
+  transform: translateY(-50%);
+  padding: 0.4rem 0.7rem;
+  border-radius: 0.55rem;
+  background: var(--onda-ink);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(26, 27, 46, 0.18);
 }
 
 .onda-sidebar-nav {
@@ -500,7 +505,9 @@ button.onda-gradient:focus-visible:not(:disabled) {
   flex-direction: column;
   gap: 0.25rem;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .onda-nav-cluster {
@@ -568,6 +575,46 @@ button.onda-gradient:focus-visible:not(:disabled) {
 
 .onda-nav-cluster.is-pos > .onda-nav-cluster-label {
   color: var(--onda-primary);
+}
+
+.onda-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-left: 0.55rem;
+  padding-left: 0.55rem;
+  border-left: 1px solid var(--onda-border);
+}
+
+.onda-nav-group-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.45rem 0.55rem 0.1rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--onda-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.onda-nav-group-label:hover {
+  color: var(--onda-ink);
+}
+
+.onda-sidebar.is-collapsed .onda-nav-group {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: none;
+}
+
+.onda-sidebar.is-collapsed .onda-nav-group-label {
+  display: none;
 }
 
 .onda-sidebar.is-collapsed .onda-nav-cluster + .onda-nav-cluster {

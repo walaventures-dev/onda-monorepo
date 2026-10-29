@@ -118,6 +118,12 @@ export function CartillaEditor({
     logoUrl: "",
   }));
   const [busy, setBusy] = useState(false);
+  const [linkedEvent, setLinkedEvent] = useState<{
+    id: string;
+    name: string;
+    startDate?: string;
+    endDate?: string;
+  } | null>(null);
 
   const storeLogoUrl = store?.passDesign?.logoUrl || "";
 
@@ -177,6 +183,7 @@ export function CartillaEditor({
       setStartsAt(c.startsAt ? String(c.startsAt).slice(0, 10) : "");
       setEndsAt(c.endsAt ? String(c.endsAt).slice(0, 10) : "");
       if (c.passDesign) setDesign(c.passDesign);
+      setLinkedEvent(c.event ?? null);
       setSlots(
         (c.items || []).map((i: any) => ({
           promotionId: i.promotionId,
@@ -421,6 +428,19 @@ export function CartillaEditor({
           </p>
         ) : null}
 
+        {linkedEvent ? (
+          <p className="flex items-center gap-2 rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] px-4 py-3 text-sm text-[var(--onda-ink)]">
+            {OndaIcons.ticket}
+            Vinculada al evento <strong>{linkedEvent.name}</strong>
+            {linkedEvent.startDate && linkedEvent.endDate
+              ? ` (${String(linkedEvent.startDate).slice(0, 10)} – ${String(
+                  linkedEvent.endDate,
+                ).slice(0, 10)})`
+              : null}
+            . Se activa sola durante las fechas del evento.
+          </p>
+        ) : null}
+
         <form onSubmit={onSave} className="onda-card space-y-4 p-5">
           <fieldset className="space-y-4">
             <input
@@ -434,26 +454,28 @@ export function CartillaEditor({
               <div className="space-y-2">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <OndaDatePicker
-                    label="Inicio"
+                    label="Inicio (opcional)"
                     value={startsAt}
                     onChange={setStartsAt}
                   />
                   <OndaDatePicker
-                    label="Fin"
+                    label="Fin (opcional)"
                     value={endsAt}
                     onChange={setEndsAt}
                   />
                 </div>
                 <p className="text-xs text-[var(--onda-muted)]">
-                  En esas fechas reemplaza a la cartilla base. Hasta el día de
-                  fin se puede acumular y redimir. No puede cruzarse con otra
-                  ocasional.
+                  Úsalas para cartillas por temporada o con fecha límite. Si las
+                  dejas vacías, la activas manualmente y queda siempre
+                  disponible (p. ej. una cartilla por servicio o por línea de
+                  productos). Tus clientes eligen cuál cargan, y puede
+                  cruzarse con otras cartillas.
                 </p>
               </div>
             ) : (
               <p className="text-xs text-[var(--onda-muted)]">
-                Plantilla base: sin fecha límite. Está vigente salvo que una
-                ocasional cubra el día de hoy.
+                Plantilla base: sin fecha límite. Siempre disponible para tus
+                clientes.
               </p>
             )}
 

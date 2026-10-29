@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@heroui/react';
 import { OndaIcons } from './icons';
 import { ONDA_BRAND, OndaLogo } from './brand';
@@ -555,10 +556,18 @@ export type NavItem = {
   footer?: boolean;
 };
 
+export type NavGroup = {
+  id: string;
+  label: string;
+  items: NavItem[];
+};
+
 export type NavCluster = {
   id: string;
   label?: string;
   items: NavItem[];
+  /** Sub-grupos colapsables dentro del cluster (ej. «Gestión» dentro de POS). */
+  groups?: NavGroup[];
 };
 
 function MenuIcon({ open }: { open: boolean }) {
@@ -680,6 +689,24 @@ export function AppShell({
   const closeNav = () => setNavOpen(false);
   const toggleCollapsed = () => setCollapsed((v) => !v);
 
+  // Tooltip del rail colapsado: va por portal con position fixed porque el
+  // nav tiene overflow-y auto (scroll interno) y clippearia cualquier label
+  // posicionado con CSS dentro del contenedor.
+  const [tip, setTip] = React.useState<{
+    x: number;
+    y: number;
+    label: string;
+  } | null>(null);
+  const showTip = (
+    e: React.MouseEvent<HTMLElement> | React.FocusEvent<HTMLElement>,
+    label: string,
+  ) => {
+    if (!collapsed) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    setTip({ x: r.right + 9, y: r.top + r.height / 2, label });
+  };
+  const hideTip = () => setTip(null);
+
   const clusters: NavCluster[] =
     navClusters ??
     (nav ? [{ id: 'main', items: nav.filter((item) => !item.footer) }] : []);
@@ -695,6 +722,10 @@ export function AppShell({
       className={`onda-nav-link${item.active ? ' is-active' : ''}`}
       onClick={closeNav}
       aria-label={collapsed ? item.label : undefined}
+      onMouseEnter={(e: React.MouseEvent<HTMLAnchorElement>) => showTip(e, item.label)}
+      onMouseLeave={hideTip}
+      onFocus={(e: React.FocusEvent<HTMLAnchorElement>) => showTip(e, item.label)}
+      onBlur={hideTip}
     >
       <span className="onda-nav-icon" aria-hidden>
         {item.icon || OndaIcons.all}
@@ -748,9 +779,11 @@ export function AppShell({
         <nav className="onda-sidebar-nav" aria-label="Principal">
           {clusters.map((cluster) => {
             // Un grupo con la sección activa siempre queda expandido.
+            const clusterActive =
+              cluster.items.some((i) => i.active) ||
+              (cluster.groups ?? []).some((g) => g.items.some((i) => i.active));
             const isClosed =
-              Boolean(closedClusters[cluster.id]) &&
-              !cluster.items.some((i) => i.active);
+              Boolean(closedClusters[cluster.id]) && !clusterActive;
             return (
             <div
               key={cluster.id}
@@ -795,9 +828,47 @@ export function AppShell({
                   </div>
                 </>
               ) : null}
-              {isClosed
-                ? null
-                : cluster.items.filter((i) => !i.footer).map(renderLink)}
+              {isClosed ? null : (
+                <>
+                  {cluster.items.filter((i) => !i.footer).map(renderLink)}
+                  {(cluster.groups ?? []).map((group) => {
+                    const groupActive = group.items.some((i) => i.active);
+                    const groupKey = `${cluster.id}:${group.id}`;
+                    const groupClosed =
+                      Boolean(closedClusters[groupKey]) && !groupActive;
+                    return (
+                      <div key={group.id} className="onda-nav-group">
+                        <button
+                          type="button"
+                          className="onda-nav-group-label onda-nav-cluster-toggle"
+                          aria-expanded={!groupClosed}
+                          onClick={() =>
+                            setClosedClusters((v) => ({
+                              ...v,
+                              [groupKey]: !v[groupKey],
+                            }))
+                          }
+                        >
+                          <span>{group.label}</span>
+                          <span
+                            className="onda-nav-cluster-chevron"
+                            aria-hidden
+                          >
+                            {groupClosed
+                              ? OndaIcons.chevronRight
+                              : OndaIcons.chevronDown}
+                          </span>
+                        </button>
+                        {groupClosed
+                          ? null
+                          : group.items
+                              .filter((i) => !i.footer)
+                              .map(renderLink)}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
             </div>
             );
           })}
@@ -815,6 +886,10 @@ export function AppShell({
             aria-pressed={collapsed}
             title={collapsed ? 'Expandir' : 'Colapsar'}
             onClick={toggleCollapsed}
+            onMouseEnter={(e) => showTip(e, collapsed ? 'Expandir' : 'Colapsar')}
+            onMouseLeave={hideTip}
+            onFocus={(e) => showTip(e, collapsed ? 'Expandir' : 'Colapsar')}
+            onBlur={hideTip}
           >
             <span className="onda-nav-icon" aria-hidden>
               {collapsed ? OndaIcons.chevronRight : OndaIcons.chevronLeft}
@@ -829,6 +904,10 @@ export function AppShell({
               className="onda-sidebar-collapse"
               onClick={onLogout}
               title="Cerrar sesión"
+              onMouseEnter={(e) => showTip(e, 'Cerrar sesión')}
+              onMouseLeave={hideTip}
+              onFocus={(e) => showTip(e, 'Cerrar sesión')}
+              onBlur={hideTip}
             >
               <span className="onda-nav-icon" aria-hidden>
                 {OndaIcons.logout}
@@ -866,6 +945,18 @@ export function AppShell({
         </header>
         <main className="onda-content">{children}</main>
       </div>
+      {collapsed && tip
+        ? createPortal(
+            <div
+              className="onda-nav-tooltip"
+              style={{ left: tip.x, top: tip.y }}
+              role="tooltip"
+            >
+              {tip.label}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

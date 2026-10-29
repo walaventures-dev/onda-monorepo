@@ -45,6 +45,7 @@ export class CartillasController {
       startsAt?: string | null;
       endsAt?: string | null;
       maxStamps?: number;
+      eventId?: string | null;
       items?: Array<{ promotionId: string; pointsRequired: number }>;
     }
   ) {
@@ -60,6 +61,7 @@ export class CartillasController {
       startsAt?: string | null;
       endsAt?: string | null;
       maxStamps?: number;
+      eventId?: string | null;
       items?: Array<{ promotionId: string; pointsRequired: number }>;
     }
   ) {

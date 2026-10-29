@@ -41,10 +41,6 @@ function assertCycle(n: number): CartillaCycle {
   return n as CartillaCycle;
 }
 
-function rangesOverlap(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
-  return aStart <= bEnd && bStart <= aEnd;
-}
-
 function parseOptionalDay(raw?: string | null): Date | null {
   if (!raw) return null;
   return parseCartillaDay(raw);
@@ -52,6 +48,7 @@ function parseOptionalDay(raw?: string | null): Date | null {
 
 const CARTILLA_INCLUDE = {
   passDesign: true,
+  event: true,
   items: {
     include: { promotion: true },
     orderBy: { pointsRequired: "asc" as const },
@@ -69,6 +66,19 @@ export function assignmentCap(maxRedemptions: number | null | undefined) {
 
 type Db = Prisma.TransactionClient | PrismaService;
 
+/**
+ * Máximo de cartillas ocasionales vivas a la vez por plan.
+ * La cartilla base no cuenta para el límite.
+ */
+export const LIVE_CARTILLA_LIMITS: Record<string, number> = {
+  BASIC: 2,
+  PRO: 4,
+};
+
+export function liveCartillaLimitForPlan(planType: string): number {
+  return LIVE_CARTILLA_LIMITS[planType] ?? 2;
+}
+
 @Injectable()
 export class CartillaService {
   private readonly logger = new Logger(CartillaService.name);
@@ -77,6 +87,27 @@ export class CartillaService {
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(WalletService) private wallet: WalletService,
   ) {}
+
+  /**
+   * Número de cartillas ocasionales vivas del negocio. Lanza 400 si activar
+   * otra superaría el límite del plan (la base no cuenta).
+   */
+  private async assertWithinLiveLimit(storeId: string, excludeId?: string) {
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: storeId },
+    });
+    const limit = liveCartillaLimitForPlan(store.planType);
+    const live = await this.resolveLiveCartillas(storeId);
+    const count = live.filter(
+      (c) => !c.isDefault && c.id !== excludeId,
+    ).length;
+    if (count >= limit) {
+      const plan = store.planType === "PRO" ? "Pro" : "Basic";
+      throw new BadRequestException(
+        `Tu plan ${plan} permite hasta ${limit} cartillas activas a la vez. Finaliza una cartilla vigente o sube de plan.`,
+      );
+    }
+  }
 
   async ensureDefaultCartilla(storeId: string, db: Db = this.prisma) {
     const existing = await db.cartilla.findFirst({
@@ -261,6 +292,48 @@ export class CartillaService {
     }
   }
 
+  /**
+   * Una cartilla está "viva" (elegible por los clientes) si es la base, o si
+   * es ocasional sin ventana y ACTIVE, o si su ventana no ha vencido (incluye
+   * ventanas futuras: se pueden elegir antes de empezar).
+   */
+  isCartillaLive(
+    cartilla: {
+      isDefault: boolean;
+      status: string;
+      startsAt: Date | null;
+      endsAt: Date | null;
+    },
+    now: Date = new Date(),
+  ): boolean {
+    if (cartilla.isDefault) return true;
+    const hasWindow = Boolean(cartilla.startsAt && cartilla.endsAt);
+    if (hasWindow) return cartillaCoversToday(null, cartilla.endsAt, now);
+    return cartilla.status === "ACTIVE";
+  }
+
+  /**
+   * Todas las cartillas vivas del negocio (base + ocasionales vigentes).
+   * Sin efectos secundarios: no activa ni termina nada.
+   */
+  async resolveLiveCartillas(storeId: string): Promise<CartillaWithItems[]> {
+    const def = await this.ensureDefaultCartilla(storeId);
+    const now = new Date();
+    const occasionals = await this.prisma.cartilla.findMany({
+      where: { storeId, isDefault: false, status: { not: "ENDED" } },
+      include: CARTILLA_INCLUDE,
+      orderBy: { startsAt: "desc" },
+    });
+    const live = occasionals.filter((c) => this.isCartillaLive(c, now));
+    return [def, ...live];
+  }
+
+  /**
+   * Resolver la cartilla "primaria" del negocio: la primera ocasional viva, o
+   * la base si no hay. Hace housekeeping de occasionales expiradas (las marca
+   * ENDED sin tocar pases — la migración de pases la hace syncPassCartilla de
+   * forma perezosa). Ya no mata cartillas vivas ni resetea puntos.
+   */
   async resolveActiveCartilla(storeId: string): Promise<CartillaWithItems> {
     const def = await this.ensureDefaultCartilla(storeId);
     const now = new Date();
@@ -270,122 +343,130 @@ export class CartillaService {
       orderBy: { startsAt: "desc" },
     });
 
-    const live: CartillaWithItems[] = [];
-    let endedApplied = false;
+    let firstLive: CartillaWithItems | null = null;
     for (const cartilla of occasionals) {
       const hasWindow = Boolean(cartilla.startsAt && cartilla.endsAt);
       if (hasWindow) {
         const stillOpen = cartillaCoversToday(null, cartilla.endsAt, now);
         if (!stillOpen) {
-          const wasActive = cartilla.status === "ACTIVE";
-          await this.endCartilla(cartilla.id, { skipReset: true });
-          if (wasActive) endedApplied = true;
+          await this.prisma.cartilla.update({
+            where: { id: cartilla.id },
+            data: { status: "ENDED" },
+          });
           continue;
         }
         if (!cartillaCoversToday(cartilla.startsAt, cartilla.endsAt, now)) {
           continue;
         }
-        live.push(cartilla);
+      } else if (cartilla.status !== "ACTIVE") {
         continue;
       }
-      if (cartilla.status === "ACTIVE") live.push(cartilla);
+      if (!firstLive) firstLive = cartilla;
     }
-
-    for (const extra of live.slice(1)) {
-      await this.endCartilla(extra.id, { skipReset: true });
-    }
-
-    if (live[0]) {
-      const next = live[0];
-      const becameLive = next.status !== "ACTIVE";
-      if (becameLive) {
-        await this.prisma.cartilla.update({
-          where: { id: next.id },
-          data: { status: "ACTIVE" },
-        });
-      }
-      if (becameLive || endedApplied || live.length > 1) {
-        await this.prisma.store.update({
-          where: { id: storeId },
-          data: { maxStamps: next.maxStamps },
-        });
-        await this.resetStorePasses(storeId, next.id);
-      }
-      return this.prisma.cartilla.findUniqueOrThrow({
-        where: { id: next.id },
-        include: CARTILLA_INCLUDE,
-      });
-    }
-
-    if (endedApplied) {
-      await this.prisma.store.update({
-        where: { id: storeId },
-        data: { maxStamps: def.maxStamps },
-      });
-      await this.resetStorePasses(storeId, def.id);
-    }
-    return def;
+    return firstLive ?? def;
   }
 
+  /**
+   * Mantiene el pase en una cartilla viva SIN pisar la elección del usuario:
+   * si la cartilla del pase sigue viva, no toca nada. Si expiró (o es nula),
+   * migra el pase a la base con reset de puntos.
+   */
   async syncPassCartilla(passId: string) {
     const pass = await this.prisma.pass.findUniqueOrThrow({
       where: { id: passId },
+      include: { store: true },
     });
     if (!pass.storeId) {
       return { switched: false, active: null as CartillaWithItems | null };
     }
-    const active = await this.resolveActiveCartilla(pass.storeId);
-    const current = await this.prisma.pass.findUniqueOrThrow({
-      where: { id: passId },
-    });
-    if (current.cartillaId === active.id) {
+    const now = new Date();
+    const current = pass.cartillaId
+      ? await this.prisma.cartilla.findUnique({
+          where: { id: pass.cartillaId },
+        })
+      : null;
+    if (current && this.isCartillaLive(current, now)) {
+      const active = await this.prisma.cartilla.findUniqueOrThrow({
+        where: { id: current.id },
+        include: CARTILLA_INCLUDE,
+      });
       return { switched: false, active };
     }
+
+    const def = await this.ensureDefaultCartilla(pass.storeId);
     await this.prisma.pass.update({
       where: { id: passId },
       data: {
-        cartillaId: active.id,
+        cartillaId: def.id,
         points: 0,
         cycleStartedAt: new Date(),
       },
     });
     await this.assignPassPromos(passId);
-    if (current.walletRef) {
-      const until = active.endsAt
-        ? ` Tienes hasta el ${formatCartillaDay(active.endsAt)} para acumular y redimir.`
+    if (pass.walletRef) {
+      const until = def.endsAt
+        ? ` Tienes hasta el ${formatCartillaDay(def.endsAt)} para acumular y redimir.`
         : " El ciclo de ondas empieza de nuevo.";
       await this.wallet.updatePoints(
-        current.walletRef,
+        pass.walletRef,
         0,
         `Tu cartilla de Onda se actualizó.${until}`,
       );
     }
-    return { switched: true, active };
+    return { switched: true, active: def };
   }
 
-  private async assertNoOccasionalOverlap(
-    storeId: string,
-    startsAt: Date | null,
-    endsAt: Date | null,
-    excludeId?: string,
-  ) {
-    if (!startsAt || !endsAt) return;
-    const others = await this.prisma.cartilla.findMany({
-      where: {
-        storeId,
-        isDefault: false,
-        status: { not: "ENDED" },
-        ...(excludeId ? { id: { not: excludeId } } : {}),
+  /**
+   * Cambia la cartilla que el cliente carga en su pase. Reglas:
+   * - La cartilla debe pertenecer al mismo negocio y estar viva (base o
+   *   ocasional vigente/futura).
+   * - Si el negocio tiene `shareCartillaProgress`, los puntos se transfieren
+   *   (con tope de maxStamps de la nueva cartilla) y el ciclo se conserva.
+   * - Si no, los puntos reinician de cero.
+   */
+  async switchPassCartilla(passId: string, cartillaId: string) {
+    const pass = await this.prisma.pass.findUniqueOrThrow({
+      where: { id: passId },
+    });
+    if (!pass.storeId) {
+      throw new BadRequestException("Este pase no pertenece a un negocio");
+    }
+    const target = await this.prisma.cartilla.findUnique({
+      where: { id: cartillaId },
+    });
+    if (!target || target.storeId !== pass.storeId) {
+      throw new BadRequestException("La cartilla no pertenece a este negocio");
+    }
+    if (!this.isCartillaLive(target)) {
+      throw new BadRequestException("Esta cartilla ya no está disponible");
+    }
+    if (pass.cartillaId === target.id) {
+      return pass;
+    }
+
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: pass.storeId },
+    });
+    const share = Boolean(store.shareCartillaProgress);
+    const points = share ? Math.min(pass.points, target.maxStamps) : 0;
+
+    const updated = await this.prisma.pass.update({
+      where: { id: passId },
+      data: {
+        cartillaId: target.id,
+        points,
+        cycleStartedAt: share ? pass.cycleStartedAt : new Date(),
       },
     });
-    for (const other of others) {
-      if (!other.startsAt || !other.endsAt) continue;
-      if (rangesOverlap(startsAt, endsAt, other.startsAt, other.endsAt)) {
-        throw new BadRequestException(
-          `El rango se cruza con «${other.name}». Solo puede haber una cartilla ocasional a la vez.`,
-        );
-      }
+    await this.assignPassPromos(passId);
+
+    if (pass.walletRef) {
+      const message = share
+        ? `Tu progreso pasó a «${target.name}»: llevas ${points} onda${points === 1 ? "" : "s"}.`
+        : `Ahora cargas «${target.name}». Tu progreso reinicia de cero.`;
+      await this.wallet.updatePoints(pass.walletRef, points, message);
     }
+    return updated;
   }
 
   async passCount(cartillaId: string) {
@@ -490,6 +571,7 @@ export class CartillaService {
         };
       }),
       activeId: active.id,
+      activeIds: (await this.resolveLiveCartillas(storeId)).map((c) => c.id),
     };
   }
 
@@ -507,6 +589,7 @@ export class CartillaService {
             endsAt: { gte: from },
           },
           { startsAt: { gte: from, lte: to } },
+          { startsAt: null, endsAt: null },
         ],
       },
       include: CARTILLA_INCLUDE,
@@ -523,6 +606,7 @@ export class CartillaService {
     startsAt?: string | null;
     endsAt?: string | null;
     maxStamps?: number;
+    eventId?: string | null;
     items?: Array<{ promotionId: string; pointsRequired: number }>;
   }) {
     if (body.isDefault) {
@@ -543,15 +627,36 @@ export class CartillaService {
       include: { passDesign: true },
     });
 
-    const startsAt = parseOptionalDay(body.startsAt);
-    const endsAt = parseOptionalDay(body.endsAt);
+    let event = null;
+    if (body.eventId) {
+      if (body.isDefault) {
+        throw new BadRequestException(
+          "La cartilla base no puede vincularse a un evento",
+        );
+      }
+      event = await this.prisma.event.findUnique({
+        where: { id: body.eventId },
+      });
+      if (!event) throw new BadRequestException("El evento no existe");
+      if (event.ownerStoreId !== body.storeId) {
+        throw new BadRequestException(
+          "Solo puedes vincular cartillas a tus propios eventos",
+        );
+      }
+    }
+
+    const startsAt = parseOptionalDay(body.startsAt) ?? event?.startDate ?? null;
+    const endsAt = parseOptionalDay(body.endsAt) ?? event?.endDate ?? null;
     if (!body.isDefault && startsAt && endsAt && endsAt <= startsAt) {
       throw new BadRequestException(
         "La fecha de fin debe ser posterior al inicio",
       );
     }
-    if (!body.isDefault) {
-      await this.assertNoOccasionalOverlap(body.storeId, startsAt, endsAt);
+    if (
+      !body.isDefault &&
+      this.isCartillaLive({ isDefault: false, status: "DRAFT", startsAt, endsAt })
+    ) {
+      await this.assertWithinLiveLimit(body.storeId);
     }
 
     const maxStamps = assertCycle(
@@ -570,6 +675,7 @@ export class CartillaService {
         status: body.isDefault ? "ACTIVE" : "DRAFT",
         startsAt,
         endsAt,
+        eventId: event?.id ?? null,
         maxStamps,
         passDesign: {
           create: {
@@ -587,7 +693,6 @@ export class CartillaService {
     });
 
     await this.replacePromos(cartilla.id, body.items || [], maxStamps);
-    await this.maybeSyncStoreCycle(body.storeId, cartilla.id, maxStamps);
     return this.get(cartilla.id);
   }
 
@@ -598,18 +703,50 @@ export class CartillaService {
       startsAt?: string | null;
       endsAt?: string | null;
       maxStamps?: number;
+      eventId?: string | null;
       items?: Array<{ promotionId: string; pointsRequired: number }>;
     },
   ) {
     const cartilla = await this.get(id);
-    const startsAt =
+    let startsAt =
       body.startsAt !== undefined
         ? parseOptionalDay(body.startsAt)
         : cartilla.startsAt;
-    const endsAt =
+    let endsAt =
       body.endsAt !== undefined
         ? parseOptionalDay(body.endsAt)
         : cartilla.endsAt;
+
+    let eventLink: string | null | undefined = undefined;
+    let inheritEventDates = false;
+    if (body.eventId !== undefined) {
+      if (cartilla.isDefault && body.eventId) {
+        throw new BadRequestException(
+          "La cartilla base no puede vincularse a un evento",
+        );
+      }
+      if (body.eventId) {
+        const event = await this.prisma.event.findUnique({
+          where: { id: body.eventId },
+        });
+        if (!event) throw new BadRequestException("El evento no existe");
+        if (event.ownerStoreId !== cartilla.storeId) {
+          throw new BadRequestException(
+            "Solo puedes vincular cartillas a tus propios eventos",
+          );
+        }
+        eventLink = event.id;
+        // Hereda la ventana del evento si la cartilla no tiene fechas propias.
+        if (!startsAt && !endsAt) {
+          startsAt = event.startDate;
+          endsAt = event.endDate;
+          inheritEventDates = true;
+        }
+      } else {
+        eventLink = null;
+      }
+    }
+
     if (!cartilla.isDefault && startsAt && endsAt && endsAt <= startsAt) {
       throw new BadRequestException(
         "La fecha de fin debe ser posterior al inicio",
@@ -618,13 +755,16 @@ export class CartillaService {
     if (cartilla.isDefault && (body.startsAt || body.endsAt)) {
       throw new BadRequestException("La cartilla base no usa fechas");
     }
-    if (!cartilla.isDefault) {
-      await this.assertNoOccasionalOverlap(
-        cartilla.storeId,
+    if (
+      !cartilla.isDefault &&
+      this.isCartillaLive({
+        isDefault: false,
+        status: cartilla.status,
         startsAt,
         endsAt,
-        id,
-      );
+      })
+    ) {
+      await this.assertWithinLiveLimit(cartilla.storeId, id);
     }
 
     const maxStamps =
@@ -636,6 +776,8 @@ export class CartillaService {
         ...("name" in body && body.name ? { name: body.name.trim() } : {}),
         ...(body.startsAt !== undefined ? { startsAt } : {}),
         ...(body.endsAt !== undefined ? { endsAt, smsRemindedAt: null } : {}),
+        ...(inheritEventDates ? { startsAt, endsAt } : {}),
+        ...(eventLink !== undefined ? { eventId: eventLink } : {}),
         ...(body.maxStamps != null ? { maxStamps } : {}),
       },
     });
@@ -644,18 +786,21 @@ export class CartillaService {
     } else if (body.maxStamps != null) {
       await this.dropSlotsOverCycle(id, maxStamps);
     }
-    await this.maybeSyncStoreCycle(cartilla.storeId, id, maxStamps);
 
     const itemsChanged = Boolean(body.items);
     const cycleChanged =
       body.maxStamps != null && body.maxStamps !== cartilla.maxStamps;
     const datesChanged =
-      body.startsAt !== undefined || body.endsAt !== undefined;
-    if (itemsChanged || cycleChanged) {
+      body.startsAt !== undefined ||
+      body.endsAt !== undefined ||
+      inheritEventDates;
+    const liveIds = (await this.resolveLiveCartillas(cartilla.storeId)).map(
+      (c) => c.id,
+    );
+    if ((itemsChanged || cycleChanged) && liveIds.includes(id)) {
       await this.resyncLiveAssignments(id);
     }
-    const active = await this.resolveActiveCartilla(cartilla.storeId);
-    if (active.id === id && (itemsChanged || cycleChanged || datesChanged)) {
+    if (liveIds.includes(id) && (itemsChanged || cycleChanged || datesChanged)) {
       await this.pushCartillaWallets(
         id,
         itemsChanged || cycleChanged
@@ -682,8 +827,7 @@ export class CartillaService {
       where: { id: cartillaId },
     });
     if (!cartilla) return;
-    const active = await this.resolveActiveCartilla(cartilla.storeId);
-    if (active.id !== cartillaId) return;
+    if (!this.isCartillaLive(cartilla)) return;
 
     await this.prisma.passPromoAssignment.deleteMany({ where: { cartillaId } });
     const passes = await this.prisma.pass.findMany({ where: { cartillaId } });
@@ -702,36 +846,19 @@ export class CartillaService {
     const cartilla = await this.get(id);
     if (cartilla.isDefault) {
       throw new BadRequestException(
-        "La cartilla base ya está vigente cuando no hay una ocasional activa",
+        "La cartilla base siempre está disponible para tus clientes",
       );
     }
     if (cartilla.status === "ACTIVE") {
       return cartilla;
     }
-    if (!cartilla.endsAt) {
-      throw new BadRequestException("Indica una fecha de fin antes de activar");
-    }
-    const others = await this.prisma.cartilla.findMany({
-      where: {
-        storeId: cartilla.storeId,
-        isDefault: false,
-        status: "ACTIVE",
-        id: { not: id },
-      },
-    });
-    for (const other of others) {
-      await this.endCartilla(other.id, { skipReset: true });
-    }
+    await this.assertWithinLiveLimit(cartilla.storeId, id);
     const startsAt =
       cartilla.startsAt && cartillaCoversToday(cartilla.startsAt, null)
         ? cartilla.startsAt
-        : parseCartillaDay(todayBogotaKey());
-    await this.assertNoOccasionalOverlap(
-      cartilla.storeId,
-      startsAt,
-      cartilla.endsAt,
-      id,
-    );
+        : !cartilla.endsAt
+          ? null
+          : parseCartillaDay(todayBogotaKey());
     await this.prisma.cartilla.update({
       where: { id },
       data: {
@@ -739,11 +866,6 @@ export class CartillaService {
         startsAt,
       },
     });
-    await this.prisma.store.update({
-      where: { id: cartilla.storeId },
-      data: { maxStamps: cartilla.maxStamps },
-    });
-    await this.resetStorePasses(cartilla.storeId, id);
     return this.get(id);
   }
 
@@ -758,29 +880,28 @@ export class CartillaService {
       data: { status: "ENDED" },
     });
     if (!opts?.skipReset) {
-      const def = await this.ensureDefaultCartilla(cartilla.storeId);
-      await this.prisma.store.update({
-        where: { id: cartilla.storeId },
-        data: { maxStamps: def.maxStamps },
-      });
-      await this.resetStorePasses(cartilla.storeId, def.id);
+      await this.migratePassesFromCartilla(cartilla.storeId, id);
     }
     return this.get(id);
   }
 
-  async resetStorePasses(storeId: string, cartillaId: string) {
-    const next = await this.prisma.cartilla.findUnique({
-      where: { id: cartillaId },
-    });
-    const message = next?.endsAt
-      ? `Tu cartilla de Onda se actualizó. Tienes hasta el ${formatCartillaDay(next.endsAt)} para acumular y redimir.`
+  /**
+   * Migra a la cartilla base (con reset de puntos) solo los pases que cargaban
+   * la cartilla terminada/expirada. Los pases en otras cartillas no se tocan.
+   */
+  async migratePassesFromCartilla(storeId: string, fromCartillaId: string) {
+    const def = await this.ensureDefaultCartilla(storeId);
+    const message = def.endsAt
+      ? `Tu cartilla de Onda se actualizó. Tienes hasta el ${formatCartillaDay(def.endsAt)} para acumular y redimir.`
       : "Tu cartilla de Onda se actualizó. El ciclo de ondas empieza de nuevo.";
-    const passes = await this.prisma.pass.findMany({ where: { storeId } });
+    const passes = await this.prisma.pass.findMany({
+      where: { storeId, cartillaId: fromCartillaId },
+    });
     for (const pass of passes) {
       await this.prisma.pass.update({
         where: { id: pass.id },
         data: {
-          cartillaId,
+          cartillaId: def.id,
           points: 0,
           cycleStartedAt: new Date(),
         },
@@ -790,6 +911,7 @@ export class CartillaService {
         await this.wallet.updatePoints(pass.walletRef, 0, message);
       }
     }
+    return def;
   }
 
   async assignPassPromos(passId: string) {
@@ -798,13 +920,21 @@ export class CartillaService {
     });
     if (!pass.storeId) return [];
 
-    const active = await this.resolveActiveCartilla(pass.storeId);
-    if (pass.cartillaId !== active.id) {
+    // El pase manda: se asignan promos de la cartilla que el usuario cargó.
+    let cartilla = pass.cartillaId
+      ? await this.prisma.cartilla.findUnique({
+          where: { id: pass.cartillaId },
+          include: CARTILLA_INCLUDE,
+        })
+      : null;
+    if (!cartilla || !this.isCartillaLive(cartilla)) {
+      cartilla = await this.ensureDefaultCartilla(pass.storeId);
       await this.prisma.pass.update({
         where: { id: passId },
-        data: { cartillaId: active.id },
+        data: { cartillaId: cartilla.id },
       });
     }
+    const active = cartilla;
 
     // Cartilla / redeem solo usa Retención. Adquisición (BIENVENIDA) es para campañas.
     const items = active.items.filter(
@@ -865,9 +995,14 @@ export class CartillaService {
     if (!promo.isActive) {
       throw new BadRequestException("Promoción inactiva");
     }
-    if (pass.storeId) {
-      const active = await this.resolveActiveCartilla(pass.storeId);
-      if (pass.cartillaId !== active.id) {
+    // El canje se valida contra la cartilla que el pase carga: si ya no es
+    // elegible, syncPassCartilla lo migra a la base y el assignment lookup
+    // de abajo falla con "no está en tu cartilla".
+    if (pass.cartillaId) {
+      const current = await this.prisma.cartilla.findUnique({
+        where: { id: pass.cartillaId },
+      });
+      if (!current || !this.isCartillaLive(current)) {
         throw new BadRequestException(
           "Tu cartilla se actualizó. Recarga para ver la vigente.",
         );
@@ -958,19 +1093,6 @@ export class CartillaService {
     endsAt: string;
   }) {
     this.logger.log('SMS fin de cartilla omitido: solo registro y campañas a demanda');
-  }
-
-  private async maybeSyncStoreCycle(
-    storeId: string,
-    cartillaId: string,
-    maxStamps: number,
-  ) {
-    const active = await this.resolveActiveCartilla(storeId);
-    if (active.id !== cartillaId) return;
-    await this.prisma.store.update({
-      where: { id: storeId },
-      data: { maxStamps },
-    });
   }
 
   private async dropSlotsOverCycle(cartillaId: string, maxStamps: number) {

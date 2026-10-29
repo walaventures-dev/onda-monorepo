@@ -54,6 +54,7 @@ export type UpdateStoreProfileBody = {
   lng?: number;
   logoUrl?: string | null;
   ownerName?: string;
+  shareCartillaProgress?: boolean;
 };
 
 function newClaimToken() {
@@ -257,6 +258,9 @@ export class StoreDraftService {
         ...(body.lng !== undefined ? { lng: body.lng } : {}),
         ...(body.ownerName?.trim()
           ? { ownerName: body.ownerName.trim() }
+          : {}),
+        ...(body.shareCartillaProgress !== undefined
+          ? { shareCartillaProgress: body.shareCartillaProgress }
           : {}),
       },
       include: { passDesign: true },

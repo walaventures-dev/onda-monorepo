@@ -76,13 +76,13 @@ export class UsersController {
     if (!pass) {
       const serialNumber = randomSerial();
       const welcomePoints = 1;
-      const active = await this.cartillas.resolveActiveCartilla(body.storeId);
+      const base = await this.cartillas.ensureDefaultCartilla(body.storeId);
       pass = await this.prisma.pass.create({
         data: {
           userId: user.id,
           storeId: body.storeId,
           eventId: body.eventId,
-          cartillaId: active.id,
+          cartillaId: base.id,
           serialNumber,
           points: welcomePoints,
         },
@@ -95,14 +95,14 @@ export class UsersController {
             storeId: body.storeId,
             type: 'ACCUMULATE',
             points: welcomePoints,
-            cartillaId: active.id,
+            cartillaId: base.id,
           },
         });
       }
       await this.cartillas.assignPassPromos(pass.id);
 
       const assignments = await this.prisma.passPromoAssignment.findMany({
-        where: { passId: pass.id, cartillaId: active.id },
+        where: { passId: pass.id, cartillaId: base.id },
         include: { promotion: true },
         orderBy: { pointsRequired: 'asc' },
       });
@@ -112,7 +112,7 @@ export class UsersController {
           title: a.promotion.title,
           pointsRequired: a.pointsRequired,
         })),
-        endsAt: active.endsAt,
+        endsAt: base.endsAt,
         welcomePoints,
       });
       try {
@@ -126,7 +126,7 @@ export class UsersController {
       }
 
       const design = toPassDesignInput(
-        resolvePassDesign(active.passDesign, store.passDesign)
+        resolvePassDesign(base.passDesign, store.passDesign)
       );
       try {
         const issued = await this.wallet.issuePass({
@@ -134,7 +134,7 @@ export class UsersController {
           points: welcomePoints,
           holderName: user.name,
           organizationName: store.name,
-          maxStamps: active.maxStamps ?? store.maxStamps,
+          maxStamps: base.maxStamps ?? store.maxStamps,
           kind: 'store',
           design,
         });

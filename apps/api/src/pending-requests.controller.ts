@@ -154,17 +154,21 @@ export class PendingRequestsController {
     }
     if (!pass.storeId) throw new BadRequestException('Pase sin negocio asociado');
     const storeId = pass.storeId;
-    const active = await this.cartillas.resolveActiveCartilla(storeId);
     const current = await this.prisma.pass.findUniqueOrThrow({
       where: { id: pass.id },
       include: { user: true },
     });
-    if (current.cartillaId !== active.id) {
+    const passCartilla = current.cartillaId
+      ? await this.prisma.cartilla.findUnique({
+          where: { id: current.cartillaId },
+        })
+      : null;
+    if (!passCartilla || !this.cartillas.isCartillaLive(passCartilla)) {
       throw new BadRequestException(
         'Tu cartilla se actualizó. Recarga para ver la vigente.'
       );
     }
-    const maxStamps = active.maxStamps;
+    const maxStamps = passCartilla.maxStamps;
 
     if (body.type === 'ACCUMULATE') {
       await assertCanAccumulate(this.prisma, storeId, 1);

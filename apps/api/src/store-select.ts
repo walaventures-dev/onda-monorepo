@@ -18,6 +18,7 @@ export const storePublicSelect = {
   nextUsageBillingAt: true,
   whatsappUsed: true,
   maxStamps: true,
+  shareCartillaProgress: true,
   currency: true,
   ondaValue: true,
   lat: true,

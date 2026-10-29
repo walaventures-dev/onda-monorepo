@@ -226,7 +226,13 @@ export class AccumulateService {
 
         let nextDelta = 0;
         if (requested > 0) {
-          const room = Math.max(0, store.maxStamps - current.points);
+          const passCartilla = current.cartillaId
+            ? await tx.cartilla.findUnique({
+                where: { id: current.cartillaId },
+              })
+            : null;
+          const cap = passCartilla?.maxStamps ?? store.maxStamps;
+          const room = Math.max(0, cap - current.points);
           if (room <= 0) {
             throw new BadRequestException(
               'Ya alcanzaste el máximo de sellos de este ciclo, reclama tu premio primero'

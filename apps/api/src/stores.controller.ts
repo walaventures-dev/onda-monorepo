@@ -169,10 +169,20 @@ export class StoresController {
       throw new NotFoundException('Comercio no encontrado');
     }
     const active = await this.cartillas.resolveActiveCartilla(store.id);
+    const liveCartillas = await this.cartillas.resolveLiveCartillas(store.id);
     return {
       ...store,
       passDesign: resolvePassDesign(active.passDesign, store.passDesign),
       activeCartillaId: active.id,
+      activeCartillas: liveCartillas.map((c) => ({
+        id: c.id,
+        name: c.name,
+        isDefault: c.isDefault,
+        startsAt: c.startsAt,
+        endsAt: c.endsAt,
+        maxStamps: c.maxStamps,
+        status: c.status,
+      })),
     };
   }
 
@@ -496,6 +506,7 @@ export class StoresController {
       ondaValue: number | null;
       posEnabled: boolean;
       ownerName: string;
+      shareCartillaProgress?: boolean;
     }>
   ) {
     const profileKeys = [
@@ -510,6 +521,7 @@ export class StoresController {
       'lng',
       'logoUrl',
       'ownerName',
+      'shareCartillaProgress',
     ] as const;
     const hasProfile = profileKeys.some((k) => k in body);
     let store: Awaited<ReturnType<StoreDraftService['updateProfile']>> | null =
@@ -527,6 +539,7 @@ export class StoresController {
         lng: body.lng,
         logoUrl: body.logoUrl,
         ownerName: body.ownerName,
+        shareCartillaProgress: body.shareCartillaProgress,
       });
     }
 

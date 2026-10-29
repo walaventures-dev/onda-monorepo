@@ -70,6 +70,7 @@ export function StoreProfileForm({
   const [slug, setSlug] = useState(initial.slug);
   const [slugTouched, setSlugTouched] = useState(false);
   const [address, setAddress] = useState(initial.address);
+  const [noFixedLocation, setNoFixedLocation] = useState(!initial.address);
   const [googlePlaceId, setGooglePlaceId] = useState(initial.googlePlaceId);
   const [lat, setLat] = useState(initial.lat);
   const [lng, setLng] = useState(initial.lng);
@@ -83,6 +84,7 @@ export function StoreProfileForm({
     setSlug(initial.slug);
     setSlugTouched(false);
     setAddress(initial.address);
+    setNoFixedLocation(!initial.address);
     setGooglePlaceId(initial.googlePlaceId);
     setLat(initial.lat);
     setLng(initial.lng);
@@ -212,15 +214,42 @@ export function StoreProfileForm({
       </div>
 
       {category !== StoreCategory.BRAND ? (
-        <PlacesAddressField
-          value={address}
-          onChange={(next) => {
-            setAddress(next.address);
-            setGooglePlaceId(next.googlePlaceId);
-            setLat(next.lat);
-            setLng(next.lng);
-          }}
-        />
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-sm text-[var(--onda-muted)]">
+            <input
+              type="checkbox"
+              checked={noFixedLocation}
+              onChange={(e) => {
+                setNoFixedLocation(e.target.checked);
+                if (e.target.checked) {
+                  setAddress('');
+                  setGooglePlaceId(undefined);
+                  setLat(undefined);
+                  setLng(undefined);
+                }
+              }}
+              className="accent-[var(--onda-violet)]"
+            />
+            No tenemos local fijo — operamos en ferias y eventos
+          </label>
+          {!noFixedLocation ? (
+            <PlacesAddressField
+              label="Dirección (opcional)"
+              value={address}
+              onChange={(next) => {
+                setAddress(next.address);
+                setGooglePlaceId(next.googlePlaceId);
+                setLat(next.lat);
+                setLng(next.lng);
+              }}
+            />
+          ) : (
+            <p className="text-xs text-[var(--onda-muted)]">
+              Podrás registrar la dirección de cada feria o evento desde tu
+              panel.
+            </p>
+          )}
+        </div>
       ) : null}
 
       {error ? <p className="text-sm text-[var(--onda-danger)]">{error}</p> : null}
