@@ -1,7 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Bar,
@@ -11,6 +11,32 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { UserListIcon as UserList } from '@phosphor-icons/react/dist/csr/UserList';
+import { MegaphoneIcon as Megaphone } from '@phosphor-icons/react/dist/csr/Megaphone';
+import { BellIcon as Bell } from '@phosphor-icons/react/dist/csr/Bell';
+import { ChatTextIcon as ChatText } from '@phosphor-icons/react/dist/csr/ChatText';
+import { CurrencyCircleDollarIcon as CurrencyCircleDollar } from '@phosphor-icons/react/dist/csr/CurrencyCircleDollar';
+import { CalendarBlankIcon as CalendarBlank } from '@phosphor-icons/react/dist/csr/CalendarBlank';
+import { ClockIcon as Clock } from '@phosphor-icons/react/dist/csr/Clock';
+import { ChatCenteredDotsIcon as ChatCenteredDots } from '@phosphor-icons/react/dist/csr/ChatCenteredDots';
+import { RocketIcon as Rocket } from '@phosphor-icons/react/dist/csr/Rocket';
+import { MagnifyingGlassIcon as MagnifyingGlass } from '@phosphor-icons/react/dist/csr/MagnifyingGlass';
+import { SpinnerGapIcon as SpinnerGap } from '@phosphor-icons/react/dist/csr/SpinnerGap';
+import { CaretDownIcon as CaretDown } from '@phosphor-icons/react/dist/csr/CaretDown';
+import { TargetIcon as Target } from '@phosphor-icons/react/dist/csr/Target';
+import { CheckIcon as Check } from '@phosphor-icons/react/dist/csr/Check';
+import { HeartIcon as Heart } from '@phosphor-icons/react/dist/csr/Heart';
+import { SmileyIcon as Smiley } from '@phosphor-icons/react/dist/csr/Smiley';
+import { LightningIcon as Lightning } from '@phosphor-icons/react/dist/csr/Lightning';
+import { CrownIcon as Crown } from '@phosphor-icons/react/dist/csr/Crown';
+import type { CampaignEmotion } from '@onda/shared-utils';
+
+const EMOTION_ICONS: Record<CampaignEmotion, typeof Heart> = {
+  warm: Heart,
+  playful: Smiley,
+  urgent: Lightning,
+  elegant: Crown,
+};
 import {
   GradientButton,
   IPhonePreview,
@@ -24,8 +50,10 @@ import {
 import {
   OBJECTIVE_KINDS,
   OBJECTIVE_TITLES,
+  CAMPAIGN_EMOTIONS,
   buildObjectiveMessages,
   campaignReachQuote,
+  nextRewardSuffix,
   objectiveAudienceQueryParams,
   objectiveHint,
   objectiveLabel,
@@ -46,11 +74,25 @@ const STEPS = [
 
 const NOTIF_DELAYS_MS = [900, 2600] as const;
 
+type AudienceMember = {
+  passId: string;
+  name: string;
+  initials: string;
+  meta: string;
+  phone?: string | null;
+  walletRef?: string | null;
+  daysSince?: number;
+  nearGap?: number | null;
+  nextRewardTitle?: string | null;
+  visits?: number;
+};
+
 type AudienceResponse = {
   headline: string;
   chips: string[];
   kpis: { label: string; value: string }[];
-  people: { name: string; initials: string; meta: string }[];
+  people: AudienceMember[];
+  members?: AudienceMember[];
   visitFrequency: { bucket: string; count: number }[];
   count: number;
   slowWindow?: string;
@@ -65,6 +107,18 @@ type AudienceResponse = {
     requireWallet?: boolean;
     cartillaId?: string | null;
   };
+};
+
+type BrowseResponse = {
+  count: number;
+  members: AudienceMember[];
+};
+
+type BrowseFilters = {
+  search: string;
+  inactiveFrom: string;
+  inactiveTo: string;
+  ondasGap: string;
 };
 
 type ReachQuota = {
@@ -118,15 +172,15 @@ export function CampaignWizard({
   const [launched, setLaunched] = useState(false);
   const [visibleNotifs, setVisibleNotifs] = useState<LockScreenNotification[]>([]);
   const launchTimersRef = useRef<number[]>([]);
-  const [isLocalDev, setIsLocalDev] = useState(false);
-
-  useEffect(() => {
-    setIsLocalDev(
-      process.env.NODE_ENV === 'development' ||
-        window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1'
-    );
-  }, []);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [browse, setBrowse] = useState<BrowseResponse | null>(null);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [browseFilters, setBrowseFilters] = useState<BrowseFilters>({
+    search: '',
+    inactiveFrom: '',
+    inactiveTo: '',
+    ondasGap: '',
+  });
 
   const messages = useMemo(
     () =>
@@ -140,8 +194,80 @@ export function CampaignWizard({
     [objectiveKind, voice, storeName, details, audience?.slowWindow]
   );
 
+  const pool: AudienceMember[] = useMemo(
+    () =>
+      audience && audience.count > 0
+        ? audience.members ?? audience.people
+        : browse?.members ?? [],
+    [audience, browse]
+  );
+
+  const effectiveSelected = useMemo(
+    () => pool.filter((m) => selected.has(m.passId)),
+    [pool, selected]
+  );
+  const effectiveCount = effectiveSelected.length;
+
+  const toggleMember = (passId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(passId)) next.delete(passId);
+      else next.add(passId);
+      return next;
+    });
+  };
+
+  const setAllMembers = (passIds: string[], value: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of passIds) {
+        if (value) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  };
+
+  // Los miembros del pool entran seleccionados por defecto; los que el
+  // usuario quitó siguen fuera mientras sigan en el pool.
+  useEffect(() => {
+    setSelected((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      for (const m of pool) {
+        if (!next.has(m.passId)) {
+          next.add(m.passId);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [pool]);
+
+  const browseFiltersRef = useRef(browseFilters);
+  browseFiltersRef.current = browseFilters;
+
+  const loadBrowse = useCallback(() => {
+    const f = browseFiltersRef.current;
+    const qs = new URLSearchParams({ storeId });
+    if (f.search.trim()) qs.set('search', f.search.trim());
+    if (f.inactiveFrom) qs.set('inactiveFrom', f.inactiveFrom);
+    if (f.inactiveTo) qs.set('inactiveTo', f.inactiveTo);
+    if (f.ondasGap) qs.set('ondasGap', f.ondasGap);
+    setBrowseLoading(true);
+    void api<BrowseResponse>(`/campaigns/audience/browse?${qs.toString()}`)
+      .then(setBrowse)
+      .catch(() => setBrowse(null))
+      .finally(() => setBrowseLoading(false));
+  }, [storeId]);
+
+  useEffect(() => {
+    if (!audience || audience.count > 0) return;
+    loadBrowse();
+  }, [audience, loadBrowse]);
+
   const reachQuote = useMemo(() => {
-    const count = audience?.count ?? 0;
+    const count = effectiveCount;
     const used = quota?.reachUsed ?? 0;
     return campaignReachQuote({
       audienceCount: count,
@@ -149,13 +275,30 @@ export function CampaignWizard({
       unitCop: quota?.unitCop ?? SMS_OVERAGE_COP,
       freeMonthly: quota?.reachLimit ?? CAMPAIGN_FREE_REACH_MONTHLY,
     });
-  }, [audience?.count, quota]);
+  }, [effectiveCount, quota]);
 
   const previewName = audience?.people[0]?.name.split(' ')[0] || 'Camila';
+  const previewMember = audience?.members?.[0] ?? null;
+  const previewSuffix = nextRewardSuffix(
+    previewMember?.nearGap,
+    previewMember?.nextRewardTitle
+  );
   const previewMessages = messages.map((m) => ({
     ...m,
-    text: renderCampaignTemplate(m.text, { nombre: previewName }),
+    text: renderCampaignTemplate(m.text, { nombre: previewName }) + previewSuffix,
   }));
+  // En el paso de revisión el iPhone muestra cómo llegarían ambas notificaciones;
+  // tras el lanzamiento, las notificaciones animadas reemplazan al preview.
+  const lockNotifications: LockScreenNotification[] =
+    visibleNotifs.length > 0
+      ? visibleNotifs
+      : step === 2
+        ? previewMessages.map((msg) => ({
+            id: msg.channel,
+            channel: msg.channel,
+            message: msg.text,
+          }))
+        : [];
   const objective = objectiveLabel(objectiveKind, voice, {
     ...details,
     slowWindow: details.slowWindow || audience?.slowWindow,
@@ -237,7 +380,6 @@ export function CampaignWizard({
   useEffect(() => () => clearLaunchTimers(), []);
 
   const goToStep = (next: number) => {
-    setLaunched(false);
     setVisibleNotifs([]);
     clearLaunchTimers();
     setStep(next);
@@ -245,8 +387,9 @@ export function CampaignWizard({
 
   async function launch() {
     if (saving || launched) return;
-    if (!audience || audience.count === 0) {
-      toast('No hay clientes en esta audiencia');
+    if (!audience) return;
+    if (effectiveCount === 0) {
+      toast('Selecciona al menos un cliente para la campaña');
       return;
     }
     setSaving(true);
@@ -269,7 +412,7 @@ export function CampaignWizard({
           walletBody: wallet?.text,
           sendSms: true,
           sendWallet: true,
-          audienceCount: audience.count,
+          audienceCount: effectiveCount,
           estimatedCostCop: reachQuote.costCop,
           audienceFilter: {
             ...(audience.filter || { objective: objectiveKind }),
@@ -283,6 +426,7 @@ export function CampaignWizard({
             requireWallet: details.requireWallet,
             rewardName: details.rewardName,
             reviewIncentive: details.reviewIncentive,
+            selectedPassIds: effectiveSelected.map((m) => m.passId),
           },
         }),
       });
@@ -324,8 +468,8 @@ export function CampaignWizard({
     step < 2 ? 'Siguiente' : launched ? null : saving ? 'Lanzando…' : 'Lanzar campaña';
 
   return (
-    <div className="overflow-hidden rounded-[1.5rem] border border-[var(--onda-border)] bg-[var(--onda-card)]">
-      <div className="flex items-center justify-between border-b border-[var(--onda-border)] px-4 py-3">
+    <div className="flex h-[calc(100dvh-170px)] min-h-[560px] flex-col overflow-hidden rounded-[1.5rem] border border-[var(--onda-border)] bg-[var(--onda-card)]">
+      <div className="flex shrink-0 items-center justify-between border-b border-[var(--onda-border)] px-4 py-3">
         <button
           type="button"
           onClick={onClose}
@@ -338,8 +482,14 @@ export function CampaignWizard({
         </p>
       </div>
 
-      <div className="grid lg:grid-cols-[180px_1fr_minmax(260px,300px)]">
-        <aside className="border-b border-[var(--onda-border)] bg-[var(--onda-bg)] p-4 lg:border-b-0 lg:border-r">
+      <div
+        className={`grid min-h-0 flex-1 ${
+          step === 2
+            ? 'lg:grid-cols-[180px_1fr_minmax(260px,300px)]'
+            : 'lg:grid-cols-[180px_1fr]'
+        }`}
+      >
+        <aside className="min-h-0 overflow-y-auto border-b border-[var(--onda-border)] bg-[var(--onda-bg)] p-4 lg:border-b-0 lg:border-r">
           <nav className="flex gap-2 overflow-x-auto lg:flex-col">
             {STEPS.map((s) => (
               <button
@@ -358,7 +508,8 @@ export function CampaignWizard({
           </nav>
         </aside>
 
-        <div className="min-h-[520px] p-6 md:p-8">
+        <div className="flex min-h-0 flex-col p-6 md:p-8">
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           <AnimatePresence mode="wait">
             <motion.div
               key={step}
@@ -376,54 +527,42 @@ export function CampaignWizard({
                     Elige el propósito (trae recomendación) y ajústalo a detalle
                     {segment ? ` · ${voice.place}` : ''}.
                   </p>
-                  <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
+                  <div className="mt-5 grid gap-2 sm:grid-cols-2">
                     {OBJECTIVE_KINDS.map((kind) => {
                       const selected = objectiveKind === kind;
-                      const label = objectiveLabel(
-                        kind,
-                        voice,
-                        selected
-                          ? {
-                              ...details,
-                              slowWindow:
-                                details.slowWindow || audience?.slowWindow,
-                            }
-                          : recommendedObjectiveDetails(voice, {
-                              slowWindow:
-                                audience?.slowWindow || voice.slowWindow,
-                            })
-                      );
                       return (
                         <button
                           key={kind}
                           type="button"
                           onClick={() => selectObjective(kind)}
-                          className={`rounded-2xl border px-4 py-3.5 text-left transition ${
+                          className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition ${
                             selected
-                              ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-50)] text-[var(--onda-ink)] shadow-[0_8px_20px_rgba(5,45,222,0.08)]'
-                              : 'border-[var(--onda-border)] text-[var(--onda-muted)] hover:border-[var(--onda-bridge)] hover:bg-white'
+                              ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-50)]'
+                              : 'border-[var(--onda-border)] hover:border-[var(--onda-bridge)] hover:bg-white'
                           }`}
                         >
+                          <span className="min-w-0">
+                            <span
+                              className={`block text-sm font-semibold ${
+                                selected
+                                  ? 'text-[var(--onda-primary-700)]'
+                                  : 'text-[var(--onda-ink)]'
+                              }`}
+                            >
+                              {OBJECTIVE_TITLES[kind]}
+                            </span>
+                            <span className="mt-0.5 block truncate text-xs text-[var(--onda-muted)]">
+                              {objectiveHint(kind)}
+                            </span>
+                          </span>
                           <span
-                            className={`block text-sm font-semibold ${
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition ${
                               selected
-                                ? 'text-[var(--onda-primary-700)]'
-                                : 'text-[var(--onda-ink)]'
+                                ? 'bg-[var(--onda-primary-500)] text-white'
+                                : 'border border-[var(--onda-border)] bg-white text-transparent'
                             }`}
                           >
-                            {OBJECTIVE_TITLES[kind]}
-                          </span>
-                          <span className="mt-1 block text-xs leading-snug text-[var(--onda-muted)]">
-                            {objectiveHint(kind)}
-                          </span>
-                          <span
-                            className={`mt-2 block text-xs leading-snug ${
-                              selected
-                                ? 'font-medium text-[var(--onda-ink)]'
-                                : 'text-[var(--onda-muted)]'
-                            }`}
-                          >
-                            {label}
+                            <Check size={12} weight="bold" />
                           </span>
                         </button>
                       );
@@ -435,6 +574,59 @@ export function CampaignWizard({
                     details={details}
                     onChange={patchDetails}
                   />
+
+                  <div className="mt-4 rounded-2xl border border-[var(--onda-border)] bg-white p-4">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="text-xs font-semibold text-[var(--onda-ink)]">
+                        Emoción del mensaje
+                      </p>
+                      <p className="text-[10px] text-[var(--onda-muted)]">
+                        Cambia cómo suena el texto
+                      </p>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {CAMPAIGN_EMOTIONS.map((emotion) => {
+                        const active = details.emotion === emotion.id;
+                        const Icon = EMOTION_ICONS[emotion.id];
+                        return (
+                          <button
+                            key={emotion.id}
+                            type="button"
+                            onClick={() => patchDetails({ emotion: emotion.id })}
+                            className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition ${
+                              active
+                                ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-50)]'
+                                : 'border-[var(--onda-border)] hover:border-[var(--onda-bridge)]'
+                            }`}
+                          >
+                            <span
+                              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                                active
+                                  ? 'bg-[var(--onda-primary-500)] text-white'
+                                  : 'bg-[var(--onda-primary-100)] text-[var(--onda-primary-700)]'
+                              }`}
+                            >
+                              <Icon size={15} weight="duotone" />
+                            </span>
+                            <span className="min-w-0">
+                              <span
+                                className={`block text-sm font-semibold ${
+                                  active
+                                    ? 'text-[var(--onda-primary-700)]'
+                                    : 'text-[var(--onda-ink)]'
+                                }`}
+                              >
+                                {emotion.label}
+                              </span>
+                              <span className="mt-0.5 block truncate text-[10px] text-[var(--onda-muted)]">
+                                {emotion.hint}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
                   <div className="mt-4 rounded-2xl bg-[var(--onda-sky-soft)] px-4 py-3">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--onda-muted)]">
@@ -450,13 +642,16 @@ export function CampaignWizard({
               {step === 1 ? (
                 <AudienceStep
                   audience={audience}
-                  isLocalDev={isLocalDev}
-                  onLoadMock={() => {
-                    setAudience(
-                      buildMockAudience(objectiveKind, details, voice, audience?.slowWindow)
-                    );
-                    toast('Audiencia demo cargada (solo local)');
-                  }}
+                  browse={browse}
+                  browseLoading={browseLoading}
+                  browseFilters={browseFilters}
+                  onBrowseFiltersChange={(patch) =>
+                    setBrowseFilters((f) => ({ ...f, ...patch }))
+                  }
+                  onApplyBrowse={loadBrowse}
+                  selected={selected}
+                  onToggleMember={toggleMember}
+                  onSetAll={setAllMembers}
                 />
               ) : null}
 
@@ -466,63 +661,90 @@ export function CampaignWizard({
                     Listo para lanzar
                   </h3>
                   <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-bg)] p-4 sm:col-span-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
-                        Objetivo
-                      </p>
-                      <p className="mt-1.5 font-display text-lg font-semibold">
+                    <SectionCard
+                      title="Objetivo"
+                      icon={<Target size={15} weight="duotone" />}
+                    >
+                      <p className="font-display text-lg font-semibold">
                         {objective}
                       </p>
-                    </div>
-                    <div className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-bg)] p-4">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
-                        Audiencia
+                    </SectionCard>
+                    <SectionCard
+                      title="Audiencia"
+                      icon={<UserList size={15} weight="duotone" />}
+                    >
+                      <p className="font-display text-2xl font-bold leading-none">
+                        {effectiveCount}
+                        <span className="ml-1 text-sm font-medium text-[var(--onda-muted)]">
+                          de {pool.length}
+                        </span>
                       </p>
-                      <p className="mt-1 font-display text-3xl font-bold">
-                        {audience?.count ?? 0}
+                      <p className="mt-1 text-xs text-[var(--onda-muted)]">
+                        clientes seleccionados
                       </p>
-                      <p className="text-sm text-[var(--onda-muted)]">clientes</p>
-                    </div>
-                    <div className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-bg)] p-4">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
-                        Canales
+                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--onda-primary-100)]">
+                        <div
+                          className="h-full rounded-full bg-[var(--onda-primary-500)] transition-all"
+                          style={{
+                            width: `${pool.length > 0 ? Math.round((effectiveCount / pool.length) * 100) : 0}%`,
+                          }}
+                        />
+                      </div>
+                    </SectionCard>
+                    <SectionCard
+                      title="Canales"
+                      icon={<Megaphone size={15} weight="duotone" />}
+                    >
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-white px-2.5 py-1 text-xs font-medium text-[var(--onda-ink)]">
+                          <Bell size={12} weight="duotone" className="text-[var(--onda-primary-700)]" />
+                          Push · Wallet
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-white px-2.5 py-1 text-xs font-medium text-[var(--onda-ink)]">
+                          <ChatText size={12} weight="duotone" className="text-[var(--onda-primary-700)]" />
+                          SMS
+                        </span>
+                      </div>
+                      <p className="mt-3 text-[11px] text-[var(--onda-muted)]">
+                        El SMS llega a cualquier celular; el push se muestra en el
+                        pase de Wallet del cliente.
                       </p>
-                      <p className="mt-3 text-sm">Push · Wallet</p>
-                      <p className="text-sm">SMS</p>
-                    </div>
-                    <div className="rounded-2xl border border-[var(--onda-border)] bg-white p-4 sm:col-span-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
-                        Costo estimado (alcance)
-                      </p>
-                      <dl className="mt-3 space-y-2 text-sm">
-                        <div className="flex justify-between gap-4">
+                    </SectionCard>
+                    <SectionCard
+                      title="Costo estimado"
+                      icon={<CurrencyCircleDollar size={15} weight="duotone" />}
+                    >
+                      <dl className="space-y-1.5 text-sm">
+                        <div className="flex items-center justify-between gap-4">
                           <dt className="text-[var(--onda-muted)]">Personas a alcanzar</dt>
-                          <dd className="font-medium tabular-nums">{audience?.count ?? 0}</dd>
+                          <dd className="font-medium tabular-nums">{effectiveCount}</dd>
                         </div>
-                        <div className="flex justify-between gap-4">
+                        <div className="flex items-center justify-between gap-4">
                           <dt className="text-[var(--onda-muted)]">
-                            Gratis este mes ({reachQuote.freeMonthly})
+                            Incluidas este mes ({reachQuote.freeMonthly})
                           </dt>
-                          <dd className="text-[var(--onda-ink)]">
-                            {reachQuote.reachUsedThisMonth} usadas →{' '}
-                            {reachQuote.freeApplied} aplicadas gratis
+                          <dd className="tabular-nums text-[var(--onda-ink)]">
+                            {reachQuote.reachUsedThisMonth} usadas ·{' '}
+                            {reachQuote.freeApplied} gratis
                           </dd>
                         </div>
                         {reachQuote.paidCount > 0 ? (
-                          <div className="flex justify-between gap-4">
+                          <div className="flex items-center justify-between gap-4">
                             <dt className="text-[var(--onda-muted)]">Personas de pago</dt>
                             <dd className="font-medium tabular-nums">
                               {reachQuote.paidCount} × {formatCop(reachQuote.unitCop)}
                             </dd>
                           </div>
                         ) : null}
-                        <div className="flex justify-between gap-4 border-t border-[var(--onda-border)] pt-2">
-                          <dt className="font-semibold text-[var(--onda-ink)]">En la próxima factura</dt>
-                          <dd className="font-display text-lg font-bold text-[var(--onda-ink)]">
-                            {formatCop(reachQuote.costCop)}
-                          </dd>
-                        </div>
                       </dl>
+                      <div className="mt-3 flex items-center justify-between rounded-xl bg-[var(--onda-sky-soft)] px-3 py-2.5">
+                        <p className="text-xs font-semibold text-[var(--onda-ink)]">
+                          En la próxima factura
+                        </p>
+                        <p className="font-display text-xl font-bold text-[var(--onda-ink)]">
+                          {reachQuote.costCop === 0 ? 'Gratis' : formatCop(reachQuote.costCop)}
+                        </p>
+                      </div>
                       {reachQuote.paidCount > 0 && quota && !quota.hasPaymentMethod ? (
                         <p className="mt-3 rounded-xl bg-[var(--onda-warning)]/10 px-3 py-2 text-xs text-[var(--onda-ink)]">
                           Necesitas tarjeta para superar las{' '}
@@ -530,39 +752,44 @@ export function CampaignWizard({
                           se cobra en la factura de consumos.
                         </p>
                       ) : null}
-                    </div>
-                    <div className="rounded-2xl border border-[var(--onda-border)] bg-white p-4 sm:col-span-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
-                        Mensajes
-                      </p>
-                      <ul className="mt-3 space-y-2">
+                    </SectionCard>
+                    <SectionCard
+                      title="Mensajes"
+                      icon={<ChatCenteredDots size={15} weight="duotone" />}
+                    >
+                      <ul className="grid gap-2 sm:grid-cols-2">
                         {previewMessages.map((msg) => (
                           <li
                             key={msg.channel}
-                            className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-bg)] px-3 py-2.5"
+                            className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-bg)] p-3"
                           >
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--onda-primary-700)]">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--onda-primary-700)] ring-1 ring-[var(--onda-border)]">
+                              {msg.channel === 'SMS' ? (
+                                <ChatText size={11} weight="duotone" />
+                              ) : (
+                                <Bell size={11} weight="duotone" />
+                              )}
                               {msg.channelLabel}
-                            </p>
-                            <p className="mt-1 text-sm leading-snug text-[var(--onda-ink)]">
+                            </span>
+                            <p className="mt-2 text-sm leading-snug text-[var(--onda-ink)]">
                               {msg.text}
                             </p>
                           </li>
                         ))}
                       </ul>
-                    </div>
-                    <div className="rounded-2xl border border-[var(--onda-border)] bg-white p-4 sm:col-span-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
-                        Cuándo sale
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-2">
+                    </SectionCard>
+                    <SectionCard
+                      title="Cuándo sale"
+                      icon={<CalendarBlank size={15} weight="duotone" />}
+                    >
+                      <div className="inline-flex rounded-full bg-[var(--onda-bg)] p-1">
                         <button
                           type="button"
                           onClick={() => setLaunchMode('now')}
-                          className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                          className={`rounded-full px-4 py-1.5 text-xs font-medium transition ${
                             launchMode === 'now'
-                              ? 'bg-[var(--onda-primary-500)] text-white'
-                              : 'bg-[var(--onda-bg)] text-[var(--onda-muted)]'
+                              ? 'bg-white text-[var(--onda-ink)] shadow-sm'
+                              : 'text-[var(--onda-muted)] hover:text-[var(--onda-ink)]'
                           }`}
                         >
                           Ahora
@@ -570,10 +797,10 @@ export function CampaignWizard({
                         <button
                           type="button"
                           onClick={() => setLaunchMode('schedule')}
-                          className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                          className={`rounded-full px-4 py-1.5 text-xs font-medium transition ${
                             launchMode === 'schedule'
-                              ? 'bg-[var(--onda-primary-500)] text-white'
-                              : 'bg-[var(--onda-bg)] text-[var(--onda-muted)]'
+                              ? 'bg-white text-[var(--onda-ink)] shadow-sm'
+                              : 'text-[var(--onda-muted)] hover:text-[var(--onda-ink)]'
                           }`}
                         >
                           Programar
@@ -586,116 +813,301 @@ export function CampaignWizard({
                             value={scheduleDate}
                             onChange={setScheduleDate}
                           />
-                          <label className="text-xs font-medium text-[var(--onda-muted)]">
+                          <label className="block text-xs font-medium text-[var(--onda-muted)]">
                             Hora (Bogotá)
                             <input
                               type="time"
                               value={scheduleTime}
                               onChange={(e) => setScheduleTime(e.target.value)}
-                              className="mt-1.5 w-full rounded-2xl border border-[var(--onda-border)] bg-white px-3 py-2 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
+                              className="mt-1.5 block w-full rounded-2xl border border-[var(--onda-border)] bg-white px-3 py-2 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
                             />
                           </label>
                         </div>
                       ) : (
-                        <p className="mt-3 text-sm text-[var(--onda-muted)]">
+                        <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-[var(--onda-muted)]">
+                          <Clock size={14} weight="duotone" className="text-[var(--onda-primary-700)]" />
                           Sale hoy, a esta hora.
                         </p>
                       )}
-                    </div>
+                    </SectionCard>
                   </div>
                 </div>
               ) : null}
             </motion.div>
           </AnimatePresence>
+          </div>
+
+          <div className="mt-6 flex items-center justify-between gap-3 border-t border-[var(--onda-border)] pt-4">
+            {!launched && step > 0 ? (
+              <button
+                type="button"
+                onClick={() => goToStep(step - 1)}
+                className="rounded-full border border-[var(--onda-border)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--onda-ink)] transition hover:border-[var(--onda-bridge)]"
+              >
+                ← Atrás
+              </button>
+            ) : (
+              <span aria-hidden />
+            )}
+            {ctaLabel ? (
+              <GradientButton
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  if (step < 2) goToStep(step + 1);
+                  else void launch();
+                }}
+              >
+                {step === 2 ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Rocket size={15} weight="duotone" />
+                    {ctaLabel}
+                  </span>
+                ) : (
+                  <>
+                    {ctaLabel}
+                    {' →'}
+                  </>
+                )}
+              </GradientButton>
+            ) : (
+              <GradientButton type="button" onClick={() => router.push('/campanas')}>
+                Ver campañas
+              </GradientButton>
+            )}
+          </div>
         </div>
 
-        <aside className="flex flex-col items-center border-t border-[var(--onda-border)] bg-[var(--onda-bg)] px-4 py-6 lg:border-l lg:border-t-0">
-          <p className="mb-4 self-start text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
-            Preview
-          </p>
-          <IPhonePreview>
-            <LockScreen
-              notifications={visibleNotifs}
-              storeName={storeName}
-              logoUrl={store.passDesign?.logoUrl}
-            />
-          </IPhonePreview>
-          {ctaLabel ? (
-            <GradientButton
-              type="button"
-              disabled={saving}
-              onClick={() => {
-                if (step < 2) goToStep(step + 1);
-                else void launch();
-              }}
-              className="mt-5 w-full max-w-[280px]"
+        <AnimatePresence>
+          {step === 2 ? (
+            <motion.aside
+              key="preview"
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 24 }}
+              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+              className="flex min-h-0 flex-col items-center overflow-y-auto border-t border-[var(--onda-border)] bg-[var(--onda-bg)] px-4 py-6 lg:col-start-3 lg:row-start-1 lg:border-l lg:border-t-0"
             >
-              {ctaLabel}
-              {step < 2 ? ' →' : ''}
-            </GradientButton>
-          ) : (
-            <GradientButton
-              type="button"
-              className="mt-5 w-full max-w-[280px]"
-              onClick={() => router.push('/campanas')}
-            >
-              Ver campañas
-            </GradientButton>
-          )}
-        </aside>
+              <p className="mb-4 self-start text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
+                Preview
+              </p>
+              <IPhonePreview>
+                <LockScreen
+                  notifications={lockNotifications}
+                  storeName={storeName}
+                  logoUrl={store.passDesign?.logoUrl}
+                />
+              </IPhonePreview>
+            </motion.aside>
+          ) : null}
+        </AnimatePresence>
       </div>
+    </div>
+  );
+}
+
+function SectionCard({
+  title,
+  icon,
+  children,
+  defaultOpen = true,
+}: {
+  title: string;
+  icon: ReactNode;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-2xl border border-[var(--onda-border)] bg-white p-4 sm:col-span-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2"
+      >
+        <span className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--onda-primary-100)] text-[var(--onda-primary-700)]">
+            {icon}
+          </span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--onda-muted)]">
+            {title}
+          </span>
+        </span>
+        <motion.span
+          animate={{ rotate: open ? 0 : -90 }}
+          transition={{ duration: 0.2 }}
+          className="text-[var(--onda-muted)]"
+        >
+          <CaretDown size={14} weight="bold" />
+        </motion.span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.div
+            key="body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="pt-3">{children}</div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
 
 function AudienceStep({
   audience,
-  isLocalDev,
-  onLoadMock,
+  browse,
+  browseLoading,
+  browseFilters,
+  onBrowseFiltersChange,
+  onApplyBrowse,
+  selected,
+  onToggleMember,
+  onSetAll,
 }: {
   audience: AudienceResponse | null;
-  isLocalDev?: boolean;
-  onLoadMock?: () => void;
+  browse: BrowseResponse | null;
+  browseLoading: boolean;
+  browseFilters: BrowseFilters;
+  onBrowseFiltersChange: (patch: Partial<BrowseFilters>) => void;
+  onApplyBrowse: () => void;
+  selected: Set<string>;
+  onToggleMember: (passId: string) => void;
+  onSetAll: (passIds: string[], value: boolean) => void;
 }) {
   if (!audience) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-[var(--onda-muted)]">Calculando audiencia…</p>
-        {isLocalDev && onLoadMock ? (
-          <button
-            type="button"
-            onClick={onLoadMock}
-            className="rounded-full border border-dashed border-[var(--onda-bridge)] bg-[var(--onda-primary-50)] px-4 py-2 text-xs font-semibold text-[var(--onda-primary-700)] hover:bg-[var(--onda-primary-100)]"
-          >
-            Cargar audiencia demo (local)
-          </button>
-        ) : null}
+      <p className="text-sm text-[var(--onda-muted)]">Calculando audiencia…</p>
+    );
+  }
+
+  if (audience.count === 0) {
+    return (
+      <div>
+        <h3 className="font-display text-xl font-semibold">Arma tu audiencia</h3>
+        <p className="mt-1 text-sm text-[var(--onda-muted)]">
+          Ningún cliente cumple los filtros del objetivo con tus datos actuales.
+          Busca entre todos tus clientes y elige quién recibe la campaña.
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onApplyBrowse();
+          }}
+          className="mt-5 grid items-end gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)_minmax(0,1fr)_auto]"
+        >
+          <label className="block text-xs font-medium text-[var(--onda-muted)]">
+            Nombre o teléfono
+            <input
+              type="search"
+              value={browseFilters.search}
+              onChange={(e) => onBrowseFiltersChange({ search: e.target.value })}
+              placeholder="Buscar…"
+              className="mt-1.5 block w-full rounded-2xl border border-[var(--onda-border)] bg-white px-3 py-2 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
+            />
+          </label>
+          <fieldset>
+            <legend className="text-xs font-medium text-[var(--onda-muted)]">
+              Días sin visita
+            </legend>
+            <div className="mt-1.5 flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                aria-label="Días sin visita, mínimo"
+                value={browseFilters.inactiveFrom}
+                onChange={(e) => onBrowseFiltersChange({ inactiveFrom: e.target.value })}
+                placeholder="Mín."
+                className="w-full min-w-0 rounded-2xl border border-[var(--onda-border)] bg-white px-3 py-2 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
+              />
+              <span className="shrink-0 text-xs text-[var(--onda-muted)]">–</span>
+              <input
+                type="number"
+                min={0}
+                aria-label="Días sin visita, máximo"
+                value={browseFilters.inactiveTo}
+                onChange={(e) => onBrowseFiltersChange({ inactiveTo: e.target.value })}
+                placeholder="Máx."
+                className="w-full min-w-0 rounded-2xl border border-[var(--onda-border)] bg-white px-3 py-2 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
+              />
+            </div>
+          </fieldset>
+          <label className="block text-xs font-medium text-[var(--onda-muted)]">
+            Ondas faltantes
+            <input
+              type="number"
+              min={1}
+              value={browseFilters.ondasGap}
+              onChange={(e) => onBrowseFiltersChange({ ondasGap: e.target.value })}
+              placeholder="Máx."
+              className="mt-1.5 block w-full rounded-2xl border border-[var(--onda-border)] bg-white px-3 py-2 text-sm text-[var(--onda-ink)] outline-none focus:border-[var(--onda-bridge)]"
+            />
+          </label>
+          <div className="flex items-end">
+            <button
+              type="submit"
+              disabled={browseLoading}
+              aria-label={browseLoading ? 'Buscando…' : 'Buscar'}
+              title={browseLoading ? 'Buscando…' : 'Buscar'}
+              className="flex h-[38px] w-[46px] shrink-0 items-center justify-center rounded-2xl bg-[var(--onda-primary-500)] text-white transition hover:bg-[var(--onda-primary-600)] disabled:opacity-70 sm:col-span-2 lg:col-span-1"
+            >
+              {browseLoading ? (
+                <SpinnerGap size={16} weight="bold" className="animate-spin" />
+              ) : (
+                <MagnifyingGlass size={16} weight="bold" />
+              )}
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-5">
+          {browseLoading && !browse ? (
+            <p className="text-sm text-[var(--onda-muted)]">Cargando clientes…</p>
+          ) : !browse ? null : browse.count === 0 ? (
+            <p className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-bg)] px-4 py-3 text-sm text-[var(--onda-muted)]">
+              Sin resultados con estos filtros. Prueba ampliar el rango de días
+              sin visita o quitar la búsqueda.
+            </p>
+          ) : (
+            <div className="rounded-2xl border border-[var(--onda-border)] bg-white p-4">
+              <p className="text-xs font-semibold text-[var(--onda-ink)]">
+                Todos los clientes ({browse.count}
+                {browse.count > browse.members.length
+                  ? ` · mostrando ${browse.members.length}`
+                  : ''}
+                )
+              </p>
+              <div className="mt-3">
+                <MemberList
+                  members={browse.members}
+                  selected={selected}
+                  onToggle={onToggleMember}
+                  onSetAll={onSetAll}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
+
+  const members = audience.members ?? audience.people;
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-display text-xl font-semibold">Audiencia encontrada</h3>
-        {isLocalDev && onLoadMock ? (
-          <button
-            type="button"
-            onClick={onLoadMock}
-            className="rounded-full border border-dashed border-[var(--onda-border)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--onda-muted)] hover:border-[var(--onda-bridge)] hover:text-[var(--onda-ink)]"
-          >
-            {audience.count === 0 ? 'Cargar audiencia demo' : 'Recargar demo'}
-          </button>
-        ) : null}
-      </div>
-      {audience.count === 0 ? (
-        <p className="mt-3 rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-bg)] px-4 py-3 text-sm text-[var(--onda-muted)]">
-          No hay clientes en este filtro con tus datos actuales.
-          {isLocalDev && onLoadMock
-            ? ' Usa el botón de arriba para probar el flujo con audiencia demo.'
-            : null}
+        <p className="text-xs font-medium text-[var(--onda-muted)]">
+          {members.filter((m) => selected.has(m.passId)).length} de {members.length}{' '}
+          seleccionados
         </p>
-      ) : (
-        <>
+      </div>
       <p className="mt-3 rounded-2xl bg-[var(--onda-sky-soft)] px-4 py-3 text-sm text-[var(--onda-ink)]">
         {audience.headline}
       </p>
@@ -746,26 +1158,12 @@ function AudienceStep({
           </div>
         </div>
         <div className="rounded-2xl border border-[var(--onda-border)] bg-white p-4">
-          <p className="text-xs font-semibold text-[var(--onda-ink)]">
-            Personas en el segmento
-          </p>
-          <ul className="mt-3 max-h-36 space-y-2 overflow-y-auto pr-1">
-            {audience.people.length === 0 ? (
-              <li className="text-sm text-[var(--onda-muted)]">Nadie en este filtro.</li>
-            ) : (
-              audience.people.map((person) => (
-                <li key={person.name + person.meta} className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--onda-primary-100)] text-[10px] font-bold text-[var(--onda-primary-700)]">
-                    {person.initials}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{person.name}</p>
-                    <p className="text-[11px] text-[var(--onda-muted)]">{person.meta}</p>
-                  </div>
-                </li>
-              ))
-            )}
-          </ul>
+          <MemberList
+            members={members}
+            selected={selected}
+            onToggle={onToggleMember}
+            onSetAll={onSetAll}
+          />
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -778,109 +1176,71 @@ function AudienceStep({
           </span>
         ))}
       </div>
-        </>
-      )}
     </div>
   );
 }
 
-const MOCK_PEOPLE = [
-  { name: 'Camila Rojas', initials: 'CR', meta: 'hace 34 días' },
-  { name: 'Andrés Mejía', initials: 'AM', meta: 'hace 41 días' },
-  { name: 'Valentina Díaz', initials: 'VD', meta: 'hace 28 días' },
-  { name: 'Santiago Pérez', initials: 'SP', meta: 'hace 52 días' },
-  { name: 'Laura Gómez', initials: 'LG', meta: 'hace 37 días' },
-  { name: 'Juan Esteban', initials: 'JE', meta: 'hace 45 días' },
-  { name: 'María Fernanda', initials: 'MF', meta: '2 ondas · cerca del premio' },
-  { name: 'Diego Castillo', initials: 'DC', meta: 'canjeó hace 5 días' },
-] as const;
-
-function buildMockAudience(
-  objectiveKind: ObjectiveKind,
-  details: ObjectiveDetails,
-  voice: ReturnType<typeof voiceFor>,
-  slowWindow?: string
-): AudienceResponse {
-  const count = 104;
-  const windowLabel = slowWindow || details.slowWindow || voice.slowWindow;
-  const filter: AudienceResponse['filter'] = {
-    objective: objectiveKind,
-    slowWindow: windowLabel,
-    inactiveDays: details.inactiveDays,
-    minVisits: details.minVisits,
-    maxPointsGap: details.maxPointsGap,
-    activeWithinDays: details.activeWithinDays,
-    redeemWithinDays: details.redeemWithinDays,
-    requireWallet: details.requireWallet,
-    cartillaId: null,
-  };
-
-  const headlines: Record<ObjectiveKind, string> = {
-    reactivate: `Encontramos ${count} ${voice.customerPlural} que no regresan hace más de ${details.inactiveDays} días.`,
-    slow_hours: `Encontramos ${count} ${voice.customerPlural} a quienes invitar ${windowLabel}.`,
-    new_reward: `Encontramos ${count} ${voice.customerPlural} a ${details.maxPointsGap} ondas del premio o activos en ${details.activeWithinDays} días.`,
-    reviews: `Encontramos ${count} ${voice.customerPlural} que canjearon en los últimos ${details.redeemWithinDays} días y aún no dejaron reseña.`,
-  };
-
-  const chips: Record<ObjectiveKind, string[]> = {
-    reactivate: [
-      `Inactivos ${details.inactiveDays}d`,
-      details.minVisits > 1 ? `${details.minVisits}+ visitas` : 'Visitaron antes',
-      details.requireWallet ? 'Solo Wallet' : 'Wallet o SMS',
-    ],
-    slow_hours: [
-      'Ya conocen el local',
-      windowLabel,
-      details.requireWallet ? 'Solo Wallet' : 'Invitación a horario flojo',
-    ],
-    new_reward: [
-      'Activos',
-      `≤ ${details.maxPointsGap} ondas al premio`,
-      `${details.activeWithinDays}d de actividad`,
-    ],
-    reviews: [
-      `Canje ≤ ${details.redeemWithinDays}d`,
-      'Sin reseña',
-      details.requireWallet ? 'Solo Wallet' : 'Google Reviews',
-    ],
-  };
-
-  const kpis =
-    objectiveKind === 'new_reward'
-      ? [
-          { label: 'Alcanzables', value: String(count) },
-          { label: 'Cerca del premio', value: '38%' },
-          { label: 'Con Wallet', value: '72%' },
-        ]
-      : [
-          { label: 'Alcanzables', value: String(count) },
-          { label: 'Días sin visita', value: '36' },
-          { label: 'Con Wallet', value: '68%' },
-        ];
-
-  return {
-    headline: headlines[objectiveKind],
-    chips: chips[objectiveKind],
-    kpis,
-    people: MOCK_PEOPLE.map((p) => ({ ...p })),
-    visitFrequency: [
-      { bucket: '1–2', count: 48 },
-      { bucket: '3–5', count: 37 },
-      { bucket: '6+', count: 19 },
-    ],
-    count,
-    slowWindow: windowLabel,
-    filter,
-  };
+function MemberList({
+  members,
+  selected,
+  onToggle,
+  onSetAll,
+}: {
+  members: AudienceMember[];
+  selected: Set<string>;
+  onToggle: (passId: string) => void;
+  onSetAll: (passIds: string[], value: boolean) => void;
+}) {
+  const selectedCount = members.filter((m) => selected.has(m.passId)).length;
+  const allSelected = members.length > 0 && selectedCount === members.length;
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-[var(--onda-ink)]">
+          Personas en el segmento
+        </p>
+        <button
+          type="button"
+          onClick={() => onSetAll(members.map((m) => m.passId), !allSelected)}
+          className="text-[11px] font-medium text-[var(--onda-primary-700)] hover:underline"
+        >
+          {allSelected ? 'Quitar todos' : 'Seleccionar todos'}
+        </button>
+      </div>
+      <ul className="mt-2 max-h-64 space-y-1.5 overflow-y-auto pr-1">
+        {members.length === 0 ? (
+          <li className="text-sm text-[var(--onda-muted)]">Nadie en este filtro.</li>
+        ) : (
+          members.map((person) => (
+            <li key={person.passId}>
+              <label className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2 py-1.5 transition hover:bg-[var(--onda-bg)]">
+                <input
+                  type="checkbox"
+                  checked={selected.has(person.passId)}
+                  onChange={() => onToggle(person.passId)}
+                  className="h-4 w-4 shrink-0 accent-[var(--onda-primary-500)]"
+                />
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--onda-primary-100)] text-[10px] font-bold text-[var(--onda-primary-700)]">
+                  {person.initials}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{person.name}</p>
+                  <p className="text-[11px] text-[var(--onda-muted)]">
+                    {person.meta}
+                    {person.phone ? ` · ${person.phone}` : ''}
+                  </p>
+                </div>
+              </label>
+            </li>
+          ))
+        )}
+      </ul>
+    </div>
+  );
 }
 
 function parseObjective(raw: string | null): ObjectiveKind {
-  if (
-    raw === 'reactivate' ||
-    raw === 'slow_hours' ||
-    raw === 'new_reward' ||
-    raw === 'reviews'
-  ) {
+  if (raw === 'reactivate' || raw === 'slow_hours') {
     return raw;
   }
   return 'reactivate';

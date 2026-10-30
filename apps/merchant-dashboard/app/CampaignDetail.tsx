@@ -15,6 +15,7 @@ import { UsersThreeIcon as UsersThree } from '@phosphor-icons/react/dist/csr/Use
 import { ChartLineUpIcon as ChartLineUp } from '@phosphor-icons/react/dist/csr/ChartLineUp';
 import { CurrencyCircleDollarIcon as CurrencyCircleDollar } from '@phosphor-icons/react/dist/csr/CurrencyCircleDollar';
 import { TrendUpIcon as TrendUp } from '@phosphor-icons/react/dist/csr/TrendUp';
+import { RocketIcon as Rocket } from '@phosphor-icons/react/dist/csr/Rocket';
 import { api, KpiCard, SkeletonDetail, toast } from '@onda/shared-ui';
 import {
   formatCampaignRoi,
@@ -22,6 +23,14 @@ import {
   OBJECTIVE_TITLES,
   type ObjectiveKind,
 } from '@onda/shared-utils';
+
+const SEND_STATUS_LABEL: Record<string, string> = {
+  DRAFT: 'Borrador',
+  SCHEDULED: 'Programada',
+  SENT: 'Enviada',
+  CANCELLED: 'Cancelada',
+  FAILED: 'Falló',
+};
 
 type CampaignResults = {
   campaign: {
@@ -70,6 +79,19 @@ type CampaignResults = {
     paidReachCount: number | null;
     objective: ObjectiveKind;
   } | null;
+  sends: {
+    id: string;
+    status: string;
+    sentAt: string | null;
+    scheduledAt: string | null;
+    audienceCount: number | null;
+    reachCount: number;
+    successCount: number;
+    successRate: number;
+    costCop: number;
+    attributedSalesCop: number;
+    roiRatio: number | null;
+  }[];
 };
 
 export function CampaignDetail({
@@ -83,6 +105,23 @@ export function CampaignDetail({
   const [data, setData] = useState<CampaignResults | null>(null);
   const [loading, setLoading] = useState(true);
   const [configOpen, setConfigOpen] = useState(false);
+  const [relaunching, setRelaunching] = useState(false);
+
+  async function relaunch() {
+    if (relaunching) return;
+    setRelaunching(true);
+    try {
+      const created = await api<{ id: string }>(`/campaigns/${campaignId}/relaunch`, {
+        method: 'POST',
+      });
+      toast('Campaña relanzada a la misma audiencia');
+      router.push(`/campanas/${created.id}`);
+    } catch (e: any) {
+      toast(e?.message || 'No se pudo relanzar la campaña');
+    } finally {
+      setRelaunching(false);
+    }
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -93,7 +132,22 @@ export function CampaignDetail({
         router.push('/campanas');
       })
       .finally(() => setLoading(false));
-  }, [campaignId, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId]);
+
+  async function cancelSend(id: string) {
+    try {
+      await api(`/campaigns/${id}/cancel`, { method: 'POST' });
+      toast('Envío cancelado');
+      setLoading(true);
+      void api<CampaignResults>(`/campaigns/${campaignId}/results`)
+        .then(setData)
+        .catch(() => undefined)
+        .finally(() => setLoading(false));
+    } catch (e: any) {
+      toast(e?.message || 'No se pudo cancelar el envío');
+    }
+  }
 
   const funnelChart = useMemo(() => {
     if (!data?.metrics || data.metrics.reachCount <= 0) return [];
@@ -136,6 +190,17 @@ export function CampaignDetail({
         </button>
         <div className="text-right">
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {campaign.status === 'SENT' ? (
+              <button
+                type="button"
+                onClick={() => void relaunch()}
+                disabled={relaunching}
+                className="inline-flex items-center gap-1.5 rounded-full bg-[var(--onda-primary-500)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--onda-primary-600)] disabled:opacity-60"
+              >
+                <Rocket size={13} weight="duotone" />
+                {relaunching ? 'Relanzando…' : 'Relanzar'}
+              </button>
+            ) : null}
             {metrics ? (
               <span
                 className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -334,6 +399,77 @@ export function CampaignDetail({
           Los resultados aparecen cuando la campaña se envía.
         </p>
       )}
+
+      {data.sends.length > 0 ? (
+        <section className="onda-card p-5">
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className="font-display text-sm font-semibold text-[var(--onda-ink)]">
+              Envíos
+            </h3>
+            <span className="text-xs text-[var(--onda-muted)]">
+              {data.sends.length}
+            </span>
+          </div>
+          <ul className="mt-2 divide-y divide-[var(--onda-border)]">
+            {data.sends.map((send, index) => (
+              <li
+                key={send.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-2.5"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[var(--onda-ink)]">
+                    Envío #{data.sends.length - index}
+                  </p>
+                  <p className="text-xs text-[var(--onda-muted)]">
+                    {send.status === 'SENT' && send.sentAt
+                      ? new Date(send.sentAt).toLocaleString('es-CO', {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        })
+                      : send.status === 'SCHEDULED'
+                        ? `Programada · ${
+                            send.scheduledAt
+                              ? new Date(send.scheduledAt).toLocaleString('es-CO', {
+                                  dateStyle: 'medium',
+                                  timeStyle: 'short',
+                                })
+                              : 'próximamente'
+                          }`
+                        : SEND_STATUS_LABEL[send.status] ?? send.status}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 text-xs tabular-nums">
+                  {send.status === 'SENT' ? (
+                    <>
+                      <span className="text-[var(--onda-muted)]">
+                        Alcance <strong className="text-[var(--onda-ink)]">{send.reachCount}</strong>
+                      </span>
+                      <span className="text-[var(--onda-muted)]">
+                        Éxito{' '}
+                        <strong className="text-[var(--onda-ink)]">
+                          {send.successCount} · {Math.round(send.successRate * 100)}%
+                        </strong>
+                      </span>
+                      <span className="text-[var(--onda-muted)]">
+                        {formatCop(send.costCop)}
+                      </span>
+                    </>
+                  ) : null}
+                  {send.status === 'SCHEDULED' ? (
+                    <button
+                      type="button"
+                      onClick={() => void cancelSend(send.id)}
+                      className="rounded-full px-3 py-1 text-xs font-medium text-[var(--onda-danger)] hover:bg-[var(--onda-danger)]/8"
+                    >
+                      Cancelar
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="onda-card overflow-hidden">
         <button

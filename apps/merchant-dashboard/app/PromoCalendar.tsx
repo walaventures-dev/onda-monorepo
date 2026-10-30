@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { SegmentedControl, OndaIcons, formatPromoBenefit } from "@onda/shared-ui";
+import { SegmentedControl, OndaIcons, GradientButton, formatPromoBenefit } from "@onda/shared-ui";
 
 type Scope = "month" | "quarter" | "semester" | "year";
 
@@ -294,9 +294,11 @@ function MonthSummaryCell({
 export function PromoCalendar({
   promos,
   onOpenPromo,
+  onCreate,
 }: {
   promos: CalPromo[];
   onOpenPromo: (id: string) => void;
+  onCreate?: () => void;
 }) {
   const now = new Date();
   const [scope, setScope] = useState<Scope>("month");
@@ -407,10 +409,22 @@ export function PromoCalendar({
       </div>
 
       {!promosInPeriod.length ? (
-        <p className="rounded-2xl border border-dashed border-[var(--onda-border)] p-6 text-center text-sm text-[var(--onda-muted)]">
-          No hay promociones en este período. Crea una con “+ Nueva promo” y
-          asígnale una vigencia para verla aquí.
-        </p>
+        <div className="rounded-2xl border border-dashed border-[var(--onda-border)] p-6 text-center">
+          <p className="text-sm text-[var(--onda-muted)]">
+            No hay promociones en este período. Crea una y asígnale una
+            vigencia para verla aquí.
+          </p>
+          {onCreate ? (
+            <GradientButton
+              type="button"
+              className="mt-3"
+              onClick={onCreate}
+            >
+              {OndaIcons.plus}
+              Nueva promo
+            </GradientButton>
+          ) : null}
+        </div>
       ) : scope === "month" ? (
         <MonthCell
           year={anchor.year}

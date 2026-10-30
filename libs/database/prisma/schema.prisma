@@ -417,11 +417,13 @@ model Campaign {
   successEvaluatedAt DateTime?
   attributedSalesCop Int?
   roiRatio           Float?
+  groupId            String?
   createdAt          DateTime            @default(now())
   reaches            CampaignReach[]
 
   @@index([storeId, channel, createdAt])
   @@index([storeId, status, scheduledAt])
+  @@index([storeId, groupId])
 }
 
 model CampaignReach {

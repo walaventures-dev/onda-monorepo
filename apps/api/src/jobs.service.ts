@@ -63,7 +63,12 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     if (this.usesCloudTasks) {
       this.logger.log('Jobs: Cloud Tasks (GCP)');
-      await this.enqueue('billing-sweep', {}, { delayMs: 60_000 });
+      try {
+        await this.enqueue('billing-sweep', {}, { delayMs: 60_000 });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.error(`No se pudo programar billing-sweep inicial: ${msg}`);
+      }
       return;
     }
     try {
@@ -114,18 +119,26 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         this.logger.warn(`Cloud Tasks falló (${type}): ${msg}`);
-        if (opts?.delayMs) {
-          return { queued: false as const, via: 'inline' as const };
-        }
       }
     }
     if (this.queue) {
-      await this.queue.add(type, payload, {
-        delay: opts?.delayMs,
-        removeOnComplete: 100,
-        removeOnFail: 200,
-      });
-      return { queued: true as const, via: 'bullmq' as const };
+      try {
+        await this.queue.add(type, payload, {
+          delay: opts?.delayMs,
+          removeOnComplete: 100,
+          removeOnFail: 200,
+        });
+        return { queued: true as const, via: 'bullmq' as const };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.warn(`BullMQ falló (${type}): ${msg}`);
+      }
+    }
+    if (opts?.delayMs && opts.delayMs > 0) {
+      throw new Error(
+        `No se pudo encolar ${type}: Cloud Tasks y Redis/BullMQ no disponibles. ` +
+          'Programa el envío para ahora o revisa la infraestructura de jobs.'
+      );
     }
     await this.dispatch(type, payload);
     return { queued: false as const, via: 'inline' as const };

@@ -13,8 +13,6 @@ export type ObjectiveKind =
 export const OBJECTIVE_KINDS: ObjectiveKind[] = [
   'reactivate',
   'slow_hours',
-  'new_reward',
-  'reviews',
 ];
 
 /** Título corto del chip / tarjeta (no cambia con el vertical). */
@@ -698,6 +696,19 @@ export function objectiveHint(kind: ObjectiveKind): string {
 }
 
 /** Detalle editable del objetivo; la recomendación se aplica al elegir el propósito. */
+export type CampaignEmotion = 'warm' | 'playful' | 'urgent' | 'elegant';
+
+export const CAMPAIGN_EMOTIONS: Array<{
+  id: CampaignEmotion;
+  label: string;
+  hint: string;
+}> = [
+  { id: 'warm', label: 'Cercano', hint: 'Cálido y directo' },
+  { id: 'playful', label: 'Divertido', hint: 'Con energía' },
+  { id: 'urgent', label: 'Urgente', hint: 'Acción ya' },
+  { id: 'elegant', label: 'Elegante', hint: 'Trato formal' },
+];
+
 export type ObjectiveDetails = {
   inactiveDays: number;
   minVisits: number;
@@ -708,6 +719,7 @@ export type ObjectiveDetails = {
   reviewIncentive: string;
   redeemWithinDays: number;
   requireWallet: boolean;
+  emotion: CampaignEmotion;
 };
 
 export const DEFAULT_INACTIVE_DAYS = 21;
@@ -872,6 +884,7 @@ export function recommendedObjectiveDetails(
     reviewIncentive: '1 onda extra por reseña',
     redeemWithinDays: DEFAULT_REDEEM_WITHIN_DAYS,
     requireWallet: false,
+    emotion: 'warm',
     ...overrides,
   };
 }
@@ -1088,6 +1101,101 @@ export type CampaignMessage = {
   text: string;
 };
 
+type MessageCtx = {
+  name: string;
+  storeName: string;
+  voice: VerticalVoice;
+  slowWindow: string;
+  rewardName: string;
+  reviewIncentive: string;
+};
+
+type EmotionTemplate = Record<CampaignEmotion, (ctx: MessageCtx) => string>;
+
+const OBJECTIVE_MESSAGE_TEMPLATES: Record<
+  ObjectiveKind,
+  Record<'Wallet' | 'SMS', EmotionTemplate>
+> = {
+  reactivate: {
+    Wallet: {
+      warm: (c) => `Te extrañamos en ${c.storeName}. Ábrelo en tu pase.`,
+      playful: (c) => `¡${c.storeName} no es lo mismo sin ti! Tu pase te espera.`,
+      urgent: (c) =>
+        `Esta semana es para volver: tu lugar en ${c.storeName} te espera. Ábrelo en tu pase.`,
+      elegant: (c) => `Le esperamos de nuevo en ${c.storeName}. Consulte su pase.`,
+    },
+    SMS: {
+      warm: (c) =>
+        `Hola ${c.name}, te extrañamos en ${c.storeName}. Vuelve pronto ${c.voice.placeTo}.`,
+      playful: (c) =>
+        `¡${c.name}! ${c.storeName} te extraña un montón. Ven y compruébalo ${c.voice.placeTo}.`,
+      urgent: (c) =>
+        `${c.name}, no dejes pasar esta semana: tu lugar en ${c.storeName} te espera ${c.voice.placeTo}.`,
+      elegant: (c) =>
+        `${c.name}, sería un gusto recibirle de nuevo en ${c.storeName}. Le esperamos ${c.voice.placeTo}.`,
+    },
+  },
+  slow_hours: {
+    Wallet: {
+      warm: (c) => `Te esperamos ${c.slowWindow} en ${c.storeName}.`,
+      playful: (c) => `¡${c.slowWindow} se disfruta más en ${c.storeName}!`,
+      urgent: (c) =>
+        `${c.slowWindow}: el momento perfecto para venir a ${c.storeName} sin filas.`,
+      elegant: (c) =>
+        `Lo invitamos ${c.slowWindow} a disfrutar ${c.storeName} con calma.`,
+    },
+    SMS: {
+      warm: (c) =>
+        `Hola ${c.name}, ${c.slowWindow} está más rico en ${c.storeName}. Te esperamos.`,
+      playful: (c) =>
+        `¡${c.name}! ${c.slowWindow} en ${c.storeName} sabe mejor. ¡Ven y compruébalo!`,
+      urgent: (c) =>
+        `${c.name}, aprovecha ${c.slowWindow}: ${c.storeName} está más tranquilo que nunca.`,
+      elegant: (c) =>
+        `${c.name}, ${c.slowWindow} le ofrecemos ${c.storeName} en su mejor ambiente.`,
+    },
+  },
+  new_reward: {
+    Wallet: {
+      warm: (c) => `Nueva recompensa: ${c.rewardName}. Ya está en tu pase.`,
+      playful: (c) => `¡Premio nuevo en tu pase: ${c.rewardName}! ¿Ya lo viste?`,
+      urgent: (c) => `Acaba de llegar: ${c.rewardName}. Ya está en tu pase.`,
+      elegant: (c) =>
+        `Nueva recompensa disponible: ${c.rewardName}. Consulte su pase.`,
+    },
+    SMS: {
+      warm: (c) =>
+        `Hola ${c.name}, estrenamos recompensa en ${c.storeName}: ${c.rewardName}. Te esperamos en tu próxima ${c.voice.visitNoun}.`,
+      playful: (c) =>
+        `¡${c.name}, hay premio nuevo en ${c.storeName}: ${c.rewardName}! Ven por tu próxima ${c.voice.visitNoun}.`,
+      urgent: (c) =>
+        `${c.name}, estrenamos ${c.rewardName} en ${c.storeName}. Ven pronto y estrena tú también.`,
+      elegant: (c) =>
+        `${c.name}, ${c.storeName} le presenta su nueva recompensa: ${c.rewardName}. Le esperamos en su próxima ${c.voice.visitNoun}.`,
+    },
+  },
+  reviews: {
+    Wallet: {
+      warm: (c) => `${c.reviewIncentive}. Cuéntanos: {{feedbackUrl}}`,
+      playful: (c) =>
+        `¿Nos cuentas cómo te fue? ${c.reviewIncentive}: {{feedbackUrl}}`,
+      urgent: (c) => `Tu opinión vale: ${c.reviewIncentive}. {{feedbackUrl}}`,
+      elegant: (c) =>
+        `Su opinión es importante: ${c.reviewIncentive}. {{feedbackUrl}}`,
+    },
+    SMS: {
+      warm: (c) =>
+        `Hola ${c.name}, ¿cómo te fue en ${c.storeName}? Cuéntanos: {{feedbackUrl}}`,
+      playful: (c) =>
+        `¿Cómo te fue, ${c.name}? Una reseña nos alegra el día: {{feedbackUrl}}`,
+      urgent: (c) =>
+        `${c.name}, 1 minuto: tu reseña de ${c.storeName} nos ayuda un montón: {{feedbackUrl}}`,
+      elegant: (c) =>
+        `${c.name}, agradeceríamos su reseña de ${c.storeName}: {{feedbackUrl}}`,
+    },
+  },
+};
+
 export function buildObjectiveMessages(opts: {
   kind: ObjectiveKind;
   voice: VerticalVoice;
@@ -1102,62 +1210,27 @@ export function buildObjectiveMessages(opts: {
   const rewardName = opts.details?.rewardName || voice.signatureReward;
   const reviewIncentive =
     opts.details?.reviewIncentive || '1 onda extra por reseña';
+  const emotion = opts.details?.emotion ?? 'warm';
 
-  if (kind === 'reviews') {
-    return [
-      {
-        channel: 'Wallet',
-        channelLabel: 'Push · Wallet',
-        text: `${reviewIncentive}. Cuéntanos: {{feedbackUrl}}`,
-      },
-      {
-        channel: 'SMS',
-        channelLabel: 'SMS',
-        text: `Hola ${name}, ¿cómo te fue en ${storeName}? Cuéntanos: {{feedbackUrl}}`,
-      },
-    ];
-  }
-
-  if (kind === 'slow_hours') {
-    return [
-      {
-        channel: 'Wallet',
-        channelLabel: 'Push · Wallet',
-        text: `Te esperamos ${slowWindow} en ${storeName}.`,
-      },
-      {
-        channel: 'SMS',
-        channelLabel: 'SMS',
-        text: `Hola ${name}, ${slowWindow} está más rico en ${storeName}. Te esperamos.`,
-      },
-    ];
-  }
-
-  if (kind === 'new_reward') {
-    return [
-      {
-        channel: 'Wallet',
-        channelLabel: 'Push · Wallet',
-        text: `Nueva recompensa: ${rewardName}. Ya está en tu pase.`,
-      },
-      {
-        channel: 'SMS',
-        channelLabel: 'SMS',
-        text: `Hola ${name}, estrenamos recompensa en ${storeName}: ${rewardName}. Te esperamos en tu próxima ${voice.visitNoun}.`,
-      },
-    ];
-  }
-
+  const ctx: MessageCtx = {
+    name,
+    storeName,
+    voice,
+    slowWindow,
+    rewardName,
+    reviewIncentive,
+  };
+  const templates = OBJECTIVE_MESSAGE_TEMPLATES[kind];
   return [
     {
       channel: 'Wallet',
       channelLabel: 'Push · Wallet',
-      text: `Te extrañamos en ${storeName}. Ábrelo en tu pase.`,
+      text: templates.Wallet[emotion](ctx),
     },
     {
       channel: 'SMS',
       channelLabel: 'SMS',
-      text: `Hola ${name}, te extrañamos en ${storeName}. Vuelve pronto ${voice.placeTo}.`,
+      text: templates.SMS[emotion](ctx),
     },
   ];
 }
@@ -1242,4 +1315,15 @@ export function renderCampaignTemplate(
     .replaceAll('{{nombre}}', vars.nombre?.trim() || 'tú')
     .replaceAll('{{feedbackUrl}}', vars.feedbackUrl?.trim() || '')
     .replaceAll('{{store}}', vars.store?.trim() || '');
+}
+
+/** Cierre que se agrega a cada mensaje con el premio más cercano del cliente. */
+export function nextRewardSuffix(
+  nearGap: number | null | undefined,
+  rewardTitle?: string | null
+): string {
+  if (nearGap == null || !rewardTitle?.trim()) return '';
+  const ondas =
+    nearGap === 1 ? 'te falta 1 onda' : `te faltan ${nearGap} ondas`;
+  return ` · Tu próximo premio: ${rewardTitle.trim()} (${ondas})`;
 }

@@ -21,6 +21,7 @@ import {
   SkeletonList,
 } from '@onda/shared-ui';
 import { PLAN_SMS_REACH_MONTHLY, SMS_OVERAGE_COP } from '@onda/shared-types';
+import { InfoIcon as Info } from '@phosphor-icons/react/dist/csr/Info';
 import {
   formatCampaignRoi,
   formatCop,
@@ -55,6 +56,7 @@ type CampaignRow = {
   estimatedCostCop: number | null;
   successCount: number | null;
   roiRatio: number | null;
+  groupKey?: string;
 };
 
 type CampaignsList = {
@@ -188,6 +190,16 @@ export function CampaignsHome({
     }
   }
 
+  const campaignGroups = useMemo(() => {
+    const map = new Map<string, CampaignRow[]>();
+    for (const c of campaigns) {
+      const key = c.groupKey || c.id;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(c);
+    }
+    return [...map.entries()].map(([key, sends]) => ({ key, sends }));
+  }, [campaigns]);
+
   const dateChartData = useMemo(() => {
     if (!analytics) return [];
     return analytics.series.map((s) => ({
@@ -213,27 +225,48 @@ export function CampaignsHome({
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="font-display text-2xl font-semibold">Campañas</h2>
-          <p className="mt-1 text-sm text-[var(--onda-muted)]">
-            Objetivo → audiencia → revisión. El extra de SMS se cobra en la
-            siguiente factura de consumos
-            {quota
-              ? ` · ${quota.reachUsed}/${quota.reachLimit} SMS usados · ${formatCop(quota.unitCop)}/SMS extra`
-              : ''}
-            {quota && !quota.hasPaymentMethod ? (
-              <>
-                {' '}
-                ·{' '}
-                <button
-                  type="button"
-                  className="font-medium underline underline-offset-2"
-                  onClick={() => router.push('/facturacion')}
-                >
-                  Agrega tarjeta
-                </button>
-              </>
-            ) : null}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h2 className="font-display text-2xl font-semibold">Campañas</h2>
+            <span className="group relative inline-flex">
+              <button
+                type="button"
+                aria-label="¿Cómo funcionan las campañas?"
+                className="text-[var(--onda-muted)] transition hover:text-[var(--onda-ink)]"
+              >
+                <Info size={16} weight="duotone" />
+              </button>
+              <span
+                role="tooltip"
+                className="pointer-events-none absolute left-0 top-full z-20 mt-2 block w-72 rounded-2xl border border-[var(--onda-border)] bg-white p-3 text-left text-xs leading-relaxed text-[var(--onda-ink)] opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-within:opacity-100"
+              >
+                <span className="block font-semibold">
+                  ¿Cómo funcionan?
+                </span>
+                <span className="mt-1 block text-[var(--onda-muted)]">
+                  Objetivo → audiencia → revisión. El extra de SMS se cobra en
+                  la siguiente factura de consumos.
+                </span>
+                {quota ? (
+                  <span className="mt-2 block border-t border-[var(--onda-border)] pt-2 tabular-nums text-[var(--onda-muted)]">
+                    {quota.reachUsed}/{quota.reachLimit} SMS usados este mes ·{' '}
+                    {formatCop(quota.unitCop)}/SMS extra
+                  </span>
+                ) : null}
+              </span>
+            </span>
+          </div>
+          {quota && !quota.hasPaymentMethod ? (
+            <p className="mt-1 text-xs text-[var(--onda-muted)]">
+              Sin tarjeta configurada{' '}
+              <button
+                type="button"
+                className="font-medium underline underline-offset-2"
+                onClick={() => router.push('/facturacion')}
+              >
+                Agrega tarjeta
+              </button>
+            </p>
+          ) : null}
         </div>
         <GradientButton type="button" onClick={() => router.push('/campanas/nueva')}>
           {OndaIcons.plus} Nueva campaña
@@ -366,10 +399,20 @@ export function CampaignsHome({
               </p>
             ) : (
               <ul className="divide-y divide-[var(--onda-border)] overflow-hidden rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)]">
-                {campaigns.map((c) => {
-                  const obj = c.objective?.toLowerCase().replace('_hours', '_hours') as
-                    | ObjectiveKind
-                    | undefined;
+                {campaignGroups.map((group) => {
+                  const root = group.sends[group.sends.length - 1];
+                  const latest = group.sends[0];
+                  const sentSends = group.sends.filter((s) => s.status === 'SENT');
+                  const totalReach = sentSends.reduce(
+                    (sum, s) => sum + (s.reachCount ?? 0),
+                    0
+                  );
+                  const totalCost = sentSends.reduce(
+                    (sum, s) => sum + (s.costCop ?? 0),
+                    0
+                  );
+                  const scheduled = group.sends.find((s) => s.status === 'SCHEDULED');
+                  const obj = root.objective?.toLowerCase() as ObjectiveKind | undefined;
                   const objectiveKey =
                     obj === 'slow_hours' ||
                     obj === 'reactivate' ||
@@ -377,50 +420,58 @@ export function CampaignsHome({
                     obj === 'reviews'
                       ? obj
                       : null;
+                  const title = root.title.replace(/\s*·\s*Reintento$/, '');
                   return (
-                    <li key={c.id}>
+                    <li key={group.key}>
                       <div className="flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-[var(--onda-bg)]/60">
                         <button
                           type="button"
-                          onClick={() =>
-                            c.status === 'SENT'
-                              ? router.push(`/campanas/${c.id}`)
-                              : undefined
-                          }
-                          disabled={c.status !== 'SENT'}
-                          className="min-w-0 flex-1 text-left disabled:cursor-default"
+                          onClick={() => router.push(`/campanas/${group.key}`)}
+                          className="min-w-0 flex-1 text-left"
                         >
-                          <p className="truncate font-medium text-[var(--onda-ink)]">
-                            {c.title}
+                          <p className="flex flex-wrap items-center gap-2">
+                            <span className="truncate font-medium text-[var(--onda-ink)]">
+                              {title}
+                            </span>
+                            {group.sends.length > 1 ? (
+                              <span className="shrink-0 rounded-full bg-[var(--onda-primary-100)] px-2 py-0.5 text-[10px] font-semibold text-[var(--onda-primary-700)]">
+                                {group.sends.length} envíos
+                              </span>
+                            ) : null}
                           </p>
                           <p className="text-xs text-[var(--onda-muted)]">
                             {objectiveKey ? OBJECTIVE_TITLES[objectiveKey] : 'Campaña'} ·{' '}
-                            {STATUS_LABEL[c.status]}
-                            {c.audienceCount != null && c.reachCount != null
-                              ? ` · Alcance ${c.audienceCount}→${c.reachCount}`
-                              : c.audienceCount != null
-                                ? ` · Est. ${c.audienceCount}`
-                                : ''}
-                            {c.status === 'SENT' && c.costCop != null
-                              ? ` · ${formatCop(c.costCop)}`
-                              : ''}
-                            {c.status === 'SENT' && c.roiRatio != null
-                              ? ` · ROI ${formatCampaignRoi(c.roiRatio)}`
-                              : ''}
+                            {sentSends.length > 0 ? (
+                              <>
+                                Último{' '}
+                                {latest.sentAt
+                                  ? new Date(latest.sentAt).toLocaleString('es-CO', {
+                                      dateStyle: 'medium',
+                                      timeStyle: 'short',
+                                    })
+                                  : '—'}
+                                {totalReach > 0 ? ` · Alcance ${totalReach}` : ''}
+                                {totalCost > 0 ? ` · ${formatCop(totalCost)}` : ''}
+                              </>
+                            ) : scheduled ? (
+                              `Programada · ${STATUS_LABEL.SCHEDULED}`
+                            ) : (
+                              STATUS_LABEL[latest.status]
+                            )}
                           </p>
                         </button>
-                        {c.status === 'SCHEDULED' ? (
+                        {scheduled ? (
                           <button
                             type="button"
-                            onClick={() => void cancelCampaign(c.id)}
+                            onClick={() => void cancelCampaign(scheduled.id)}
                             className="rounded-full px-3 py-1.5 text-xs font-medium text-[var(--onda-danger)] hover:bg-[var(--onda-danger)]/8"
                           >
                             Cancelar
                           </button>
-                        ) : c.status === 'SENT' ? (
+                        ) : sentSends.length > 0 ? (
                           <button
                             type="button"
-                            onClick={() => router.push(`/campanas/${c.id}`)}
+                            onClick={() => router.push(`/campanas/${group.key}`)}
                             className="text-xs text-[var(--onda-primary-700)]"
                           >
                             Ver →

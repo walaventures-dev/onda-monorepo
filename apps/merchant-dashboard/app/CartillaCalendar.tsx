@@ -224,12 +224,15 @@ export function CartillaCalendar({
   onCreate,
   onClose,
   embedded = false,
+  initialCartillas,
 }: {
   storeId: string;
   onOpen: (id: string) => void;
   onCreate?: () => void;
   onClose?: () => void;
   embedded?: boolean;
+  /** Datos ya cargados por el padre: evita el estado vacío inicial. */
+  initialCartillas?: CalCartilla[];
 }) {
   const now = new Date();
   const [scope, setScope] = useState<Scope>("year");
@@ -257,7 +260,8 @@ export function CartillaCalendar({
   const daysInPeriod =
     Math.round((periodEnd.getTime() - periodStart.getTime()) / MS_DAY) + 1;
 
-  const cartillas = data?.cartillas || [];
+  const cartillas =
+    initialCartillas?.length ? initialCartillas : (data?.cartillas || []);
   const lanes = useMemo(
     () => buildLanes(periodStart, periodEnd, daysInPeriod, cartillas),
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -37,6 +37,7 @@ import {
   BadgePill,
   SkeletonDetail,
   SkeletonDashboard,
+  InfoTooltip,
 } from "@onda/shared-ui";
 import {
   displayPhone,
@@ -801,6 +802,8 @@ export function MerchantWorkspace() {
   const [eventId, setEventId] = useState("");
   const [overview, setOverview] = useState<any>(null);
   const [promos, setPromos] = useState<any[]>([]);
+  const [promosLoading, setPromosLoading] = useState(false);
+  const promosReqSeq = useRef(0);
   const [memberships, setMemberships] = useState<any[]>([]);
   const [billing, setBilling] = useState<any>(null);
   const [duplicateSource, setDuplicateSource] = useState<any>(null);
@@ -1152,13 +1155,22 @@ export function MerchantWorkspace() {
 
   const loadPromos = useCallback(async () => {
     if (!storeId) return;
-    const params = new URLSearchParams({ storeId });
-    if (filters.promoTypes.length)
-      params.set("type", filters.promoTypes.join(","));
-    if (promoStatusFilter === "active") params.set("isActive", "true");
-    if (promoStatusFilter === "inactive") params.set("isActive", "false");
-    if (promoPoolFilter !== "ALL") params.set("pool", promoPoolFilter);
-    setPromos((await api(`/promotions?${params}`)) as any[]);
+    const seq = ++promosReqSeq.current;
+    setPromosLoading(true);
+    try {
+      const params = new URLSearchParams({ storeId });
+      if (filters.promoTypes.length)
+        params.set("type", filters.promoTypes.join(","));
+      if (promoStatusFilter === "active") params.set("isActive", "true");
+      if (promoStatusFilter === "inactive") params.set("isActive", "false");
+      if (promoPoolFilter !== "ALL") params.set("pool", promoPoolFilter);
+      const data = (await api(`/promotions?${params}`)) as any[];
+      // Ignora respuestas atrapadas: el filtro cambió mientras se hacía el fetch.
+      if (seq !== promosReqSeq.current) return;
+      setPromos(data);
+    } finally {
+      if (seq === promosReqSeq.current) setPromosLoading(false);
+    }
   }, [storeId, filters.promoTypes, promoStatusFilter, promoPoolFilter]);
 
   const loadCartillas = useCallback(async () => {
@@ -3003,28 +3015,12 @@ export function MerchantWorkspace() {
 
         {tab === "promos" && !selectedPromoId && !selectedCartillaId && (
           <div className="space-y-5">
-            <div className="onda-kpi-grid">
-              <KpiCard
-                label="Promos activas"
-                value={kpis?.promosActivas ?? 0}
-              />
-              <KpiCard
-                label="Cobertura catálogo"
-                value={`${kpis?.coberturaCatalogo ?? 0}%`}
-              />
-              <KpiCard label="Canjes en rango" value={kpis?.redenciones ?? 0} />
-            </div>
-
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                <h2 className="font-display text-xl font-semibold">
+                <h2 className="flex items-center gap-1.5 font-display text-xl font-semibold">
                   Cartillas
+                  <InfoTooltip text="La base y las demás cartillas activas pueden coexistir — por temporada, por servicio o por productos. Tus clientes eligen cuál cargan en su pase." />
                 </h2>
-                <p className="text-sm text-[var(--onda-muted)]">
-                  La base y las demás cartillas activas pueden coexistir — por
-                  temporada, por servicio o por productos. Tus clientes eligen
-                  cuál cargan en su pase.
-                </p>
                 <p className="mt-1 text-xs text-[var(--onda-muted)]">
                   {(() => {
                     const limit = store?.planType === "PRO" ? 4 : 2;
@@ -3077,15 +3073,19 @@ export function MerchantWorkspace() {
                 </GradientButton>
               </div>
             </div>
-            {cartillaView === "calendar" ? (
+            <div className={cartillaView === "calendar" ? "" : "hidden"}>
               <CartillaCalendar
                 storeId={storeId}
                 embedded
+                initialCartillas={cartillasData?.cartillas}
                 onOpen={(id) => router.push(`/promos/cartilla/${id}`)}
               />
-            ) : null}
-            {cartillaView === "grid" ? (
-              <div className="grid gap-3 sm:grid-cols-2">
+            </div>
+            <div
+              className={`grid gap-3 sm:grid-cols-2 ${
+                cartillaView === "grid" ? "" : "hidden"
+              }`}
+            >
               {(cartillasData?.cartillas || []).map((c: any) => (
                 <article
                   key={c.id}
@@ -3167,17 +3167,14 @@ export function MerchantWorkspace() {
                   </dl>
                 </article>
               ))}
-              </div>
-            ) : null}
+            </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="font-display text-xl font-semibold">
+                <h2 className="flex items-center gap-1.5 font-display text-xl font-semibold">
                   Promociones
+                  <InfoTooltip text="Dos bolsas: Adquisición (Onda capta clientes) y Retención." />
                 </h2>
-                <p className="text-sm text-[var(--onda-muted)]">
-                  Dos bolsas: Adquisición (Onda capta clientes) y Retención.
-                </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <SegmentedControl
@@ -3231,32 +3228,51 @@ export function MerchantWorkspace() {
               </p>
             ) : null}
 
-            {promoView === "calendar" ? (
-              <PromoCalendar promos={promos} onOpenPromo={openPromoDetail} />
-            ) : (
-              <div className="grid justify-start gap-2 grid-cols-2 sm:[grid-template-columns:repeat(auto-fill,10.5rem)] lg:[grid-template-columns:repeat(auto-fill,15.25rem)]">
-                {promos.map((p) => (
-                  <PromoCatalogCard
-                    key={p.id}
-                    promo={p}
-                    stats={promoStatsMap.get(p.id)}
-                    highlight={p.id === justCreatedPromoId}
-                    showTypeTag={filters.promoTypes.length !== 1}
-                    showStatusTag={promoStatusFilter === "all"}
-                    showPoolTag={promoPoolFilter === "ALL"}
-                    onOpen={() => openPromoDetail(p.id)}
-                    onToggle={() => void togglePromo(p.id, p.isActive)}
-                    onDelete={() => void deletePromo(p.id)}
-                  />
-                ))}
-                {!promos.length ? (
-                  <p className="col-span-full text-sm text-[var(--onda-muted)]">
-                    No hay promociones con estos filtros. Crea una con “+ Nueva
-                    promo”.
-                  </p>
-                ) : null}
-              </div>
-            )}
+            <div
+              className={`transition-opacity duration-150 ${
+                promosLoading ? "opacity-50" : ""
+              }`}
+            >
+              {promoView === "calendar" ? (
+                <PromoCalendar
+                  promos={promos}
+                  onOpenPromo={openPromoDetail}
+                  onCreate={() => router.push("/promos/nueva")}
+                />
+              ) : (
+                <div className="grid justify-start gap-2 grid-cols-2 sm:[grid-template-columns:repeat(auto-fill,10.5rem)] lg:[grid-template-columns:repeat(auto-fill,15.25rem)]">
+                  {promos.map((p) => (
+                    <PromoCatalogCard
+                      key={p.id}
+                      promo={p}
+                      stats={promoStatsMap.get(p.id)}
+                      highlight={p.id === justCreatedPromoId}
+                      showTypeTag={filters.promoTypes.length !== 1}
+                      showStatusTag={promoStatusFilter === "all"}
+                      showPoolTag={promoPoolFilter === "ALL"}
+                      onOpen={() => openPromoDetail(p.id)}
+                      onToggle={() => void togglePromo(p.id, p.isActive)}
+                      onDelete={() => void deletePromo(p.id)}
+                    />
+                  ))}
+                  {!promos.length && !promosLoading ? (
+                    <div className="col-span-full rounded-2xl border border-dashed border-[var(--onda-border)] p-6 text-center">
+                      <p className="text-sm text-[var(--onda-muted)]">
+                        No hay promociones con estos filtros.
+                      </p>
+                      <GradientButton
+                        type="button"
+                        className="mt-3"
+                        onClick={() => router.push("/promos/nueva")}
+                      >
+                        {OndaIcons.plus}
+                        Nueva promo
+                      </GradientButton>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

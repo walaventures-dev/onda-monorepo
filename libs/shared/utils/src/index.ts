@@ -292,7 +292,9 @@ export {
   buildCampaignMessages,
   buildObjectiveMessages,
   renderCampaignTemplate,
+  nextRewardSuffix,
   CAMPAIGN_CHANNELS,
+  CAMPAIGN_EMOTIONS,
   type ObjectiveKind,
   type ObjectiveDetails,
   type ObjectiveDetailFieldDef,
@@ -302,6 +304,7 @@ export {
   type CampaignPromoType,
   type CampaignMessage,
   type CampaignChannelLabel,
+  type CampaignEmotion,
 } from './campaign-copy';
 
 export {

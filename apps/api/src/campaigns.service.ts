@@ -16,6 +16,7 @@ import {
 import { StoreSegment, StoreSubcategory } from '@onda/shared-types';
 import {
   buildObjectiveMessages,
+  nextRewardSuffix,
   objectiveLabel,
   renderCampaignTemplate,
   voiceFor,
@@ -55,6 +56,7 @@ export type AudienceFilter = {
   cartillaId?: string | null;
   rewardName?: string;
   reviewIncentive?: string;
+  selectedPassIds?: string[];
 };
 
 type AudienceQueryOpts = Partial<
@@ -68,6 +70,37 @@ type PassRow = Prisma.PassGetPayload<{
     transactions: true;
   };
 }>;
+
+type MemberRow = {
+  passId: string;
+  userId: string;
+  walletRef: string | null;
+  phone: string | null;
+  name: string;
+  daysSince: number;
+  visits: number;
+  nearGap: number | null;
+  nextRewardTitle: string | null;
+  redeemedRecently: boolean;
+  daysSinceRedeem: number | null;
+  hasFeedback: boolean;
+  meta: string;
+};
+
+function memberDto(m: MemberRow) {
+  return {
+    passId: m.passId,
+    name: m.name,
+    initials: initials(m.name),
+    meta: m.meta,
+    phone: m.phone,
+    walletRef: m.walletRef,
+    daysSince: Math.round(m.daysSince),
+    visits: m.visits,
+    nearGap: m.nearGap,
+    nextRewardTitle: m.nextRewardTitle,
+  };
+}
 
 @Injectable()
 export class CampaignsService {
@@ -98,7 +131,10 @@ export class CampaignsService {
     ]);
     const freeRemaining = Math.max(0, pricing.freeMonthly - reachUsed);
     return {
-      campaigns,
+      campaigns: campaigns.map((c) => ({
+        ...c,
+        groupKey: c.groupId ?? c.id,
+      })),
       reachUsed,
       reachLimit: pricing.freeMonthly,
       freeRemaining,
@@ -217,6 +253,7 @@ export class CampaignsService {
       chips,
       kpis,
       people,
+      members: members.slice(0, 300).map(memberDto),
       visitFrequency,
       count: members.length,
       slowWindow,
@@ -231,6 +268,50 @@ export class CampaignsService {
         requireWallet: filter.requireWallet,
         cartillaId: filter.cartillaId,
       } satisfies AudienceFilter,
+    };
+  }
+
+  async browseAudience(
+    storeId: string,
+    opts: {
+      search?: string;
+      inactiveFrom?: number;
+      inactiveTo?: number;
+      ondasGap?: number;
+      requireWallet?: boolean;
+    } = {}
+  ) {
+    if (!storeId) throw new BadRequestException('storeId es obligatorio');
+    const { mapped } = await this.loadMappedPasses(storeId);
+    let members = mapped;
+
+    const search = opts.search?.trim().toLowerCase();
+    if (search) {
+      const digits = search.replace(/\D/g, '');
+      members = members.filter((m) => {
+        if (m.name.toLowerCase().includes(search)) return true;
+        const phoneDigits = (m.phone || '').replace(/\D/g, '');
+        return digits.length > 0 && phoneDigits.includes(digits);
+      });
+    }
+    if (opts.inactiveFrom != null && Number.isFinite(opts.inactiveFrom)) {
+      members = members.filter((m) => m.daysSince >= opts.inactiveFrom!);
+    }
+    if (opts.inactiveTo != null && Number.isFinite(opts.inactiveTo)) {
+      members = members.filter((m) => m.daysSince <= opts.inactiveTo!);
+    }
+    if (opts.ondasGap != null && Number.isFinite(opts.ondasGap)) {
+      members = members.filter(
+        (m) => m.nearGap != null && m.nearGap <= opts.ondasGap!
+      );
+    }
+    if (opts.requireWallet) {
+      members = members.filter((m) => m.walletRef);
+    }
+    members.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    return {
+      count: members.length,
+      members: members.slice(0, 300).map(memberDto),
     };
   }
 
@@ -307,60 +388,6 @@ export class CampaignsService {
       }
     }
 
-    const rewardCartilla = cartillas.find((c) =>
-      c.items.some((i) => i.promotion.isActive)
-    );
-    const rewardItem = rewardCartilla?.items.find((i) => i.promotion.isActive);
-    const nearAudience = await this.audience(
-      storeId,
-      'new_reward',
-      rewardCartilla?.id
-    );
-    const recentPromo = rewardItem
-      ? Date.now() - rewardItem.promotion.createdAt.getTime() < 14 * DAY_MS
-      : false;
-    if (rewardItem && (nearAudience.count >= 1 || recentPromo)) {
-      const rewardName = rewardItem.promotion.title;
-      recs.push({
-        id: 'new_reward',
-        objective: 'new_reward',
-        origin: 'RECOMMENDED',
-        reason: recentPromo
-          ? `Hay una recompensa reciente en «${rewardCartilla?.name}».`
-          : `${nearAudience.count} clientes están cerca de canjear.`,
-        title: `Avisar la recompensa «${rewardItem.promotion.title}»`,
-        audienceCount: nearAudience.count,
-        messages: buildObjectiveMessages({
-          kind: 'new_reward',
-          voice,
-          storeName: store.name,
-          details: recommendedDetails(voice, { rewardName }),
-        }),
-        cartillaId: rewardCartilla?.id,
-        rewardName,
-      });
-    }
-
-    if (store.googlePlaceId) {
-      const reviews = await this.audience(storeId, 'reviews');
-      if (reviews.count >= 1) {
-        recs.push({
-          id: 'reviews',
-          objective: 'reviews',
-          origin: 'RECOMMENDED',
-          reason: `${reviews.count} clientes canjearon hace poco y aún no dejaron reseña.`,
-          title: objectiveLabel('reviews', voice),
-          audienceCount: reviews.count,
-          messages: buildObjectiveMessages({
-            kind: 'reviews',
-            voice,
-            storeName: store.name,
-            details: recommendedDetails(voice),
-          }),
-        });
-      }
-    }
-
     if (store.planType === 'PRO') {
       const weekAgo = new Date(Date.now() - 7 * DAY_MS);
       const negativeCount = await this.prisma.feedback.count({
@@ -388,39 +415,6 @@ export class CampaignsService {
         });
       }
 
-      const fortnightAgo = new Date(Date.now() - 14 * DAY_MS);
-      const recentFeedbacks = await this.prisma.feedback.findMany({
-        where: { storeId, createdAt: { gte: fortnightAgo } },
-        select: { sentiment: true, redirectedToGoogle: true },
-      });
-      if (recentFeedbacks.length >= 5 && store.googlePlaceId) {
-        const positive = recentFeedbacks.filter(
-          (f) => f.sentiment === 'POSITIVE'
-        ).length;
-        const positiveRate = positive / recentFeedbacks.length;
-        const googleRedirects = recentFeedbacks.filter(
-          (f) => f.redirectedToGoogle
-        ).length;
-        if (positiveRate >= 0.7 && googleRedirects < positive * 0.3) {
-          const reviewsAudience = await this.audience(storeId, 'reviews');
-          if (reviewsAudience.count >= 1) {
-            recs.push({
-              id: 'feedback-google-push',
-              objective: 'reviews',
-              origin: 'RECOMMENDED',
-              reason: `${Math.round(positiveRate * 100)}% de feedback positivo pero pocas reseñas en Google. Refuerza la campaña de reseñas.`,
-              title: 'Convertir feedback positivo en reseñas Google',
-              audienceCount: reviewsAudience.count,
-              messages: buildObjectiveMessages({
-                kind: 'reviews',
-                voice,
-                storeName: store.name,
-                details: recommendedDetails(voice),
-              }),
-            });
-          }
-        }
-      }
     }
 
     const ending = cartillas.find((c) => {
@@ -493,8 +487,16 @@ export class CampaignsService {
     const filter = (body.audienceFilter ?? {
       objective: objectiveToKind(objective),
     }) as AudienceFilter;
-    const members = await this.resolveMembers(storeId, filter);
-    const audienceCount = body.audienceCount ?? members.length;
+    const selectedIds = Array.isArray(filter.selectedPassIds)
+      ? new Set(filter.selectedPassIds.filter((id) => typeof id === 'string'))
+      : null;
+    const members = selectedIds?.size
+      ? await this.resolveAllMembers(storeId)
+      : await this.resolveMembers(storeId, filter);
+    const effectiveMembers = selectedIds?.size
+      ? members.filter((m) => selectedIds.has(m.passId))
+      : members;
+    const audienceCount = body.audienceCount ?? effectiveMembers.length;
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: storeId },
       select: { planType: true, nextUsageBillingAt: true },
@@ -536,11 +538,21 @@ export class CampaignsService {
       },
     });
 
-    await this.jobs.enqueue(
-      'campaign-dispatch',
-      { campaignId: campaign.id },
-      { delayMs: Math.max(0, delayMs) }
-    );
+    try {
+      await this.jobs.enqueue(
+        'campaign-dispatch',
+        { campaignId: campaign.id },
+        { delayMs: Math.max(0, delayMs) }
+      );
+    } catch (e) {
+      await this.prisma.campaign.update({
+        where: { id: campaign.id },
+        data: { status: CampaignStatus.FAILED },
+      });
+      throw e instanceof Error
+        ? new BadRequestException(`No se pudo programar el envío: ${e.message}`)
+        : e;
+    }
     return campaign;
   }
 
@@ -555,6 +567,33 @@ export class CampaignsService {
       data: { status: CampaignStatus.CANCELLED },
     });
     return this.prisma.campaign.findUniqueOrThrow({ where: { id } });
+  }
+
+  async relaunch(id: string) {
+    const campaign = await this.prisma.campaign.findUnique({ where: { id } });
+    if (!campaign) throw new NotFoundException('Campaña no encontrada');
+    if (campaign.status !== CampaignStatus.SENT) {
+      throw new BadRequestException('Solo se pueden relanzar campañas ya enviadas');
+    }
+    // create() re-resuelve la audiencia al día (y respeta la selección guardada),
+    // recalcula el costo por el cupo del mes y encola el envío.
+    const created = await this.create({
+      storeId: campaign.storeId,
+      title: `${campaign.title} · Reintento`,
+      objective: campaign.objective ? campaign.objective.toLowerCase() : 'reactivate',
+      origin: campaign.origin,
+      smsBody: campaign.smsBody ?? undefined,
+      walletBody: campaign.walletBody ?? undefined,
+      sendSms: campaign.sendSms,
+      sendWallet: campaign.sendWallet,
+      audienceFilter: (campaign.audienceFilter || undefined) as
+        | AudienceFilter
+        | undefined,
+    });
+    return this.prisma.campaign.update({
+      where: { id: created.id },
+      data: { groupId: campaign.groupId ?? campaign.id },
+    });
   }
 
   async purchase(
@@ -596,25 +635,41 @@ export class CampaignsService {
 
     const filter = (campaign.audienceFilter || {}) as AudienceFilter;
     const objective = filter.objective || objectiveToKind(campaign.objective);
-    const members = await this.resolveMembers(campaign.storeId, {
-      objective,
-      slowWindow: filter.slowWindow,
-      inactiveDays: filter.inactiveDays,
-      minVisits: filter.minVisits,
-      maxPointsGap: filter.maxPointsGap,
-      activeWithinDays: filter.activeWithinDays,
-      redeemWithinDays: filter.redeemWithinDays,
-      requireWallet: filter.requireWallet,
-      cartillaId: filter.cartillaId,
-    });
+    const selectedIds = Array.isArray(filter.selectedPassIds)
+      ? new Set(filter.selectedPassIds.filter((id) => typeof id === 'string'))
+      : null;
+    const members = selectedIds?.size
+      ? await this.resolveAllMembers(campaign.storeId)
+      : await this.resolveMembers(campaign.storeId, {
+          objective,
+          slowWindow: filter.slowWindow,
+          inactiveDays: filter.inactiveDays,
+          minVisits: filter.minVisits,
+          maxPointsGap: filter.maxPointsGap,
+          activeWithinDays: filter.activeWithinDays,
+          redeemWithinDays: filter.redeemWithinDays,
+          requireWallet: filter.requireWallet,
+          cartillaId: filter.cartillaId,
+        });
+    const targets = selectedIds?.size
+      ? members.filter((m) => selectedIds.has(m.passId))
+      : members;
 
     const sentAt = new Date();
     const reached = new Map<
       string,
-      { passId: string; userId: string; phone?: string; name: string; walletRef?: string | null }
+      {
+        passId: string;
+        userId: string;
+        phone?: string | null;
+        name: string;
+        walletRef?: string | null;
+        nearGap?: number | null;
+        nextRewardTitle?: string | null;
+      }
     >();
 
-    for (const m of members) {
+    for (const m of targets) {
       const canSms = campaign.sendSms && campaign.smsBody && m.phone;
       const canWallet = campaign.sendWallet && campaign.walletBody && m.walletRef;
       if (!canSms && !canWallet) continue;
@@ -647,29 +702,54 @@ export class CampaignsService {
     try {
       // El extra de SMS se factura en el corte de consumos, no al enviar.
 
+      let attempted = 0;
+      let failed = 0;
       for (const m of reachList) {
         const feedbackUrl = buildFeedbackUrl({
           slug: campaign.store.slug,
           passId: m.passId,
         });
+        const suffix = nextRewardSuffix(m.nearGap, m.nextRewardTitle);
         if (campaign.sendSms && campaign.smsBody && m.phone) {
-          const message = renderCampaignTemplate(campaign.smsBody, {
+          const base = renderCampaignTemplate(campaign.smsBody, {
             nombre: m.name.split(' ')[0] || 'tú',
             feedbackUrl,
             store: campaign.store.name,
-          }).slice(0, 160);
-          await this.brevo.sendSms({ to: m.phone, message });
+          });
+          // El cierre del premio cercano no se corta: se recorta el cuerpo si no cabe.
+          const bodyBudget = 160 - suffix.length;
+          const body =
+            base.length <= bodyBudget ? base : `${base.slice(0, Math.max(0, bodyBudget)).trimEnd()}…`;
+          attempted += 1;
+          const res = await this.brevo.sendSms({ to: m.phone, message: body + suffix });
+          if (!res.ok) failed += 1;
         }
         if (campaign.sendWallet && campaign.walletBody && m.walletRef) {
-          await this.wallet.notify(
+          attempted += 1;
+          const res = await this.wallet.notify(
             m.walletRef,
             renderCampaignTemplate(campaign.walletBody, {
               nombre: m.name.split(' ')[0],
               feedbackUrl,
               store: campaign.store.name,
-            })
+            }) + suffix
           );
+          if (!res.ok) {
+            failed += 1;
+            this.logger.warn(`Wallet notify falló para ${m.walletRef} (${m.name})`);
+          }
         }
+      }
+
+      if (attempted > 0 && failed === attempted) {
+        throw new Error(
+          `Ningún envío llegó a su destino: fallaron ${failed} de ${attempted}`
+        );
+      }
+      if (failed > 0) {
+        this.logger.warn(
+          `Campaña ${campaign.id}: ${failed} de ${attempted} envíos fallaron (parcial)`
+        );
       }
 
       await this.prisma.$transaction(async (tx) => {
@@ -881,7 +961,52 @@ export class CampaignsService {
         sentAt: campaign.sentAt,
       },
       metrics,
+      sends: await this.sendsForGroup(campaign),
     };
+  }
+
+  private async sendsForGroup(campaign: {
+    id: string;
+    storeId: string;
+    groupId: string | null;
+  }) {
+    const groupKey = campaign.groupId ?? campaign.id;
+    const siblings = await this.prisma.campaign.findMany({
+      where: {
+        storeId: campaign.storeId,
+        OR: [{ id: groupKey }, { groupId: groupKey }],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    for (const s of siblings) {
+      if (s.status === CampaignStatus.SENT && !s.successEvaluatedAt) {
+        await this.evaluateCampaignSuccess(s.id);
+      }
+    }
+    const refreshed = await this.prisma.campaign.findMany({
+      where: {
+        storeId: campaign.storeId,
+        OR: [{ id: groupKey }, { groupId: groupKey }],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return refreshed.map((s) => {
+      const reach = s.reachCount ?? 0;
+      const success = s.successCount ?? 0;
+      return {
+        id: s.id,
+        status: s.status,
+        sentAt: s.sentAt,
+        scheduledAt: s.scheduledAt,
+        audienceCount: s.audienceCount,
+        reachCount: reach,
+        successCount: success,
+        successRate: reach > 0 ? success / reach : 0,
+        costCop: s.costCop ?? 0,
+        attributedSalesCop: s.attributedSalesCop ?? 0,
+        roiRatio: s.roiRatio,
+      };
+    });
   }
 
   async analytics(
@@ -999,7 +1124,12 @@ export class CampaignsService {
     };
   }
 
-  private async resolveMembers(storeId: string, filter: AudienceFilter) {
+  private async resolveAllMembers(storeId: string) {
+    const { mapped } = await this.loadMappedPasses(storeId);
+    return mapped;
+  }
+
+  private async loadMappedPasses(storeId: string) {
     const passes = await this.prisma.pass.findMany({
       where: { storeId },
       include: {
@@ -1017,9 +1147,20 @@ export class CampaignsService {
         })
       ).map((f) => f.userId)
     );
+    return { mapped: passes.map((p) => this.mapPass(p, now, feedbackUserIds)) };
+  }
 
-    const mapped = passes.map((p) => this.mapPass(p, now, feedbackUserIds));
-    let members: ReturnType<typeof this.mapPass>[];
+  private async resolveMembers(storeId: string, filter: AudienceFilter) {
+    const { mapped } = await this.loadMappedPasses(storeId);
+    const members = this.applyObjectiveFilter(mapped, filter);
+    if (filter.requireWallet) {
+      return members.filter((m) => m.walletRef);
+    }
+    return members;
+  }
+
+  private applyObjectiveFilter(mapped: MemberRow[], filter: AudienceFilter) {
+    let members: MemberRow[];
     switch (filter.objective) {
       case 'reactivate': {
         const days = filter.inactiveDays ?? 21;
@@ -1057,9 +1198,6 @@ export class CampaignsService {
       default:
         members = mapped.filter((m) => m.visits > 0);
     }
-    if (filter.requireWallet) {
-      members = members.filter((m) => m.walletRef);
-    }
     return members;
   }
 
@@ -1067,7 +1205,7 @@ export class CampaignsService {
     p: PassRow,
     now: number,
     feedbackUserIds: Set<string>
-  ) {
+  ): MemberRow {
     const lastTx = p.transactions[0];
     const visits = p.transactions.filter((t) => t.type === 'ACCUMULATE').length;
     const daysSince = lastTx
@@ -1083,6 +1221,7 @@ export class CampaignsService {
       .filter((r) => p.points < r.pointsRequired)
       .sort((a, b) => a.pointsRequired - b.pointsRequired)[0];
     const nearGap = next ? next.pointsRequired - p.points : null;
+    const nextRewardTitle = next?.title ?? null;
     const lastRedeem = p.transactions.find((t) => t.type === 'REDEEM');
     const daysSinceRedeem = lastRedeem
       ? (now - lastRedeem.createdAt.getTime()) / DAY_MS
@@ -1107,6 +1246,7 @@ export class CampaignsService {
       daysSince,
       visits,
       nearGap,
+      nextRewardTitle,
       redeemedRecently,
       daysSinceRedeem,
       hasFeedback: feedbackUserIds.has(p.userId),

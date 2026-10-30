@@ -62,6 +62,24 @@ export class CampaignsController {
     });
   }
 
+  @Get('audience/browse')
+  browseAudience(
+    @Query('storeId') storeId: string,
+    @Query('search') search?: string,
+    @Query('inactiveFrom') inactiveFrom?: string,
+    @Query('inactiveTo') inactiveTo?: string,
+    @Query('ondasGap') ondasGap?: string,
+    @Query('requireWallet') requireWallet?: string
+  ) {
+    return this.campaigns.browseAudience(storeId, {
+      search,
+      inactiveFrom: parseOptionalInt(inactiveFrom),
+      inactiveTo: parseOptionalInt(inactiveTo),
+      ondasGap: parseOptionalInt(ondasGap),
+      requireWallet: requireWallet === '1' || requireWallet === 'true',
+    });
+  }
+
   @Post()
   create(@Body() body: Parameters<CampaignsService['create']>[0]) {
     return this.campaigns.create(body);
@@ -87,6 +105,11 @@ export class CampaignsController {
   @Post(':id/cancel')
   cancel(@Param('id') id: string) {
     return this.campaigns.cancel(id);
+  }
+
+  @Post(':id/relaunch')
+  relaunch(@Param('id') id: string) {
+    return this.campaigns.relaunch(id);
   }
 
   @Get('store/:storeId')
