@@ -7,18 +7,21 @@ import {
 export type ObjectiveKind =
   | 'reactivate'
   | 'slow_hours'
+  | 'recover'
   | 'new_reward'
   | 'reviews';
 
 export const OBJECTIVE_KINDS: ObjectiveKind[] = [
   'reactivate',
   'slow_hours',
+  'recover',
 ];
 
 /** Título corto del chip / tarjeta (no cambia con el vertical). */
 export const OBJECTIVE_TITLES: Record<ObjectiveKind, string> = {
   reactivate: 'Traer de vuelta',
   slow_hours: 'Horas flojas',
+  recover: 'Recuperar',
   new_reward: 'Nueva recompensa',
   reviews: 'Pedir reseñas',
 };
@@ -688,6 +691,8 @@ export function objectiveHint(kind: ObjectiveKind): string {
       return 'Clientes dormidos o en riesgo';
     case 'slow_hours':
       return 'Llena el local cuando esté flojo';
+    case 'recover':
+      return 'Recupera a quien tuvo mala experiencia';
     case 'new_reward':
       return 'Avisa un premio nuevo o cercano';
     case 'reviews':
@@ -713,11 +718,15 @@ export type ObjectiveDetails = {
   inactiveDays: number;
   minVisits: number;
   slowWindow: string;
+  slowDows: number[];
+  slowStartHour: number;
+  slowEndHour: number;
   rewardName: string;
   maxPointsGap: number;
   activeWithinDays: number;
   reviewIncentive: string;
   redeemWithinDays: number;
+  negativeWithinDays: number;
   requireWallet: boolean;
   emotion: CampaignEmotion;
 };
@@ -727,6 +736,94 @@ export const DEFAULT_MIN_VISITS = 1;
 export const DEFAULT_MAX_POINTS_GAP = 2;
 export const DEFAULT_ACTIVE_WITHIN_DAYS = 14;
 export const DEFAULT_REDEEM_WITHIN_DAYS = 14;
+export const DEFAULT_NEGATIVE_WITHIN_DAYS = 30;
+export const DEFAULT_SLOW_DOWS: number[] = [2, 3];
+export const DEFAULT_SLOW_START_HOUR = 14;
+export const DEFAULT_SLOW_END_HOUR = 17;
+
+/** 1 = lunes … 7 = domingo (igual que Date.getDay() con lunes primero). */
+export const SLOW_DOW_LABELS = [
+  'lunes',
+  'martes',
+  'miércoles',
+  'jueves',
+  'viernes',
+  'sábado',
+  'domingo',
+] as const;
+
+/** Iniciales cortas para los chips del selector. */
+export const SLOW_DOW_SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] as const;
+
+export function formatSlowHour(hour: number): string {
+  const h = ((Math.round(hour) % 24) + 24) % 24;
+  if (h === 12) return '12 m';
+  if (h === 0) return '12 am';
+  if (h > 12) return `${h - 12} pm`;
+  return `${h} am`;
+}
+
+/** "martes y miércoles de 2 a 5 pm". Cadena vacía si faltan datos. */
+export function formatSlowWindowParts(opts: {
+  dows: number[];
+  startHour: number;
+  endHour: number;
+}): string {
+  const dows = [...new Set(opts.dows.filter((d) => d >= 1 && d <= 7))].sort(
+    (a, b) => a - b
+  );
+  if (
+    dows.length === 0 ||
+    !Number.isFinite(opts.startHour) ||
+    !Number.isFinite(opts.endHour)
+  ) {
+    return '';
+  }
+  const names = dows.map((d) => SLOW_DOW_LABELS[d - 1]);
+  const days =
+    names.length === 1
+      ? names[0]
+      : names.length === 2
+        ? `${names[0]} y ${names[1]}`
+        : `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`;
+  return `${days} de ${formatSlowHour(opts.startHour)} a ${formatSlowHour(opts.endHour)}`;
+}
+
+const SLOW_WINDOW_RE =
+  /^\s*((?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)(?:(?:\s*,|\s+y)\s*(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo))*)\s*(?:de\s*(\d{1,2})\s*(am|pm|m)?\s+a\s*(\d{1,2})\s*(am|pm|m)?)?/i;
+
+function slowHourTo24(hour: number, meridiem: string | undefined): number {
+  if (!meridiem) return hour;
+  if (meridiem === 'm') return hour === 12 ? 12 : hour; // "12 m" = mediodía
+  if (meridiem === 'am') return hour === 12 ? 0 : hour;
+  return hour === 12 ? 12 : hour + 12;
+}
+
+/** Parsea el formato estándar de formatSlowWindowParts. Null si no reconoce el texto. */
+export function parseSlowWindowLabel(
+  label: string
+): { dows: number[]; startHour: number; endHour: number } | null {
+  const m = SLOW_WINDOW_RE.exec(label || '');
+  if (!m) return null;
+  const strip = (s: string) =>
+    s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const dows = m[1]
+    .split(/\s*,\s*|\s+y\s+/)
+    .map((n) => SLOW_DOW_LABELS.findIndex((d) => strip(d) === strip(n)) + 1)
+    .filter((d) => d > 0);
+  if (dows.length === 0) return null;
+  // "de 2 a 5 pm": la hora inicial sin meridiano hereda el de la final.
+  const startMeridiem = m[3]?.toLowerCase() || m[5]?.toLowerCase();
+  return {
+    dows,
+    startHour: m[2]
+      ? slowHourTo24(Number(m[2]), startMeridiem)
+      : DEFAULT_SLOW_START_HOUR,
+    endHour: m[4]
+      ? slowHourTo24(Number(m[4]), m[5]?.toLowerCase())
+      : DEFAULT_SLOW_END_HOUR,
+  };
+}
 
 export type ObjectiveDetailFieldKey = keyof ObjectiveDetails;
 
@@ -734,7 +831,7 @@ export type ObjectiveDetailFieldDef = {
   key: ObjectiveDetailFieldKey;
   label: string;
   hint?: string;
-  type: 'number' | 'text' | 'boolean';
+  type: 'number' | 'text' | 'boolean' | 'weekdays' | 'hours';
   min?: number;
   max?: number;
   placeholder?: string;
@@ -769,11 +866,24 @@ export const OBJECTIVE_DETAIL_FIELDS: Record<
   ],
   slow_hours: [
     {
-      key: 'slowWindow',
-      label: 'Ventana floja',
-      hint: 'Cuándo quieres llenar el local',
-      type: 'text',
-      placeholder: 'ej. martes y miércoles de 2 a 5 pm',
+      key: 'slowDows',
+      label: 'Días de la semana',
+      hint: '¿Qué días quieres llenar el local?',
+      type: 'weekdays',
+    },
+    {
+      key: 'slowStartHour',
+      label: 'Desde',
+      type: 'hours',
+      min: 5,
+      max: 22,
+    },
+    {
+      key: 'slowEndHour',
+      label: 'Hasta',
+      type: 'hours',
+      min: 6,
+      max: 23,
     },
     {
       key: 'minVisits',
@@ -781,6 +891,21 @@ export const OBJECTIVE_DETAIL_FIELDS: Record<
       type: 'number',
       min: 1,
       max: 20,
+    },
+    {
+      key: 'requireWallet',
+      label: 'Solo con pase en Wallet',
+      type: 'boolean',
+    },
+  ],
+  recover: [
+    {
+      key: 'negativeWithinDays',
+      label: 'Mala experiencia hace menos de (días)',
+      hint: 'Clientes que calificaron negativo su última visita',
+      type: 'number',
+      min: 1,
+      max: 90,
     },
     {
       key: 'requireWallet',
@@ -844,13 +969,19 @@ export function objectiveDetailFields(kind: ObjectiveKind): ObjectiveDetailField
 
 export function clampObjectiveDetail(
   key: ObjectiveDetailFieldKey,
-  raw: string | number | boolean
+  raw: string | number | boolean | number[]
 ): ObjectiveDetails[ObjectiveDetailFieldKey] {
   const field = Object.values(OBJECTIVE_DETAIL_FIELDS)
     .flat()
     .find((f) => f.key === key);
   if (field?.type === 'boolean') return Boolean(raw);
   if (field?.type === 'text') return String(raw);
+  if (field?.type === 'weekdays') {
+    const list = Array.isArray(raw) ? raw : String(raw).split(',');
+    return [...new Set(list.map(Number).filter((d) => d >= 1 && d <= 7))].sort(
+      (a, b) => a - b
+    );
+  }
   const n = Number(raw);
   const fallback =
     key === 'inactiveDays'
@@ -863,7 +994,13 @@ export function clampObjectiveDetail(
             ? DEFAULT_ACTIVE_WITHIN_DAYS
             : key === 'redeemWithinDays'
               ? DEFAULT_REDEEM_WITHIN_DAYS
-              : 0;
+              : key === 'negativeWithinDays'
+                ? DEFAULT_NEGATIVE_WITHIN_DAYS
+                : key === 'slowStartHour'
+                  ? DEFAULT_SLOW_START_HOUR
+                  : key === 'slowEndHour'
+                    ? DEFAULT_SLOW_END_HOUR
+                    : 0;
   if (!Number.isFinite(n)) return fallback;
   const min = field?.min ?? 0;
   const max = field?.max ?? 999;
@@ -874,15 +1011,20 @@ export function recommendedObjectiveDetails(
   voice: VerticalVoice,
   overrides?: Partial<ObjectiveDetails>
 ): ObjectiveDetails {
+  const parsedSlow = parseSlowWindowLabel(voice.slowWindow);
   return {
     inactiveDays: DEFAULT_INACTIVE_DAYS,
     minVisits: DEFAULT_MIN_VISITS,
     slowWindow: voice.slowWindow,
+    slowDows: parsedSlow?.dows ?? [...DEFAULT_SLOW_DOWS],
+    slowStartHour: parsedSlow?.startHour ?? DEFAULT_SLOW_START_HOUR,
+    slowEndHour: parsedSlow?.endHour ?? DEFAULT_SLOW_END_HOUR,
     rewardName: voice.signatureReward,
     maxPointsGap: DEFAULT_MAX_POINTS_GAP,
     activeWithinDays: DEFAULT_ACTIVE_WITHIN_DAYS,
     reviewIncentive: '1 onda extra por reseña',
     redeemWithinDays: DEFAULT_REDEEM_WITHIN_DAYS,
+    negativeWithinDays: DEFAULT_NEGATIVE_WITHIN_DAYS,
     requireWallet: false,
     emotion: 'warm',
     ...overrides,
@@ -906,9 +1048,28 @@ export function objectiveAudienceQueryParams(
       if (text) params[field.key] = text;
       continue;
     }
+    if (field.type === 'weekdays') {
+      if (Array.isArray(value) && value.length) {
+        params[field.key] = value.join(',');
+      }
+      continue;
+    }
     params[field.key] = String(value);
   }
   return params;
+}
+
+/** Ventana floja como texto: prefere la selección estructurada (días + horas). */
+export function slowWindowText(
+  details: Partial<ObjectiveDetails> | undefined,
+  voice: VerticalVoice
+): string {
+  const structured = formatSlowWindowParts({
+    dows: details?.slowDows ?? [],
+    startHour: details?.slowStartHour ?? Number.NaN,
+    endHour: details?.slowEndHour ?? Number.NaN,
+  });
+  return structured || details?.slowWindow || voice.slowWindow;
 }
 
 export function objectiveLabel(
@@ -922,12 +1083,13 @@ export function objectiveLabel(
       : detailsOrSlow || {};
   const inactiveDays = details.inactiveDays ?? DEFAULT_INACTIVE_DAYS;
   const minVisits = details.minVisits ?? DEFAULT_MIN_VISITS;
-  const slowWindow = details.slowWindow || voice.slowWindow;
+  const slowWindow = slowWindowText(details, voice);
   const rewardName = details.rewardName || voice.signatureReward;
   const maxPointsGap = details.maxPointsGap ?? DEFAULT_MAX_POINTS_GAP;
   const activeWithinDays = details.activeWithinDays ?? DEFAULT_ACTIVE_WITHIN_DAYS;
   const reviewIncentive = details.reviewIncentive || '1 onda extra por reseña';
   const redeemWithinDays = details.redeemWithinDays ?? DEFAULT_REDEEM_WITHIN_DAYS;
+  const negativeWithinDays = details.negativeWithinDays ?? DEFAULT_NEGATIVE_WITHIN_DAYS;
   const walletOnly = details.requireWallet ? ' (solo Wallet)' : '';
 
   switch (kind) {
@@ -939,6 +1101,8 @@ export function objectiveLabel(
       return minVisits > 1
         ? `Llenar ${voice.place} ${slowWindow} — ${minVisits}+ visitas previas${walletOnly}`
         : `Llenar ${voice.place} ${slowWindow}${walletOnly}`;
+    case 'recover':
+      return `Recuperar ${voice.customerPlural} que tuvieron mala experiencia en los últimos ${negativeWithinDays} días${walletOnly}`;
     case 'new_reward':
       return `Lanzar ${rewardName} — a ${maxPointsGap} ondas o activos en ${activeWithinDays} días${walletOnly}`;
     case 'reviews':
@@ -987,6 +1151,15 @@ export function defaultPromo(
       return {
         type: 'PERCENT_OFF',
         title: `Promo ${slowWindow}`,
+        value: '25',
+        buyQuantity: '2',
+        getQuantity: '1',
+        productName: voice.signatureProduct,
+      };
+    case 'recover':
+      return {
+        type: 'PERCENT_OFF',
+        title: `Te queremos de vuelta ${voice.placeTo}`,
         value: '25',
         buyQuantity: '2',
         getQuantity: '1',
@@ -1155,6 +1328,24 @@ const OBJECTIVE_MESSAGE_TEMPLATES: Record<
         `${c.name}, ${c.slowWindow} le ofrecemos ${c.storeName} en su mejor ambiente.`,
     },
   },
+  recover: {
+    Wallet: {
+      warm: (c) => `No nos salió bien la última vez y lo sentimos. Ábrelo en tu pase de ${c.storeName}.`,
+      playful: (c) => `Todos tenemos un mal día, ¡pero queremos remediarlo! Mira tu pase de ${c.storeName}.`,
+      urgent: (c) => `Tu experiencia no fue la que mereces. Esta semana lo hacemos bien en ${c.storeName}.`,
+      elegant: (c) => `Lamentamos no haber estado a la altura. Permítanos recibirle de nuevo en ${c.storeName}.`,
+    },
+    SMS: {
+      warm: (c) =>
+        `Hola ${c.name}, lamentamos que tu última visita a ${c.storeName} no haya sido como esperabas. Queremos recuperarte ${c.voice.placeTo}.`,
+      playful: (c) =>
+        `¡${c.name}! Nos supo mal tu última visita. Vuelve a ${c.storeName} y déjanos consentirte como debe ser.`,
+      urgent: (c) =>
+        `${c.name}, sabemos que la última vez no estuvo bien. Esta semana lo hacemos distinto en ${c.storeName}.`,
+      elegant: (c) =>
+        `${c.name}, le pedimos disculpas por su última experiencia en ${c.storeName}. Le esperamos para atenderle como merece.`,
+    },
+  },
   new_reward: {
     Wallet: {
       warm: (c) => `Nueva recompensa: ${c.rewardName}. Ya está en tu pase.`,
@@ -1206,7 +1397,7 @@ export function buildObjectiveMessages(opts: {
 }): CampaignMessage[] {
   const name = opts.firstName || '{{nombre}}';
   const { storeName, voice, kind } = opts;
-  const slowWindow = opts.slowWindow || opts.details?.slowWindow || voice.slowWindow;
+  const slowWindow = slowWindowText(opts.details, voice) || opts.slowWindow || voice.slowWindow;
   const rewardName = opts.details?.rewardName || voice.signatureReward;
   const reviewIncentive =
     opts.details?.reviewIncentive || '1 onda extra por reseña';
@@ -1274,6 +1465,21 @@ export function buildCampaignMessages(opts: {
         channel: 'SMS',
         channelLabel: 'SMS',
         text: `Hola ${name}, ${slowWindow} está más rico en ${storeName}. ${offer} si vienes.`,
+      },
+    ];
+  }
+
+  if (kind === 'recover') {
+    return [
+      {
+        channel: 'Wallet',
+        channelLabel: 'Push · Wallet',
+        text: `${offer}. Lo sentimos y te queremos de vuelta en ${storeName}.`,
+      },
+      {
+        channel: 'SMS',
+        channelLabel: 'SMS',
+        text: `Hola ${name}, lamentamos tu última experiencia en ${storeName}. ${offer} si nos das otra oportunidad.`,
       },
     ];
   }

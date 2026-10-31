@@ -24,6 +24,7 @@ import {
   computeRoiRatio,
   successLabel,
   successWindowDays,
+  formatSlowWindowParts,
   type ObjectiveKind,
 } from '@onda/shared-utils';
 import { PrismaService } from './prisma.service';
@@ -52,6 +53,10 @@ export type AudienceFilter = {
   maxPointsGap?: number;
   activeWithinDays?: number;
   redeemWithinDays?: number;
+  negativeWithinDays?: number;
+  slowDows?: number[];
+  slowStartHour?: number;
+  slowEndHour?: number;
   requireWallet?: boolean;
   cartillaId?: string | null;
   rewardName?: string;
@@ -83,6 +88,7 @@ type MemberRow = {
   nextRewardTitle: string | null;
   redeemedRecently: boolean;
   daysSinceRedeem: number | null;
+  daysSinceNegativeFeedback: number | null;
   hasFeedback: boolean;
   meta: string;
 };
@@ -186,7 +192,12 @@ export class CampaignsService {
       store.segment as StoreSegment | null
     );
     const slow = await this.slowWindowForStore(storeId, voice.slowWindow);
-    const slowWindow = opts.slowWindow?.trim() || slow.label;
+    const structuredSlow = formatSlowWindowParts({
+      dows: opts.slowDows ?? [],
+      startHour: opts.slowStartHour ?? Number.NaN,
+      endHour: opts.slowEndHour ?? Number.NaN,
+    });
+    const slowWindow = structuredSlow || opts.slowWindow?.trim() || slow.label;
     const filter: AudienceFilter = {
       objective,
       slowWindow,
@@ -195,6 +206,18 @@ export class CampaignsService {
       maxPointsGap: clampInt(opts.maxPointsGap, 1, 10, 2),
       activeWithinDays: clampInt(opts.activeWithinDays, 1, 90, 14),
       redeemWithinDays: clampInt(opts.redeemWithinDays, 1, 60, 14),
+      negativeWithinDays: clampInt(opts.negativeWithinDays, 1, 90, 30),
+      slowDows: Array.isArray(opts.slowDows)
+        ? [...new Set(opts.slowDows.map(Number).filter((d) => d >= 1 && d <= 7))].sort((a, b) => a - b)
+        : undefined,
+      slowStartHour:
+        opts.slowStartHour != null && Number.isFinite(opts.slowStartHour)
+          ? Math.max(0, Math.min(23, Math.round(opts.slowStartHour)))
+          : undefined,
+      slowEndHour:
+        opts.slowEndHour != null && Number.isFinite(opts.slowEndHour)
+          ? Math.max(0, Math.min(23, Math.round(opts.slowEndHour)))
+          : undefined,
       requireWallet: opts.requireWallet === true,
       cartillaId: cartillaId || null,
     };
@@ -265,6 +288,10 @@ export class CampaignsService {
         maxPointsGap: filter.maxPointsGap,
         activeWithinDays: filter.activeWithinDays,
         redeemWithinDays: filter.redeemWithinDays,
+        negativeWithinDays: filter.negativeWithinDays,
+        slowDows: filter.slowDows,
+        slowStartHour: filter.slowStartHour,
+        slowEndHour: filter.slowEndHour,
         requireWallet: filter.requireWallet,
         cartillaId: filter.cartillaId,
       } satisfies AudienceFilter,
@@ -398,21 +425,23 @@ export class CampaignsService {
         },
       });
       if (negativeCount >= 3) {
-        const recoveryAudience = await this.audience(storeId, 'reactivate');
-        recs.unshift({
-          id: 'feedback-recovery',
-          objective: 'reactivate',
-          origin: 'RECOMMENDED',
-          reason: `${negativeCount} experiencias negativas esta semana. Conviene recuperar clientes insatisfechos con una promo.`,
-          title: 'Recuperar clientes insatisfechos',
-          audienceCount: recoveryAudience.count,
-          messages: buildObjectiveMessages({
-            kind: 'reactivate',
-            voice,
-            storeName: store.name,
-            details: recommendedDetails(voice),
-          }),
-        });
+        const recoveryAudience = await this.audience(storeId, 'recover');
+        if (recoveryAudience.count >= 1) {
+          recs.unshift({
+            id: 'feedback-recovery',
+            objective: 'recover',
+            origin: 'RECOMMENDED',
+            reason: `${negativeCount} experiencias negativas esta semana. Conviene recuperar clientes insatisfechos con una promo.`,
+            title: 'Recuperar clientes insatisfechos',
+            audienceCount: recoveryAudience.count,
+            messages: buildObjectiveMessages({
+              kind: 'recover',
+              voice,
+              storeName: store.name,
+              details: recommendedDetails(voice),
+            }),
+          });
+        }
       }
 
     }
@@ -648,6 +677,7 @@ export class CampaignsService {
           maxPointsGap: filter.maxPointsGap,
           activeWithinDays: filter.activeWithinDays,
           redeemWithinDays: filter.redeemWithinDays,
+          negativeWithinDays: filter.negativeWithinDays,
           requireWallet: filter.requireWallet,
           cartillaId: filter.cartillaId,
         });
@@ -1161,15 +1191,24 @@ export class CampaignsService {
       },
     });
     const now = Date.now();
-    const feedbackUserIds = new Set(
-      (
-        await this.prisma.feedback.findMany({
-          where: { storeId },
-          select: { userId: true },
-        })
-      ).map((f) => f.userId)
-    );
-    return { mapped: passes.map((p) => this.mapPass(p, now, feedbackUserIds)) };
+    const feedbacks = await this.prisma.feedback.findMany({
+      where: { storeId },
+      select: { userId: true, sentiment: true, createdAt: true },
+    });
+    const feedbackUserIds = new Set(feedbacks.map((f) => f.userId));
+    // Días desde la experiencia negativa más reciente por usuario.
+    const negativeDaysByUser = new Map<string, number>();
+    for (const f of feedbacks) {
+      if (f.sentiment !== 'NEGATIVE') continue;
+      const days = (now - f.createdAt.getTime()) / DAY_MS;
+      const prev = negativeDaysByUser.get(f.userId);
+      if (prev == null || days < prev) negativeDaysByUser.set(f.userId, days);
+    }
+    return {
+      mapped: passes.map((p) =>
+        this.mapPass(p, now, feedbackUserIds, negativeDaysByUser)
+      ),
+    };
   }
 
   private async resolveMembers(storeId: string, filter: AudienceFilter) {
@@ -1195,6 +1234,15 @@ export class CampaignsService {
       case 'slow_hours': {
         const minVisits = filter.minVisits ?? 1;
         members = mapped.filter((m) => m.visits >= minVisits);
+        break;
+      }
+      case 'recover': {
+        const days = filter.negativeWithinDays ?? 30;
+        members = mapped.filter(
+          (m) =>
+            m.daysSinceNegativeFeedback != null &&
+            m.daysSinceNegativeFeedback <= days
+        );
         break;
       }
       case 'new_reward': {
@@ -1226,7 +1274,8 @@ export class CampaignsService {
   private mapPass(
     p: PassRow,
     now: number,
-    feedbackUserIds: Set<string>
+    feedbackUserIds: Set<string>,
+    negativeDaysByUser: Map<string, number>
   ): MemberRow {
     const lastTx = p.transactions[0];
     const visits = p.transactions.filter((t) => t.type === 'ACCUMULATE').length;
@@ -1252,12 +1301,16 @@ export class CampaignsService {
       daysSinceRedeem != null && daysSinceRedeem <= 14
     );
     const name = p.user.name || p.user.phone;
+    const daysSinceNegative = negativeDaysByUser.get(p.userId) ?? null;
     let meta = lastTx
       ? `hace ${Math.max(1, Math.round(daysSince))} días`
       : 'sin visitas';
     if (nearGap != null && nearGap <= 2) meta = `${p.points} ondas · cerca del premio`;
     if (redeemedRecently && lastRedeem) {
       meta = `canjeó hace ${Math.max(1, Math.round((now - lastRedeem.createdAt.getTime()) / DAY_MS))} días`;
+    }
+    if (daysSinceNegative != null) {
+      meta = `queja hace ${Math.max(1, Math.round(daysSinceNegative))} días`;
     }
     return {
       passId: p.id,
@@ -1271,29 +1324,40 @@ export class CampaignsService {
       nextRewardTitle,
       redeemedRecently,
       daysSinceRedeem,
+      daysSinceNegativeFeedback: daysSinceNegative,
       hasFeedback: feedbackUserIds.has(p.userId),
       meta,
     };
   }
 
+  /** Ventana menos concurrida de los últimos 30 días, en formato estructurado. */
   private async slowWindowForStore(storeId: string, fallback: string) {
-    const from = new Date(Date.now() - 60 * DAY_MS);
+    const base = {
+      label: fallback,
+      recommend: false,
+      dows: null as number[] | null,
+      startHour: null as number | null,
+      endHour: null as number | null,
+      transactions: 0,
+      basedOnDays: 30,
+    };
+    const from = new Date(Date.now() - 30 * DAY_MS);
     const txs = await this.prisma.transaction.findMany({
       where: { storeId, createdAt: { gte: from } },
       select: { createdAt: true },
     });
     if (txs.length < 8) {
-      return { label: fallback, recommend: false };
+      return base;
     }
     const cells = Array.from({ length: 7 * 24 }, () => 0);
     for (const tx of txs) {
       const jsDay = tx.createdAt.getDay();
-      const dow = jsDay === 0 ? 6 : jsDay - 1;
+      const dow = jsDay === 0 ? 6 : jsDay - 1; // 0 = lunes … 6 = domingo
       cells[dow * 24 + tx.createdAt.getHours()] += 1;
     }
     let best = { score: Infinity, dow: 1, hour: 14 };
-    for (let dow = 0; dow < 5; dow++) {
-      for (let hour = 10; hour <= 17; hour++) {
+    for (let dow = 0; dow < 7; dow++) {
+      for (let hour = 6; hour <= 20; hour++) {
         const score =
           cells[dow * 24 + hour] +
           cells[dow * 24 + hour + 1] +
@@ -1308,9 +1372,136 @@ export class CampaignsService {
       cells[best.dow * 24 + best.hour + 2],
       0
     );
-    const nextDow = Math.min(best.dow + 1, 4);
-    const label = `${DOW_LABELS[best.dow]} y ${DOW_LABELS[nextDow]} de ${formatHour(best.hour)} a ${formatHour(best.hour + 3)}`;
-    return { label, recommend: windowPeak < peak * 0.55 };
+    const dows =
+      best.dow + 1 <= 7
+        ? [...new Set([best.dow + 1, Math.min(best.dow + 2, 7)])]
+        : [7];
+    const startHour = best.hour;
+    const endHour = best.hour + 3;
+    const label =
+      dows.length === 2
+        ? `${DOW_LABELS[dows[0] - 1]} y ${DOW_LABELS[dows[1] - 1]} de ${formatHour(startHour)} a ${formatHour(endHour)}`
+        : `${DOW_LABELS[dows[0] - 1]} de ${formatHour(startHour)} a ${formatHour(endHour)}`;
+    return {
+      label,
+      recommend: windowPeak < peak * 0.55,
+      dows,
+      startHour,
+      endHour,
+      transactions: txs.length,
+      basedOnDays: 30,
+    };
+  }
+
+  /** Propuesta determinística de parámetros según el objetivo, basada en datos reales. */
+  async propose(storeId: string, objective: ObjectiveKind) {
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: storeId },
+      select: { subcategory: true, segment: true },
+    });
+    const voice = voiceFor(
+      store.subcategory as StoreSubcategory,
+      store.segment as StoreSegment | null
+    );
+
+    switch (objective) {
+      case 'slow_hours': {
+        const slow = await this.slowWindowForStore(storeId, voice.slowWindow);
+        if (!slow.dows) {
+          return {
+            objective,
+            patch: {},
+            label: `Con ${slow.transactions} movimientos en ${slow.basedOnDays} días aún no alcanza para proponer una ventana`,
+            basedOnDays: slow.basedOnDays,
+            sampleSize: slow.transactions,
+          };
+        }
+        return {
+          objective,
+          patch: {
+            slowDows: slow.dows,
+            slowStartHour: slow.startHour,
+            slowEndHour: slow.endHour,
+          },
+          label: `Menos concurrida: ${slow.label} (${slow.transactions} movimientos en ${slow.basedOnDays} días)`,
+          basedOnDays: slow.basedOnDays,
+          sampleSize: slow.transactions,
+        };
+      }
+
+      case 'reactivate': {
+        const basedOnDays = 90;
+        const since = new Date(Date.now() - basedOnDays * DAY_MS);
+        const txs = await this.prisma.transaction.findMany({
+          where: { storeId, type: 'ACCUMULATE', createdAt: { gte: since } },
+          select: { passId: true, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+        });
+        const lastByPass = new Map<string, Date>();
+        for (const t of txs) {
+          if (!lastByPass.has(t.passId)) lastByPass.set(t.passId, t.createdAt);
+        }
+        if (lastByPass.size < 8) {
+          return {
+            objective,
+            patch: {},
+            label: `Con ${lastByPass.size} pases activos en ${basedOnDays} días aún no alcanza para proponer un umbral`,
+            basedOnDays,
+            sampleSize: lastByPass.size,
+          };
+        }
+        const now = Date.now();
+        const gaps = [...lastByPass.values()]
+          .map((d) => (now - d.getTime()) / DAY_MS)
+          .sort((a, b) => a - b);
+        const p75 = gaps[Math.min(gaps.length - 1, Math.floor(gaps.length * 0.75))];
+        const inactiveDays = Math.max(7, Math.min(180, Math.round(p75)));
+        return {
+          objective,
+          patch: { inactiveDays },
+          label: `El 25% más inactivo lleva más de ${inactiveDays} días sin volver (${lastByPass.size} pases en ${basedOnDays} días)`,
+          basedOnDays,
+          sampleSize: lastByPass.size,
+        };
+      }
+
+      case 'recover': {
+        const basedOnDays = 60;
+        const since = new Date(Date.now() - basedOnDays * DAY_MS);
+        const negatives = await this.prisma.feedback.findMany({
+          where: { storeId, sentiment: 'NEGATIVE', createdAt: { gte: since } },
+          select: { createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        });
+        if (negatives.length === 0) {
+          return {
+            objective,
+            patch: {},
+            label: `Sin feedback negativo en los últimos ${basedOnDays} días`,
+            basedOnDays,
+            sampleSize: 0,
+          };
+        }
+        const daysSinceOldest =
+          (Date.now() - negatives[0].createdAt.getTime()) / DAY_MS;
+        const negativeWithinDays = Math.max(
+          1,
+          Math.min(90, Math.ceil(daysSinceOldest))
+        );
+        return {
+          objective,
+          patch: { negativeWithinDays },
+          label: `${negatives.length} quejas en los últimos ${negativeWithinDays} días`,
+          basedOnDays,
+          sampleSize: negatives.length,
+        };
+      }
+
+      default:
+        throw new BadRequestException(
+          `El objetivo "${objective}" no tiene propuesta automática`
+        );
+    }
   }
 }
 
@@ -1346,6 +1537,12 @@ function chipsFor(kind: ObjectiveKind, filter: AudienceFilter) {
         slowWindow,
         filter.requireWallet ? 'Solo Wallet' : 'Invitación a horario flojo',
       ];
+    case 'recover':
+      return [
+        `Mala experiencia ≤ ${filter.negativeWithinDays ?? 30}d`,
+        'Feedback negativo',
+        filter.requireWallet ? 'Solo Wallet' : 'Disculpa + invitación',
+      ];
     case 'new_reward':
       return [
         'Activos',
@@ -1373,6 +1570,7 @@ function headlineFor(
   const maxPointsGap = filter.maxPointsGap ?? 2;
   const activeWithinDays = filter.activeWithinDays ?? 14;
   const redeemWithinDays = filter.redeemWithinDays ?? 14;
+  const negativeWithinDays = filter.negativeWithinDays ?? 30;
 
   if (count === 0) {
     return `Aún no hay ${voice.customerPlural} para este objetivo.`;
@@ -1384,6 +1582,8 @@ function headlineFor(
         : `Encontramos ${count} ${voice.customerPlural} que no regresan hace más de ${inactiveDays} días.`;
     case 'slow_hours':
       return `Encontramos ${count} ${voice.customerPlural} a quienes invitar ${slowWindow}.`;
+    case 'recover':
+      return `Encontramos ${count} ${voice.customerPlural} que tuvieron una mala experiencia en los últimos ${negativeWithinDays} días.`;
     case 'new_reward':
       return `Encontramos ${count} ${voice.customerPlural} a ${maxPointsGap} ondas del premio o activos en ${activeWithinDays} días.`;
     case 'reviews':
@@ -1408,6 +1608,8 @@ function parseObjective(raw?: string): CampaignObjective | null {
       return CampaignObjective.REACTIVATE;
     case 'slow_hours':
       return CampaignObjective.SLOW_HOURS;
+    case 'recover':
+      return CampaignObjective.RECOVER;
     case 'new_reward':
       return CampaignObjective.NEW_REWARD;
     case 'reviews':
@@ -1421,6 +1623,8 @@ function objectiveToKind(obj: CampaignObjective | null): ObjectiveKind {
   switch (obj) {
     case CampaignObjective.SLOW_HOURS:
       return 'slow_hours';
+    case CampaignObjective.RECOVER:
+      return 'recover';
     case CampaignObjective.NEW_REWARD:
       return 'new_reward';
     case CampaignObjective.REVIEWS:
@@ -1434,6 +1638,8 @@ function defaultTitle(objective: CampaignObjective | null) {
   switch (objective) {
     case CampaignObjective.SLOW_HOURS:
       return 'Campaña horario flojo';
+    case CampaignObjective.RECOVER:
+      return 'Campaña de recuperación';
     case CampaignObjective.NEW_REWARD:
       return 'Campaña nueva recompensa';
     case CampaignObjective.REVIEWS:
@@ -1456,6 +1662,7 @@ function recommendedDetails(
     activeWithinDays: patch?.activeWithinDays ?? 14,
     reviewIncentive: patch?.reviewIncentive ?? '1 onda extra por reseña',
     redeemWithinDays: patch?.redeemWithinDays ?? 14,
+    negativeWithinDays: patch?.negativeWithinDays ?? 30,
     requireWallet: patch?.requireWallet ?? false,
   };
 }

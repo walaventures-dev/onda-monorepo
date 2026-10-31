@@ -81,6 +81,7 @@ enum CampaignOrigin {
 enum CampaignObjective {
   REACTIVATE
   SLOW_HOURS
+  RECOVER
   NEW_REWARD
   REVIEWS
 }

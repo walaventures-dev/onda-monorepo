@@ -416,6 +416,7 @@ export function CampaignsHome({
                   const objectiveKey =
                     obj === 'slow_hours' ||
                     obj === 'reactivate' ||
+                    obj === 'recover' ||
                     obj === 'new_reward' ||
                     obj === 'reviews'
                       ? obj

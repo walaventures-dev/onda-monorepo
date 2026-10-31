@@ -38,6 +38,14 @@ export class CampaignsController {
     return this.campaigns.recommendations(storeId);
   }
 
+  @Get('propose')
+  propose(
+    @Query('storeId') storeId: string,
+    @Query('objective') objective: ObjectiveKind = 'reactivate'
+  ) {
+    return this.campaigns.propose(storeId, objective);
+  }
+
   @Get('audience')
   audience(
     @Query('storeId') storeId: string,
@@ -49,6 +57,10 @@ export class CampaignsController {
     @Query('maxPointsGap') maxPointsGap?: string,
     @Query('activeWithinDays') activeWithinDays?: string,
     @Query('redeemWithinDays') redeemWithinDays?: string,
+    @Query('negativeWithinDays') negativeWithinDays?: string,
+    @Query('slowDows') slowDows?: string,
+    @Query('slowStartHour') slowStartHour?: string,
+    @Query('slowEndHour') slowEndHour?: string,
     @Query('requireWallet') requireWallet?: string
   ) {
     return this.campaigns.audience(storeId, objective, cartillaId, {
@@ -58,6 +70,10 @@ export class CampaignsController {
       maxPointsGap: parseOptionalInt(maxPointsGap),
       activeWithinDays: parseOptionalInt(activeWithinDays),
       redeemWithinDays: parseOptionalInt(redeemWithinDays),
+      negativeWithinDays: parseOptionalInt(negativeWithinDays),
+      slowDows: parseDows(slowDows),
+      slowStartHour: parseOptionalInt(slowStartHour),
+      slowEndHour: parseOptionalInt(slowEndHour),
       requireWallet: requireWallet === '1' || requireWallet === 'true',
     });
   }
@@ -122,4 +138,14 @@ function parseOptionalInt(raw?: string) {
   if (!raw) return undefined;
   const n = Number(raw);
   return Number.isFinite(n) ? n : undefined;
+}
+
+/** "2,3" → [2, 3] (lunes=1 … domingo=7). */
+function parseDows(raw?: string) {
+  if (!raw) return undefined;
+  const list = raw
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n >= 1 && n <= 7);
+  return list.length ? [...new Set(list)].sort((a, b) => a - b) : undefined;
 }

@@ -36,10 +36,6 @@ import {
 import type { FeedbackAnalyticsDto, FeedbackDto } from '@onda/shared-types';
 import { feedbackDimensionLabel, feedbackDimensionsFor } from '@onda/shared-utils';
 import { useStoreSse } from '../lib/useStoreSse';
-import { mockAnalytics, mockFeedbacks } from './feedback.mock';
-
-// TODO: quitar antes de producción — muestra el módulo con datos de ejemplo
-const MOCK_FEEDBACK = true;
 
 const PAGE_SIZE = 8;
 
@@ -242,43 +238,39 @@ export function FeedbackWorkspace({
     safePage * PAGE_SIZE
   );
 
-  const dims = useMemo(() => {
-    if (MOCK_FEEDBACK) return feedbackDimensionsFor('CAFE', segment);
-    return subcategory ? feedbackDimensionsFor(subcategory, segment) : [];
-  }, [subcategory, segment]);
+  const dims = useMemo(
+    () => (subcategory ? feedbackDimensionsFor(subcategory, segment) : []),
+    [subcategory, segment]
+  );
 
-  const load = useCallback(async (silent = false) => {
-    if (!MOCK_FEEDBACK && planType !== 'PRO') {
-      setLoading(false);
-      return;
-    }
-    if (!silent) setLoading(true);
-    if (MOCK_FEEDBACK) {
-      setAnalytics(mockAnalytics);
-      setFeedbacks(mockFeedbacks);
-      setLoading(false);
-      return;
-    }
-    try {
-      const [a, list] = await Promise.all([
-        api<FeedbackAnalyticsDto>(`/feedback/store/${storeId}/analytics?days=30`),
-        api<FeedbackDto[]>(`/feedback/store/${storeId}`),
-      ]);
-      setAnalytics(a);
-      setFeedbacks(list);
-    } catch (err: any) {
-      if (!silent) toast(err.message || 'No se pudo cargar feedback');
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [storeId, planType]);
+  const load = useCallback(
+    async (silent = false) => {
+      if (planType !== 'PRO') {
+        setLoading(false);
+        return;
+      }
+      if (!silent) setLoading(true);
+      try {
+        const [a, list] = await Promise.all([
+          api<FeedbackAnalyticsDto>(`/feedback/store/${storeId}/analytics?days=30`),
+          api<FeedbackDto[]>(`/feedback/store/${storeId}`),
+        ]);
+        setAnalytics(a);
+        setFeedbacks(list);
+      } catch (err: any) {
+        if (!silent) toast(err.message || 'No se pudo cargar feedback');
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [storeId, planType]
+  );
 
   useEffect(() => {
     void load(false);
   }, [load]);
 
-  useStoreSse(storeId, MOCK_FEEDBACK || planType === 'PRO', (payload) => {
-    if (MOCK_FEEDBACK) return;
+  useStoreSse(storeId, planType === 'PRO', (payload) => {
     if (payload.kind !== 'feedback_new' && payload.kind !== 'feedback_alert') {
       return;
     }
@@ -297,10 +289,6 @@ export function FeedbackWorkspace({
 
   useEffect(() => {
     if (!contactTarget) return;
-    if (MOCK_FEEDBACK) {
-      setSmsQuota({ reachUsed: 84, reachLimit: 100, freeRemaining: 16, unitCop: 45 });
-      return;
-    }
     api<any>(`/campaigns/quota?storeId=${storeId}`)
       .then((q) =>
         setSmsQuota({
@@ -318,21 +306,6 @@ export function FeedbackWorkspace({
     status: 'OPEN' | 'CONTACTED' | 'RESOLVED',
     opts?: { message?: string; note?: string }
   ) {
-    if (MOCK_FEEDBACK) {
-      setFeedbacks((prev) =>
-        prev.map((f) =>
-          f.id === feedbackId
-            ? {
-                ...f,
-                followUpStatus: status,
-                followUpNote:
-                  opts?.message?.trim() || opts?.note?.trim() || f.followUpNote,
-              }
-            : f
-        )
-      );
-      return;
-    }
     setFollowUpBusy(true);
     try {
       await api(`/feedback/${feedbackId}/follow-up`, {
@@ -353,7 +326,7 @@ export function FeedbackWorkspace({
     }
   }
 
-  if (!MOCK_FEEDBACK && planType !== 'PRO') {
+  if (planType !== 'PRO') {
     return (
       <div className="rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] p-8 text-center">
         <p className="font-display text-xl font-semibold text-[var(--onda-ink)]">
@@ -413,7 +386,7 @@ export function FeedbackWorkspace({
           <GradientButton
             type="button"
             onClick={() =>
-              router.push('/campanas/nueva?objective=reactivate&from=feedback')
+              router.push('/campanas/nueva?objective=recover&from=feedback')
             }
           >
             Crear campaña de recuperación

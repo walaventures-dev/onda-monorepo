@@ -4,6 +4,7 @@ import type { ObjectiveKind } from './campaign-copy';
 export const SUCCESS_WINDOW_DAYS: Record<ObjectiveKind, number> = {
   reactivate: 14,
   slow_hours: 7,
+  recover: 14,
   new_reward: 14,
   reviews: 14,
 };
@@ -12,6 +13,7 @@ export const SUCCESS_WINDOW_DAYS: Record<ObjectiveKind, number> = {
 export const SUCCESS_RATE_THRESHOLD: Record<ObjectiveKind, number> = {
   reactivate: 0.15,
   slow_hours: 0.1,
+  recover: 0.15,
   new_reward: 0.15,
   reviews: 0.2,
 };
@@ -35,6 +37,8 @@ export function successLabel(kind: ObjectiveKind): string {
       return 'Volvieron a visitar';
     case 'slow_hours':
       return 'Visitas en el periodo';
+    case 'recover':
+      return 'Volvieron tras la queja';
     case 'new_reward':
       return 'Activaron o canjearon';
     case 'reviews':

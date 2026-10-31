@@ -60,6 +60,8 @@ import {
   recommendedObjectiveDetails,
   renderCampaignTemplate,
   voiceFor,
+  formatSlowWindowParts,
+  parseSlowWindowLabel,
   formatCop,
   type ObjectiveDetails,
   type ObjectiveKind,
@@ -181,6 +183,31 @@ export function CampaignWizard({
     inactiveTo: '',
     ondasGap: '',
   });
+
+  const [proposeLoading, setProposeLoading] = useState(false);
+
+  const proposeParams = async () => {
+    if (proposeLoading) return;
+    setProposeLoading(true);
+    try {
+      const p = await api<{
+        patch: Partial<ObjectiveDetails>;
+        label: string | null;
+      }>(
+        `/campaigns/propose?storeId=${storeId}&objective=${objectiveKind}`
+      );
+      if (!p?.patch || Object.keys(p.patch).length === 0) {
+        toast(p?.label || 'Aún no hay datos suficientes para proponer');
+        return;
+      }
+      patchDetails(p.patch);
+      toast(p.label ? `Propuesta: ${p.label}` : 'Parámetros propuestos aplicados');
+    } catch (err: any) {
+      toast(err.message || 'No se pudo calcular la propuesta');
+    } finally {
+      setProposeLoading(false);
+    }
+  };
 
   const messages = useMemo(
     () =>
@@ -333,16 +360,7 @@ export function CampaignWizard({
       .catch(() => setQuota(null));
   }, [storeId]);
 
-  // Si la API sugiere una ventana floja distinta a la del vertical, úsala como default
-  // mientras el usuario no la haya personalizado.
-  useEffect(() => {
-    if (objectiveKind !== 'slow_hours' || !audience?.slowWindow) return;
-    setDetails((d) =>
-      d.slowWindow === voice.slowWindow
-        ? { ...d, slowWindow: audience.slowWindow! }
-        : d
-    );
-  }, [audience?.slowWindow, objectiveKind, voice.slowWindow]);
+  // La ventana analizada se aplica solo con el botón "Proponer" (ver proposeSlowWindow).
 
   useEffect(() => {
     if (!recId) return;
@@ -355,21 +373,63 @@ export function CampaignWizard({
         slowWindow: rec.slowWindow || voice.slowWindow,
         rewardName: rec.rewardName || voice.signatureReward,
       });
+      if (rec.objective === 'slow_hours') {
+        const parsed = parseSlowWindowLabel(rec.slowWindow || voice.slowWindow);
+        if (parsed) {
+          nextDetails.slowDows = parsed.dows;
+          nextDetails.slowStartHour = parsed.startHour;
+          nextDetails.slowEndHour = parsed.endHour;
+        }
+        nextDetails.slowWindow = formatSlowWindowParts({
+          dows: nextDetails.slowDows,
+          startHour: nextDetails.slowStartHour,
+          endHour: nextDetails.slowEndHour,
+        });
+      }
       setObjectiveKind(rec.objective);
       setDetails(nextDetails);
     });
   }, [recId, storeId, subcategory, segment]);
 
   const selectObjective = (kind: ObjectiveKind) => {
+    // La ventana analizada ya no se aplica sola: el usuario la aplica con "Proponer".
+    const baseLabel = voice.slowWindow;
     const nextDetails = recommendedObjectiveDetails(voice, {
-      slowWindow: audience?.slowWindow || voice.slowWindow,
+      slowWindow: baseLabel,
     });
+    if (kind === 'slow_hours') {
+      const parsed = parseSlowWindowLabel(baseLabel);
+      if (parsed) {
+        nextDetails.slowDows = parsed.dows;
+        nextDetails.slowStartHour = parsed.startHour;
+        nextDetails.slowEndHour = parsed.endHour;
+      }
+      nextDetails.slowWindow = formatSlowWindowParts({
+        dows: nextDetails.slowDows,
+        startHour: nextDetails.slowStartHour,
+        endHour: nextDetails.slowEndHour,
+      });
+    }
     setObjectiveKind(kind);
     setDetails(nextDetails);
   };
 
   const patchDetails = (patch: Partial<ObjectiveDetails>) => {
-    setDetails({ ...details, ...patch });
+    setDetails((d) => {
+      const next = { ...d, ...patch };
+      if (
+        'slowDows' in patch ||
+        'slowStartHour' in patch ||
+        'slowEndHour' in patch
+      ) {
+        next.slowWindow = formatSlowWindowParts({
+          dows: next.slowDows,
+          startHour: next.slowStartHour,
+          endHour: next.slowEndHour,
+        });
+      }
+      return next;
+    });
   };
 
   const clearLaunchTimers = () => {
@@ -423,6 +483,10 @@ export function CampaignWizard({
             maxPointsGap: details.maxPointsGap,
             activeWithinDays: details.activeWithinDays,
             redeemWithinDays: details.redeemWithinDays,
+            negativeWithinDays: details.negativeWithinDays,
+            slowDows: details.slowDows,
+            slowStartHour: details.slowStartHour,
+            slowEndHour: details.slowEndHour,
             requireWallet: details.requireWallet,
             rewardName: details.rewardName,
             reviewIncentive: details.reviewIncentive,
@@ -527,7 +591,7 @@ export function CampaignWizard({
                     Elige el propósito (trae recomendación) y ajústalo a detalle
                     {segment ? ` · ${voice.place}` : ''}.
                   </p>
-                  <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                  <div className="mt-5 grid grid-cols-3 gap-2">
                     {OBJECTIVE_KINDS.map((kind) => {
                       const selected = objectiveKind === kind;
                       return (
@@ -573,6 +637,8 @@ export function CampaignWizard({
                     kind={objectiveKind}
                     details={details}
                     onChange={patchDetails}
+                    onPropose={() => void proposeParams()}
+                    proposeLoading={proposeLoading}
                   />
 
                   <div className="mt-4 rounded-2xl border border-[var(--onda-border)] bg-white p-4">
@@ -1240,7 +1306,7 @@ function MemberList({
 }
 
 function parseObjective(raw: string | null): ObjectiveKind {
-  if (raw === 'reactivate' || raw === 'slow_hours') {
+  if (raw === 'reactivate' || raw === 'slow_hours' || raw === 'recover') {
     return raw;
   }
   return 'reactivate';
