@@ -511,7 +511,10 @@ export interface FeedbackDto {
   dimensions: string[];
   source: 'POST_ACCUMULATE' | 'MANUAL' | 'CAMPAIGN';
   followUpStatus: 'OPEN' | 'CONTACTED' | 'RESOLVED';
+  followUpNote?: string | null;
   comment?: string | null;
+  sentimentScore?: number | null;
+  sentimentMagnitude?: number | null;
   redirectedToGoogle: boolean;
   createdAt: string;
   user?: { id: string; name: string; phone: string };
@@ -543,6 +546,16 @@ export interface FeedbackAnalyticsDto {
     ratingNow: number | null;
     reviewsBefore: number | null;
     reviewsNow: number | null;
+  };
+  followUp: {
+    open: number;
+    contacted: number;
+    resolved: number;
+  };
+  followUpSms: number;
+  commentSentiment: {
+    analyzed: number;
+    avgScore: number | null;
   };
 }
 

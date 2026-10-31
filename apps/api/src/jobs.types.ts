@@ -8,8 +8,10 @@ export type JobType =
   | 'billing-sweep'
   | 'cartilla-ending-sms'
   | 'campaign-dispatch'
+  | 'campaign-sweep'
   | 'campaign-pack-renew'
-  | 'pos-accounting-sync';
+  | 'pos-accounting-sync'
+  | 'google-places-sweep';
 
 export type WhatsappJobPayload = {
   to: string;
@@ -59,6 +61,8 @@ export type CampaignDispatchPayload = {
   campaignId: string;
 };
 
+export type CampaignSweepJobPayload = Record<string, never>;
+
 export type CampaignPackRenewPayload = {
   storeId: string;
 };
@@ -66,6 +70,8 @@ export type CampaignPackRenewPayload = {
 export type PosAccountingSyncPayload = {
   saleId: string;
 };
+
+export type GooglePlacesSweepJobPayload = Record<string, never>;
 
 export type JobPayloadMap = {
   'whatsapp-send': WhatsappJobPayload;
@@ -77,8 +83,10 @@ export type JobPayloadMap = {
   'billing-sweep': BillingSweepJobPayload;
   'cartilla-ending-sms': CartillaEndingSmsPayload;
   'campaign-dispatch': CampaignDispatchPayload;
+  'campaign-sweep': CampaignSweepJobPayload;
   'campaign-pack-renew': CampaignPackRenewPayload;
   'pos-accounting-sync': PosAccountingSyncPayload;
+  'google-places-sweep': GooglePlacesSweepJobPayload;
 };
 
 export type JobsEnqueueOptions = {

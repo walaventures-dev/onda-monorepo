@@ -94,7 +94,7 @@ export async function monthlyNewCustomersUsed(
   });
 }
 
-/** SMS enviados (no cuenta push de Wallet). */
+/** SMS enviados (no cuenta push de Wallet). Incluye campañas y follow-ups de feedback. */
 export async function monthlyReachUsed(
   db: QuotaDb,
   storeId: string,
@@ -103,16 +103,24 @@ export async function monthlyReachUsed(
 ): Promise<number> {
   const start = from ?? startOfCurrentMonth();
   const end = to;
-  const agg = await db.campaign.aggregate({
-    where: {
-      storeId,
-      status: 'SENT',
-      sendSms: true,
-      sentAt: end ? { gte: start, lt: end } : { gte: start },
-    },
-    _sum: { smsReachCount: true, reachCount: true },
-  });
-  return agg._sum.smsReachCount ?? agg._sum.reachCount ?? 0;
+  const [agg, followUps] = await Promise.all([
+    db.campaign.aggregate({
+      where: {
+        storeId,
+        status: 'SENT',
+        sendSms: true,
+        sentAt: end ? { gte: start, lt: end } : { gte: start },
+      },
+      _sum: { smsReachCount: true, reachCount: true },
+    }),
+    db.feedbackFollowUpSms.count({
+      where: {
+        storeId,
+        createdAt: end ? { gte: start, lt: end } : { gte: start },
+      },
+    }),
+  ]);
+  return (agg._sum.smsReachCount ?? agg._sum.reachCount ?? 0) + followUps;
 }
 
 export async function monthlyCampaignsSent(

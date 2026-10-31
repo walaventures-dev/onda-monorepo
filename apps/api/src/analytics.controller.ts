@@ -2097,9 +2097,18 @@ export class FeedbackController {
   @Patch(':id/follow-up')
   followUp(
     @Param('id') id: string,
-    @Body() body: { storeId: string; status: 'OPEN' | 'CONTACTED' | 'RESOLVED' }
+    @Body()
+    body: {
+      storeId: string;
+      status: 'OPEN' | 'CONTACTED' | 'RESOLVED';
+      message?: string;
+      note?: string;
+    }
   ) {
-    return this.feedback.updateFollowUp(body.storeId, id, body.status as any);
+    return this.feedback.updateFollowUp(body.storeId, id, body.status as any, {
+      message: body.message,
+      note: body.note,
+    });
   }
 }
 

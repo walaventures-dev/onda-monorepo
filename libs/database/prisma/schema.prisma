@@ -359,6 +359,7 @@ model Store {
   passes            Pass[]
   transactions      Transaction[]
   feedbacks         Feedback[]
+  feedbackFollowUpSms FeedbackFollowUpSms[]
   googlePlaceSnapshots GooglePlaceSnapshot[]
   promotions        Promotion[]
   cartillas         Cartilla[]
@@ -603,14 +604,30 @@ model Feedback {
   source             FeedbackSource         @default(MANUAL)
   followUpStatus     FeedbackFollowUpStatus @default(OPEN)
   comment            String?
+  sentimentScore     Float?
+  sentimentMagnitude Float?
+  followUpNote       String?
   redirectedToGoogle Boolean                @default(false)
   createdAt          DateTime               @default(now())
   user               User                   @relation(fields: [userId], references: [id])
   store              Store                  @relation(fields: [storeId], references: [id])
+  followUpSms        FeedbackFollowUpSms[]
 
   @@index([storeId, createdAt])
   @@index([storeId, sentiment])
   @@index([passId])
+}
+
+model FeedbackFollowUpSms {
+  id         String   @id @default(uuid())
+  storeId    String
+  feedbackId String
+  message    String
+  createdAt  DateTime @default(now())
+  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, createdAt])
 }
 
 model GooglePlaceSnapshot {

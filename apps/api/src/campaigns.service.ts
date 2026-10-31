@@ -792,6 +792,28 @@ export class CampaignsService {
     }
   }
 
+  async sweepStaleScheduled() {
+    // Campañas SCHEDULED cuya hora ya pasó: su job de dispatch puede haberse
+    // perdido (caída del proceso, fallo de encolado). Se re-encolan; dispatch
+    // es idempotente vía el chequeo de status.
+    const graceMs = 5 * 60 * 1000;
+    const stale = await this.prisma.campaign.findMany({
+      where: {
+        status: CampaignStatus.SCHEDULED,
+        scheduledAt: { lte: new Date(Date.now() - graceMs) },
+      },
+      select: { id: true, scheduledAt: true },
+      take: 50,
+    });
+    for (const c of stale) {
+      this.logger.warn(
+        `Campaña ${c.id} SCHEDULED vencida (${c.scheduledAt?.toISOString() ?? 'sin fecha'}): re-encolando dispatch`
+      );
+      await this.jobs.enqueue('campaign-dispatch', { campaignId: c.id });
+    }
+    return { requeued: stale.length };
+  }
+
   async evaluateCampaignSuccess(campaignId: string) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: campaignId },

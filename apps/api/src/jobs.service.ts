@@ -27,11 +27,13 @@ import type {
   WhatsappJobPayload,
   WompiRenewJobPayload,
   UsageBillingJobPayload,
+  GooglePlacesSweepJobPayload,
 } from './jobs.types';
 import { CartillaService } from './cartilla.service';
 import { CampaignsService } from './campaigns.service';
 import { PosService } from './pos.service';
 import { BillingService } from './billing.service';
+import { GooglePlacesService } from './google-places.service';
 
 const QUEUE_NAME = 'onda-jobs';
 
@@ -51,7 +53,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     @Inject(forwardRef(() => CartillaService)) private cartillas: CartillaService,
     @Inject(forwardRef(() => CampaignsService)) private campaigns: CampaignsService,
     @Inject(forwardRef(() => PosService)) private pos: PosService,
-    @Inject(forwardRef(() => BillingService)) private billing: BillingService
+    @Inject(forwardRef(() => BillingService)) private billing: BillingService,
+    @Inject(GooglePlacesService) private googlePlaces: GooglePlacesService
   ) {}
 
   get usesCloudTasks(): boolean {
@@ -68,6 +71,20 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         this.logger.error(`No se pudo programar billing-sweep inicial: ${msg}`);
+      }
+      try {
+        await this.enqueue('campaign-sweep', {}, { delayMs: 60_000 });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.error(`No se pudo programar campaign-sweep inicial: ${msg}`);
+      }
+      try {
+        await this.enqueue('google-places-sweep', {}, { delayMs: 60_000 });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.error(
+          `No se pudo programar google-places-sweep inicial: ${msg}`
+        );
       }
       return;
     }
@@ -93,6 +110,24 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
         {},
         {
           jobId: 'billing-sweep-daily',
+          repeat: { every: 24 * 60 * 60 * 1000 },
+          removeOnComplete: 20,
+        }
+      );
+      await this.queue.add(
+        'campaign-sweep',
+        {},
+        {
+          jobId: 'campaign-sweep-quarterly',
+          repeat: { every: 15 * 60 * 1000 },
+          removeOnComplete: 20,
+        }
+      );
+      await this.queue.add(
+        'google-places-sweep',
+        {},
+        {
+          jobId: 'google-places-sweep-daily',
           repeat: { every: 24 * 60 * 60 * 1000 },
           removeOnComplete: 20,
         }
@@ -197,6 +232,15 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       case 'campaign-dispatch':
         await this.campaigns.dispatch(payload as CampaignDispatchPayload);
         return;
+      case 'campaign-sweep': {
+        await this.campaigns.sweepStaleScheduled();
+        if (this.usesCloudTasks) {
+          await this.enqueue('campaign-sweep', {}, {
+            delayMs: 15 * 60 * 1000,
+          });
+        }
+        return;
+      }
       case 'campaign-pack-renew':
         await this.campaigns.renewPackSubscription(
           (payload as CampaignPackRenewPayload).storeId
@@ -206,6 +250,9 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
         await this.pos.syncSaleAccounting(
           (payload as PosAccountingSyncPayload).saleId
         );
+        return;
+      case 'google-places-sweep':
+        await this.dispatchGooglePlacesSweep(payload as GooglePlacesSweepJobPayload);
         return;
       default:
         this.logger.warn(`Job desconocido: ${type}`);
@@ -235,6 +282,18 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
 
   private async dispatchWompiRenew(payload: WompiRenewJobPayload) {
     await this.billing.renewStore(payload.storeId);
+  }
+
+  private async dispatchGooglePlacesSweep(_payload: GooglePlacesSweepJobPayload) {
+    const result = await this.googlePlaces.refreshAllProStores();
+    this.logger.log(
+      `Google Places sweep: ${result.updated}/${result.total} tiendas actualizadas`
+    );
+    if (this.usesCloudTasks) {
+      await this.enqueue('google-places-sweep', {}, {
+        delayMs: 24 * 60 * 60 * 1000,
+      });
+    }
   }
 
   private async enqueueCloudTask(

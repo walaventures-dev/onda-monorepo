@@ -72,6 +72,13 @@ import { ReceiptIcon as Receipt } from "@phosphor-icons/react/dist/csr/Receipt";
 import { TargetIcon as Target } from "@phosphor-icons/react/dist/csr/Target";
 import { TrendUpIcon as TrendUp } from "@phosphor-icons/react/dist/csr/TrendUp";
 import { SparkleIcon as Sparkle } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { StarIcon as Star } from "@phosphor-icons/react/dist/csr/Star";
+import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/dist/csr/ChatCircleDots";
+import { PaperPlaneTiltIcon as PaperPlaneTilt } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
+import { WarningIcon as Warning } from "@phosphor-icons/react/dist/csr/Warning";
+import { SmileyIcon as Smiley } from "@phosphor-icons/react/dist/csr/Smiley";
+import { PhoneCallIcon as PhoneCall } from "@phosphor-icons/react/dist/csr/PhoneCall";
+import { TrophyIcon as Trophy } from "@phosphor-icons/react/dist/csr/Trophy";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { PromoDetail } from "./PromoDetail";
 import { CreatePromo } from "./CreatePromo";
@@ -145,6 +152,34 @@ function deltaLabel(n?: number | null) {
   if (n == null) return undefined;
   const sign = n > 0 ? "+" : "";
   return `${sign}${n}%`;
+}
+
+function sentimentLabel(score?: number | null) {
+  if (score == null) return "Sin datos";
+  if (score <= -0.5) return "Muy negativo";
+  if (score <= -0.1) return "Negativo";
+  if (Math.abs(score) < 0.1) return "Neutro";
+  if (score < 0.5) return "Positivo";
+  return "Muy positivo";
+}
+
+function googleRatingHint(
+  delta: {
+    ratingBefore?: number | null;
+    ratingNow?: number | null;
+    reviewsNow?: number | null;
+  } | null,
+  redirects?: number
+) {
+  if (delta?.ratingNow == null) return "Conecta tu perfil de Maps";
+  const parts: string[] = [];
+  if (delta.ratingBefore != null) {
+    const d = delta.ratingNow - delta.ratingBefore;
+    parts.push(`${d >= 0 ? "+" : ""}${d.toFixed(1)} vs al unirte`);
+  }
+  parts.push(`${delta.reviewsNow ?? 0} reseñas`);
+  if (redirects) parts.push(`${redirects} desde Onda`);
+  return parts.join(" · ");
 }
 
 function formatRoi(roi?: number | null) {
@@ -2439,17 +2474,96 @@ export function MerchantWorkspace() {
                     value={`${Math.round((overview.feedback.responseRate || 0) * 100)}%`}
                     hint="Sobre acumulaciones en el periodo"
                     tone="sky"
+                    icon={
+                      <PaperPlaneTilt
+                        className="h-5 w-5"
+                        weight="duotone"
+                        aria-hidden
+                      />
+                    }
                   />
                   <KpiCard
-                    label="Reseñas Google"
-                    value={String(overview.feedback.googleRedirects ?? 0)}
+                    label="Rating Google"
+                    value={
+                      overview.feedback.googleDelta?.ratingNow != null
+                        ? `★ ${overview.feedback.googleDelta.ratingNow.toFixed(1)}`
+                        : "—"
+                    }
+                    hint={googleRatingHint(
+                      overview.feedback.googleDelta,
+                      overview.feedback.googleRedirects
+                    )}
                     tone="primary"
+                    icon={
+                      <Star className="h-5 w-5" weight="duotone" aria-hidden />
+                    }
                   />
                   <KpiCard
                     label="Alertas abiertas"
                     value={String(overview.feedback.openAlerts ?? 0)}
                     tone={
                       (overview.feedback.openAlerts ?? 0) > 0 ? "amber" : "sky"
+                    }
+                    icon={
+                      <Warning
+                        className="h-5 w-5"
+                        weight="duotone"
+                        aria-hidden
+                      />
+                    }
+                  />
+                  <KpiCard
+                    label="Sentimiento comentarios"
+                    value={sentimentLabel(
+                      overview.feedback.commentSentiment?.avgScore
+                    )}
+                    hint={`${overview.feedback.commentSentiment?.analyzed ?? 0} comentarios analizados (NLP)`}
+                    tone={
+                      (overview.feedback.commentSentiment?.avgScore ?? 0) < -0.1
+                        ? "amber"
+                        : "success"
+                    }
+                    icon={
+                      <Smiley className="h-5 w-5" weight="duotone" aria-hidden />
+                    }
+                  />
+                  <KpiCard
+                    label="Casos contactados"
+                    value={String(overview.feedback.followUp?.contacted ?? 0)}
+                    hint={`${overview.feedback.followUp?.resolved ?? 0} resueltos en el periodo`}
+                    tone="sky"
+                    icon={
+                      <PhoneCall
+                        className="h-5 w-5"
+                        weight="duotone"
+                        aria-hidden
+                      />
+                    }
+                  />
+                  <KpiCard
+                    label="SMS seguimiento"
+                    value={String(overview.feedback.followUpSms ?? 0)}
+                    hint="Descuentan del alcance de campañas"
+                    tone="primary"
+                    icon={
+                      <ChatCircleDots
+                        className="h-5 w-5"
+                        weight="duotone"
+                        aria-hidden
+                      />
+                    }
+                  />
+                  <KpiCard
+                    label="Aspectos top"
+                    value={overview.feedback.topDimensions?.[0]?.label ?? "—"}
+                    hint={
+                      overview.feedback.topDimensions?.[0]
+                        ? `${overview.feedback.topDimensions[0].count} menciones · más repetido`
+                        : "Sin menciones aún"
+                    }
+                    tone="primary"
+                    icon={
+                      <Trophy className="h-5 w-5" weight="duotone" aria-hidden />
                     }
                   />
                 </div>

@@ -62,6 +62,7 @@ import { BillingStorageService } from './billing-storage.service';
 import { PlacesController } from './places.controller';
 import { FeedbackService } from './feedback.service';
 import { GooglePlacesService } from './google-places.service';
+import { SentimentService } from './sentiment.service';
 
 @Module({
   imports: [
@@ -136,6 +137,7 @@ import { GooglePlacesService } from './google-places.service';
     BillingStorageService,
     FeedbackService,
     GooglePlacesService,
+    SentimentService,
   ],
 })
 export class AppModule {}

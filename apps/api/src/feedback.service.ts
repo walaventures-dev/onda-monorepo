@@ -17,6 +17,7 @@ import { CustomerAuthService } from './customer-auth.service';
 import { BrevoService } from './brevo.service';
 import { PendingRequestsSseService } from './pending-requests-sse.service';
 import { GooglePlacesService } from './google-places.service';
+import { SentimentService } from './sentiment.service';
 import { googleWriteReviewUrl } from './feedback-url';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -38,7 +39,8 @@ export class FeedbackService {
     @Inject(CustomerAuthService) private auth: CustomerAuthService,
     @Inject(BrevoService) private brevo: BrevoService,
     @Inject(PendingRequestsSseService) private sse: PendingRequestsSseService,
-    @Inject(GooglePlacesService) private places: GooglePlacesService
+    @Inject(GooglePlacesService) private places: GooglePlacesService,
+    @Inject(SentimentService) private sentiment: SentimentService
   ) {}
 
   private assertPro(store: { planType: string }) {
@@ -112,6 +114,22 @@ export class FeedbackService {
       },
       include: { user: true },
     });
+
+    const comment = input.comment?.trim();
+    if (comment) {
+      const analysis = await this.sentiment.analyzeComment(comment);
+      if (analysis) {
+        await this.prisma.feedback.update({
+          where: { id: feedback.id },
+          data: {
+            sentimentScore: analysis.score,
+            sentimentMagnitude: analysis.magnitude,
+          },
+        });
+        feedback.sentimentScore = analysis.score;
+        feedback.sentimentMagnitude = analysis.magnitude;
+      }
+    }
 
     this.sse.emit(input.storeId, {
       kind: 'feedback_new',
@@ -200,7 +218,8 @@ export class FeedbackService {
   async updateFollowUp(
     storeId: string,
     feedbackId: string,
-    status: FeedbackFollowUpStatus
+    status: FeedbackFollowUpStatus,
+    opts?: { message?: string; note?: string }
   ) {
     const store = await this.prisma.store.findUniqueOrThrow({
       where: { id: storeId },
@@ -208,11 +227,50 @@ export class FeedbackService {
     this.assertPro(store);
     const existing = await this.prisma.feedback.findFirst({
       where: { id: feedbackId, storeId },
+      include: { user: true },
     });
     if (!existing) throw new NotFoundException('Feedback no encontrado');
+
+    const note = opts?.note?.trim() || undefined;
+
+    if (status === FeedbackFollowUpStatus.CONTACTED && opts?.message?.trim()) {
+      const message = opts.message.trim();
+      if (!existing.user.phone) {
+        throw new BadRequestException(
+          'El cliente no tiene teléfono registrado'
+        );
+      }
+      try {
+        await this.brevo.sendSms({
+          to: existing.user.phone,
+          message,
+        });
+      } catch (err) {
+        this.logger.warn(
+          `SMS seguimiento falló (${feedbackId}): ${
+            err instanceof Error ? err.message : err
+          }`
+        );
+        throw new BadRequestException(
+          'No se pudo enviar el SMS. Intenta de nuevo.'
+        );
+      }
+      await this.prisma.feedbackFollowUpSms.create({
+        data: { storeId, feedbackId, message },
+      });
+      return this.prisma.feedback.update({
+        where: { id: feedbackId },
+        data: { followUpStatus: status, followUpNote: message },
+        include: { user: true },
+      });
+    }
+
     return this.prisma.feedback.update({
       where: { id: feedbackId },
-      data: { followUpStatus: status },
+      data: {
+        followUpStatus: status,
+        ...(note ? { followUpNote: note } : {}),
+      },
       include: { user: true },
     });
   }
@@ -249,6 +307,28 @@ export class FeedbackService {
         f.sentiment === FeedbackSentiment.NEGATIVE &&
         f.followUpStatus === FeedbackFollowUpStatus.OPEN
     ).length;
+    const followUp = {
+      open: openAlerts,
+      contacted: feedbacks.filter(
+        (f) => f.followUpStatus === FeedbackFollowUpStatus.CONTACTED
+      ).length,
+      resolved: feedbacks.filter(
+        (f) => f.followUpStatus === FeedbackFollowUpStatus.RESOLVED
+      ).length,
+    };
+    const scores = feedbacks
+      .map((f) => f.sentimentScore)
+      .filter((s): s is number => s != null);
+    const commentSentiment = {
+      analyzed: scores.length,
+      avgScore:
+        scores.length > 0
+          ? scores.reduce((acc, s) => acc + s, 0) / scores.length
+          : null,
+    };
+    const followUpSms = await this.prisma.feedbackFollowUpSms.count({
+      where: { storeId, createdAt: { gte: since } },
+    });
 
     const seriesMap = new Map<string, { positive: number; negative: number }>();
     for (let i = 0; i < days; i++) {
@@ -299,6 +379,9 @@ export class FeedbackService {
         ...v,
       })),
       topDimensions,
+      followUp,
+      followUpSms,
+      commentSentiment,
       googleDelta: googleDelta || {
         ratingBefore: null,
         ratingNow: null,
