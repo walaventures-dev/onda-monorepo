@@ -97,6 +97,78 @@ function lineLabel(line: PosTabDto['lines'][number]) {
   return parts.join(' · ');
 }
 
+function TabLineRow({
+  line,
+  editable,
+  lineBusyId,
+  onQty,
+}: {
+  line: PosTabDto['lines'][number];
+  editable: boolean;
+  lineBusyId: string | null;
+  onQty: (lineId: string, qty: number) => void;
+}) {
+  const sent = Boolean(line.sentAt);
+  return (
+    <li
+      className={`flex items-center gap-2 rounded-xl border px-2 py-2 ${
+        sent
+          ? 'border-[var(--onda-border)]/60 bg-[var(--onda-bg)]/60'
+          : 'border-[var(--onda-border)]'
+      }`}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <p
+            className={`truncate text-sm font-medium ${
+              sent ? 'text-[var(--onda-muted)]' : ''
+            }`}
+          >
+            {lineLabel(line)}
+          </p>
+          {sent ? (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--onda-sky-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--onda-ink)]">
+              <CookingPot className="h-3 w-3" weight="regular" aria-hidden />
+              En cocina
+            </span>
+          ) : null}
+        </div>
+        <p className="text-xs tabular-nums text-[var(--onda-muted)]">
+          {formatCop(line.unitPrice)}
+          {(line.addons || []).some((a) => a.price > 0) ? ' c/u' : ''}
+        </p>
+      </div>
+      {editable ? (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--onda-border)] text-sm transition hover:border-[var(--onda-primary)]/40 hover:bg-[var(--onda-bg)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => onQty(line.id, Math.max(0, line.quantity - 1))}
+            disabled={lineBusyId === line.id}
+            aria-label="Quitar uno"
+          >
+            <Minus className="h-3.5 w-3.5" weight="regular" aria-hidden />
+          </button>
+          <span className="w-6 text-center text-sm tabular-nums">
+            {line.quantity}
+          </span>
+          <button
+            type="button"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--onda-border)] text-sm transition hover:border-[var(--onda-primary)]/40 hover:bg-[var(--onda-bg)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => onQty(line.id, line.quantity + 1)}
+            disabled={lineBusyId === line.id}
+            aria-label="Agregar uno"
+          >
+            <Plus className="h-3.5 w-3.5" weight="regular" aria-hidden />
+          </button>
+        </div>
+      ) : (
+        <span className="text-sm tabular-nums">×{line.quantity}</span>
+      )}
+    </li>
+  );
+}
+
 function ItemPickerModal({
   item,
   busy,
@@ -1095,58 +1167,34 @@ export function PosVenderCore({
                     Agrega productos desde la grilla.
                   </li>
                 ) : (
-                  selectedTab.lines.map((line) => (
-                    <li
-                      key={line.id}
-                      className="flex items-center gap-2 rounded-xl border border-[var(--onda-border)] px-2 py-2"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">
-                          {lineLabel(line)}
-                        </p>
-                        <p className="text-xs tabular-nums text-[var(--onda-muted)]">
-                          {formatCop(line.unitPrice)}
-                          {(line.addons || []).some((a) => a.price > 0)
-                            ? ' c/u'
-                            : ''}
-                        </p>
-                      </div>
-                      {selectedTab.status === 'OPEN' ? (
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--onda-border)] text-sm transition hover:border-[var(--onda-primary)]/40 hover:bg-[var(--onda-bg)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-                            onClick={() =>
-                              void setLineQty(
-                                line.id,
-                                Math.max(0, line.quantity - 1),
-                              )
-                            }
-                            disabled={lineBusyId === line.id}
-                            aria-label="Quitar uno"
-                          >
-                            <Minus className="h-3.5 w-3.5" weight="regular" aria-hidden />
-                          </button>
-                          <span className="w-6 text-center text-sm tabular-nums">
-                            {line.quantity}
-                          </span>
-                          <button
-                            type="button"
-                            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--onda-border)] text-sm transition hover:border-[var(--onda-primary)]/40 hover:bg-[var(--onda-bg)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-                            onClick={() =>
-                              void setLineQty(line.id, line.quantity + 1)
-                            }
-                            disabled={lineBusyId === line.id}
-                            aria-label="Agregar uno"
-                          >
-                            <Plus className="h-3.5 w-3.5" weight="regular" aria-hidden />
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-sm tabular-nums">×{line.quantity}</span>
-                      )}
-                    </li>
-                  ))
+                  (() => {
+                    const unsent = selectedTab.lines.filter((l) => !l.sentAt);
+                    const sent = selectedTab.lines.filter((l) => l.sentAt);
+                    const mixed = unsent.length > 0 && sent.length > 0;
+                    const renderRow = (line: PosTabDto['lines'][number]) => (
+                      <TabLineRow
+                        key={line.id}
+                        line={line}
+                        editable={selectedTab.status === 'OPEN'}
+                        lineBusyId={lineBusyId}
+                        onQty={(lineId, qty) => void setLineQty(lineId, qty)}
+                      />
+                    );
+                    return mixed ? (
+                      <>
+                        <li className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+                          Por enviar ({unsent.length})
+                        </li>
+                        {unsent.map(renderRow)}
+                        <li className="pt-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+                          En cocina ({sent.length})
+                        </li>
+                        {sent.map(renderRow)}
+                      </>
+                    ) : (
+                      selectedTab.lines.map(renderRow)
+                    );
+                  })()
                 )}
               </ul>
 
@@ -1161,7 +1209,8 @@ export function PosVenderCore({
                         className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-[var(--onda-border)] bg-[var(--onda-sky-soft)] px-3 py-2 text-sm font-semibold text-[var(--onda-ink)] transition hover:border-[var(--onda-primary)]/35 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <CookingPot className="h-4 w-4" weight="regular" aria-hidden />
-                        Enviar a cocina
+                        Enviar a cocina (
+                        {selectedTab.lines.filter((l) => !l.sentAt).length})
                       </button>
                     ) : null}
                     <Button
