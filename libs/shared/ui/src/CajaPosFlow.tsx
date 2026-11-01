@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, toast } from '@heroui/react';
 import { BankIcon as Bank } from '@phosphor-icons/react/dist/csr/Bank';
-import { ArmchairIcon as Armchair } from '@phosphor-icons/react/dist/csr/Armchair';
+import { PicnicTableIcon as PicnicTable } from '@phosphor-icons/react/dist/csr/PicnicTable';
 import { CaretLeftIcon as CaretLeft } from '@phosphor-icons/react/dist/csr/CaretLeft';
 import { CookingPotIcon as CookingPot } from '@phosphor-icons/react/dist/csr/CookingPot';
 import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/CreditCard';
 import { MoneyIcon as Money } from '@phosphor-icons/react/dist/csr/Money';
-import { QrCodeIcon as QrCode } from '@phosphor-icons/react/dist/csr/QrCode';
 import type { ReactNode } from 'react';
 import {
   formatCop,
@@ -28,6 +27,9 @@ import { api } from './api';
 import { OndaIcons } from './icons';
 import { PhoneInput } from './PhoneInput';
 import { PosTablesPanel } from './PosTablesPanel';
+import { useHasPosTables } from './useHasPosTables';
+import { useSwipeNav } from './useSwipeNav';
+import { useOndaDialogs } from './OndaDialogs';
 import { SkeletonCards, SkeletonList } from './Skeleton';
 
 type View = 'list' | 'tables' | 'cart' | 'grid' | 'identify' | 'pay';
@@ -67,7 +69,7 @@ function lineLabel(line: PosTabDto['lines'][number]) {
 }
 
 function paymentIcon(key: string): ReactNode {
-  const cls = 'h-5 w-5';
+  const cls = 'h-6 w-6';
   if (key === 'card') return <CreditCard className={cls} weight="regular" aria-hidden />;
   if (key === 'transfer') return <Bank className={cls} weight="regular" aria-hidden />;
   return <Money className={cls} weight="regular" aria-hidden />;
@@ -142,12 +144,18 @@ function PickerModal({
     variants.find((v) => v.isDefault)?.id || variants[0]?.id || '',
   );
   const [addonIds, setAddonIds] = useState<string[]>([]);
+  const [addonSearch, setAddonSearch] = useState('');
   const [note, setNote] = useState('');
   const base = variants.find((v) => v.id === variantId)?.price ?? item.price;
   const extras = addons.filter((a) => addonIds.includes(a.id)).reduce((s, a) => s + a.price, 0);
+  const filteredAddons = useMemo(() => {
+    const q = addonSearch.trim().toLowerCase();
+    if (!q) return addons;
+    return addons.filter((a) => a.name.toLowerCase().includes(q));
+  }, [addons, addonSearch]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
       <div className="onda-card w-full max-w-md space-y-4 p-4">
         <h3 className="font-display text-lg font-semibold">{item.name}</h3>
         {variants.length ? (
@@ -169,27 +177,65 @@ function PickerModal({
           </div>
         ) : null}
         {addons.length ? (
-          <div className="flex flex-wrap gap-2">
-            {addons.map((a) => {
-              const on = addonIds.includes(a.id);
-              return (
-                <button
-                  key={a.id}
-                  type="button"
-                  className={`rounded-full border px-3 py-1.5 text-sm ${
-                    on
-                      ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-100)]'
-                      : 'border-[var(--onda-border)]'
-                  }`}
-                  onClick={() =>
-                    setAddonIds((ids) => (on ? ids.filter((id) => id !== a.id) : [...ids, a.id]))
-                  }
-                >
-                  {a.name}
-                  {a.price > 0 ? ` · ${formatCop(a.price)}` : ''}
-                </button>
-              );
-            })}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+              Adicionales (opcionales)
+            </p>
+            {addons.length > 6 ? (
+              <input
+                type="search"
+                placeholder="Buscar adicional…"
+                className="onda-input w-full"
+                value={addonSearch}
+                onChange={(e) => setAddonSearch(e.target.value)}
+              />
+            ) : null}
+            {filteredAddons.length === 0 ? (
+              <p className="text-xs text-[var(--onda-muted)]">
+                Sin resultados para “{addonSearch.trim()}”.
+              </p>
+            ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {filteredAddons.map((a) => {
+                const on = addonIds.includes(a.id);
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    aria-pressed={on}
+                    className={`flex cursor-pointer flex-col overflow-hidden rounded-xl border text-left transition active:scale-[0.97] ${
+                      on
+                        ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-100)] shadow-sm'
+                        : 'border-[var(--onda-border)] bg-[var(--onda-card)] hover:border-[var(--onda-primary-500)]/35'
+                    }`}
+                    onClick={() =>
+                      setAddonIds((ids) => (on ? ids.filter((id) => id !== a.id) : [...ids, a.id]))
+                    }
+                  >
+                    {a.imageUrl ? (
+                      <img
+                        src={a.imageUrl}
+                        alt=""
+                        className="pointer-events-none aspect-square w-full object-cover"
+                      />
+                    ) : (
+                      <span className="pointer-events-none flex aspect-square w-full items-center justify-center bg-[var(--onda-bg)] font-display text-lg font-semibold text-[var(--onda-muted)]">
+                        {a.name.trim().charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="space-y-0.5 p-1.5">
+                      <span className="block truncate text-[11px] font-medium leading-tight">
+                        {a.name}
+                      </span>
+                      <span className="block text-[10px] tabular-nums text-[var(--onda-muted)]">
+                        {a.price > 0 ? formatCop(a.price) : 'gratis'}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            )}
           </div>
         ) : null}
         {withNote ? (
@@ -233,24 +279,67 @@ export function CajaPosFlow({
   storeId,
   storeName,
   ondaValue,
-  onAcumular,
-  onLogout,
-  logoutBusy,
   token,
-  kitchenHref,
 }: {
   storeId: string;
   storeName?: string;
   ondaValue?: number | null;
-  onAcumular: () => void;
-  onLogout?: () => void | Promise<void>;
-  logoutBusy?: boolean;
   /** Token de CajaLink (SSE y creación de cuentas con mesa). */
   token?: string;
-  /** URL de la pantalla de cocina (solo PWA caja); si falta, no se muestra. */
-  kitchenHref?: string;
 }) {
   const [view, setView] = useState<View>('list');
+  const [anim, setAnim] = useState<'forward' | 'back' | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const backStack = useRef<View[]>([]);
+  const forwardStack = useRef<View[]>([]);
+  const viewRef = useRef<View>('list');
+  const animTimer = useRef<number | undefined>(undefined);
+  const hasTables = useHasPosTables(storeId);
+
+  function flashAnim(dir: 'forward' | 'back') {
+    setAnim(dir);
+    window.clearTimeout(animTimer.current);
+    animTimer.current = window.setTimeout(() => setAnim(null), 240);
+  }
+
+  /** Navega apilando historial: el swipe puede volver atrás y rehacer. */
+  const goTo = useCallback((next: View) => {
+    if (viewRef.current === next) return;
+    backStack.current.push(viewRef.current);
+    forwardStack.current = [];
+    viewRef.current = next;
+    setView(next);
+    flashAnim('forward');
+  }, []);
+
+  /** Reinicio de flujo (venta cobrada / cuenta anulada): sin historial. */
+  const resetTo = useCallback((next: View) => {
+    backStack.current = [];
+    forwardStack.current = [];
+    viewRef.current = next;
+    setView(next);
+    setAnim(null);
+  }, []);
+
+  const goBack = useCallback(() => {
+    const prev = backStack.current.pop();
+    if (!prev) return;
+    forwardStack.current.push(viewRef.current);
+    viewRef.current = prev;
+    setView(prev);
+    flashAnim('back');
+  }, []);
+
+  const goForward = useCallback(() => {
+    const next = forwardStack.current.pop();
+    if (!next) return;
+    backStack.current.push(viewRef.current);
+    viewRef.current = next;
+    setView(next);
+    flashAnim('forward');
+  }, []);
+
+  const { confirm, dialogs } = useOndaDialogs();
   const [items, setItems] = useState<PosItemDto[]>([]);
   const [tabs, setTabs] = useState<PosTabDto[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PosPaymentMethodDto[]>([]);
@@ -266,6 +355,11 @@ export function CajaPosFlow({
   const [methodKey, setMethodKey] = useState('cash');
   const [cashReceived, setCashReceived] = useState('');
   const [identifying, setIdentifying] = useState(false);
+  useSwipeNav(rootRef, {
+    onBack: goBack,
+    onForward: goForward,
+    enabled: !busy && !identifying,
+  });
   const skipSyncUntil = useRef(0);
   const identifyToken = useRef(0);
   const qrAbort = useRef<AbortController | null>(null);
@@ -364,7 +458,7 @@ export function CajaPosFlow({
     upsert(created);
     setSelectedId(created.id);
     setSearch('');
-    setView('grid');
+    goTo('grid');
   }
 
   async function createTabForTable(input: {
@@ -385,7 +479,7 @@ export function CajaPosFlow({
       upsert(created);
       setSelectedId(created.id);
       setSearch('');
-      setView('grid');
+      goTo('grid');
     } catch (e) {
       toast.danger('Error', {
         description: e instanceof Error ? e.message : 'No se pudo abrir la mesa',
@@ -533,6 +627,15 @@ export function CajaPosFlow({
 
   async function voidTab() {
     if (!tab || busy) return;
+    const ok = await confirm({
+      title: 'Cancelar cuenta',
+      message: `Se anulará la cuenta${
+        tab.label ? ` "${tab.label}"` : ''
+      } y se descartarán sus líneas. Esta acción no se puede deshacer.`,
+      confirmLabel: 'Anular cuenta',
+      tone: 'danger',
+    });
+    if (!ok) return;
     setBusy(true);
     markLocal();
     try {
@@ -542,7 +645,7 @@ export function CajaPosFlow({
       });
       setTabs((prev) => prev.filter((t) => t.id !== tab.id));
       setSelectedId(null);
-      setView('list');
+      resetTo('list');
       toast.success('Cuenta cancelada');
     } catch (e) {
       toast.danger('Error', {
@@ -581,12 +684,12 @@ export function CajaPosFlow({
       upsert(updated);
       setPhone('');
       setIdentifying(false);
-      setView('pay');
+      goTo('pay');
       toast.success('Cliente identificado', {
         description: updated.customerName || 'Listo para cobrar',
       });
     },
-    [upsert],
+    [upsert, goTo],
   );
 
   useEffect(() => {
@@ -676,7 +779,7 @@ export function CajaPosFlow({
       setTabs((prev) => prev.filter((t) => t.id !== current.id));
       setSelectedId(null);
       setCashReceived('');
-      setView('list');
+      resetTo('list');
       toast.success('Venta registrada');
       const text = [
         storeName || 'Onda',
@@ -717,28 +820,17 @@ export function CajaPosFlow({
       ? Math.max(0, Number(parseMoneyInput(cashReceived) || 0) - tab.total)
       : 0;
 
-  const header = (
-    <header className="flex items-center justify-between gap-3">
-      <p className="min-w-0 truncate text-sm font-semibold text-[var(--onda-ink)]">
-        {storeName?.trim() || 'Caja'}
-      </p>
-      {onLogout ? (
-        <button
-          type="button"
-          onClick={() => void onLogout()}
-          disabled={logoutBusy}
-          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-2.5 py-1.5 text-xs font-medium text-[var(--onda-muted)] disabled:opacity-50"
-        >
-          {OndaIcons.logout}
-          Salir
-        </button>
-      ) : null}
-    </header>
-  );
-
   return (
-    <div className="flex min-h-[70dvh] flex-col gap-3">
-      {header}
+    <div
+      ref={rootRef}
+      className={`flex h-full min-h-0 flex-col gap-3 ${
+        anim === 'forward'
+          ? 'onda-view-enter-forward'
+          : anim === 'back'
+            ? 'onda-view-enter-back'
+            : ''
+      }`}
+    >
 
       {view === 'list' ? (
         <>
@@ -757,14 +849,14 @@ export function CajaPosFlow({
                     <li key={row.id}>
                       <button
                         type="button"
-                        className="onda-card flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                        className="onda-card flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
                         onClick={() => {
                           setSelectedId(row.id);
-                          setView('cart');
+                          goTo('cart');
                         }}
                       >
                         <span className="min-w-0">
-                          <span className="block truncate font-semibold text-[var(--onda-ink)]">
+                          <span className="block truncate text-base font-semibold text-[var(--onda-ink)]">
                             {tabTitle(row)}
                           </span>
                           <span className="text-xs text-[var(--onda-muted)]">
@@ -772,7 +864,7 @@ export function CajaPosFlow({
                             {row.status === 'CHECKOUT' ? ' · Por cobrar' : ''}
                           </span>
                         </span>
-                        <span className="shrink-0 text-sm font-semibold tabular-nums">
+                        <span className="shrink-0 text-base font-bold tabular-nums">
                           {formatCop(row.total)}
                         </span>
                       </button>
@@ -782,47 +874,36 @@ export function CajaPosFlow({
               </ul>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-2 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-            <Button type="button" onPress={() => void createTab()} isDisabled={busy}>
+          <div className="flex flex-col gap-2 border-t border-[var(--onda-border)] pt-3">
+            <Button
+              type="button"
+              size="lg"
+              fullWidth
+              onPress={() => void createTab()}
+              isDisabled={busy}
+            >
               {OndaIcons.plus} Nueva cuenta
             </Button>
-            <button
-              type="button"
-              onClick={() => setView('tables')}
-              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-4 text-sm font-semibold text-[var(--onda-ink)]"
-            >
-              <Armchair className="h-4 w-4" weight="regular" aria-hidden />
-              Mesas
-            </button>
-            <button
-              type="button"
-              onClick={onAcumular}
-              className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-[var(--onda-sky)] px-4 text-sm font-semibold text-[var(--onda-ink)] ${
-                kitchenHref ? '' : 'col-span-2'
-              }`}
-            >
-              <QrCode className="h-4 w-4" weight="regular" aria-hidden />
-              Acumular
-            </button>
-            {kitchenHref ? (
-              <a
-                href={kitchenHref}
-                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-4 text-sm font-semibold text-[var(--onda-ink)]"
+            {hasTables ? (
+              <button
+                type="button"
+                onClick={() => goTo('tables')}
+                className="inline-flex min-h-12 w-full items-center justify-center gap-1.5 rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 text-sm font-semibold text-[var(--onda-ink)] active:scale-[0.98]"
               >
-                <CookingPot className="h-4 w-4" weight="regular" aria-hidden />
-                Cocina
-              </a>
+                <PicnicTable className="h-5 w-5" weight="regular" aria-hidden />
+                Ver mesas
+              </button>
             ) : null}
           </div>
         </>
       ) : null}
 
-      {view === 'tables' ? (
+      {view === 'tables' && hasTables ? (
         <>
           <button
             type="button"
             className="inline-flex items-center gap-1 text-sm font-medium text-[var(--onda-muted)]"
-            onClick={() => setView('list')}
+            onClick={() => goTo('list')}
           >
             <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
             Cuentas
@@ -832,7 +913,7 @@ export function CajaPosFlow({
             token={token}
             onOpenTab={(tabId) => {
               setSelectedId(tabId);
-              setView('cart');
+              goTo('cart');
             }}
             onCreateTab={(input) => createTabForTable(input)}
           />
@@ -844,7 +925,7 @@ export function CajaPosFlow({
           <button
             type="button"
             className="inline-flex items-center gap-1 text-sm font-medium text-[var(--onda-muted)]"
-            onClick={() => setView('list')}
+            onClick={() => goTo('list')}
           >
             <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
             Cuentas
@@ -906,43 +987,47 @@ export function CajaPosFlow({
               ))
             )}
           </ul>
-          <div className="grid grid-cols-3 gap-2 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+          <div className="flex flex-col gap-2 border-t border-[var(--onda-border)] pt-3">
             {tab.lines.some((l) => !l.sentAt) ? (
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void sendToKitchen()}
-                className="col-span-3 inline-flex items-center justify-center gap-1.5 rounded-full bg-[var(--onda-sky)] px-3 py-2 text-sm font-semibold text-[var(--onda-ink)] disabled:opacity-50"
+                className="inline-flex min-h-14 items-center justify-center gap-1.5 rounded-2xl bg-[var(--onda-sky)] px-3 text-base font-semibold text-[var(--onda-ink)] active:scale-[0.99] disabled:opacity-50"
               >
-                <CookingPot className="h-4 w-4" weight="regular" aria-hidden />
+                <CookingPot className="h-5 w-5" weight="regular" aria-hidden />
                 Enviar a cocina ({tab.lines.filter((l) => !l.sentAt).length})
               </button>
             ) : null}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void voidTab()}
-              className="rounded-full border border-[var(--onda-danger)]/30 px-3 py-2 text-sm font-semibold text-[var(--onda-danger)] disabled:opacity-50"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                void ensureOpen().then(() => {
-                  setSearch('');
-                  setView('grid');
-                });
-              }}
-              className="rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
-            >
-              Editar
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  void ensureOpen().then(() => {
+                    setSearch('');
+                    goTo('grid');
+                  });
+                }}
+                className="min-h-12 rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 text-sm font-semibold disabled:opacity-50"
+              >
+                Editar
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void voidTab()}
+                className="min-h-12 rounded-2xl border border-[var(--onda-danger)]/30 px-3 text-sm font-semibold text-[var(--onda-danger)] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+            </div>
             <Button
               type="button"
+              size="lg"
+              fullWidth
               isDisabled={busy || tab.lines.length === 0}
-              onPress={() => setView('identify')}
+              onPress={() => goTo('identify')}
             >
               Completar
             </Button>
@@ -956,7 +1041,7 @@ export function CajaPosFlow({
             <button
               type="button"
               className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-[var(--onda-muted)]"
-              onClick={() => setView('cart')}
+              onClick={() => goTo('cart')}
             >
               <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
               Cuenta
@@ -1020,11 +1105,16 @@ export function CajaPosFlow({
           </div>
           <button
             type="button"
-            onClick={() => setView('cart')}
-            className="rounded-full bg-[var(--onda-ink)] px-4 py-3 text-sm font-semibold text-white"
+            onClick={() => goTo('cart')}
+            className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--onda-ink)] px-4 py-3.5 text-base font-semibold text-white shadow-[0_12px_28px_rgba(26,27,46,0.25)] active:scale-[0.99]"
           >
-            Ver cuenta · {formatCop(tab.total)} · {productCount(tab)} producto
-            {productCount(tab) === 1 ? '' : 's'}
+            Ver cuenta
+            <span className="tabular-nums text-[var(--onda-lime)]">
+              {formatCop(tab.total)}
+            </span>
+            <span className="text-sm font-medium text-white/70">
+              · {productCount(tab)} producto{productCount(tab) === 1 ? '' : 's'}
+            </span>
           </button>
         </>
       ) : null}
@@ -1036,7 +1126,7 @@ export function CajaPosFlow({
             className="inline-flex items-center gap-1 text-sm font-medium text-[var(--onda-muted)]"
             onClick={() => {
               stopIdentify();
-              setView('cart');
+              goTo('cart');
             }}
           >
             <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
@@ -1047,16 +1137,17 @@ export function CajaPosFlow({
             En la pantalla del cliente: pasa el QR del pase Onda en el sensor. Puedes pedir el
             teléfono. Lo que ocurra primero identifica la cuenta.
           </p>
-          <div className="space-y-2 rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] p-4">
+          <div className="space-y-3 rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] p-4">
             <PhoneInput
               value={phone}
               onChange={setPhone}
-              className="onda-input w-full text-center text-lg"
+              className="onda-input w-full text-center text-xl"
               disabled={identifying}
             />
             <Button
               type="button"
-              className="w-full"
+              size="lg"
+              fullWidth
               isDisabled={identifying || !isCompletePhoneMask(phone)}
               onPress={() => void linkPhone()}
             >
@@ -1065,10 +1156,10 @@ export function CajaPosFlow({
           </div>
           <button
             type="button"
-            className="text-sm font-semibold text-[var(--onda-muted)]"
+            className="mt-auto min-h-12 w-full rounded-full text-sm font-semibold text-[var(--onda-muted)]"
             onClick={() => {
               stopIdentify();
-              setView('pay');
+              goTo('pay');
             }}
           >
             Continuar sin identificar
@@ -1081,7 +1172,7 @@ export function CajaPosFlow({
           <button
             type="button"
             className="inline-flex items-center gap-1 text-sm font-medium text-[var(--onda-muted)]"
-            onClick={() => setView('cart')}
+            onClick={() => goTo('cart')}
           >
             <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
             Cuenta
@@ -1100,7 +1191,7 @@ export function CajaPosFlow({
                 key={m.key}
                 type="button"
                 onClick={() => setMethodKey(m.key)}
-                className={`flex flex-col items-center gap-1 rounded-2xl border px-2 py-3 text-xs font-semibold ${
+                className={`flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl border px-2 py-3 text-sm font-semibold ${
                   methodKey === m.key
                     ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-100)] text-[var(--onda-primary-700)]'
                     : 'border-[var(--onda-border)]'
@@ -1115,18 +1206,25 @@ export function CajaPosFlow({
             <label className="block space-y-1 text-sm">
               <span className="text-[var(--onda-muted)]">Efectivo recibido</span>
               <input
-                className="onda-input w-full text-lg font-semibold tabular-nums"
+                className="onda-input w-full text-xl font-semibold tabular-nums"
                 inputMode="numeric"
                 value={formatMoneyInput(cashReceived)}
                 onChange={(e) => setCashReceived(parseMoneyInput(e.target.value))}
                 placeholder={formatMoneyInput(String(tab.total))}
               />
               {cashReceived && Number(parseMoneyInput(cashReceived) || 0) >= tab.total ? (
-                <span className="block text-sm">Cambio {formatCop(changeDue)}</span>
+                <span className="block text-base">Cambio {formatCop(changeDue)}</span>
               ) : null}
             </label>
           ) : null}
-          <Button type="button" className="w-full" isDisabled={busy} onPress={() => void cobrar()}>
+          <Button
+            type="button"
+            size="lg"
+            fullWidth
+            className="mt-auto"
+            isDisabled={busy}
+            onPress={() => void cobrar()}
+          >
             {busy ? 'Cobrando…' : `Cobrar ${formatCop(tab.total)}`}
           </Button>
           <p className="text-xs text-[var(--onda-muted)]">
@@ -1138,7 +1236,7 @@ export function CajaPosFlow({
       ) : null}
 
       {menuItem ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4">
           <div className="onda-card w-full max-w-md space-y-2 p-4">
             <p className="font-semibold">{menuItem.name}</p>
             <button type="button" className="w-full rounded-full border border-[var(--onda-border)] px-4 py-2 text-sm font-semibold" onClick={() => openAdd(menuItem, false)}>
@@ -1171,7 +1269,7 @@ export function CajaPosFlow({
       ) : null}
 
       {noteItem ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4">
           <div className="onda-card w-full max-w-md space-y-3 p-4">
             <p className="font-semibold">{noteItem.name}</p>
             <input
@@ -1196,6 +1294,8 @@ export function CajaPosFlow({
           </div>
         </div>
       ) : null}
+
+      {dialogs}
     </div>
   );
 }

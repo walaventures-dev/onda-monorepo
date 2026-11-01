@@ -84,7 +84,7 @@ button.onda-gradient:focus-visible:not(:disabled) {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  border-radius: 999px;
+  border-radius: var(--onda-btn-radius, 1rem);
   border: 0;
   background: #25d366;
   color: #fff !important;
@@ -368,6 +368,17 @@ button.onda-gradient:focus-visible:not(:disabled) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.onda-sidebar-brand-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.onda-sidebar.is-collapsed .onda-sidebar-brand-text {
+  display: none;
 }
 
 .onda-sidebar.is-collapsed .onda-sidebar-brand {
@@ -711,7 +722,7 @@ button.onda-gradient:focus-visible:not(:disabled) {
   width: 2.5rem;
   height: 2.5rem;
   border: 1px solid var(--onda-border);
-  border-radius: 0.75rem;
+  border-radius: var(--onda-btn-radius, 1rem);
   background: var(--onda-card);
   color: var(--onda-ink);
   cursor: pointer;
@@ -1450,7 +1461,7 @@ button.onda-gradient:focus-visible:not(:disabled) {
 }
 
 .onda-dialog-btn {
-  border-radius: 999px !important;
+  border-radius: var(--onda-btn-radius, 1rem) !important;
   min-height: 2.35rem;
   padding-inline: 1rem !important;
   font-size: 0.875rem !important;
@@ -1709,15 +1720,15 @@ button.onda-gradient:focus-visible:not(:disabled) {
   position: relative;
   display: inline-flex;
   flex: 1;
-  min-height: 2.75rem;
+  min-height: 3.5rem;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  border-radius: 999px;
+  gap: 0.45rem;
+  border-radius: var(--onda-btn-radius, 1rem);
   border: none;
   background: transparent;
   color: var(--onda-muted);
-  font-size: 0.875rem;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
@@ -1730,15 +1741,15 @@ button.onda-gradient:focus-visible:not(:disabled) {
 
 .onda-caja-tab-badge {
   display: inline-flex;
-  min-width: 1.15rem;
-  height: 1.15rem;
+  min-width: 1.4rem;
+  height: 1.4rem;
   align-items: center;
   justify-content: center;
-  padding: 0 0.3rem;
+  padding: 0 0.35rem;
   border-radius: 999px;
   background: var(--onda-primary-500);
   color: #fff;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 1;
 }
@@ -2017,4 +2028,51 @@ button.onda-gradient:focus-visible:not(:disabled) {
   to {
     opacity: 1;
   }
+}
+
+/* Transición de vistas con swipe (atrás/adelante) en el POS de caja */
+@keyframes ondaViewEnterForward {
+  from {
+    transform: translateX(14%);
+    opacity: 0.35;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes ondaViewEnterBack {
+  from {
+    transform: translateX(-14%);
+    opacity: 0.35;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.onda-view-enter-forward {
+  animation: ondaViewEnterForward 220ms ease-out;
+  will-change: transform, opacity;
+}
+
+.onda-view-enter-back {
+  animation: ondaViewEnterBack 220ms ease-out;
+  will-change: transform, opacity;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Botones: radio unificado (curvo) en todo el sistema de diseño.
+   Cualquier botón con utilidad rounded-* queda en --onda-btn-radius.
+   ════════════════════════════════════════════════════════════════════ */
+:root {
+  --onda-btn-radius: 1rem; /* rounded-2xl */
+}
+
+button[class*='rounded-'],
+a[class*='rounded-'],
+[role='button'][class*='rounded-'] {
+  border-radius: var(--onda-btn-radius) !important;
 }

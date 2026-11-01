@@ -5,8 +5,10 @@ import { Button, toast } from '@heroui/react';
 import { OndaIcons } from './icons';
 import { PhoneInput } from './PhoneInput';
 import { PosTablesPanel } from './PosTablesPanel';
+import { useHasPosTables } from './useHasPosTables';
+import { useOndaDialogs } from './OndaDialogs';
 import { SkeletonCards } from './Skeleton';
-import { api } from './api';
+import { api, getApiAuthToken } from './api';
 import {
   formatCop,
   formatMoneyInput,
@@ -22,7 +24,7 @@ import type {
   PosTabDto,
 } from '@onda/shared-types';
 import { MoneyIcon as Money } from '@phosphor-icons/react/dist/csr/Money';
-import { ArmchairIcon as Armchair } from '@phosphor-icons/react/dist/csr/Armchair';
+import { PicnicTableIcon as PicnicTable } from '@phosphor-icons/react/dist/csr/PicnicTable';
 import { CookingPotIcon as CookingPot } from '@phosphor-icons/react/dist/csr/CookingPot';
 import { CreditCardIcon as CreditCard } from '@phosphor-icons/react/dist/csr/CreditCard';
 import { BankIcon as Bank } from '@phosphor-icons/react/dist/csr/Bank';
@@ -86,6 +88,112 @@ function paymentMethodIcon(key: string): ReactNode {
 
 function itemNeedsPicker(item: PosItemDto) {
   return (item.variants?.length ?? 0) > 0 || (item.addons?.length ?? 0) > 0;
+}
+
+const VOID_REASONS = [
+  { id: 'error_pedido', label: 'Error en el pedido' },
+  { id: 'cliente_cancelo', label: 'El cliente canceló' },
+  { id: 'duplicada', label: 'Cuenta duplicada' },
+  { id: 'agotado', label: 'Producto agotado' },
+  { id: 'otro', label: 'Otro' },
+] as const;
+
+type VoidReasonId = (typeof VOID_REASONS)[number]['id'];
+
+function VoidTabModal({
+  tabLabel,
+  total,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  tabLabel: string;
+  total: number;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reasonId, setReasonId] = useState<VoidReasonId | ''>('');
+  const [detail, setDetail] = useState('');
+  const option = VOID_REASONS.find((r) => r.id === reasonId) ?? null;
+  const detailTrimmed = detail.trim();
+  const reason = option
+    ? `${option.label}${detailTrimmed ? ` — ${detailTrimmed}` : ''}`
+    : '';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+      <div className="onda-card w-full max-w-md space-y-4 p-4 shadow-lg">
+        <div>
+          <h3 className="font-display text-lg font-semibold">Anular cuenta</h3>
+          <p className="text-sm text-[var(--onda-muted)]">
+            ¿Por qué anulas "{tabLabel}" ({formatCop(total)})? Se cancelan las
+            comandas en cocina y la acción no se puede deshacer.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+            Motivo
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {VOID_REASONS.map((r) => {
+              const on = reasonId === r.id;
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setReasonId(r.id)}
+                  className={`cursor-pointer rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition active:scale-[0.98] ${
+                    on
+                      ? 'border-[var(--onda-danger)] bg-[var(--onda-danger)]/10 text-[var(--onda-danger)]'
+                      : 'border-[var(--onda-border)] text-[var(--onda-muted)] hover:border-[var(--onda-danger)]/40 hover:text-[var(--onda-ink)]'
+                  }`}
+                >
+                  {r.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <label className="block space-y-1 text-sm">
+          <span className="text-xs text-[var(--onda-muted)]">
+            Detalle (opcional)
+          </span>
+          <input
+            className="onda-input w-full"
+            value={detail}
+            onChange={(e) => setDetail(e.target.value)}
+            placeholder="Ej: el cliente pidió cambiar todo…"
+            maxLength={140}
+            disabled={busy}
+          />
+        </label>
+
+        <div className="flex gap-2 border-t border-[var(--onda-border)] pt-3">
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            isDisabled={busy}
+            onPress={onCancel}
+          >
+            {OndaIcons.close} Cancelar
+          </Button>
+          <Button
+            type="button"
+            className="flex-1 bg-[var(--onda-danger)] text-white hover:bg-[var(--onda-danger)]/90"
+            isDisabled={busy || !option}
+            onPress={() => onConfirm(reason)}
+          >
+            {OndaIcons.trash} {busy ? 'Anulando…' : 'Anular cuenta'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function lineLabel(line: PosTabDto['lines'][number]) {
@@ -186,6 +294,13 @@ function ItemPickerModal({
     variants.find((v) => v.isDefault)?.id || variants[0]?.id || '';
   const [variantId, setVariantId] = useState(defaultVariant);
   const [addonIds, setAddonIds] = useState<string[]>([]);
+  const [addonSearch, setAddonSearch] = useState('');
+
+  const filteredAddons = useMemo(() => {
+    const q = addonSearch.trim().toLowerCase();
+    if (!q) return addons;
+    return addons.filter((a) => a.name.toLowerCase().includes(q));
+  }, [addons, addonSearch]);
 
   const base =
     variants.find((v) => v.id === variantId)?.price ?? item.price;
@@ -232,17 +347,32 @@ function ItemPickerModal({
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
               Adicionales (opcionales)
             </p>
-            <div className="flex flex-wrap gap-2">
-              {addons.map((a) => {
+            {addons.length > 6 ? (
+              <input
+                type="search"
+                placeholder="Buscar adicional…"
+                className="onda-input w-full"
+                value={addonSearch}
+                onChange={(e) => setAddonSearch(e.target.value)}
+              />
+            ) : null}
+            {filteredAddons.length === 0 ? (
+              <p className="text-xs text-[var(--onda-muted)]">
+                Sin resultados para “{addonSearch.trim()}”.
+              </p>
+            ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {filteredAddons.map((a) => {
                 const on = addonIds.includes(a.id);
                 return (
                   <button
                     key={a.id}
                     type="button"
-                    className={`rounded-full border px-3 py-1.5 text-sm ${
+                    aria-pressed={on}
+                    className={`flex cursor-pointer flex-col overflow-hidden rounded-xl border text-left transition active:scale-[0.97] ${
                       on
-                        ? 'border-[var(--onda-primary)] bg-[var(--onda-primary-100)]'
-                        : 'border-[var(--onda-border)]'
+                        ? 'border-[var(--onda-primary)] bg-[var(--onda-primary-100)] shadow-sm'
+                        : 'border-[var(--onda-border)] bg-[var(--onda-card)] hover:border-[var(--onda-primary)]/35'
                     }`}
                     onClick={() =>
                       setAddonIds((ids) =>
@@ -250,12 +380,30 @@ function ItemPickerModal({
                       )
                     }
                   >
-                    {a.name}
-                    {a.price > 0 ? ` · ${formatCop(a.price)}` : ' · gratis'}
+                    {a.imageUrl ? (
+                      <img
+                        src={a.imageUrl}
+                        alt=""
+                        className="pointer-events-none aspect-square w-full object-cover"
+                      />
+                    ) : (
+                      <span className="pointer-events-none flex aspect-square w-full items-center justify-center bg-[var(--onda-bg)] font-display text-lg font-semibold text-[var(--onda-muted)]">
+                        {a.name.trim().charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="space-y-0.5 p-1.5">
+                      <span className="block truncate text-[11px] font-medium leading-tight">
+                        {a.name}
+                      </span>
+                      <span className="block text-[10px] tabular-nums text-[var(--onda-muted)]">
+                        {a.price > 0 ? formatCop(a.price) : 'gratis'}
+                      </span>
+                    </span>
                   </button>
                 );
               })}
             </div>
+            )}
           </div>
         ) : null}
 
@@ -319,10 +467,13 @@ export function PosVenderCore({
   const [linkName, setLinkName] = useState('');
   const [linkingCustomer, setLinkingCustomer] = useState(false);
   const [showLinkForm, setShowLinkForm] = useState(false);
+  const [voidOpen, setVoidOpen] = useState(false);
   const [attendFilter, setAttendFilter] = useState<AttendFilter>('all');
   const [attendants, setAttendants] = useState<PosAttendantDto[]>([]);
   const [assignBusy, setAssignBusy] = useState(false);
-  const [showTables, setShowTables] = useState(false);
+  const [tableView, setTableView] = useState<'none' | 'browse' | 'pick'>('none');
+  const hasTables = useHasPosTables(storeId);
+  const { dialogs } = useOndaDialogs();
   const [readyCount, setReadyCount] = useState(0);
   const readyIdsRef = useRef<Set<string>>(new Set());
   const skipRemoteSyncUntil = useRef(0);
@@ -426,9 +577,15 @@ export function PosVenderCore({
     };
   }, [loadItems, loadTabs, loadPaymentMethods, loadAttendants]);
 
+  // SSE con credenciales: EventSource no lleva headers, así que el token
+  // (ID token Firebase del merchant o token de caja) va en ?token=.
+  // Reconexión manual para re-leer el token en cada intento (expira ~1h).
   useEffect(() => {
-    const es = new EventSource(`/api/pos/stream?storeId=${storeId}`);
-    es.onmessage = (ev) => {
+    let cancelled = false;
+    let source: EventSource | null = null;
+    let retryTimer: number | undefined;
+
+    function handleMessage(ev: MessageEvent) {
       try {
         const data = JSON.parse(ev.data);
         const ticket = data?.ticket;
@@ -463,8 +620,33 @@ export function PosVenderCore({
         /* ping u otro evento sin JSON */
       }
       void loadTabs();
+    }
+
+    async function connect() {
+      if (cancelled) return;
+      source?.close();
+      const token = await getApiAuthToken();
+      if (cancelled) return;
+      const qs = new URLSearchParams({ storeId });
+      if (token) qs.set('token', token);
+      source = new EventSource(`/api/pos/stream?${qs.toString()}`);
+      source.onmessage = handleMessage;
+      source.onerror = () => {
+        source?.close();
+        source = null;
+        if (cancelled) return;
+        window.clearTimeout(retryTimer);
+        retryTimer = window.setTimeout(() => void connect(), 4000);
+      };
+    }
+
+    void connect();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(retryTimer);
+      source?.close();
+      source = null;
     };
-    return () => es.close();
   }, [storeId, loadTabs]);
 
   async function createNewTab() {
@@ -495,10 +677,63 @@ export function PosVenderCore({
       });
       upsertTab(tab);
       setSelectedTabId(tab.id);
-      setShowTables(false);
+      setTableView('none');
     } catch (e) {
       toast.danger('Error', {
         description: e instanceof Error ? e.message : 'No se pudo abrir la mesa',
+      });
+    }
+  }
+
+  async function assignTable(input: {
+    tableId: string;
+    label: string;
+    guestCount: number | null;
+  }) {
+    if (!selectedTab) return;
+    markLocalMutation();
+    try {
+      const updated = await api<PosTabDto>(
+        `/pos/tabs/${selectedTab.id}/table?storeId=${storeId}`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            tableId: input.tableId,
+            guestCount: input.guestCount,
+          }),
+        },
+      );
+      upsertTab(updated);
+      setTableView('none');
+      toast.success(`Mesa ${input.label} asignada`, {
+        description: `La cuenta quedó en la mesa ${input.label}.`,
+      });
+    } catch (e) {
+      toast.danger('Error', {
+        description: e instanceof Error ? e.message : 'No se pudo asignar la mesa',
+      });
+    }
+  }
+
+  async function unassignTable() {
+    if (!selectedTab) return;
+    markLocalMutation();
+    try {
+      const updated = await api<PosTabDto>(
+        `/pos/tabs/${selectedTab.id}/table?storeId=${storeId}`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ tableId: null }),
+        },
+      );
+      upsertTab(updated);
+      toast.success('Mesa liberada', {
+        description: 'La cuenta quedó sin mesa asignada.',
+      });
+    } catch (e) {
+      toast.danger('Error', {
+        description:
+          e instanceof Error ? e.message : 'No se pudo quitar la mesa',
       });
     }
   }
@@ -631,15 +866,21 @@ export function PosVenderCore({
 
   async function voidTab() {
     if (!selectedTab || busy) return;
+    setVoidOpen(true);
+  }
+
+  async function confirmVoid(reason: string) {
+    if (!selectedTab || busy) return;
     setBusy(true);
     markLocalMutation();
     try {
       await api(`/pos/tabs/${selectedTab.id}/void?storeId=${storeId}`, {
         method: 'POST',
-        body: JSON.stringify({}),
+        body: JSON.stringify({ reason }),
       });
       setTabs((prev) => prev.filter((t) => t.id !== selectedTab.id));
       setSelectedTabId(null);
+      setVoidOpen(false);
       toast.success('Cuenta anulada');
     } catch (e) {
       toast.danger('Error', {
@@ -732,6 +973,7 @@ export function PosVenderCore({
     setLinkPhone('');
     setLinkName('');
     setShowLinkForm(false);
+    setVoidOpen(false);
   }, [selectedTabId]);
 
   async function pay() {
@@ -808,17 +1050,22 @@ export function PosVenderCore({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          {hasTables ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setTableView('browse')}
+            >
+              <PicnicTable className="h-4 w-4 shrink-0" weight="regular" aria-hidden />
+              Mesas
+            </Button>
+          ) : null}
           <Button
             type="button"
-            variant="outline"
-            onClick={() => setShowTables(true)}
-          >
-            <Armchair className="h-4 w-4 shrink-0" weight="regular" aria-hidden />
-            Mesas
-          </Button>
-          <Button
-            type="button"
-            onClick={() => void createNewTab()}
+            onClick={() => {
+              if (hasTables) setTableView('browse');
+              else void createNewTab();
+            }}
             isDisabled={busy}
           >
             {OndaIcons.plus} Nueva cuenta
@@ -873,23 +1120,30 @@ export function PosVenderCore({
         ) : null}
       </div>
 
-      {showTables ? (
+      {tableView !== 'none' && hasTables ? (
         <div className="flex flex-1 flex-col gap-3">
           <button
             type="button"
             className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-[var(--onda-muted)]"
-            onClick={() => setShowTables(false)}
+            onClick={() => setTableView('none')}
           >
             <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
-            Vender
+            {tableView === 'pick' ? 'Volver a la cuenta' : 'Vender'}
           </button>
           <PosTablesPanel
             storeId={storeId}
+            mode={tableView === 'pick' ? 'pick' : 'open'}
+            initialGuestCount={selectedTab?.guestCount ?? null}
             onOpenTab={(tabId) => {
               setSelectedTabId(tabId);
-              setShowTables(false);
+              setTableView('none');
             }}
             onCreateTab={(input) => createTabForTable(input)}
+            onQuickTab={async () => {
+              await createNewTab();
+              setTableView('none');
+            }}
+            onPickTable={(input) => assignTable(input)}
           />
         </div>
       ) : (
@@ -925,13 +1179,34 @@ export function PosVenderCore({
                         {formatCop(tab.total)}
                       </span>
                     </div>
-                    <p className="mt-0.5 text-xs text-[var(--onda-muted)]">
-                      {tabStatusLabel(tab.status)}
-                      {tab.customerName
-                        ? ` · ${tab.customerName}`
-                        : tab.lines.length
-                          ? ` · ${tab.lines.length} ítem${tab.lines.length === 1 ? '' : 's'}`
-                          : ''}
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-1 text-xs text-[var(--onda-muted)]">
+                      <span>{tabStatusLabel(tab.status)}</span>
+                      {tab.tableLabel ? (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span className="inline-flex items-center gap-0.5 font-semibold text-[var(--onda-primary-700)]">
+                            <PicnicTable
+                              className="h-3 w-3"
+                              weight="regular"
+                              aria-hidden
+                            />
+                            {tab.tableLabel}
+                          </span>
+                        </>
+                      ) : null}
+                      {(() => {
+                        const detail = tab.customerName
+                          ? tab.customerName
+                          : tab.lines.length
+                            ? `${tab.lines.length} ítem${tab.lines.length === 1 ? '' : 's'}`
+                            : '';
+                        return detail ? (
+                          <>
+                            <span aria-hidden>·</span>
+                            <span>{detail}</span>
+                          </>
+                        ) : null;
+                      })()}
                     </p>
                     <p className="mt-0.5 truncate text-[11px] text-[var(--onda-primary-700)]">
                       {tab.attendedByName
@@ -1021,9 +1296,11 @@ export function PosVenderCore({
                     <p className="text-xs text-[var(--onda-muted)]">
                       {tabStatusLabel(selectedTab.status)}
                       {selectedTab.tableId
-                        ? selectedTab.guestCount
-                          ? ` · Mesa · ${selectedTab.guestCount} comensal${selectedTab.guestCount === 1 ? '' : 'es'}`
-                          : ' · Mesa'
+                        ? ` · Mesa ${selectedTab.tableLabel ?? ''}${
+                            selectedTab.guestCount
+                              ? ` · ${selectedTab.guestCount} comensal${selectedTab.guestCount === 1 ? '' : 'es'}`
+                              : ''
+                          }`
                         : ''}
                     </p>
                   </div>
@@ -1060,6 +1337,64 @@ export function PosVenderCore({
                       {selectedTab.attendedByName}
                     </span>
                   </p>
+                ) : null}
+
+                {hasTables &&
+                (selectedTab.status === 'OPEN' ||
+                  selectedTab.status === 'CHECKOUT') ? (
+                  selectedTab.tableId ? (
+                    <div className="mt-3 flex items-center gap-2 rounded-xl border border-[var(--onda-border)] bg-[var(--onda-bg)]/50 px-3 py-2">
+                      <PicnicTable
+                        className="h-4 w-4 shrink-0 text-[var(--onda-primary-500)]"
+                        weight="regular"
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-[var(--onda-ink)]">
+                          Mesa {selectedTab.tableLabel ?? ''}
+                          {selectedTab.tableSectionName
+                            ? ` · ${selectedTab.tableSectionName}`
+                            : ''}
+                        </p>
+                        {selectedTab.guestCount ? (
+                          <p className="text-[11px] text-[var(--onda-muted)]">
+                            {selectedTab.guestCount} comensal
+                            {selectedTab.guestCount === 1 ? '' : 'es'}
+                          </p>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setTableView('pick')}
+                        className="shrink-0 rounded-full border border-[var(--onda-border)] bg-white px-2.5 py-1 text-xs font-medium text-[var(--onda-primary-500)] transition hover:bg-[var(--onda-primary-50)] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Cambiar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void unassignTable()}
+                        className="shrink-0 rounded-full px-2 py-1 text-xs font-medium text-[var(--onda-muted)] transition hover:text-[var(--onda-danger)] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setTableView('pick')}
+                      className="mt-3 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed border-[var(--onda-border)] px-3 py-2 text-xs font-medium text-[var(--onda-muted)] transition hover:border-[var(--onda-primary)]/40 hover:bg-[var(--onda-primary-50)] hover:text-[var(--onda-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <PicnicTable
+                        className="h-3.5 w-3.5"
+                        weight="regular"
+                        aria-hidden
+                      />
+                      Asignar a mesa
+                    </button>
+                  )
                 ) : null}
 
                 {selectedTab.passId ? (
@@ -1345,6 +1680,16 @@ export function PosVenderCore({
         />
       ) : null}
 
+      {voidOpen && selectedTab ? (
+        <VoidTabModal
+          tabLabel={selectedTab.label}
+          total={selectedTab.total}
+          busy={busy}
+          onCancel={() => setVoidOpen(false)}
+          onConfirm={(reason) => void confirmVoid(reason)}
+        />
+      ) : null}
+
       {isKiosk && onLeave ? (
         <div className="flex justify-center pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1">
           <button
@@ -1357,6 +1702,8 @@ export function PosVenderCore({
           </button>
         </div>
       ) : null}
+
+      {dialogs}
     </div>
   );
 }

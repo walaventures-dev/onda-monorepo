@@ -72,6 +72,7 @@ export class PosService {
       pass: { include: { user: { select: { name: true, phone: true } } } },
       openedByMember: { select: { id: true, name: true } },
       attendedByMember: { select: { id: true, name: true } },
+      table: { include: { section: { select: { name: true } } } },
     };
   }
 
@@ -95,7 +96,10 @@ export class PosService {
       openedAt: tab.openedAt.toISOString(),
       checkoutAt: tab.checkoutAt?.toISOString() ?? null,
       tableId: tab.tableId ?? null,
+      tableLabel: tab.table?.label ?? null,
+      tableSectionName: tab.table?.section?.name ?? null,
       guestCount: tab.guestCount ?? null,
+      voidReason: tab.voidReason ?? null,
       lines: tab.lines.map((l) => ({
         id: l.id,
         itemId: l.itemId,
@@ -162,6 +166,7 @@ export class PosService {
           storeId: string;
           name: string;
           price: number;
+          imageUrl: string | null;
           isActive: boolean;
           sortOrder: number;
         };
@@ -192,6 +197,7 @@ export class PosService {
           storeId: l.addon.storeId,
           name: l.addon.name,
           price: l.addon.price,
+          imageUrl: l.addon.imageUrl,
           isActive: l.addon.isActive,
           sortOrder: l.addon.sortOrder,
         })),
@@ -230,7 +236,7 @@ export class PosService {
 
   async createAddon(
     storeId: string,
-    body: { name: string; price?: number }
+    body: { name: string; price?: number; imageUrl?: string | null }
   ) {
     const name = body.name?.trim();
     if (!name) throw new BadRequestException('Nombre requerido');
@@ -239,14 +245,20 @@ export class PosService {
       throw new BadRequestException('Precio inválido');
     }
     return this.prisma.posAddon.create({
-      data: { storeId, name, price },
+      data: { storeId, name, price, imageUrl: body.imageUrl || null },
     });
   }
 
   async updateAddon(
     storeId: string,
     addonId: string,
-    body: Partial<{ name: string; price: number; isActive: boolean; sortOrder: number }>
+    body: Partial<{
+      name: string;
+      price: number;
+      imageUrl: string | null;
+      isActive: boolean;
+      sortOrder: number;
+    }>
   ) {
     const addon = await this.prisma.posAddon.findFirst({
       where: { id: addonId, storeId },
@@ -257,6 +269,7 @@ export class PosService {
       data: {
         ...(body.name != null ? { name: body.name.trim() } : {}),
         ...(body.price != null ? { price: Math.round(body.price) } : {}),
+        ...(body.imageUrl !== undefined ? { imageUrl: body.imageUrl || null } : {}),
         ...(body.isActive != null ? { isActive: body.isActive } : {}),
         ...(body.sortOrder != null ? { sortOrder: body.sortOrder } : {}),
       },
@@ -523,7 +536,8 @@ export class PosService {
       sortOrder: number;
       imageUrl: string | null;
       stationId: string | null;
-    }>
+    }>,
+    changedBy?: { memberId: string | null; email: string | null }
   ) {
     const item = await this.prisma.posItem.findFirst({
       where: { id: itemId, storeId },
@@ -535,27 +549,62 @@ export class PosService {
           ? null
           : await this.validateStation(storeId, body.stationId)
         : undefined;
-    return this.prisma.posItem.update({
-      where: { id: itemId },
-      data: {
-        ...(body.name != null ? { name: body.name.trim() } : {}),
-        ...(body.price != null ? { price: Math.round(body.price) } : {}),
-        ...(body.isActive != null ? { isActive: body.isActive } : {}),
-        ...(body.sortOrder != null ? { sortOrder: body.sortOrder } : {}),
-        ...(stationId !== undefined ? { stationId } : {}),
-        ...(body.trackStock != null && item.kind === 'PRODUCT'
-          ? {
-              trackStock: body.trackStock,
-              stockQty: body.trackStock
-                ? (body.stockQty ?? item.stockQty ?? 0)
-                : null,
-            }
-          : {}),
-        ...(body.stockQty != null && item.trackStock
-          ? { stockQty: body.stockQty }
-          : {}),
-        ...(body.imageUrl !== undefined ? { imageUrl: body.imageUrl?.trim() || null } : {}),
-      },
+    const data = {
+      ...(body.name != null ? { name: body.name.trim() } : {}),
+      ...(body.price != null ? { price: Math.round(body.price) } : {}),
+      ...(body.isActive != null ? { isActive: body.isActive } : {}),
+      ...(body.sortOrder != null ? { sortOrder: body.sortOrder } : {}),
+      ...(stationId !== undefined ? { stationId } : {}),
+      ...(body.trackStock != null && item.kind === 'PRODUCT'
+        ? {
+            trackStock: body.trackStock,
+            stockQty: body.trackStock
+              ? (body.stockQty ?? item.stockQty ?? 0)
+              : null,
+          }
+        : {}),
+      ...(body.stockQty != null && item.trackStock
+        ? { stockQty: body.stockQty }
+        : {}),
+      ...(body.imageUrl !== undefined ? { imageUrl: body.imageUrl?.trim() || null } : {}),
+    };
+    const previous = item as unknown as Record<string, unknown>;
+    const historyRows = Object.entries(data)
+      .filter(
+        ([field, value]) =>
+          String(previous[field] ?? null) !== String(value ?? null)
+      )
+      .map(([field, value]) => ({
+        itemId,
+        storeId,
+        field,
+        oldValue: previous[field] == null ? null : String(previous[field]),
+        newValue: value == null ? null : String(value),
+        changedById: changedBy?.memberId ?? null,
+        changedByEmail: changedBy?.email ?? null,
+      }));
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.posItem.update({
+        where: { id: itemId },
+        data,
+      }),
+      ...(historyRows.length
+        ? [this.prisma.posItemHistory.createMany({ data: historyRows })]
+        : []),
+    ]);
+    return updated;
+  }
+
+  async listItemHistory(storeId: string, itemId: string) {
+    const item = await this.prisma.posItem.findFirst({
+      where: { id: itemId, storeId },
+      select: { id: true },
+    });
+    if (!item) throw new NotFoundException('Ítem no encontrado');
+    return this.prisma.posItemHistory.findMany({
+      where: { itemId, storeId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
     });
   }
 
@@ -621,7 +670,7 @@ export class PosService {
     body: { label?: string; tableId?: string | null; guestCount?: number | null },
     memberId?: string | null
   ) {
-    let table: { id: string; isBlocked: boolean } | null = null;
+    let table: { id: string; label: string; isBlocked: boolean } | null = null;
     if (body.tableId) {
       table = await this.prisma.posTable.findFirst({
         where: { id: body.tableId, storeId },
@@ -648,7 +697,7 @@ export class PosService {
     const tab = await this.prisma.posTab.create({
       data: {
         storeId,
-        label: body.label?.trim() || `Cuenta #${count + 1}`,
+        label: body.label?.trim() || table?.label || `Cuenta #${count + 1}`,
         tableId: table?.id ?? null,
         guestCount,
         openedByMemberId: memberId || null,
@@ -658,6 +707,77 @@ export class PosService {
     });
     const serialized = this.serializeTab(tab as any);
     this.emitTab(storeId, 'tab_created', tab.id);
+    return serialized;
+  }
+
+  /** Asigna, mueve o quita la mesa de una cuenta abierta. */
+  async assignTabTable(
+    storeId: string,
+    tabId: string,
+    body: { tableId?: string | null; guestCount?: number | null }
+  ) {
+    const tab = await this.fetchTab(tabId);
+    if (tab.storeId !== storeId) throw new ForbiddenException();
+    if (
+      tab.status !== PosTabStatus.OPEN &&
+      tab.status !== PosTabStatus.CHECKOUT
+    ) {
+      throw new BadRequestException(
+        'Solo se puede cambiar la mesa de cuentas abiertas'
+      );
+    }
+
+    const data: {
+      tableId?: string | null;
+      label?: string;
+      guestCount?: number | null;
+    } = {};
+
+    if (body.tableId) {
+      const table = await this.prisma.posTable.findFirst({
+        where: { id: body.tableId, storeId },
+      });
+      if (!table) throw new NotFoundException('Mesa no encontrada');
+      if (table.isBlocked) {
+        throw new BadRequestException('La mesa está bloqueada');
+      }
+      const existing = await this.prisma.posTab.findFirst({
+        where: {
+          tableId: table.id,
+          status: { in: ['OPEN', 'CHECKOUT'] },
+          id: { not: tabId },
+        },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new ConflictException('La mesa ya tiene una cuenta activa');
+      }
+      data.tableId = table.id;
+      // Si el nombre era automático o el de la mesa anterior, hereda la nueva.
+      const prevLabel = tab.table?.label ?? null;
+      if (/^Cuenta #\d+$/.test(tab.label) || (prevLabel && tab.label === prevLabel)) {
+        data.label = table.label;
+      }
+    } else if (body.tableId === null) {
+      data.tableId = null;
+    }
+
+    if (body.guestCount !== undefined) {
+      const guests =
+        body.guestCount == null ? null : Math.round(Number(body.guestCount));
+      if (guests != null && (!Number.isFinite(guests) || guests < 1)) {
+        throw new BadRequestException('Número de comensales inválido');
+      }
+      data.guestCount = guests;
+    }
+
+    const updated = await this.prisma.posTab.update({
+      where: { id: tabId },
+      data,
+      include: this.tabInclude(),
+    });
+    const serialized = this.serializeTab(updated as any);
+    this.emitTab(storeId, 'tab_updated', tabId);
     return serialized;
   }
 
@@ -923,7 +1043,11 @@ export class PosService {
     return serialized;
   }
 
-  async voidTab(storeId: string, tabId: string) {
+  async voidTab(
+    storeId: string,
+    tabId: string,
+    body: { reason?: string } = {}
+  ) {
     const tab = await this.prisma.posTab.findFirst({
       where: { id: tabId, storeId },
     });
@@ -931,9 +1055,14 @@ export class PosService {
     if (tab.status === PosTabStatus.PAID) {
       throw new BadRequestException('Usa devolución en ventas pagadas');
     }
+    const reason = body.reason?.trim() || null;
     await this.prisma.posTab.update({
       where: { id: tabId },
-      data: { status: PosTabStatus.VOID },
+      data: {
+        status: PosTabStatus.VOID,
+        voidedAt: new Date(),
+        voidReason: reason,
+      },
     });
     const now = new Date();
     await this.prisma.kitchenTicket.updateMany({
@@ -951,7 +1080,9 @@ export class PosService {
       data: {
         status: KitchenTicketStatus.CANCELLED,
         cancelledAt: now,
-        cancelReason: 'Cuenta anulada',
+        cancelReason: reason
+          ? `Cuenta anulada: ${reason}`
+          : 'Cuenta anulada',
       },
     });
     await this.prisma.kitchenTicketItem.updateMany({
@@ -1054,6 +1185,35 @@ export class PosService {
     });
   }
 
+  /** Elimina el salón y sus mesas. Bloquea si alguna mesa tiene cuenta abierta. */
+  async removeSection(storeId: string, sectionId: string) {
+    const section = await this.prisma.posSection.findFirst({
+      where: { id: sectionId, storeId },
+      include: {
+        tables: {
+          include: {
+            tabs: {
+              where: { status: { in: ['OPEN', 'CHECKOUT'] } },
+              select: { id: true },
+            },
+          },
+        },
+      },
+    });
+    if (!section) throw new NotFoundException('Salón no encontrado');
+    const busyTables = section.tables.filter((t) => t.tabs.length > 0);
+    if (busyTables.length > 0) {
+      throw new BadRequestException(
+        `Hay ${busyTables.length} mesa(s) con cuenta abierta o por pagar (${busyTables
+          .map((t) => t.label)
+          .join(', ')}). Ciérralas antes de eliminar el salón.`
+      );
+    }
+    // Las mesas se eliminan en cascada (onDelete: Cascade en PosTable.section).
+    await this.prisma.posSection.delete({ where: { id: sectionId } });
+    return { ok: true as const };
+  }
+
   async createTable(
     storeId: string,
     body: { sectionId?: string; label?: string; sortOrder?: number }
@@ -1075,6 +1235,37 @@ export class PosService {
     });
   }
 
+  /** Crea `count` mesas con numeración secuencial (M{n+1}…), como un POS real. */
+  async createTablesBulk(
+    storeId: string,
+    body: { sectionId?: string; count?: number }
+  ) {
+    if (!body.sectionId) throw new BadRequestException('sectionId requerido');
+    const count = Math.round(Number(body.count ?? 0));
+    if (!Number.isFinite(count) || count < 1 || count > 200) {
+      throw new BadRequestException('Cantidad entre 1 y 200');
+    }
+    const section = await this.prisma.posSection.findFirst({
+      where: { id: body.sectionId, storeId },
+      include: { tables: { select: { label: true } } },
+    });
+    if (!section) throw new NotFoundException('Salón no encontrado');
+    const nums = section.tables
+      .map((t) => /^M(\d+)$/.exec(t.label)?.[1])
+      .filter((n): n is string => Boolean(n))
+      .map(Number);
+    let next = nums.length > 0 ? Math.max(...nums) + 1 : section.tables.length + 1;
+    await this.prisma.posTable.createMany({
+      data: Array.from({ length: count }, () => ({
+        storeId,
+        sectionId: section.id,
+        label: `M${next++}`,
+      })),
+    });
+    this.emitTab(storeId, 'tables_updated', section.id);
+    return { created: count };
+  }
+
   async updateTable(
     storeId: string,
     tableId: string,
@@ -1094,6 +1285,27 @@ export class PosService {
     });
     this.emitTab(storeId, 'tables_updated', tableId);
     return updated;
+  }
+
+  async removeTable(storeId: string, tableId: string) {
+    const table = await this.prisma.posTable.findFirst({
+      where: { id: tableId, storeId },
+      include: {
+        tabs: {
+          where: { status: { in: ['OPEN', 'CHECKOUT'] } },
+          select: { id: true },
+        },
+      },
+    });
+    if (!table) throw new NotFoundException('Mesa no encontrada');
+    if (table.tabs.length > 0) {
+      throw new BadRequestException(
+        'La mesa tiene una cuenta abierta o por pagar. Ciérrala antes de eliminarla.'
+      );
+    }
+    await this.prisma.posTable.delete({ where: { id: tableId } });
+    this.emitTab(storeId, 'tables_updated', tableId);
+    return { ok: true as const };
   }
 
   // ── Estaciones de preparación ─────────────────────────────────────────────
@@ -1814,14 +2026,53 @@ export class PosService {
 
   async listSales(
     storeId: string,
-    query: { from?: string; to?: string; limit?: number; offset?: number }
+    query: {
+      from?: string;
+      to?: string;
+      limit?: number;
+      offset?: number;
+      search?: string;
+      status?: string;
+      paymentMethod?: string;
+      sort?: string;
+      order?: string;
+    }
   ) {
     const from = query.from ? new Date(query.from) : undefined;
     const to = query.to ? new Date(query.to) : undefined;
     if (to) to.setHours(23, 59, 59, 999);
 
+    const search = query.search?.trim();
+    const sortable: Record<string, 'completedAt' | 'total' | 'ondasGranted'> = {
+      completedAt: 'completedAt',
+      total: 'total',
+      ondasGranted: 'ondasGranted',
+    };
+    const sortField = sortable[query.sort ?? ''] ?? 'completedAt';
+    const sortOrder = query.order === 'asc' ? 'asc' : 'desc';
+
     const where = {
       storeId,
+      ...(query.status
+        ? { status: query.status as PosSaleStatus }
+        : {}),
+      ...(query.paymentMethod
+        ? { payments: { some: { methodKey: query.paymentMethod } } }
+        : {}),
+      ...(search
+        ? {
+            OR: [
+              { id: { contains: search, mode: 'insensitive' as const } },
+              {
+                lines: {
+                  some: {
+                    name: { contains: search, mode: 'insensitive' as const },
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
       ...(from || to
         ? {
             completedAt: {
@@ -1836,7 +2087,7 @@ export class PosService {
       this.prisma.posSale.findMany({
         where,
         include: { payments: true, lines: true },
-        orderBy: { completedAt: 'desc' },
+        orderBy: { [sortField]: sortOrder },
         take: query.limit ?? 50,
         skip: query.offset ?? 0,
       }),

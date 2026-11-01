@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 import {
   api,
+  CajaIdentityBar,
   KitchenDisplay,
   setApiAuthTokenGetter,
   SkeletonScreen,
 } from '@onda/shared-ui';
+import { clearCajaToken } from './CajaApp';
 
 type CocinaSession = {
   storeId: string;
@@ -36,6 +38,12 @@ export function CocinaClient({ token }: { token: string }) {
     };
   }, [token]);
 
+  function handleLogout() {
+    clearCajaToken();
+    setApiAuthTokenGetter(null);
+    window.location.href = '/';
+  }
+
   if (error) {
     return (
       <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-3 p-6 text-center">
@@ -59,12 +67,16 @@ export function CocinaClient({ token }: { token: string }) {
   }
 
   return (
-    <main className="mx-auto min-h-dvh max-w-[1400px] p-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <KitchenDisplay
-        storeId={session.storeId}
-        token={token}
-        storeName={session.storeName}
-      />
+    <main className="mx-auto flex h-dvh w-full max-w-[1400px] flex-col gap-3 overflow-hidden p-3">
+      {/* Header compartido: logo Onda + negocio + salir (igual que el resto de la app). */}
+      <CajaIdentityBar storeName={session.storeName} onLogout={handleLogout} />
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <KitchenDisplay
+          storeId={session.storeId}
+          token={token}
+          storeName={session.storeName}
+        />
+      </div>
     </main>
   );
 }

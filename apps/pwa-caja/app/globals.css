@@ -365,15 +365,15 @@
   position: relative;
   display: inline-flex;
   flex: 1;
-  min-height: 2.75rem;
+  min-height: 3.5rem;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
   border-radius: 999px;
   border: none;
   background: transparent;
   color: var(--onda-muted);
-  font-size: 0.875rem;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
@@ -386,15 +386,15 @@
 
 .onda-caja-tab-badge {
   display: inline-flex;
-  min-width: 1.15rem;
-  height: 1.15rem;
+  min-width: 1.4rem;
+  height: 1.4rem;
   align-items: center;
   justify-content: center;
-  padding: 0 0.3rem;
+  padding: 0 0.35rem;
   border-radius: 999px;
   background: var(--onda-primary-500);
   color: #fff;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 1;
 }

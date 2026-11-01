@@ -32,7 +32,7 @@ const handMaskStyle: CSSProperties = {
 };
 
 export function OndaWordmark({
-  className = '',
+  className = 'h-8 w-auto',
   variant = 'default',
   alt = 'Onda.',
   style,
@@ -47,7 +47,7 @@ export function OndaWordmark({
     <img
       src={ONDA_BRAND.wordmark}
       alt={alt}
-      className={`h-8 w-auto ${filter ?? ''} ${className}`.trim()}
+      className={`${className} ${filter ?? ''}`.trim()}
       style={style}
       draggable={false}
     />
@@ -55,7 +55,7 @@ export function OndaWordmark({
 }
 
 export function OndaHandMark({
-  className = '',
+  className = 'h-8 w-auto',
   variant = 'default',
   alt = '',
 }: {
@@ -85,7 +85,7 @@ export function OndaHandMark({
     <img
       src={ONDA_BRAND.hand}
       alt={alt}
-      className={`h-8 w-auto ${filter} ${className}`.trim()}
+      className={`${className} ${filter}`.trim()}
       aria-hidden={alt ? undefined : true}
       draggable={false}
     />
@@ -93,7 +93,7 @@ export function OndaHandMark({
 }
 
 export function OndaScriptMark({
-  className = '',
+  className = 'h-10 w-auto',
   variant = 'default',
   alt = '',
 }: {
@@ -109,7 +109,7 @@ export function OndaScriptMark({
       <img
       src={ONDA_BRAND.script}
       alt={alt}
-      className={`h-10 w-auto ${filter} ${className}`.trim()}
+      className={`${className} ${filter}`.trim()}
       aria-hidden={alt ? undefined : true}
       draggable={false}
     />

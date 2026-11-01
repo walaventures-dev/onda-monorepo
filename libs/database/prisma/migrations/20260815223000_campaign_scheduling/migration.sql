@@ -1,25 +1,24 @@
 -- CreateEnum
-CREATE TYPE "CampaignStatus" AS ENUM ('DRAFT', 'SCHEDULED', 'SENT', 'CANCELLED', 'FAILED');
+DO $$ BEGIN CREATE TYPE "CampaignStatus" AS ENUM ('DRAFT', 'SCHEDULED', 'SENT', 'CANCELLED', 'FAILED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "CampaignOrigin" AS ENUM ('MANUAL', 'RECOMMENDED');
+DO $$ BEGIN CREATE TYPE "CampaignOrigin" AS ENUM ('MANUAL', 'RECOMMENDED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "CampaignObjective" AS ENUM ('REACTIVATE', 'SLOW_HOURS', 'NEW_REWARD', 'REVIEWS');
+DO $$ BEGIN CREATE TYPE "CampaignObjective" AS ENUM ('REACTIVATE', 'SLOW_HOURS', 'NEW_REWARD', 'REVIEWS'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AlterTable
-ALTER TABLE "Campaign"
-  ADD COLUMN "status" "CampaignStatus" NOT NULL DEFAULT 'SCHEDULED',
-  ADD COLUMN "origin" "CampaignOrigin" NOT NULL DEFAULT 'MANUAL',
-  ADD COLUMN "objective" "CampaignObjective",
-  ADD COLUMN "scheduledAt" TIMESTAMP(3),
-  ADD COLUMN "sentAt" TIMESTAMP(3),
-  ADD COLUMN "smsBody" TEXT,
-  ADD COLUMN "walletBody" TEXT,
-  ADD COLUMN "sendSms" BOOLEAN NOT NULL DEFAULT true,
-  ADD COLUMN "sendWallet" BOOLEAN NOT NULL DEFAULT true,
-  ADD COLUMN "audienceFilter" JSONB,
-  ADD COLUMN "promoSnapshot" JSONB;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "status" "CampaignStatus" NOT NULL DEFAULT 'SCHEDULED';
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "origin" "CampaignOrigin" NOT NULL DEFAULT 'MANUAL';
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "objective" "CampaignObjective";
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "scheduledAt" TIMESTAMP(3);
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "sentAt" TIMESTAMP(3);
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "smsBody" TEXT;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "walletBody" TEXT;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "sendSms" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "sendWallet" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "audienceFilter" JSONB;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "promoSnapshot" JSONB;
 
 -- Existing rows already launched.
 UPDATE "Campaign"

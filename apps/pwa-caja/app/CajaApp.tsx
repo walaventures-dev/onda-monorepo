@@ -1,20 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  CajaOperationsPanel,
   PasswordInput,
   Button,
   api,
   setApiAuthTokenGetter,
   SkeletonScreen,
-  type PosVenderMemberSession,
 } from '@onda/shared-ui';
-import type { PosAttendantDto } from '@onda/shared-types';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getMerchantAuth, isMerchantFirebaseConfigured } from '../lib/firebase';
-import { loadDefaultStoreId, useCajaAuth } from '../lib/useCajaAuth';
+import { useCajaAuth } from '../lib/useCajaAuth';
 
 type CajaSession = {
   storeId: string;
@@ -25,181 +22,17 @@ type CajaSession = {
 
 const CAJA_TOKEN_KEY = 'onda-caja-token';
 
-function readCajaToken(): string {
+export function readCajaToken(): string {
   if (typeof window === 'undefined') return '';
   return localStorage.getItem(CAJA_TOKEN_KEY) || '';
 }
 
-function writeCajaToken(token: string) {
+export function writeCajaToken(token: string) {
   localStorage.setItem(CAJA_TOKEN_KEY, token);
 }
 
-function clearCajaToken() {
+export function clearCajaToken() {
   localStorage.removeItem(CAJA_TOKEN_KEY);
-}
-
-function useFirebaseApiToken() {
-  setApiAuthTokenGetter(async () => {
-    const user = getMerchantAuth().currentUser;
-    return user ? user.getIdToken() : null;
-  });
-}
-
-/** Espera a que Firebase restaure la sesión persistida del dispositivo. */
-function waitForFirebaseUser(): Promise<User | null> {
-  const auth = getMerchantAuth();
-  if (auth.currentUser) return Promise.resolve(auth.currentUser);
-  return new Promise((resolve) => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      unsub();
-      resolve(user);
-    });
-  });
-}
-
-function useCajaMemberAuth(storeId: string, cajaToken: string) {
-  /** Vuelve al bearer del enlace; no cierra Firebase (sesión de Vender persiste). */
-  const restoreCajaAuth = useCallback(() => {
-    setApiAuthTokenGetter(async () => cajaToken);
-  }, [cajaToken]);
-
-  const fetchMemberSession = useCallback(async (): Promise<PosVenderMemberSession> => {
-    const me = await api<PosAttendantDto>(`/pos/stores/${storeId}/me`);
-    return { memberId: me.id, name: me.name, role: me.role };
-  }, [storeId]);
-
-  const activateMemberAuth = useCallback(async () => {
-    if (!isMerchantFirebaseConfigured() || !getMerchantAuth().currentUser) {
-      throw new Error('Sesión de miembro no disponible');
-    }
-    useFirebaseApiToken();
-  }, []);
-
-  /** Si Firebase ya tiene usuario (mismo dispositivo), reutiliza sin pedir clave. */
-  const resumeMemberSession = useCallback(async (): Promise<PosVenderMemberSession | null> => {
-    if (!isMerchantFirebaseConfigured() || !storeId) return null;
-    const user = await waitForFirebaseUser();
-    if (!user) return null;
-    useFirebaseApiToken();
-    try {
-      return await fetchMemberSession();
-    } catch {
-      restoreCajaAuth();
-      return null;
-    }
-  }, [storeId, fetchMemberSession, restoreCajaAuth]);
-
-  const signInMember = useCallback(
-    async (email: string, password: string): Promise<PosVenderMemberSession> => {
-      if (!isMerchantFirebaseConfigured()) {
-        throw new Error('Firebase no está configurado en esta caja');
-      }
-      await signInWithEmailAndPassword(
-        getMerchantAuth(),
-        email.trim(),
-        password,
-      );
-      useFirebaseApiToken();
-      try {
-        return await fetchMemberSession();
-      } catch (e) {
-        restoreCajaAuth();
-        void signOut(getMerchantAuth()).catch(() => undefined);
-        throw e instanceof Error
-          ? e
-          : new Error('No eres miembro activo de esta sede');
-      }
-    },
-    [fetchMemberSession, restoreCajaAuth],
-  );
-
-  return {
-    signInMember,
-    restoreCajaAuth,
-    activateMemberAuth,
-    resumeMemberSession,
-  };
-}
-
-/** App única de caja (kiosk): acumular + vender + cuentas. */
-export function CajaKioskClient({
-  token,
-  onInvalid,
-}: {
-  token: string;
-  /** Si el token no abre la caja. Sin esto, va a inicio de sesión. */
-  onInvalid?: () => void;
-}) {
-  const router = useRouter();
-  const [session, setSession] = useState<CajaSession | null>(null);
-
-  useEffect(() => {
-    setApiAuthTokenGetter(async () => token);
-    let cancelled = false;
-    void api<CajaSession>(`/caja/session?token=${encodeURIComponent(token)}`)
-      .then((s) => {
-        if (cancelled) return;
-        writeCajaToken(token);
-        setSession(s);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        // Enlace revocado/caduco: limpiar sesión local y volver a login.
-        if (readCajaToken() === token) clearCajaToken();
-        setApiAuthTokenGetter(null);
-        const firebaseConfigured = isMerchantFirebaseConfigured();
-        if (firebaseConfigured) {
-          void signOut(getMerchantAuth()).catch(() => undefined);
-        }
-        if (onInvalid) onInvalid();
-        else router.replace(firebaseConfigured ? '/login' : '/');
-      });
-    return () => {
-      cancelled = true;
-      setApiAuthTokenGetter(null);
-    };
-  }, [token, router, onInvalid]);
-
-  const storeId = session?.storeId || '';
-  const {
-    signInMember,
-    restoreCajaAuth,
-    activateMemberAuth,
-    resumeMemberSession,
-  } = useCajaMemberAuth(storeId, token);
-
-  /** Cierra la sesión solo en este dispositivo; el enlace sigue vivo para los demás. */
-  const handleLogout = useCallback(async () => {
-    clearCajaToken();
-    setApiAuthTokenGetter(null);
-    const firebaseConfigured = isMerchantFirebaseConfigured();
-    if (firebaseConfigured) {
-      await signOut(getMerchantAuth()).catch(() => undefined);
-    }
-    router.replace(firebaseConfigured ? '/login' : '/');
-  }, [router]);
-
-  if (!session) {
-    return <SkeletonScreen label="Abriendo caja" />;
-  }
-
-  return (
-    <main className="mx-auto flex min-h-dvh max-w-6xl flex-col p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <CajaOperationsPanel
-        storeId={session.storeId}
-        storeName={session.storeName}
-        posEnabled={Boolean(session.posEnabled)}
-        ondaValue={session.ondaValue}
-        token={token}
-        kitchenHref={`/cocina?token=${encodeURIComponent(token)}`}
-        signInMember={signInMember}
-        restoreCajaAuth={restoreCajaAuth}
-        activateMemberAuth={activateMemberAuth}
-        resumeMemberSession={resumeMemberSession}
-        onLogout={handleLogout}
-      />
-    </main>
-  );
 }
 
 export function CajaLoginClient() {
@@ -231,7 +64,7 @@ export function CajaLoginClient() {
         const store = await api<{
           passDesign?: {
             logoUrl?: string | null;
-            backgroundColor?: string;
+            backgroundColor?: string | null;
             foregroundColor?: string | null;
           } | null;
         }>(`/stores/${session.storeId}`);
@@ -314,7 +147,8 @@ export function CajaLoginClient() {
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         <Button
           type="submit"
-          className="w-full"
+          size="lg"
+          fullWidth
           style={{
             background: brand?.color || 'var(--onda-primary-500)',
             color: brand?.foreground || '#FFFFFF',
@@ -331,137 +165,5 @@ export function CajaLoginClient() {
         />
       </footer>
     </form>
-  );
-}
-
-/** Hub: abre con el token guardado; si no vale, pide inicio de sesión. */
-export function CajaHubClient() {
-  const router = useRouter();
-  const { ready, user, firebaseEnabled } = useCajaAuth();
-  const [boot, setBoot] = useState<'checking' | 'kiosk' | 'hub'>('checking');
-  const [kioskToken, setKioskToken] = useState('');
-  const [storeId, setStoreId] = useState('');
-  const [posEnabled, setPosEnabled] = useState(false);
-  const [storeName, setStoreName] = useState('');
-  const [ondaValue, setOndaValue] = useState<number | null>(null);
-  const [cajaToken, setCajaToken] = useState<string | undefined>();
-  const openWithLogin = useCallback(() => setBoot('hub'), []);
-
-  useEffect(() => {
-    if (!ready) return;
-    let cancelled = false;
-    void (async () => {
-      const stored = readCajaToken();
-      if (stored) {
-        setApiAuthTokenGetter(async () => stored);
-        try {
-          await api<CajaSession>(
-            `/caja/session?token=${encodeURIComponent(stored)}`,
-          );
-          if (cancelled) return;
-          setKioskToken(stored);
-          setBoot('kiosk');
-          return;
-        } catch {
-          clearCajaToken();
-          if (isMerchantFirebaseConfigured()) useFirebaseApiToken();
-          else setApiAuthTokenGetter(null);
-        }
-      }
-      if (!cancelled) setBoot('hub');
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [ready]);
-
-  useEffect(() => {
-    if (boot !== 'hub' || !ready) return;
-    if (firebaseEnabled && !user) {
-      router.replace('/login');
-      return;
-    }
-    if (firebaseEnabled) useFirebaseApiToken();
-    void (async () => {
-      const id = await loadDefaultStoreId();
-      if (!id) return;
-      setStoreId(id);
-      try {
-        const link = await api<{ token: string; url: string }>('/caja/link', {
-          method: 'POST',
-          body: JSON.stringify({ storeId: id }),
-        });
-        writeCajaToken(link.token);
-        setCajaToken(link.token);
-        setApiAuthTokenGetter(async () => link.token);
-        const session = await api<CajaSession>(
-          `/caja/session?token=${encodeURIComponent(link.token)}`,
-        );
-        setPosEnabled(Boolean(session.posEnabled));
-        setStoreName(session.storeName);
-        setOndaValue(
-          session.ondaValue != null && Number(session.ondaValue) > 0
-            ? Number(session.ondaValue)
-            : null,
-        );
-      } catch {
-        clearCajaToken();
-        setPosEnabled(false);
-      }
-    })();
-  }, [boot, ready, user, firebaseEnabled, router]);
-
-  const {
-    signInMember,
-    restoreCajaAuth,
-    activateMemberAuth,
-    resumeMemberSession,
-  } = useCajaMemberAuth(storeId, cajaToken || '');
-
-  /** Cierra la sesión solo en este dispositivo; el enlace sigue vivo. */
-  const handleLogout = useCallback(async () => {
-    clearCajaToken();
-    setApiAuthTokenGetter(null);
-    if (isMerchantFirebaseConfigured()) {
-      await signOut(getMerchantAuth()).catch(() => undefined);
-    }
-    router.replace('/login');
-  }, [router]);
-
-  if (boot === 'checking' || !ready) {
-    return <SkeletonScreen label="Abriendo caja" />;
-  }
-
-  if (boot === 'kiosk' && kioskToken) {
-    return (
-      <CajaKioskClient
-        token={kioskToken}
-        onInvalid={openWithLogin}
-      />
-    );
-  }
-
-  if (!storeId) {
-    return <SkeletonScreen label="Cargando sede" />;
-  }
-
-  return (
-    <main className="mx-auto flex min-h-dvh max-w-6xl flex-col p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <CajaOperationsPanel
-        storeId={storeId}
-        storeName={storeName || undefined}
-        posEnabled={posEnabled}
-        ondaValue={ondaValue}
-        token={cajaToken}
-        kitchenHref={
-          cajaToken ? `/cocina?token=${encodeURIComponent(cajaToken)}` : undefined
-        }
-        signInMember={cajaToken ? signInMember : undefined}
-        restoreCajaAuth={cajaToken ? restoreCajaAuth : undefined}
-        activateMemberAuth={cajaToken ? activateMemberAuth : undefined}
-        resumeMemberSession={cajaToken ? resumeMemberSession : undefined}
-        onLogout={handleLogout}
-      />
-    </main>
   );
 }

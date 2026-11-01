@@ -83,8 +83,33 @@ export class PosController {
     @Headers('authorization') auth: string | undefined,
     @Body() body: Parameters<PosService['updateItem']>[2]
   ) {
-    await this.guardPos(storeId, auth, undefined, StoreMemberRole.ADMIN);
-    return this.pos.updateItem(storeId, itemId, body);
+    const ctx = await this.guardPos(
+      storeId,
+      auth,
+      undefined,
+      StoreMemberRole.ADMIN
+    );
+    return this.pos.updateItem(storeId, itemId, body, {
+      memberId: ctx.memberId,
+      email: ctx.email,
+    });
+  }
+
+  @Get('stores/:storeId/items/:itemId/history')
+  async listItemHistory(
+    @Param('storeId') storeId: string,
+    @Param('itemId') itemId: string,
+    @Headers('authorization') auth?: string,
+    @Query('token') token?: string
+  ) {
+    await this.guardPos(
+      storeId,
+      auth,
+      token,
+      StoreMemberRole.ADMIN,
+      StoreMemberRole.CAJA
+    );
+    return this.pos.listItemHistory(storeId, itemId);
   }
 
   @Get('stores/:storeId/addons')
@@ -250,6 +275,24 @@ export class PosController {
     return this.pos.createTab(storeId, body ?? {}, ctx.memberId);
   }
 
+  @Post('tabs/:tabId/table')
+  async assignTabTable(
+    @Param('tabId') tabId: string,
+    @Query('storeId') storeId: string,
+    @Body() body: { tableId?: string | null; guestCount?: number | null },
+    @Headers('authorization') auth?: string,
+    @Query('token') token?: string
+  ) {
+    await this.guardPos(
+      storeId,
+      auth,
+      token,
+      StoreMemberRole.ADMIN,
+      StoreMemberRole.CAJA
+    );
+    return this.pos.assignTabTable(storeId, tabId, body ?? {});
+  }
+
   @Get('stores/:storeId/sections')
   async listSections(
     @Param('storeId') storeId: string,
@@ -287,6 +330,16 @@ export class PosController {
     return this.pos.updateSection(storeId, sectionId, body ?? {});
   }
 
+  @Post('stores/:storeId/sections/:sectionId/remove')
+  async removeSection(
+    @Param('storeId') storeId: string,
+    @Param('sectionId') sectionId: string,
+    @Headers('authorization') auth: string | undefined
+  ) {
+    await this.guardPos(storeId, auth, undefined, StoreMemberRole.ADMIN);
+    return this.pos.removeSection(storeId, sectionId);
+  }
+
   @Post('stores/:storeId/tables')
   async createTable(
     @Param('storeId') storeId: string,
@@ -295,6 +348,16 @@ export class PosController {
   ) {
     await this.guardPos(storeId, auth, undefined, StoreMemberRole.ADMIN);
     return this.pos.createTable(storeId, body ?? {});
+  }
+
+  @Post('stores/:storeId/tables/bulk')
+  async createTablesBulk(
+    @Param('storeId') storeId: string,
+    @Headers('authorization') auth: string | undefined,
+    @Body() body: { sectionId?: string; count?: number }
+  ) {
+    await this.guardPos(storeId, auth, undefined, StoreMemberRole.ADMIN);
+    return this.pos.createTablesBulk(storeId, body ?? {});
   }
 
   @Post('tables/:tableId')
@@ -306,6 +369,16 @@ export class PosController {
   ) {
     await this.guardPos(storeId, auth, undefined, StoreMemberRole.ADMIN);
     return this.pos.updateTable(storeId, tableId, body ?? {});
+  }
+
+  @Post('tables/:tableId/remove')
+  async removeTable(
+    @Param('tableId') tableId: string,
+    @Query('storeId') storeId: string,
+    @Headers('authorization') auth: string | undefined
+  ) {
+    await this.guardPos(storeId, auth, undefined, StoreMemberRole.ADMIN);
+    return this.pos.removeTable(storeId, tableId);
   }
 
   @Get('stores/:storeId/stations')
@@ -580,6 +653,7 @@ export class PosController {
   async voidTab(
     @Param('tabId') tabId: string,
     @Query('storeId') storeId: string,
+    @Body() body: { reason?: string },
     @Headers('authorization') auth?: string,
     @Query('token') token?: string
   ) {
@@ -590,7 +664,7 @@ export class PosController {
       StoreMemberRole.ADMIN,
       StoreMemberRole.CAJA
     );
-    return this.pos.voidTab(storeId, tabId);
+    return this.pos.voidTab(storeId, tabId, body ?? {});
   }
 
   @Post('tabs/:tabId/link-pass')
@@ -655,7 +729,12 @@ export class PosController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('limit') limit?: string,
-    @Query('offset') offset?: string
+    @Query('offset') offset?: string,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('paymentMethod') paymentMethod?: string,
+    @Query('sort') sort?: string,
+    @Query('order') order?: string
   ) {
     await this.guardPos(
       storeId,
@@ -669,6 +748,11 @@ export class PosController {
       to,
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
+      search,
+      status,
+      paymentMethod,
+      sort,
+      order,
     });
   }
 

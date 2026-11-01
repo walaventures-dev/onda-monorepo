@@ -2,17 +2,25 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@heroui/react';
-import { ArmchairIcon as Armchair } from '@phosphor-icons/react/dist/csr/Armchair';
+import { PicnicTableIcon as PicnicTable } from '@phosphor-icons/react/dist/csr/PicnicTable';
 import { LockIcon as Lock } from '@phosphor-icons/react/dist/csr/Lock';
+import { PlusIcon as Plus } from '@phosphor-icons/react/dist/csr/Plus';
 import { UsersIcon as Users } from '@phosphor-icons/react/dist/csr/Users';
 import type { PosSectionDto, PosTableDto } from '@onda/shared-types';
-import { api } from './api';
-import { SkeletonCards } from './Skeleton';
+import { api, getApiAuthToken } from './api';
+import { SkeletonTables } from './Skeleton';
 
 export type PosTablesPanelProps = {
   storeId: string;
   /** Token de CajaLink para el SSE (EventSource no lleva headers). */
   token?: string;
+  /**
+   * open = abrir cuenta de la mesa o entrar a la cuenta activa (flujo Mesas).
+   * pick = solo elegir una mesa libre y devolverla (asignar/mover una cuenta).
+   */
+  mode?: 'open' | 'pick';
+  /** Comensales precargados en el diálogo (p.ej. los de la cuenta actual). */
+  initialGuestCount?: number | null;
   /** Mesa ocupada: abrir su cuenta activa. */
   onOpenTab: (tabId: string) => void;
   /** Mesa libre: crear la cuenta con la mesa y los comensales. */
@@ -20,6 +28,14 @@ export type PosTablesPanelProps = {
     tableId: string;
     label: string;
     guestCount?: number | null;
+  }) => Promise<string | void> | void;
+  /** Salida rápida: crear la cuenta sin mesa (mostrador / domicilio). */
+  onQuickTab?: () => Promise<string | void> | void;
+  /** Modo pick: mesa libre elegida para asignar a la cuenta. */
+  onPickTable?: (input: {
+    tableId: string;
+    label: string;
+    guestCount: number | null;
   }) => Promise<string | void> | void;
 };
 
@@ -52,8 +68,12 @@ const STATUS_STYLE: Record<
 export function PosTablesPanel({
   storeId,
   token,
+  mode = 'open',
+  initialGuestCount,
   onOpenTab,
   onCreateTab,
+  onQuickTab,
+  onPickTable,
 }: PosTablesPanelProps) {
   const [sections, setSections] = useState<PosSectionDto[]>([]);
   const [activeSectionId, setActiveSectionId] = useState<string>('');
@@ -83,41 +103,64 @@ export function PosTablesPanel({
     };
   }, [load]);
 
+  const [authToken, setAuthToken] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    void getApiAuthToken().then((t) => {
+      if (!cancelled) setAuthToken(t ?? '');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     const qs = new URLSearchParams({ storeId });
-    if (token) qs.set('token', token);
+    const t = token || authToken;
+    if (t) qs.set('token', t);
     const es = new EventSource(`/api/pos/stream?${qs.toString()}`);
     es.onmessage = () => void load().catch(() => undefined);
     return () => es.close();
-  }, [storeId, token, load]);
+  }, [storeId, token, authToken, load]);
 
   const active = sections.find((s) => s.id === activeSectionId) ?? sections[0] ?? null;
+  const pickMode = mode === 'pick';
 
   async function confirmCreate() {
     if (!dialog || busy) return;
     const guests = Math.max(0, Math.round(Number(guestCount) || 0));
     setBusy(true);
     try {
-      await onCreateTab({
-        tableId: dialog.id,
-        label: dialog.label,
-        guestCount: guests > 0 ? guests : null,
-      });
-      setDialog(null);
+      if (pickMode) {
+        await onPickTable?.({
+          tableId: dialog.id,
+          label: dialog.label,
+          guestCount: guests > 0 ? guests : null,
+        });
+        setDialog(null);
+      } else {
+        await onCreateTab({
+          tableId: dialog.id,
+          label: dialog.label,
+          guestCount: guests > 0 ? guests : null,
+        });
+        setDialog(null);
+      }
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
       {sections.length > 1 ? (
         <div className="flex gap-2 overflow-x-auto pb-1">
           {sections.map((s) => (
             <button
               key={s.id}
               type="button"
-              className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium ${
+              className={`inline-flex min-h-11 items-center rounded-full px-4 text-sm font-medium ${
                 active?.id === s.id
                   ? 'bg-[var(--onda-primary-100)] text-[var(--onda-primary-700)]'
                   : 'text-[var(--onda-muted)] hover:bg-[var(--onda-bg)]'
@@ -130,11 +173,23 @@ export function PosTablesPanel({
         </div>
       ) : null}
 
+      {pickMode ? (
+        <p className="text-xs text-[var(--onda-muted)]">
+          Elige una mesa libre. Las ocupadas o bloqueadas no se pueden
+          seleccionar.
+        </p>
+      ) : (
+        <p className="text-xs text-[var(--onda-muted)]">
+          Toca una mesa libre para abrir una cuenta nueva, o una ocupada para
+          entrar a su cuenta.
+        </p>
+      )}
+
       {loading ? (
-        <SkeletonCards count={6} />
+        <SkeletonTables />
       ) : sections.length === 0 ? (
         <div className="onda-card flex flex-col items-center gap-2 p-10 text-center">
-          <Armchair
+          <PicnicTable
             className="h-8 w-8 text-[var(--onda-muted)]"
             weight="regular"
             aria-hidden
@@ -153,9 +208,10 @@ export function PosTablesPanel({
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
             {active.tables.map((table) => {
               const style = STATUS_STYLE[table.status];
-              const clickable =
-                table.status === 'AVAILABLE' ||
-                Boolean(table.activeTab?.id);
+              const clickable = pickMode
+                ? table.status === 'AVAILABLE'
+                : table.status === 'AVAILABLE' ||
+                  Boolean(table.activeTab?.id);
               return (
                 <button
                   key={table.id}
@@ -163,11 +219,22 @@ export function PosTablesPanel({
                   disabled={!clickable}
                   className={`flex aspect-square flex-col justify-between rounded-2xl border p-3 text-left transition active:scale-[0.97] disabled:cursor-not-allowed ${style.card}`}
                   onClick={() => {
-                    if (table.activeTab?.id) onOpenTab(table.activeTab.id);
-                    else if (table.status === 'AVAILABLE') {
+                    if (pickMode) {
+                      if (table.status !== 'AVAILABLE') return;
                       setDialog(table);
                       setGuestCount(
-                        table.activeTab?.guestCount ? String(table.activeTab.guestCount) : '2',
+                        initialGuestCount
+                          ? String(initialGuestCount)
+                          : '2',
+                      );
+                    } else if (table.activeTab?.id) {
+                      onOpenTab(table.activeTab.id);
+                    } else if (table.status === 'AVAILABLE') {
+                      setDialog(table);
+                      setGuestCount(
+                        table.activeTab?.guestCount
+                          ? String(table.activeTab.guestCount)
+                          : '2',
                       );
                     }
                   }}
@@ -201,15 +268,30 @@ export function PosTablesPanel({
         )
       ) : null}
 
+      {!pickMode && onQuickTab ? (
+        <div className="flex justify-center pt-1">
+          <button
+            type="button"
+            onClick={() => void onQuickTab()}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-[var(--onda-border)] px-4 py-2 text-xs font-medium text-[var(--onda-muted)] transition hover:border-[var(--onda-primary)]/40 hover:bg-[var(--onda-primary-50)] hover:text-[var(--onda-primary)]"
+          >
+            <Plus className="h-3.5 w-3.5" weight="regular" aria-hidden />
+            Nueva cuenta sin mesa
+          </button>
+        </div>
+      ) : null}
+
       {dialog ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
           <div className="onda-card w-full max-w-sm space-y-4 p-4">
             <div>
               <h3 className="font-display text-lg font-semibold">
-                Abrir mesa {dialog.label}
+                {pickMode ? 'Asignar mesa' : 'Abrir mesa'} {dialog.label}
               </h3>
               <p className="text-sm text-[var(--onda-muted)]">
-                ¿Cuántos comensales se sientan?
+                {pickMode
+                  ? '¿Cuántos comensales quedan en esta mesa?'
+                  : '¿Cuántos comensales se sientan?'}
               </p>
             </div>
             <label className="block space-y-1 text-sm">
@@ -243,7 +325,13 @@ export function PosTablesPanel({
                 isDisabled={busy}
                 onPress={() => void confirmCreate()}
               >
-                {busy ? 'Abriendo…' : 'Abrir cuenta'}
+                {busy
+                  ? pickMode
+                    ? 'Asignando…'
+                    : 'Abriendo…'
+                  : pickMode
+                    ? 'Asignar mesa'
+                    : 'Abrir cuenta'}
               </Button>
             </div>
           </div>

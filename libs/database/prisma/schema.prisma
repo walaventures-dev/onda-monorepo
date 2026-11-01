@@ -862,10 +862,27 @@ model PosItem {
   addons      PosItemAddon[]
   tabLines    PosTabLine[]
   saleLines   PosSaleLine[]
+  history     PosItemHistory[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
   @@index([storeId, isActive])
+}
+
+model PosItemHistory {
+  id            String   @id @default(uuid())
+  itemId        String
+  item          PosItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  storeId       String
+  field         String
+  oldValue      String?
+  newValue      String?
+  changedById   String?
+  changedByEmail String?
+  createdAt     DateTime @default(now())
+
+  @@index([itemId, createdAt])
+  @@index([storeId, createdAt])
 }
 
 model PosAddon {
@@ -874,6 +891,7 @@ model PosAddon {
   store     Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
   name      String
   price     Int            @default(0)
+  imageUrl  String?        @db.Text
   isActive  Boolean        @default(true)
   sortOrder Int            @default(0)
   items     PosItemAddon[]
@@ -928,6 +946,8 @@ model PosTab {
   tableId    String?
   table      PosTable?    @relation(fields: [tableId], references: [id], onDelete: SetNull)
   guestCount Int?
+  voidedAt   DateTime?
+  voidReason String?
   lines      PosTabLine[]
   sale       PosSale?
   kitchenTickets KitchenTicket[]

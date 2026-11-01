@@ -79,6 +79,7 @@ import { WarningIcon as Warning } from "@phosphor-icons/react/dist/csr/Warning";
 import { SmileyIcon as Smiley } from "@phosphor-icons/react/dist/csr/Smiley";
 import { PhoneCallIcon as PhoneCall } from "@phosphor-icons/react/dist/csr/PhoneCall";
 import { TrophyIcon as Trophy } from "@phosphor-icons/react/dist/csr/Trophy";
+import { TicketIcon as Ticket } from "@phosphor-icons/react/dist/csr/Ticket";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { PromoDetail } from "./PromoDetail";
 import { CreatePromo } from "./CreatePromo";
@@ -95,8 +96,10 @@ import { CampaignsHome } from "./CampaignsHome";
 import { CampaignWizard } from "./CampaignWizard";
 import { CampaignDetail } from "./CampaignDetail";
 import { SetupChecklist } from "./SetupChecklist";
+import { BusinessTypeSwitcher } from "./BusinessTypeSwitcher";
 import { isSetupAllowedTab, storeSetupStatus } from "./setupStatus";
 import { useMerchantAuth } from "../lib/MerchantAuth";
+import { BusinessTypeProvider } from "../lib/businessType";
 import { PosWorkspace } from "./PosWorkspace";
 import { ConfigWorkspace } from "./ConfigWorkspace";
 import { BillingWorkspace } from "./BillingWorkspace";
@@ -2074,7 +2077,8 @@ export function MerchantWorkspace() {
   ];
 
   return (
-    <div className="onda-merchant-caja-layout">
+    <BusinessTypeProvider>
+      <div className="onda-merchant-caja-layout">
       <AppShell
         title={viewTitle}
         navClusters={navClusters}
@@ -2086,6 +2090,7 @@ export function MerchantWorkspace() {
               }
             : undefined
         }
+        brandExtra={<BusinessTypeSwitcher />}
         linkComponent={Link}
         onLogout={firebaseEnabled ? () => void logout() : undefined}
         toolbar={
@@ -3468,11 +3473,64 @@ export function MerchantWorkspace() {
                 );
               })}
               {!ownEvents.length ? (
-                <div className="onda-card p-4">
-                  <p className="text-sm text-[var(--onda-muted)]">
-                    Aún no tienes eventos. Usa “Nuevo evento” para registrar tu
-                    primera feria.
-                  </p>
+                <div className="overflow-hidden rounded-2xl border border-dashed border-[var(--onda-border)]">
+                  <div className="flex flex-col items-center px-6 py-8 text-center">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--onda-violet-soft)] text-[var(--onda-violet)]">
+                      <Ticket size={28} weight="regular" aria-hidden="true" />
+                    </div>
+                    <h4 className="mt-4 font-display text-base font-semibold">
+                      Crea tu primer evento
+                    </h4>
+                    <p className="mt-1 max-w-sm text-sm text-[var(--onda-muted)]">
+                      Ferias, festivales y activaciones: registra el evento,
+                      invita a otros locales y vende en conjunto con una
+                      cartilla de promos.
+                    </p>
+                    <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                      <GradientButton
+                        type="button"
+                        onClick={() =>
+                          setEventModal({ open: true, editing: null })
+                        }
+                      >
+                        {OndaIcons.plus}
+                        Nuevo evento
+                      </GradientButton>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-full border border-[var(--onda-border)] px-4 py-2 text-sm font-medium text-[var(--onda-ink)] transition hover:bg-[var(--onda-bg)]"
+                        onClick={() => router.push("/promos/nueva")}
+                      >
+                        {OndaIcons.sparkle} Crear una promo
+                      </button>
+                    </div>
+                  </div>
+                  <ol className="grid gap-2 border-t border-dashed border-[var(--onda-border)] bg-[var(--onda-bg)] px-6 py-4 sm:grid-cols-3">
+                    {[
+                      {
+                        icon: OndaIcons.ticket,
+                        text: "Registra fechas, lugar y slug del evento.",
+                      },
+                      {
+                        icon: OndaIcons.check,
+                        text: "Actívalo para empezar a invitar locales.",
+                      },
+                      {
+                        icon: OndaIcons.accumulate,
+                        text: "Arma la cartilla con tus promos participantes.",
+                      },
+                    ].map((step, i) => (
+                      <li
+                        key={i}
+                        className="flex items-start gap-2 text-left text-xs text-[var(--onda-muted)]"
+                      >
+                        <span className="mt-0.5 shrink-0 text-[var(--onda-violet)]">
+                          {step.icon}
+                        </span>
+                        <span>{step.text}</span>
+                      </li>
+                    ))}
+                  </ol>
                 </div>
               ) : null}
             </section>
@@ -3591,6 +3649,7 @@ export function MerchantWorkspace() {
         onCreated={() => refreshEventData()}
       />
       {dialogs}
-    </div>
+      </div>
+    </BusinessTypeProvider>
   );
 }

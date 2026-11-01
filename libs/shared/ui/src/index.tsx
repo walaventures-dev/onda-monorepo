@@ -96,10 +96,17 @@ export { CajaScanClient } from './CajaScanClient';
 export { CajaPendingQueue } from './CajaPendingQueue';
 export type { CajaPendingItem } from './CajaPendingQueue';
 export {
-  CajaOperationsPanel,
+  CajaDualPane,
   AsociarVentaList,
   AsociarVentaDetail,
 } from './AsociarVentaPanel';
+export type { CajaPane } from './AsociarVentaPanel';
+export { CajaBottomNav } from './CajaBottomNav';
+export type { CajaBottomNavItem } from './CajaBottomNav';
+export { CajaIdentityBar } from './CajaIdentityBar';
+export { VenderMobile } from './VenderMobile';
+export { OndaBackButton } from './BackButton';
+export { useSwipeNav } from './useSwipeNav';
 export {
   PosTablesPanel,
   type PosTablesPanelProps,
@@ -120,6 +127,7 @@ export {
   SkeletonTable,
   SkeletonList,
   SkeletonCards,
+  SkeletonTables,
   SkeletonDetail,
   SkeletonScreen,
   SkeletonDashboard,
@@ -606,6 +614,7 @@ export function AppShell({
   children,
   userName,
   brand,
+  brandExtra,
   toolbar,
   linkComponent,
   onLogout,
@@ -618,6 +627,8 @@ export function AppShell({
   userName?: string;
   /** Logo + nombre del negocio entre el wordmark Onda y la navegación */
   brand?: { name: string; logoUrl?: string | null };
+  /** Contenido extra junto al nombre del negocio (p.ej. un selector), bajo el nombre */
+  brandExtra?: React.ReactNode;
   toolbar?: React.ReactNode;
   /** p.ej. next/link para SPA navigation */
   linkComponent?: React.ElementType;
@@ -773,7 +784,14 @@ export function AppShell({
                 {brand.name.slice(0, 1).toUpperCase()}
               </span>
             )}
-            <span className="onda-sidebar-brand-name">{brand.name}</span>
+            {brandExtra ? (
+              <div className="onda-sidebar-brand-text">
+                <span className="onda-sidebar-brand-name">{brand.name}</span>
+                <div className="onda-sidebar-brand-extra">{brandExtra}</div>
+              </div>
+            ) : (
+              <span className="onda-sidebar-brand-name">{brand.name}</span>
+            )}
           </div>
         ) : null}
         <nav className="onda-sidebar-nav" aria-label="Principal">

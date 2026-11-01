@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArmchairIcon as Armchair } from '@phosphor-icons/react/dist/csr/Armchair';
+import { PicnicTableIcon as PicnicTable } from '@phosphor-icons/react/dist/csr/PicnicTable';
 import { CheckIcon as Check } from '@phosphor-icons/react/dist/csr/Check';
 import { ClockIcon as Clock } from '@phosphor-icons/react/dist/csr/Clock';
 import { CookingPotIcon as CookingPot } from '@phosphor-icons/react/dist/csr/CookingPot';
@@ -91,11 +91,12 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
   const qs = useCallback(
     (path: string) => {
       const params = new URLSearchParams();
+      params.set('storeId', storeId);
       if (token) params.set('token', token);
       const suffix = params.toString();
       return suffix ? `${path}?${suffix}` : path;
     },
-    [token],
+    [storeId, token],
   );
 
   const loadStations = useCallback(async () => {
@@ -186,7 +187,7 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
   );
 
   return (
-    <div className="flex min-h-[70dvh] flex-col gap-4 rounded-3xl bg-[#141625] p-4 text-white">
+    <div className="flex h-full min-h-0 flex-col gap-4 rounded-3xl bg-[#141625] p-4 text-white">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white">
@@ -277,7 +278,7 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
                 <header className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="flex items-center gap-1.5 font-display text-base font-semibold leading-tight">
-                      <Armchair
+                      <PicnicTable
                         className="h-4 w-4 shrink-0 text-white/50"
                         weight="regular"
                         aria-hidden

@@ -54,6 +54,7 @@ import { MegaphoneIcon as Megaphone } from '@phosphor-icons/react/dist/csr/Megap
 import { CameraIcon as Camera } from '@phosphor-icons/react/dist/csr/Camera';
 import { QrCodeIcon as QrCode } from '@phosphor-icons/react/dist/csr/QrCode';
 import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
+import { ClockCounterClockwiseIcon as ClockCounterClockwise } from '@phosphor-icons/react/dist/csr/ClockCounterClockwise';
 
 const SIZE = 16;
 const CLASS = 'h-3 w-3 shrink-0';
@@ -83,6 +84,7 @@ export const OndaIcons = {
   plus: <Plus size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   copy: <Copy size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   power: <Power size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
+  history: <ClockCounterClockwise size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   trash: <Trash size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   check: <Check size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,
   lock: <Lock size={SIZE} weight="regular" className={CLASS} aria-hidden="true" />,

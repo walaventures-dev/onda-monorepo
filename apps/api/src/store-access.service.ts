@@ -65,6 +65,14 @@ export class StoreAccessService {
           viaCajaToken: true,
         };
       }
+      // Sin Firebase no hay plan B: un ?token= que no es cajaLink es inválido.
+      // (Sin este guard, cualquier token en query caería al modo sin-auth.)
+      if (queryToken && !this.firebase.isConfigured) {
+        throw new UnauthorizedException('Enlace de caja inválido o revocado');
+      }
+      // Con Firebase, ?token= también puede ser un ID token de Firebase:
+      // EventSource no puede enviar Authorization, así que los SSE lo llevan
+      // en query. Se verifica más abajo igual que un bearer.
     }
 
     if (!this.firebase.isConfigured) {

@@ -3,28 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserQRCodeReader } from '@zxing/browser';
 import { Button } from '@heroui/react';
-import { CaretLeftIcon as CaretLeft } from '@phosphor-icons/react/dist/csr/CaretLeft';
 import { PhoneIcon as Phone } from '@phosphor-icons/react/dist/csr/Phone';
-import { PlusCircleIcon as PlusCircle } from '@phosphor-icons/react/dist/csr/PlusCircle';
 import { QrCodeIcon as QrCode } from '@phosphor-icons/react/dist/csr/QrCode';
 import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
 import { UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
-import { CurrencyDollarIcon as CurrencyDollar } from '@phosphor-icons/react/dist/csr/CurrencyDollar';
 import { ListBulletsIcon as ListBullets } from '@phosphor-icons/react/dist/csr/ListBullets';
 import { CpuIcon as Cpu } from '@phosphor-icons/react/dist/csr/Cpu';
 import { api } from './api';
+import { OndaBackButton } from './BackButton';
+import { useSwipeNav } from './useSwipeNav';
 import { CajaScanClient } from './CajaScanClient';
 import { CajaPendingQueue } from './CajaPendingQueue';
 import { CajaDevicePanel } from './CajaDevicePanel';
-import { CajaPosFlow } from './CajaPosFlow';
 import { PhoneInput } from './PhoneInput';
-import { PasswordInput } from './PasswordInput';
-import { OndaWordmark } from './brand';
-import { OndaIcons } from './icons';
-import {
-  PosVenderCore,
-  type PosVenderMemberSession,
-} from './PosVenderCore';
+import { VenderMobile } from './VenderMobile';
 import {
   formatCop,
   isCompletePhoneMask,
@@ -34,79 +26,50 @@ import {
 import { SkeletonList } from './Skeleton';
 import type { PosTabDto } from '@onda/shared-types';
 
-function CajaIdentityBar({
-  storeName,
-  onLogout,
-  logoutBusy,
-}: {
-  storeName?: string;
-  onLogout?: () => void;
-  logoutBusy?: boolean;
-}) {
-  const name = storeName?.trim() || 'tu comercio';
-  return (
-    <header className="flex items-center justify-between gap-3">
-      <OndaWordmark className="h-4 w-auto shrink-0" />
-      <p className="min-w-0 flex-1 truncate text-right text-sm font-semibold text-[var(--onda-ink)]">
-        {name}
-      </p>
-      {onLogout ? (
-        <button
-          type="button"
-          onClick={onLogout}
-          disabled={logoutBusy}
-          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-2.5 py-1.5 text-xs font-medium text-[var(--onda-muted)] transition hover:text-[var(--onda-ink)] disabled:opacity-50"
-          aria-label="Cerrar sesión"
-        >
-          {OndaIcons.logout}
-          <span className="hidden sm:inline">Salir</span>
-        </button>
-      ) : null}
-    </header>
-  );
-}
-
 const CAJA_PANES = ['camera', 'queue', 'device'] as const;
-type CajaPane = (typeof CAJA_PANES)[number];
+export type CajaPane = (typeof CAJA_PANES)[number];
 
-function CajaDualPane({
+/**
+ * Panel táctil de caja con tres paneles deslizables (cámara, solicitudes,
+ * sensores). El pane activo lo controla la ruta vía activePane/onPaneChange,
+ * así cada vista tiene URL propia y es navegable con history.
+ */
+export function CajaDualPane({
   storeId,
   token,
   ondaValue,
   posEnabled,
-  storeName,
-  onLogout,
-  logoutBusy,
-  onBack,
+  activePane,
+  onPaneChange,
 }: {
   storeId: string;
   token?: string;
   ondaValue?: number | null;
   posEnabled?: boolean;
-  storeName?: string;
-  onLogout?: () => void;
-  logoutBusy?: boolean;
-  onBack?: () => void;
+  activePane: CajaPane;
+  onPaneChange: (pane: CajaPane) => void;
 }) {
-  const [pane, setPane] = useState<CajaPane>('camera');
   const [pendingCount, setPendingCount] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
   const syncingRef = useRef(false);
 
-  const scrollToPane = useCallback((next: CajaPane) => {
-    const track = trackRef.current;
-    if (!track) return;
-    const index = CAJA_PANES.indexOf(next);
-    syncingRef.current = true;
-    track.scrollTo({
-      left: index * track.clientWidth,
-      behavior: 'smooth',
-    });
-    setPane(next);
-    window.setTimeout(() => {
-      syncingRef.current = false;
-    }, 350);
-  }, []);
+  const scrollToPane = useCallback(
+    (next: CajaPane) => {
+      const track = trackRef.current;
+      if (!track) return;
+      const index = CAJA_PANES.indexOf(next);
+      syncingRef.current = true;
+      track.scrollTo({
+        left: index * track.clientWidth,
+        behavior: 'smooth',
+      });
+      onPaneChange(next);
+      window.setTimeout(() => {
+        syncingRef.current = false;
+      }, 350);
+    },
+    [onPaneChange],
+  );
 
   useEffect(() => {
     const track = trackRef.current;
@@ -116,42 +79,44 @@ function CajaDualPane({
       if (syncingRef.current || !track) return;
       const index = Math.round(track.scrollLeft / Math.max(track.clientWidth, 1));
       const next = CAJA_PANES[Math.min(Math.max(index, 0), CAJA_PANES.length - 1)];
-      setPane((prev) => (prev === next ? prev : next));
+      if (next !== activePane) onPaneChange(next);
     }
 
     track.addEventListener('scroll', onScroll, { passive: true });
     return () => track.removeEventListener('scroll', onScroll);
-  }, []);
+  }, [activePane, onPaneChange]);
+
+  // Al montar/cambiar de ruta, alinea el scroll al pane activo sin animar.
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const index = CAJA_PANES.indexOf(activePane);
+    track.scrollTo({ left: index * track.clientWidth, behavior: 'instant' as ScrollBehavior });
+  }, [activePane]);
 
   const badge = pendingCount > 99 ? '99+' : String(pendingCount);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <CajaIdentityBar
-        storeName={storeName}
-        onLogout={onLogout}
-        logoutBusy={logoutBusy}
-      />
-
       <div className="onda-caja-tabs" role="tablist" aria-label="Vista de caja">
         <button
           type="button"
           role="tab"
-          aria-selected={pane === 'camera'}
-          className={`onda-caja-tab${pane === 'camera' ? ' is-active' : ''}`}
+          aria-selected={activePane === 'camera'}
+          className={`onda-caja-tab${activePane === 'camera' ? ' is-active' : ''}`}
           onClick={() => scrollToPane('camera')}
         >
-          <QrCode className="h-4 w-4" weight="regular" aria-hidden />
+          <QrCode className="h-5 w-5" weight="regular" aria-hidden />
           Cámara
         </button>
         <button
           type="button"
           role="tab"
-          aria-selected={pane === 'queue'}
-          className={`onda-caja-tab${pane === 'queue' ? ' is-active' : ''}`}
+          aria-selected={activePane === 'queue'}
+          className={`onda-caja-tab${activePane === 'queue' ? ' is-active' : ''}`}
           onClick={() => scrollToPane('queue')}
         >
-          <ListBullets className="h-4 w-4" weight="regular" aria-hidden />
+          <ListBullets className="h-5 w-5" weight="regular" aria-hidden />
           Solicitudes
           {pendingCount > 0 ? (
             <span className="onda-caja-tab-badge">{badge}</span>
@@ -160,11 +125,11 @@ function CajaDualPane({
         <button
           type="button"
           role="tab"
-          aria-selected={pane === 'device'}
-          className={`onda-caja-tab${pane === 'device' ? ' is-active' : ''}`}
+          aria-selected={activePane === 'device'}
+          className={`onda-caja-tab${activePane === 'device' ? ' is-active' : ''}`}
           onClick={() => scrollToPane('device')}
         >
-          <Cpu className="h-4 w-4" weight="regular" aria-hidden />
+          <Cpu className="h-5 w-5" weight="regular" aria-hidden />
           Sensores
         </button>
       </div>
@@ -173,7 +138,7 @@ function CajaDualPane({
         <section
           className="onda-caja-swipe-pane"
           aria-label="Escanear QR"
-          aria-hidden={pane !== 'camera'}
+          aria-hidden={activePane !== 'camera'}
         >
           <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl">
             <CajaScanClient
@@ -182,14 +147,14 @@ function CajaDualPane({
               embedded
               hideHeader
               posEnabled={posEnabled}
-              active={pane === 'camera'}
+              active={activePane === 'camera'}
             />
           </div>
         </section>
         <section
           className="onda-caja-swipe-pane"
           aria-label="Solicitudes pendientes"
-          aria-hidden={pane !== 'queue'}
+          aria-hidden={activePane !== 'queue'}
         >
           <CajaPendingQueue
             storeId={storeId}
@@ -200,24 +165,11 @@ function CajaDualPane({
         <section
           className="onda-caja-swipe-pane"
           aria-label="Sensores del dispositivo"
-          aria-hidden={pane !== 'device'}
+          aria-hidden={activePane !== 'device'}
         >
           <CajaDevicePanel />
         </section>
       </div>
-
-      {onBack ? (
-        <div className="flex justify-center pt-1">
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex min-h-12 min-w-[12rem] cursor-pointer items-center justify-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 text-sm font-semibold text-[var(--onda-ink)] shadow-[0_8px_24px_rgba(26,27,46,0.06)] transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary-500)]/35"
-          >
-            <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
-            Inicio
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -280,16 +232,7 @@ function QrLinkScanner({
 }
 
 function BackButton({ onClick, label }: { onClick: () => void; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--onda-primary-500)]"
-    >
-      <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
-      {label}
-    </button>
-  );
+  return <OndaBackButton onClick={onClick} label={label} />;
 }
 
 export function AsociarVentaList({
@@ -350,20 +293,20 @@ export function AsociarVentaList({
               onClick={() => onSelect(tab.id)}
             >
               <span
-                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
+                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
                   linked
                     ? 'bg-[var(--onda-success)]/15 text-[var(--onda-success)]'
                     : 'bg-[var(--onda-primary-50)] text-[var(--onda-primary-500)]'
                 }`}
               >
                 {linked ? (
-                  <UserCircle className="h-7 w-7" weight="regular" aria-hidden />
+                  <UserCircle className="h-8 w-8" weight="regular" aria-hidden />
                 ) : (
-                  <Receipt className="h-7 w-7" weight="regular" aria-hidden />
+                  <Receipt className="h-8 w-8" weight="regular" aria-hidden />
                 )}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-display text-base font-semibold text-[var(--onda-ink)]">
+                <p className="truncate font-display text-lg font-semibold text-[var(--onda-ink)]">
                   {tab.label}
                 </p>
                 <p className="truncate text-sm text-[var(--onda-muted)]">
@@ -372,7 +315,7 @@ export function AsociarVentaList({
                     : 'Toca para asociar'}
                 </p>
               </div>
-              <p className="shrink-0 font-display text-lg font-bold tabular-nums text-[var(--onda-ink)]">
+              <p className="shrink-0 font-display text-xl font-bold tabular-nums text-[var(--onda-ink)]">
                 {formatCop(tab.total)}
               </p>
             </button>
@@ -404,6 +347,9 @@ export function AsociarVentaDetail({
     text: string;
   } | null>(null);
   const [mode, setMode] = useState<'qr' | 'phone'>('qr');
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useSwipeNav(rootRef, { onBack: onBack, enabled: !linking });
 
   const reload = useCallback(async () => {
     const qs = new URLSearchParams({
@@ -495,14 +441,14 @@ export function AsociarVentaDetail({
       : null;
 
   return (
-    <div className="space-y-4">
+    <div ref={rootRef} className="space-y-4">
       <BackButton onClick={onBack} label="Cuentas" />
 
       <div className="rounded-2xl bg-[var(--onda-primary-50)] px-4 py-4 text-center">
         <p className="text-xs font-semibold uppercase tracking-wide text-[var(--onda-primary-700)]">
           {tab.label}
         </p>
-        <p className="mt-1 font-display text-3xl font-bold tabular-nums text-[var(--onda-ink)]">
+        <p className="mt-1 font-display text-4xl font-bold tabular-nums text-[var(--onda-ink)]">
           {formatCop(tab.total)}
         </p>
         <p className="mt-1 text-sm text-[var(--onda-muted)]">
@@ -539,7 +485,7 @@ export function AsociarVentaDetail({
                 ? `+${previewOndas} onda${previewOndas === 1 ? '' : 's'} al cobrar`
                 : '+0 ondas al cobrar (venta registrada)'}
           </p>
-          <Button className="mt-2" onPress={onBack}>
+          <Button size="lg" fullWidth className="mt-2" onPress={onBack}>
             Listo
           </Button>
         </div>
@@ -549,25 +495,25 @@ export function AsociarVentaDetail({
             <button
               type="button"
               onClick={() => setMode('qr')}
-              className={`flex flex-col items-center gap-1.5 rounded-2xl border px-3 py-3 text-sm font-semibold transition ${
+              className={`flex min-h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border px-3 py-4 text-base font-semibold transition active:scale-[0.98] ${
                 mode === 'qr'
                   ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-50)] text-[var(--onda-primary-700)]'
                   : 'border-[var(--onda-border)] bg-[var(--onda-card)] text-[var(--onda-muted)]'
               }`}
             >
-              <QrCode className="h-6 w-6" weight="regular" aria-hidden />
+              <QrCode className="h-7 w-7" weight="regular" aria-hidden />
               Escanear
             </button>
             <button
               type="button"
               onClick={() => setMode('phone')}
-              className={`flex flex-col items-center gap-1.5 rounded-2xl border px-3 py-3 text-sm font-semibold transition ${
+              className={`flex min-h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border px-3 py-4 text-base font-semibold transition active:scale-[0.98] ${
                 mode === 'phone'
                   ? 'border-[var(--onda-primary-500)] bg-[var(--onda-primary-50)] text-[var(--onda-primary-700)]'
                   : 'border-[var(--onda-border)] bg-[var(--onda-card)] text-[var(--onda-muted)]'
               }`}
             >
-              <Phone className="h-6 w-6" weight="regular" aria-hidden />
+              <Phone className="h-7 w-7" weight="regular" aria-hidden />
               Celular
             </button>
           </div>
@@ -587,11 +533,12 @@ export function AsociarVentaDetail({
               <PhoneInput
                 value={phone}
                 onChange={setPhone}
-                className="onda-input w-full text-center text-lg"
+                className="onda-input w-full text-center text-xl"
                 disabled={linking}
               />
               <Button
-                className="w-full"
+                size="lg"
+                fullWidth
                 onPress={() => void linkPhone()}
                 isDisabled={linking || !isCompletePhoneMask(phone)}
               >
@@ -605,292 +552,3 @@ export function AsociarVentaDetail({
   );
 }
 
-export function CajaOperationsPanel({
-  storeId,
-  defaultMode = 'acumular',
-  posEnabled = false,
-  token,
-  storeName,
-  ondaValue,
-  signInMember,
-  restoreCajaAuth,
-  activateMemberAuth,
-  resumeMemberSession,
-  onLogout,
-  kitchenHref,
-}: {
-  storeId: string;
-  defaultMode?: 'acumular' | 'asociar';
-  posEnabled?: boolean;
-  token?: string;
-  storeName?: string;
-  ondaValue?: number | null;
-  /** Firebase login for Vender; returns active member for this store. */
-  signInMember?: (
-    email: string,
-    password: string,
-  ) => Promise<PosVenderMemberSession>;
-  /** Restore CajaLink bearer after leaving Vender (keeps Firebase signed in). */
-  restoreCajaAuth?: () => void;
-  /** Re-attach Firebase bearer when re-entering Vender with an existing session. */
-  activateMemberAuth?: () => Promise<void>;
-  /** Silent resume if Firebase already has a user for this device. */
-  resumeMemberSession?: () => Promise<PosVenderMemberSession | null>;
-  /** Cerrar sesión de caja (Firebase hub o revocar enlace kiosk). */
-  onLogout?: () => void | Promise<void>;
-  /** URL de la pantalla de cocina (solo PWA caja con token de caja). */
-  kitchenHref?: string;
-}) {
-  const [mode, setMode] = useState<'home' | 'acumular' | 'asociar' | 'vender' | 'vender-login'>(
-    () => (posEnabled ? 'home' : 'acumular'),
-  );
-  const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
-  const [memberSession, setMemberSession] =
-    useState<PosVenderMemberSession | null>(null);
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loginBusy, setLoginBusy] = useState(false);
-  const [loginError, setLoginError] = useState('');
-  const [openingVender, setOpeningVender] = useState(false);
-  const [logoutBusy, setLogoutBusy] = useState(false);
-
-  useEffect(() => {
-    if (!posEnabled) setMode('acumular');
-  }, [posEnabled]);
-
-  async function handleLogout() {
-    if (!onLogout || logoutBusy) return;
-    setLogoutBusy(true);
-    try {
-      await onLogout();
-    } finally {
-      setLogoutBusy(false);
-    }
-  }
-
-  function leaveVender() {
-    restoreCajaAuth?.();
-    setMode('home');
-  }
-
-  async function openVender() {
-    setOpeningVender(true);
-    setLoginError('');
-    try {
-      if (memberSession) {
-        await activateMemberAuth?.();
-        setMode('vender');
-        return;
-      }
-      const resumed = (await resumeMemberSession?.()) ?? null;
-      if (resumed) {
-        setMemberSession(resumed);
-        setMode('vender');
-        return;
-      }
-      setMode('vender-login');
-    } catch {
-      setMemberSession(null);
-      setMode('vender-login');
-    } finally {
-      setOpeningVender(false);
-    }
-  }
-
-  async function submitVenderLogin(e: React.FormEvent) {
-    e.preventDefault();
-    if (!signInMember) return;
-    setLoginBusy(true);
-    setLoginError('');
-    try {
-      const member = await signInMember(loginEmail.trim(), loginPassword);
-      setMemberSession(member);
-      setLoginPassword('');
-      setMode('vender');
-    } catch (err) {
-      setLoginError(
-        err instanceof Error ? err.message : 'No se pudo iniciar sesión',
-      );
-    } finally {
-      setLoginBusy(false);
-    }
-  }
-
-  if (selectedTabId) {
-    return (
-      <div className="flex min-h-[70dvh] flex-col gap-3">
-        <CajaIdentityBar
-          storeName={storeName}
-          onLogout={onLogout ? () => void handleLogout() : undefined}
-          logoutBusy={logoutBusy}
-        />
-        <AsociarVentaDetail
-          storeId={storeId}
-          tabId={selectedTabId}
-          token={token}
-          ondaValue={ondaValue}
-          onBack={() => setSelectedTabId(null)}
-        />
-      </div>
-    );
-  }
-
-  if (mode === 'vender-login') {
-    return (
-      <div className="flex min-h-[70dvh] flex-col gap-4">
-        <CajaIdentityBar
-          storeName={storeName}
-          onLogout={onLogout ? () => void handleLogout() : undefined}
-          logoutBusy={logoutBusy}
-        />
-        {!signInMember ? (
-          <p className="text-center text-sm text-[var(--onda-danger)]">
-            Esta caja no tiene login de miembro configurado.
-          </p>
-        ) : (
-        <div className="mx-auto w-full max-w-sm space-y-4 rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] p-5 shadow-[0_12px_28px_rgba(26,27,46,0.08)]">
-          <div className="text-center">
-            <CurrencyDollar
-              className="mx-auto h-8 w-8 text-[var(--onda-primary-500)]"
-              weight="regular"
-              aria-hidden
-            />
-            <h2 className="mt-2 font-display text-lg font-semibold">
-              Entrar a Vender
-            </h2>
-            <p className="mt-1 text-sm text-[var(--onda-muted)]">
-              Usa tu email y contraseña de miembro Onda.
-            </p>
-          </div>
-          <form onSubmit={submitVenderLogin} className="space-y-3">
-            <label className="block space-y-1 text-sm">
-              <span className="text-[var(--onda-muted)]">Email</span>
-              <input
-                className="onda-input w-full"
-                type="email"
-                autoComplete="username"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                required
-              />
-            </label>
-            <label className="block space-y-1 text-sm">
-              <span className="text-[var(--onda-muted)]">Contraseña</span>
-              <PasswordInput
-                className="rounded-xl"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-              />
-            </label>
-            {loginError ? (
-              <p className="text-sm text-[var(--onda-danger)]">{loginError}</p>
-            ) : null}
-            <Button type="submit" className="w-full" isDisabled={loginBusy}>
-              {loginBusy ? 'Entrando…' : 'Continuar'}
-            </Button>
-          </form>
-        </div>
-        )}
-        <div className="flex justify-center pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-          <button
-            type="button"
-            onClick={() => setMode('home')}
-            className="inline-flex min-h-12 min-w-[12rem] cursor-pointer items-center justify-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 text-sm font-semibold text-[var(--onda-ink)]"
-          >
-            <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
-            Inicio
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (mode === 'vender' && memberSession) {
-    return (
-      <PosVenderCore
-        storeId={storeId}
-        ondaValue={ondaValue}
-        variant="kiosk"
-        memberSession={memberSession}
-        headerExtra={
-          <CajaIdentityBar
-            storeName={storeName}
-            onLogout={onLogout ? () => void handleLogout() : undefined}
-            logoutBusy={logoutBusy}
-          />
-        }
-        onLeave={leaveVender}
-      />
-    );
-  }
-
-  if (mode === 'acumular') {
-    return (
-      <CajaDualPane
-        storeId={storeId}
-        token={token}
-        ondaValue={ondaValue}
-        posEnabled={posEnabled}
-        storeName={storeName}
-        onLogout={onLogout ? () => void handleLogout() : undefined}
-        logoutBusy={logoutBusy}
-        onBack={posEnabled ? () => setMode('home') : undefined}
-      />
-    );
-  }
-
-  if (mode === 'asociar') {
-    return (
-      <div className="flex min-h-[70dvh] flex-col gap-4">
-        <CajaIdentityBar
-          storeName={storeName}
-          onLogout={onLogout ? () => void handleLogout() : undefined}
-          logoutBusy={logoutBusy}
-        />
-        <div className="flex items-center justify-center gap-2">
-          <PlusCircle
-            className="h-5 w-5 text-[var(--onda-primary-500)]"
-            weight="regular"
-            aria-hidden
-          />
-          <h2 className="font-display text-lg font-semibold text-[var(--onda-ink)]">
-            Cuentas
-          </h2>
-        </div>
-        <div className="min-h-0 flex-1">
-          <AsociarVentaList
-            storeId={storeId}
-            token={token}
-            onSelect={setSelectedTabId}
-          />
-        </div>
-        <div className="flex justify-center pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1">
-          <button
-            type="button"
-            onClick={() => setMode('home')}
-            className="inline-flex min-h-12 min-w-[12rem] cursor-pointer items-center justify-center gap-1.5 rounded-full border border-[var(--onda-border)] bg-[var(--onda-card)] px-6 text-sm font-semibold text-[var(--onda-ink)] shadow-[0_8px_24px_rgba(26,27,46,0.06)] transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onda-primary-500)]/35"
-          >
-            <CaretLeft className="h-4 w-4" weight="regular" aria-hidden />
-            Inicio
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  /* Inicio: cuentas abiertas */
-  return (
-    <CajaPosFlow
-      storeId={storeId}
-      storeName={storeName}
-      ondaValue={ondaValue}
-      onAcumular={() => setMode('acumular')}
-      onLogout={onLogout ? () => void handleLogout() : undefined}
-      logoutBusy={logoutBusy}
-      token={token}
-      kitchenHref={kitchenHref}
-    />
-  );
-}

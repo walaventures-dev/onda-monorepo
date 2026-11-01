@@ -310,13 +310,13 @@ export function CajaPendingQueue({
                     <span className="text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
                       Valor de la cuenta
                     </span>
-                    <span className="mt-1 flex items-center gap-1 rounded-xl border border-[var(--onda-border)] bg-[var(--onda-bg)] px-3 py-2">
+                    <span className="mt-1 flex min-h-12 items-center gap-1 rounded-xl border border-[var(--onda-border)] bg-[var(--onda-bg)] px-3 py-2">
                       <span className="text-sm text-[var(--onda-muted)]">$</span>
                       <input
                         type="text"
                         inputMode="numeric"
                         autoComplete="off"
-                        className="w-full bg-transparent text-sm text-[var(--onda-ink)] outline-none"
+                        className="w-full bg-transparent text-base text-[var(--onda-ink)] outline-none"
                         value={formatMoneyInput(amounts[item.id] || '')}
                         onChange={(e) =>
                           setAmounts((prev) => ({
@@ -387,7 +387,7 @@ export function CajaPendingQueue({
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    className="flex-1 rounded-full bg-[var(--onda-success)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    className="min-h-12 flex-1 rounded-2xl bg-[var(--onda-success)] px-3 py-2.5 text-base font-semibold text-white disabled:opacity-50"
                     disabled={busyId === item.id || !canConfirm(item)}
                     onClick={() => void resolve(item.id, 'confirm')}
                   >
@@ -395,7 +395,7 @@ export function CajaPendingQueue({
                   </button>
                   <button
                     type="button"
-                    className="flex-1 rounded-full border border-[var(--onda-border)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+                    className="min-h-12 flex-1 rounded-2xl border border-[var(--onda-border)] px-3 py-2.5 text-base font-semibold disabled:opacity-50"
                     disabled={busyId === item.id}
                     onClick={() => void resolve(item.id, 'reject')}
                   >

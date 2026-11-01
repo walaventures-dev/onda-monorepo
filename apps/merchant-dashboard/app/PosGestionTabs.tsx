@@ -1,14 +1,18 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { OndaIcons } from '@onda/shared-ui';
-import type { StoreMemberRole } from '@onda/shared-types';
+import { api, OndaIcons } from '@onda/shared-ui';
+import type {
+  PosItemDto,
+  StoreMemberRole,
+} from '@onda/shared-types';
 import { PosInventory } from './PosInventory';
 import { PosSalesList } from './PosSalesList';
 import { PosTablesConfig } from './PosTablesConfig';
 import { PosStationsConfig } from './PosStationsConfig';
 import { isAdmin } from '../lib/useStoreRole';
+import { hasDining, hasStations, useBusinessType } from '../lib/businessType';
 
 const TAB_BUTTON =
   'inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition';
@@ -27,55 +31,90 @@ export function PosGestionTabs({
   const pathname = usePathname();
   const router = useRouter();
   const admin = isAdmin(memberRole);
+  const { businessType } = useBusinessType();
+  // Salones y mesas solo aplica a restauración; estaciones también a belleza
+  // (sillas/cabinas donde se presta el servicio).
+  const diningModules = hasDining(businessType);
+  const stationModules = hasStations(businessType);
+  const [itemCount, setItemCount] = useState(0);
 
-  // Salones y mesas (/pos/mesas) y Estaciones (/pos/estaciones) viven dentro
-  // de Inventario — la fila de navegación de PosInventory ya los enlaza.
-  const activeTab = pathname.startsWith('/pos/ventas') ? 'ventas' : 'inventario';
+  const inInventory = pathname.startsWith('/pos/inventario');
+  const inTables = pathname.startsWith('/pos/mesas');
+  const inStations = pathname.startsWith('/pos/estaciones');
+  const gestionRoute = inInventory || inTables || inStations;
+
+  // Si el tipo de negocio no usa un módulo, saca al usuario de esa ruta.
+  useEffect(() => {
+    if ((inTables && !diningModules) || (inStations && !stationModules)) {
+      router.replace('/pos/inventario');
+    }
+  }, [diningModules, stationModules, inTables, inStations, router]);
+
+  useEffect(() => {
+    if (!admin || !storeId) return;
+    let cancelled = false;
+    api<PosItemDto[]>(`/pos/stores/${storeId}/items`)
+      .then((itemRows) => {
+        if (cancelled) return;
+        setItemCount(itemRows.length);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [admin, storeId]);
 
   let panel: ReactNode;
-  if (pathname.startsWith('/pos/mesas')) {
+  if (inTables) {
     panel = admin ? <PosTablesConfig storeId={storeId} /> : NO_ACCESS;
-  } else if (pathname.startsWith('/pos/estaciones')) {
+  } else if (inStations) {
     panel = admin ? <PosStationsConfig storeId={storeId} /> : NO_ACCESS;
-  } else if (activeTab === 'ventas') {
+  } else if (pathname.startsWith('/pos/ventas')) {
     panel = <PosSalesList storeId={storeId} readOnly={!admin} />;
   } else {
     panel = admin ? <PosInventory storeId={storeId} /> : NO_ACCESS;
   }
 
+  const pill = (active: boolean) =>
+    `${TAB_BUTTON} ${
+      active
+        ? 'bg-[var(--onda-primary-100)] text-[var(--onda-primary-700)]'
+        : 'text-[var(--onda-muted)] hover:bg-[var(--onda-bg)]'
+    }`;
+
   return (
     <div>
-      <div className="flex flex-wrap gap-2">
-        {admin ? (
+      {admin && gestionRoute ? (
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className={`${TAB_BUTTON} ${
-              activeTab === 'inventario'
-                ? 'bg-[var(--onda-primary-100)] text-[var(--onda-primary-700)]'
-                : 'text-[var(--onda-muted)] hover:bg-[var(--onda-bg)]'
-            }`}
+            className={pill(inInventory)}
             onClick={() => {
-              if (!pathname.startsWith('/pos/inventario'))
-                router.push('/pos/inventario');
+              if (!inInventory) router.push('/pos/inventario');
             }}
           >
-            {OndaIcons.product} Inventario
+            {OndaIcons.product} Ítems ({itemCount})
           </button>
-        ) : null}
-        <button
-          type="button"
-          className={`${TAB_BUTTON} ${
-            activeTab === 'ventas'
-              ? 'bg-[var(--onda-primary-100)] text-[var(--onda-primary-700)]'
-              : 'text-[var(--onda-muted)] hover:bg-[var(--onda-bg)]'
-          }`}
-          onClick={() => {
-            if (!pathname.startsWith('/pos/ventas')) router.push('/pos/ventas');
-          }}
-        >
-          {OndaIcons.wallet} Ventas
-        </button>
-      </div>
+          {diningModules ? (
+            <button
+              type="button"
+              className={pill(inTables)}
+              onClick={() => router.push('/pos/mesas')}
+            >
+              {OndaIcons.near} Salones y mesas
+            </button>
+          ) : null}
+          {stationModules ? (
+            <button
+              type="button"
+              className={pill(inStations)}
+              onClick={() => router.push('/pos/estaciones')}
+            >
+              {OndaIcons.gear} Estaciones
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mt-4">{panel}</div>
     </div>
   );

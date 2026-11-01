@@ -136,6 +136,34 @@ export function SkeletonList({
   );
 }
 
+/** POS: salones y mesas — grilla de mesas cuadradas con etiqueta y estado. */
+export function SkeletonTables({
+  count = 10,
+  className = '',
+}: {
+  count?: number;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5 ${className}`.trim()}
+      aria-busy="true"
+      aria-label="Cargando"
+    >
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="flex aspect-square flex-col justify-between rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)]/60 p-3"
+          aria-hidden
+        >
+          <Skeleton className="h-3.5 w-10" />
+          <Skeleton className="h-2.5 w-14" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function SkeletonCards({
   count = 6,
   className = '',

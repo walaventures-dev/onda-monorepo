@@ -720,6 +720,7 @@ export interface PosAddonDto {
   storeId: string;
   name: string;
   price: number;
+  imageUrl?: string | null;
   isActive: boolean;
   sortOrder: number;
 }
@@ -749,6 +750,18 @@ export interface PosItemDto {
   stationId?: string | null;
   variants?: PosItemVariantDto[];
   addons?: PosAddonDto[];
+}
+
+export interface PosItemHistoryDto {
+  id: string;
+  itemId: string;
+  storeId: string;
+  field: string;
+  oldValue?: string | null;
+  newValue?: string | null;
+  changedById?: string | null;
+  changedByEmail?: string | null;
+  createdAt: string;
 }
 
 export interface PosTabLineAddonDto {
@@ -834,7 +847,10 @@ export interface PosTabDto {
   userId?: string | null;
   passId?: string | null;
   tableId?: string | null;
+  tableLabel?: string | null;
+  tableSectionName?: string | null;
   guestCount?: number | null;
+  voidReason?: string | null;
   openedAt: string;
   checkoutAt?: string | null;
   lines: PosTabLineDto[];
