@@ -387,7 +387,7 @@ export function CajaPendingQueue({
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    className="min-h-12 flex-1 rounded-2xl bg-[var(--onda-success)] px-3 py-2.5 text-base font-semibold text-white disabled:opacity-50"
+                    className="min-h-14 flex-1 rounded-2xl bg-[var(--onda-success)] px-3 py-2.5 text-base font-semibold text-white disabled:opacity-50"
                     disabled={busyId === item.id || !canConfirm(item)}
                     onClick={() => void resolve(item.id, 'confirm')}
                   >
@@ -395,7 +395,7 @@ export function CajaPendingQueue({
                   </button>
                   <button
                     type="button"
-                    className="min-h-12 flex-1 rounded-2xl border border-[var(--onda-border)] px-3 py-2.5 text-base font-semibold disabled:opacity-50"
+                    className="min-h-14 flex-1 rounded-2xl border border-[var(--onda-border)] px-3 py-2.5 text-base font-semibold disabled:opacity-50"
                     disabled={busyId === item.id}
                     onClick={() => void resolve(item.id, 'reject')}
                   >

@@ -297,7 +297,7 @@ export function PosTablesPanel({
             <label className="block space-y-1 text-sm">
               <span className="text-[var(--onda-muted)]">Comensales</span>
               <input
-                className="onda-input w-full text-center text-lg font-semibold tabular-nums"
+                className="onda-input min-h-14 w-full text-center text-lg font-semibold tabular-nums"
                 inputMode="numeric"
                 autoFocus
                 value={guestCount}
@@ -313,7 +313,7 @@ export function PosTablesPanel({
               <Button
                 type="button"
                 variant="outline"
-                className="flex-1"
+                className="min-h-14 flex-1"
                 isDisabled={busy}
                 onPress={() => setDialog(null)}
               >
@@ -321,7 +321,7 @@ export function PosTablesPanel({
               </Button>
               <Button
                 type="button"
-                className="flex-1"
+                className="min-h-14 flex-1"
                 isDisabled={busy}
                 onPress={() => void confirmCreate()}
               >

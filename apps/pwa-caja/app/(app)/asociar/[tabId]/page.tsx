@@ -15,7 +15,7 @@ export default function AsociarTabPage({
   const router = useRouter();
   if (!session) return <SkeletonScreen />;
   return (
-    <div className="flex min-h-[70dvh] flex-col gap-3">
+    <div className="flex min-h-full w-full flex-col gap-3">
       <AsociarVentaDetail
         storeId={session.storeId}
         tabId={tabId}

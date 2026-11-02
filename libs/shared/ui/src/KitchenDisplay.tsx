@@ -14,6 +14,7 @@ import type {
   PosStationDto,
 } from '@onda/shared-types';
 import { api } from './api';
+import { useOndaDialogs } from './OndaDialogs';
 
 export type KitchenDisplayProps = {
   storeId: string;
@@ -55,19 +56,19 @@ function elapsedLabel(ms: number) {
 function ticketTone(status: KitchenTicketStatus) {
   switch (status) {
     case 'PENDING':
-      return 'bg-amber-400/20 text-amber-200';
+      return 'bg-amber-100 text-amber-800';
     case 'ACCEPTED':
-      return 'bg-sky-400/20 text-sky-200';
+      return 'bg-[var(--onda-sky-soft)] text-[#1a8fb8]';
     case 'IN_PREPARATION':
-      return 'bg-blue-400/20 text-blue-200';
+      return 'bg-[var(--onda-primary-100)] text-[var(--onda-primary-700)]';
     case 'READY':
-      return 'bg-emerald-400/20 text-emerald-200';
+      return 'bg-[var(--onda-success)]/10 text-[var(--onda-success)]';
     case 'DELIVERED':
-      return 'bg-white/10 text-white/50';
+      return 'bg-[var(--onda-bg)] text-[var(--onda-muted)]';
     case 'CANCELLED':
-      return 'bg-red-400/10 text-red-200/60 line-through';
+      return 'bg-[var(--onda-danger)]/10 text-[var(--onda-danger)] line-through';
     default:
-      return 'bg-white/10 text-white/60';
+      return 'bg-[var(--onda-bg)] text-[var(--onda-muted)]';
   }
 }
 
@@ -82,6 +83,7 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
   const [cancelReason, setCancelReason] = useState('');
   const [now, setNow] = useState(() => Date.now());
   const reloadSeq = useRef(0);
+  const { alert: showAlert, dialogs } = useOndaDialogs();
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 1000);
@@ -159,7 +161,11 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
       await action();
       await loadTickets();
     } catch (e) {
-      window.alert?.(e instanceof Error ? e.message : 'No se pudo actualizar');
+      void showAlert({
+        tone: 'danger',
+        title: 'No se pudo actualizar',
+        message: e instanceof Error ? e.message : 'Intenta de nuevo.',
+      });
     } finally {
       setBusyKey(null);
     }
@@ -186,18 +192,24 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
     [tickets],
   );
 
+  const activeStation = useMemo(
+    () => stations.find((s) => s.id === stationId),
+    [stations, stationId],
+  );
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 rounded-3xl bg-[#141625] p-4 text-white">
+    <div className="flex h-full min-h-0 flex-col gap-5 rounded-3xl border border-[var(--onda-border)] bg-[var(--onda-card)] p-4 text-[var(--onda-ink)] shadow-[0_8px_24px_rgba(26,27,46,0.06)] sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white">
-            <CookingPot className="h-5 w-5" weight="regular" aria-hidden />
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--onda-primary-100)] text-[var(--onda-primary-600)]">
+            <CookingPot className="h-6 w-6" weight="regular" aria-hidden />
           </span>
           <div>
-            <h2 className="font-display text-lg font-semibold leading-tight">
-              Cocina{storeName?.trim() ? ` · ${storeName.trim()}` : ''}
+            <h2 className="font-display text-xl font-semibold leading-tight">
+              {activeStation?.name ?? 'Todas las estaciones'}
             </h2>
-            <p className="text-xs text-white/50">
+            <p className="text-sm text-[var(--onda-muted)]">
+              {storeName?.trim() ? `${storeName.trim()} · ` : ''}
               {activeCount} comanda{activeCount === 1 ? '' : 's'} activa
               {activeCount === 1 ? '' : 's'}
             </p>
@@ -207,10 +219,10 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
           <div className="flex gap-1.5 overflow-x-auto">
             <button
               type="button"
-              className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+              className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${
                 stationId === ''
-                  ? 'bg-white text-[#141625]'
-                  : 'bg-white/10 text-white/70 hover:bg-white/20'
+                  ? 'bg-[var(--onda-primary-500)] text-white'
+                  : 'bg-[var(--onda-bg)] text-[var(--onda-muted)] hover:bg-[var(--onda-primary-50)] hover:text-[var(--onda-ink)]'
               }`}
               onClick={() => setStationId('')}
             >
@@ -220,10 +232,10 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
               <button
                 key={s.id}
                 type="button"
-                className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${
                   stationId === s.id
-                    ? 'bg-white text-[#141625]'
-                    : 'bg-white/10 text-white/70 hover:bg-white/20'
+                    ? 'bg-[var(--onda-primary-500)] text-white'
+                    : 'bg-[var(--onda-bg)] text-[var(--onda-muted)] hover:bg-[var(--onda-primary-50)] hover:text-[var(--onda-ink)]'
                 }`}
                 onClick={() => setStationId(s.id)}
               >
@@ -231,10 +243,10 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
               </button>
             ))}
           </div>
-          <label className="flex items-center gap-1.5 text-xs text-white/60">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--onda-muted)]">
             <input
               type="checkbox"
-              className="rounded border-white/30 bg-transparent"
+              className="h-4 w-4 rounded accent-[var(--onda-primary-500)]"
               checked={includeDone}
               onChange={(e) => setIncludeDone(e.target.checked)}
             />
@@ -244,18 +256,20 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
       </div>
 
       {loading ? (
-        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-48 animate-pulse rounded-2xl bg-white/5" />
+            <div key={i} className="h-56 animate-pulse rounded-2xl bg-[var(--onda-bg)]" />
           ))}
         </div>
       ) : tickets.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-center">
-          <Flame className="h-8 w-8 text-white/30" weight="regular" aria-hidden />
-          <p className="text-sm text-white/50">Sin comandas pendientes.</p>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--onda-bg)]">
+            <Flame className="h-7 w-7 text-[var(--onda-muted)]" weight="regular" aria-hidden />
+          </span>
+          <p className="text-base text-[var(--onda-muted)]">Sin comandas pendientes.</p>
         </div>
       ) : (
-        <div className="grid flex-1 grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid flex-1 grid-cols-1 items-start gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {tickets.map((ticket) => {
             const elapsed = now - new Date(ticket.createdAt).getTime();
             const stalled =
@@ -267,19 +281,19 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
             return (
               <article
                 key={ticket.id}
-                className={`flex flex-col gap-3 rounded-2xl border bg-white/[0.06] p-3 ${
+                className={`flex flex-col gap-3 rounded-2xl border bg-[var(--onda-card)] p-4 shadow-[0_1px_2px_rgba(26,27,46,0.04)] ${
                   stalled
-                    ? 'border-red-400/70 ring-2 ring-red-400/40'
+                    ? 'border-[var(--onda-danger)]/50 ring-2 ring-[var(--onda-danger)]/20'
                     : ticket.status === 'READY'
-                      ? 'border-emerald-300/50'
-                      : 'border-white/10'
+                      ? 'border-[var(--onda-success)]/40'
+                      : 'border-[var(--onda-border)]'
                 }`}
               >
                 <header className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="flex items-center gap-1.5 font-display text-base font-semibold leading-tight">
+                    <p className="flex items-center gap-2 font-display text-lg font-semibold leading-tight">
                       <PicnicTable
-                        className="h-4 w-4 shrink-0 text-white/50"
+                        className="h-5 w-5 shrink-0 text-[var(--onda-muted)]"
                         weight="regular"
                         aria-hidden
                       />
@@ -287,54 +301,58 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
                         {ticket.tabLabel || `#${ticket.id.slice(-4).toUpperCase()}`}
                       </span>
                     </p>
-                    <p className="mt-0.5 text-[11px] text-white/45">
+                    <p className="mt-1 text-xs text-[var(--onda-muted)]">
                       #{ticket.id.slice(-4).toUpperCase()}
                       {ticket.stationName ? ` · ${ticket.stationName}` : ' · General'}
                       {ticket.openedByName ? ` · ${ticket.openedByName}` : ''}
                     </p>
                   </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
                     <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
-                        stalled ? 'bg-red-400/20 text-red-100' : 'bg-white/10 text-white/70'
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ${
+                        stalled
+                          ? 'bg-[var(--onda-danger)]/10 text-[var(--onda-danger)]'
+                          : 'bg-[var(--onda-bg)] text-[var(--onda-ink)]'
                       }`}
                     >
-                      <Clock className="h-3 w-3" weight="regular" aria-hidden />
+                      <Clock className="h-3.5 w-3.5" weight="regular" aria-hidden />
                       {elapsedLabel(elapsed)}
                     </span>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${ticketTone(ticket.status)}`}
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${ticketTone(ticket.status)}`}
                     >
                       {TICKET_STATUS_LABEL[ticket.status]}
                     </span>
                   </div>
                 </header>
 
-                <ul className="space-y-1.5">
+                <ul className="space-y-2">
                   {ticket.items.map((item) => (
                     <li
                       key={item.id}
-                      className={`flex items-center gap-2 rounded-xl bg-black/20 px-2.5 py-2 ${
+                      className={`flex items-center gap-3 rounded-xl bg-[var(--onda-bg)] px-3 py-2.5 ${
                         item.status === 'CANCELLED' ? 'opacity-50' : ''
                       }`}
                     >
-                      <span className="w-7 shrink-0 text-center text-sm font-bold tabular-nums text-white/80">
+                      <span className="w-8 shrink-0 text-center text-base font-bold tabular-nums text-[var(--onda-ink)]">
                         ×{item.quantity}
                       </span>
                       <div className="min-w-0 flex-1">
                         <p
-                          className={`text-sm font-medium leading-tight ${
-                            item.status === 'CANCELLED' ? 'line-through' : ''
+                          className={`text-base font-semibold leading-tight ${
+                            item.status === 'CANCELLED'
+                              ? 'line-through text-[var(--onda-muted)]'
+                              : ''
                           }`}
                         >
                           {item.name}
                         </p>
                         {item.note ? (
-                          <p className="truncate text-[11px] italic text-amber-200/80">
+                          <p className="truncate text-xs italic text-amber-700">
                             {item.note}
                           </p>
                         ) : null}
-                        <p className="text-[10px] uppercase tracking-wide text-white/40">
+                        <p className="text-[11px] uppercase tracking-wide text-[var(--onda-muted)]">
                           {ITEM_STATUS_LABEL[item.status]}
                         </p>
                       </div>
@@ -344,7 +362,7 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
                             <button
                               type="button"
                               disabled={busyKey !== null}
-                              className="rounded-full bg-sky-400/20 px-2.5 py-1 text-[11px] font-semibold text-sky-100 transition hover:bg-sky-400/30 disabled:opacity-50"
+                              className="min-h-10 rounded-full bg-[var(--onda-sky)] px-4 py-2 text-sm font-bold text-white transition hover:brightness-95 disabled:opacity-50"
                               onClick={() =>
                                 void run(`item:${item.id}:start`, () =>
                                   api(qs(`/pos/kitchen/tickets/${ticket.id}/items/${item.id}`), {
@@ -360,7 +378,7 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
                             <button
                               type="button"
                               disabled={busyKey !== null}
-                              className="rounded-full bg-blue-400/20 px-2.5 py-1 text-[11px] font-semibold text-blue-100 transition hover:bg-blue-400/30 disabled:opacity-50"
+                              className="min-h-10 rounded-full bg-[var(--onda-primary-500)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--onda-primary-600)] disabled:opacity-50"
                               onClick={() =>
                                 void run(`item:${item.id}:ready`, () =>
                                   api(qs(`/pos/kitchen/tickets/${ticket.id}/items/${item.id}`), {
@@ -376,7 +394,7 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
                             <button
                               type="button"
                               disabled={busyKey !== null}
-                              className="rounded-full bg-emerald-400/25 px-2.5 py-1 text-[11px] font-semibold text-emerald-100 transition hover:bg-emerald-400/35 disabled:opacity-50"
+                              className="min-h-10 rounded-full bg-[var(--onda-success)] px-4 py-2 text-sm font-bold text-white transition hover:brightness-95 disabled:opacity-50"
                               onClick={() =>
                                 void run(`item:${item.id}:deliver`, () =>
                                   api(
@@ -391,19 +409,19 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
                           ) : null}
                         </div>
                       ) : item.status === 'DELIVERED' ? (
-                        <Check className="h-4 w-4 shrink-0 text-emerald-300" weight="regular" aria-hidden />
+                        <Check className="h-5 w-5 shrink-0 text-[var(--onda-success)]" weight="regular" aria-hidden />
                       ) : null}
                     </li>
                   ))}
                 </ul>
 
                 {!closed ? (
-                  <footer className="flex items-center gap-2 border-t border-white/10 pt-2.5">
+                  <footer className="flex items-center gap-2 border-t border-[var(--onda-border)] pt-3">
                     {ticket.status === 'PENDING' ? (
                       <button
                         type="button"
                         disabled={busyKey !== null}
-                        className="flex-1 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[#141625] transition hover:bg-white/90 disabled:opacity-50"
+                        className="min-h-11 flex-1 rounded-full bg-[var(--onda-primary-500)] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[var(--onda-primary-600)] disabled:opacity-50"
                         onClick={() =>
                           void run(`accept:${ticket.id}`, () =>
                             api(qs(`/pos/kitchen/tickets/${ticket.id}/accept`), {
@@ -417,9 +435,9 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
                       </button>
                     ) : null}
                     {cancelTicketId === ticket.id ? (
-                      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
                         <input
-                          className="min-w-0 flex-1 rounded-full border border-red-300/40 bg-black/30 px-3 py-1.5 text-xs text-white placeholder:text-white/40"
+                          className="min-h-10 min-w-0 flex-1 rounded-full border border-[var(--onda-border)] bg-white px-4 py-2 text-sm text-[var(--onda-ink)] outline-none placeholder:text-[var(--onda-muted)] focus:border-[var(--onda-bridge)]"
                           placeholder="Motivo"
                           autoFocus
                           value={cancelReason}
@@ -432,25 +450,25 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
                         <button
                           type="button"
                           disabled={busyKey !== null || !cancelReason.trim()}
-                          className="rounded-full bg-red-400/25 px-2.5 py-1.5 text-[11px] font-semibold text-red-100 disabled:opacity-50"
+                          className="min-h-10 rounded-full bg-[var(--onda-danger)] px-4 py-2 text-xs font-bold text-white transition hover:brightness-95 disabled:opacity-50"
                           onClick={() => void confirmCancel(ticket.id)}
                         >
                           Confirmar
                         </button>
                         <button
                           type="button"
-                          className="rounded-full bg-white/10 px-2 py-1.5 text-white/60"
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--onda-bg)] text-[var(--onda-muted)] transition hover:text-[var(--onda-ink)]"
                           onClick={() => setCancelTicketId(null)}
                           aria-label="Cerrar"
                         >
-                          <X className="h-3.5 w-3.5" weight="regular" aria-hidden />
+                          <X className="h-4 w-4" weight="regular" aria-hidden />
                         </button>
                       </div>
                     ) : (
                       <button
                         type="button"
                         disabled={busyKey !== null}
-                        className="rounded-full bg-red-400/10 px-3 py-1.5 text-[11px] font-semibold text-red-200/80 transition hover:bg-red-400/20 disabled:opacity-50"
+                        className="min-h-10 rounded-full bg-[var(--onda-danger)]/10 px-4 py-2 text-xs font-bold text-[var(--onda-danger)] transition hover:bg-[var(--onda-danger)]/15 disabled:opacity-50"
                         onClick={() => {
                           setCancelTicketId(ticket.id);
                           setCancelReason('');
@@ -466,6 +484,7 @@ export function KitchenDisplay({ storeId, token, storeName }: KitchenDisplayProp
           })}
         </div>
       )}
+      {dialogs}
     </div>
   );
 }

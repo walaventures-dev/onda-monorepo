@@ -1698,6 +1698,7 @@ button.onda-gradient:focus-visible:not(:disabled) {
 .onda-caja-shell.is-embedded .onda-caja-body {
   min-height: 0;
   flex: 1;
+  overflow-y: auto;
 }
 
 .onda-caja-shell.is-embedded .onda-caja-scan {
@@ -1855,7 +1856,7 @@ button.onda-gradient:focus-visible:not(:disabled) {
 .onda-caja-scan {
   position: relative;
   flex: 1;
-  min-height: 16rem;
+  min-height: 20rem;
   overflow: hidden;
   background: var(--onda-ink);
 }
@@ -1998,7 +1999,7 @@ button.onda-gradient:focus-visible:not(:disabled) {
 }
 
 .onda-caja-amount-submit {
-  min-height: 3.25rem;
+  min-height: 3.5rem;
   border: 0;
   border-radius: 999px;
   background: var(--onda-primary-500);
@@ -2012,7 +2013,7 @@ button.onda-gradient:focus-visible:not(:disabled) {
 }
 
 .onda-caja-amount-cancel {
-  min-height: 2.75rem;
+  min-height: 3.5rem;
   border: 0;
   border-radius: 999px;
   background: transparent;

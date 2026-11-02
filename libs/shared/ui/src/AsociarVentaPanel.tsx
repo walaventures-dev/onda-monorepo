@@ -97,7 +97,7 @@ export function CajaDualPane({
   const badge = pendingCount > 99 ? '99+' : String(pendingCount);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="onda-caja-tabs" role="tablist" aria-label="Vista de caja">
         <button
           type="button"
@@ -219,7 +219,7 @@ function QrLinkScanner({
   }, [disabled, onScan]);
 
   return (
-    <div className="onda-caja-scan relative mt-2 min-h-[16rem] overflow-hidden rounded-2xl">
+    <div className="onda-caja-scan relative mt-2 overflow-hidden rounded-2xl">
       <video
         ref={videoRef}
         className="h-full w-full object-cover"
@@ -441,7 +441,7 @@ export function AsociarVentaDetail({
       : null;
 
   return (
-    <div ref={rootRef} className="space-y-4">
+    <div ref={rootRef} className="flex min-h-full flex-1 flex-col gap-4">
       <BackButton onClick={onBack} label="Cuentas" />
 
       <div className="rounded-2xl bg-[var(--onda-primary-50)] px-4 py-4 text-center">
@@ -485,12 +485,12 @@ export function AsociarVentaDetail({
                 ? `+${previewOndas} onda${previewOndas === 1 ? '' : 's'} al cobrar`
                 : '+0 ondas al cobrar (venta registrada)'}
           </p>
-          <Button size="lg" fullWidth className="mt-2" onPress={onBack}>
+          <Button size="lg" fullWidth className="mt-2 min-h-14" onPress={onBack}>
             Listo
           </Button>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -519,7 +519,7 @@ export function AsociarVentaDetail({
           </div>
 
           {mode === 'qr' ? (
-            <div>
+            <div className="flex min-h-0 flex-1 flex-col">
               <p className="mb-1 text-center text-sm text-[var(--onda-muted)]">
                 Apunta al QR del pase
               </p>
@@ -529,16 +529,17 @@ export function AsociarVentaDetail({
               />
             </div>
           ) : (
-            <div className="space-y-3 rounded-2xl border border-[var(--onda-border)] p-4">
+            <div className="mt-auto space-y-3 rounded-2xl border border-[var(--onda-border)] p-4 pb-2">
               <PhoneInput
                 value={phone}
                 onChange={setPhone}
-                className="onda-input w-full text-center text-xl"
+                className="onda-input min-h-14 w-full text-center text-xl"
                 disabled={linking}
               />
               <Button
                 size="lg"
                 fullWidth
+                className="min-h-14"
                 onPress={() => void linkPhone()}
                 isDisabled={linking || !isCompletePhoneMask(phone)}
               >

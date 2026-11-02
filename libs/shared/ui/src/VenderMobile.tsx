@@ -198,6 +198,7 @@ function ItemOptionsModal({
             <Button
               type="button"
               variant="outline"
+              className="min-h-14"
               onPress={onCancel}
               isDisabled={busy}
             >
@@ -205,6 +206,7 @@ function ItemOptionsModal({
             </Button>
             <Button
               type="button"
+              className="min-h-14"
               isDisabled={busy || (variants.length > 0 && !variantId)}
               onPress={() =>
                 onConfirm({ variantId: variantId || undefined, addonIds })
@@ -664,7 +666,7 @@ export function VenderMobile({
               value={searchTabs}
               onChange={(e) => setSearchTabs(e.target.value)}
               placeholder="Buscar cuenta, cliente o mesa…"
-              className="w-full rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] py-2.5 pl-9 pr-3 text-sm outline-none placeholder:text-[var(--onda-muted)] focus:border-[var(--onda-primary-500)]"
+              className="min-h-14 w-full rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] py-2.5 pl-9 pr-3 text-sm outline-none placeholder:text-[var(--onda-muted)] focus:border-[var(--onda-primary-500)]"
             />
           </div>
 
@@ -754,11 +756,11 @@ export function VenderMobile({
         <>
           <div className="flex items-center gap-2">
             <OndaBackButton onClick={() => onNavigate('/vender')} label="Cuentas" />
-            <span className="min-w-0 flex-1 truncate text-right font-display text-lg font-semibold tabular-nums">
+            <span className="min-w-0 flex-1 truncate text-right font-display text-xl font-bold tabular-nums">
               {formatCop(tab.total)}
             </span>
           </div>
-          <p className="text-xs text-[var(--onda-muted)]">
+          <p className="text-sm text-[var(--onda-muted)]">
             {tab.label}
             {tab.tableLabel ? ` · Mesa ${tab.tableLabel}` : ''}
             {' · '}
@@ -769,10 +771,10 @@ export function VenderMobile({
             type="button"
             disabled={busy}
             onClick={() => onNavigate(`/asociar/${tab.id}`)}
-            className="flex w-full items-center gap-2 rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-2.5 text-left transition active:scale-[0.98] disabled:opacity-50"
+            className="flex w-full items-center gap-3 rounded-2xl border border-[var(--onda-ink)]/10 bg-[var(--onda-card)] px-4 py-3.5 text-left transition active:scale-[0.98] disabled:opacity-50"
           >
             <UserCircle
-              className={`h-5 w-5 shrink-0 ${
+              className={`h-6 w-6 shrink-0 ${
                 tab.passId
                   ? 'text-[var(--onda-success)]'
                   : 'text-[var(--onda-primary-500)]'
@@ -780,7 +782,7 @@ export function VenderMobile({
               weight="regular"
               aria-hidden
             />
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            <span className="min-w-0 flex-1 truncate text-base font-semibold">
               {tab.customerName || 'Asociar cliente'}
             </span>
             {tab.passId ? (
@@ -798,49 +800,58 @@ export function VenderMobile({
             )}
           </button>
 
-          <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+          <ul className="min-h-0 flex-1 space-y-2.5 overflow-y-auto">
             {tab.lines.length === 0 ? (
-              <li className="py-8 text-center text-sm text-[var(--onda-muted)]">
+              <li className="py-8 text-center text-base text-[var(--onda-muted)]">
                 Cuenta vacía. Agrega productos desde la grilla.
               </li>
             ) : (
               tab.lines.map((line) => (
                 <li
                   key={line.id}
-                  className="flex items-center gap-2 rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] px-3 py-2"
+                  className="flex items-center gap-3 rounded-2xl border border-[var(--onda-ink)]/10 bg-[var(--onda-card)] px-3 py-3"
                 >
+                  <span className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-[var(--onda-border)]">
+                    {line.item ? (
+                      <ItemPhoto item={line.item} />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center bg-[var(--onda-bg)] font-display text-lg font-semibold text-[var(--onda-muted)]">
+                        {lineLabel(line).trim().charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <p
-                        className={`truncate text-sm font-medium ${
+                        className={`truncate text-base font-semibold ${
                           line.sentAt ? 'text-[var(--onda-muted)]' : ''
                         }`}
                       >
                         {lineLabel(line)}
                       </p>
                       {line.sentAt ? (
-                        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[var(--onda-sky-soft)] px-1.5 py-0.5 text-[10px] font-semibold">
-                          <CookingPot className="h-3 w-3" weight="regular" aria-hidden />
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--onda-sky-soft)] px-2 py-0.5 text-[11px] font-semibold">
+                          <CookingPot className="h-3.5 w-3.5" weight="regular" aria-hidden />
                           Cocina
                         </span>
                       ) : null}
                     </div>
-                    <p className="text-xs tabular-nums text-[var(--onda-muted)]">
+                    <p className="mt-0.5 text-sm font-medium tabular-nums text-[var(--onda-ink)]/70">
                       {formatCop(line.unitPrice)} c/u
                     </p>
                   </div>
                   {tab.status === 'OPEN' ? (
-                    <div className="flex shrink-0 items-center gap-1">
+                    <div className="flex shrink-0 items-center gap-1.5">
                       <button
                         type="button"
                         aria-label="Quitar uno"
                         disabled={busy}
                         onClick={() => void setLineQty(line.id, Math.max(0, line.quantity - 1))}
-                        className="flex h-8 w-8 items-center justify-center rounded-2xl border border-[var(--onda-border)] transition active:scale-95 disabled:opacity-50"
+                        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--onda-ink)]/20 bg-white text-[var(--onda-ink)] transition hover:bg-[var(--onda-bg)] active:scale-95 disabled:opacity-50"
                       >
-                        <Minus className="h-3.5 w-3.5" weight="regular" aria-hidden />
+                        <Minus className="h-5 w-5" weight="regular" aria-hidden />
                       </button>
-                      <span className="w-6 text-center text-sm tabular-nums">
+                      <span className="w-7 text-center text-base font-bold tabular-nums">
                         {line.quantity}
                       </span>
                       <button
@@ -848,13 +859,13 @@ export function VenderMobile({
                         aria-label="Agregar uno"
                         disabled={busy}
                         onClick={() => void setLineQty(line.id, line.quantity + 1)}
-                        className="flex h-8 w-8 items-center justify-center rounded-2xl border border-[var(--onda-border)] transition active:scale-95 disabled:opacity-50"
+                        className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--onda-primary-500)] text-white transition hover:bg-[var(--onda-primary-600)] active:scale-95 disabled:opacity-50"
                       >
-                        <Plus className="h-3.5 w-3.5" weight="regular" aria-hidden />
+                        <Plus className="h-5 w-5" weight="regular" aria-hidden />
                       </button>
                     </div>
                   ) : (
-                    <span className="shrink-0 text-sm tabular-nums">
+                    <span className="shrink-0 text-base font-bold tabular-nums">
                       ×{line.quantity}
                     </span>
                   )}
@@ -869,12 +880,12 @@ export function VenderMobile({
                 <div className="flex gap-2">
                   <Button
                     fullWidth
-                    className="min-h-14 flex-[2] text-base"
+                    className="min-h-14 flex-[2] text-lg font-bold"
                     isDisabled={busy || tab.lines.length === 0}
                     onPress={() => void checkout()}
                   >
                     <Receipt
-                      className="h-5 w-5"
+                      className="h-6 w-6"
                       weight="duotone"
                       aria-hidden
                     />
@@ -886,24 +897,23 @@ export function VenderMobile({
                   <Button
                     variant="outline"
                     aria-label="Agregar productos"
-                    className="min-h-14 w-1/3 shrink-0 text-base"
+                    className="min-h-14 w-1/3 shrink-0 border-transparent bg-[var(--onda-primary-100)] text-[var(--onda-primary-600)]"
                     isDisabled={busy}
                     onPress={() => onNavigate(`/vender/${tab.id}/productos`)}
                   >
-                    <Plus className="h-5 w-5" weight="bold" aria-hidden />
+                    <Plus className="h-6 w-6" weight="bold" aria-hidden />
                   </Button>
                 </div>
                 {tab.lines.some((l) => !l.sentAt) ? (
-                  <Button
-                    fullWidth
-                    variant="outline"
-                    isDisabled={busy}
-                    onPress={() => void sendToKitchen()}
-                    className="min-h-14 text-base"
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void sendToKitchen()}
+                    className="flex min-h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[var(--onda-sky)] px-3 text-lg font-bold text-[var(--onda-ink)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <CookingPot className="h-4 w-4" weight="regular" aria-hidden />
+                    <CookingPot className="h-6 w-6" weight="regular" aria-hidden />
                     Enviar a cocina ({tab.lines.filter((l) => !l.sentAt).length})
-                  </Button>
+                  </button>
                 ) : null}
                 <button
                   type="button"
@@ -1007,7 +1017,7 @@ export function VenderMobile({
                 value={searchItems}
                 onChange={(e) => setSearchItems(e.target.value)}
                 placeholder="Buscar producto…"
-                className="w-full rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] py-2.5 pl-9 pr-3 text-sm outline-none placeholder:text-[var(--onda-muted)] focus:border-[var(--onda-primary-500)]"
+                className="min-h-14 w-full rounded-2xl border border-[var(--onda-border)] bg-[var(--onda-card)] py-2.5 pl-9 pr-3 text-sm outline-none placeholder:text-[var(--onda-muted)] focus:border-[var(--onda-primary-500)]"
               />
             </div>
           </div>
@@ -1116,7 +1126,7 @@ export function VenderMobile({
               <Button
                 type="button"
                 variant="outline"
-                className="min-h-11 flex-1"
+                className="min-h-14 flex-1"
                 isDisabled={busy}
                 onPress={() => setVoidOpen(false)}
               >
@@ -1126,7 +1136,7 @@ export function VenderMobile({
                 type="button"
                 disabled={busy}
                 onClick={() => void voidTab()}
-                className="flex min-h-11 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-2xl bg-[var(--onda-danger)] px-3 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-50"
+                className="flex min-h-14 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-2xl bg-[var(--onda-danger)] px-3 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-50"
               >
                 {busy ? 'Anulando…' : 'Anular cuenta'}
               </button>

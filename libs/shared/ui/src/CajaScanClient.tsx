@@ -218,7 +218,7 @@ function CajaAmountSheet({
               type="number"
               min={1}
               placeholder="1"
-              className="mt-1 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
+              className="mt-1 min-h-14 w-full rounded-xl border border-[var(--onda-border)] px-3 py-2 text-sm text-[var(--onda-ink)]"
               value={draft.points}
               onChange={(e) =>
                 onChange({ points: e.target.value } as Partial<Draft>)
