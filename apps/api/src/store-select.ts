@@ -19,6 +19,7 @@ export const storePublicSelect = {
   whatsappUsed: true,
   maxStamps: true,
   shareCartillaProgress: true,
+  posSharedTabs: true,
   currency: true,
   ondaValue: true,
   lat: true,

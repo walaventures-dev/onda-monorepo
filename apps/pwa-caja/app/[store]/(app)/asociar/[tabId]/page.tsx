@@ -3,7 +3,7 @@
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
 import { AsociarVentaDetail, SkeletonScreen } from '@onda/shared-ui';
-import { useCajaSession } from '../../../CajaAppShell';
+import { useCajaSession } from '../../../../CajaAppShell';
 
 export default function AsociarTabPage({
   params,

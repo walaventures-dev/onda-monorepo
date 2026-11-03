@@ -41,6 +41,7 @@ export function cajaAllowedMerchantPath(pathname: string): boolean {
   if (loyaltyOnly.includes(first)) return false;
   if (pathname === '/pos' || pathname === '/pos/') return false;
   if (pathname.startsWith('/pos/inventario')) return false;
+  if (pathname.startsWith('/pos/equipo')) return false;
   if (pathname.startsWith('/config/')) return false;
   return pathname.startsWith('/pos');
 }

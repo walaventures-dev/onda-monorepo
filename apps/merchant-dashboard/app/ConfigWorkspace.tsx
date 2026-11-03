@@ -430,7 +430,8 @@ export function ConfigWorkspace({
                 { href: '/pos', label: 'Resumen POS', hint: 'Ventas y métricas' },
                 { href: '/pos/vender', label: 'Vender', hint: 'Cuentas y cobro' },
                 { href: '/pos/inventario', label: 'Inventario', hint: 'Productos y precios' },
-                { href: '/pos/ventas', label: 'Ventas', hint: 'Historial y reembolsos' },
+                { href: '/pos/equipo', label: 'Equipo', hint: 'Usuarios de caja, roles y PIN' },
+                { href: '/pos/ventas', label: 'Ventas', hint: 'Historial, reembolsos y stats por usuario' },
                 { href: '/pos/mesas', label: 'Mesas y salones', hint: 'Zonas y mesas del local' },
                 { href: '/pos/estaciones', label: 'Estaciones', hint: 'Cocina, barra, postres…' },
               ].map((item) => (

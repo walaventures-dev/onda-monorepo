@@ -11,6 +11,7 @@ import { PosInventory } from './PosInventory';
 import { PosSalesList } from './PosSalesList';
 import { PosTablesConfig } from './PosTablesConfig';
 import { PosStationsConfig } from './PosStationsConfig';
+import { PosUsersPanel } from './PosUsersPanel';
 import { isAdmin } from '../lib/useStoreRole';
 import { hasDining, hasStations, useBusinessType } from '../lib/businessType';
 
@@ -41,6 +42,7 @@ export function PosGestionTabs({
   const inInventory = pathname.startsWith('/pos/inventario');
   const inTables = pathname.startsWith('/pos/mesas');
   const inStations = pathname.startsWith('/pos/estaciones');
+  const inTeam = pathname.startsWith('/pos/equipo');
   const gestionRoute = inInventory || inTables || inStations;
 
   // Si el tipo de negocio no usa un módulo, saca al usuario de esa ruta.
@@ -69,6 +71,8 @@ export function PosGestionTabs({
     panel = admin ? <PosTablesConfig storeId={storeId} /> : NO_ACCESS;
   } else if (inStations) {
     panel = admin ? <PosStationsConfig storeId={storeId} /> : NO_ACCESS;
+  } else if (inTeam) {
+    panel = admin ? <PosUsersPanel storeId={storeId} /> : NO_ACCESS;
   } else if (pathname.startsWith('/pos/ventas')) {
     panel = <PosSalesList storeId={storeId} readOnly={!admin} />;
   } else {

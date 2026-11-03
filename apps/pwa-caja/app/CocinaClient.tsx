@@ -8,24 +8,43 @@ import {
   setApiAuthTokenGetter,
   SkeletonScreen,
 } from '@onda/shared-ui';
-import { clearCajaToken } from './CajaApp';
+import { clearCajaToken } from '../lib/caja-token';
+import { clearPosToken } from '../lib/pos-session';
 
 type CocinaSession = {
   storeId: string;
+  storeSlug?: string;
   storeName: string;
 };
 
-/** Pantalla de cocina (KDS) autenticada con el token del enlace de caja. */
-export function CocinaClient({ token }: { token: string }) {
+/** Pantalla de cocina (KDS) autenticada con enlace de caja o usuario+PIN. */
+export function CocinaClient({
+  store,
+  token,
+}: {
+  /** Segmento [store] de la URL, para redirigir al login correcto. */
+  store: string;
+  token: string;
+}) {
   const [session, setSession] = useState<CocinaSession | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    if (!token) {
+      window.location.href = `/${store}/login`;
+      return;
+    }
     setApiAuthTokenGetter(async () => token);
     let cancelled = false;
     void api<CocinaSession>(`/caja/session?token=${encodeURIComponent(token)}`)
       .then((s) => {
-        if (!cancelled) setSession(s);
+        if (cancelled) return;
+        if (s.storeSlug && s.storeSlug !== store) {
+          // El token es de otra tienda: abrir la cocina de esa tienda.
+          window.location.href = `/${s.storeSlug}/cocina?token=${encodeURIComponent(token)}`;
+          return;
+        }
+        setSession(s);
       })
       .catch(() => {
         if (cancelled) return;
@@ -36,12 +55,13 @@ export function CocinaClient({ token }: { token: string }) {
       cancelled = true;
       setApiAuthTokenGetter(null);
     };
-  }, [token]);
+  }, [token, store]);
 
   function handleLogout() {
     clearCajaToken();
+    clearPosToken();
     setApiAuthTokenGetter(null);
-    window.location.href = '/';
+    window.location.href = `/${store}/login`;
   }
 
   if (error) {

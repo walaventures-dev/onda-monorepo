@@ -26,6 +26,8 @@ export type RedeemInput = {
   paymentAmount?: number;
   /** Beneficio COP manual (OTHER sin value en promo). */
   benefitAmount?: number;
+  /** Usuario de caja que registra la redención (historial por usuario). */
+  posUserId?: string;
 };
 
 function clip(text: string, max: number) {
@@ -202,6 +204,7 @@ export class RedeemService {
           ...(lastAccumulate ? { accumulateId: lastAccumulate.id } : {}),
           ...(paymentAmount != null ? { paymentAmount } : {}),
           ...(benefitAmount != null ? { benefitAmount } : {}),
+          ...(input.posUserId ? { posUserId: input.posUserId } : {}),
         },
       });
       if (isFinalReward) {

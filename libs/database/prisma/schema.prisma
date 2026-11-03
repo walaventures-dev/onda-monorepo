@@ -155,6 +155,13 @@ enum StoreMemberStatus {
   REVOKED
 }
 
+enum PosUserRole {
+  ADMIN
+  ATENCION
+  CAJA
+  PREPARACION
+}
+
 enum PosItemKind {
   PRODUCT
   SERVICE
@@ -319,73 +326,77 @@ enum StoreSegment {
 }
 
 model Store {
-  id                String                 @id @default(uuid())
-  name              String
-  slug              String                 @unique
-  category          StoreCategory          @default(RESTAURANT)
-  subcategory       StoreSubcategory
-  segment           StoreSegment?
-  googlePlaceId     String?
-  address           String?
-  googleRating      Float?
-  googleReviewCount Int?
-  googleRatingUpdatedAt DateTime?
-  planType          PlanType               @default(BASIC)
-  billingStatus     String                 @default("ACTIVE")
-  billingPeriod     String                 @default("monthly")
-  whatsappUsed      Int                    @default(0)
-  maxStamps         Int                    @default(12)
-  currency          String                 @default("COP")
-  ondaValue         Float?
-  posEnabled        Boolean                @default(true)
-  shareCartillaProgress Boolean             @default(false)
-  lat               Float?
-  lng               Float?
-  ownerName         String
-  ownerEmail        String?
-  claimToken        String?                @unique
-  claimTokenCreatedAt DateTime?
-  referralCode      String                 @unique
-  wompiTransactionId   String?
-  wompiPaymentSourceId String?
-  nextBillingAt        DateTime?
-  nextUsageBillingAt   DateTime?
-  usageBalanceCop      Int                    @default(0)
-  referralBonusApplied Boolean               @default(false)
-  promoCodeUsed        String?
-  referredByStoreId String?
-  freeMonthsBalance Int                    @default(0)
-  referredBy        Store?                 @relation("StoreReferrals", fields: [referredByStoreId], references: [id])
-  referrals         Store[]                @relation("StoreReferrals")
-  passes            Pass[]
-  transactions      Transaction[]
-  feedbacks         Feedback[]
-  feedbackFollowUpSms FeedbackFollowUpSms[]
-  googlePlaceSnapshots GooglePlaceSnapshot[]
-  promotions        Promotion[]
-  cartillas         Cartilla[]
-  eventMemberships  StoreEventMembership[]
-  ownedEvents       Event[]
-  passDesign        PassDesign?
-  pendingRequests   PendingRequest[]
-  cajaLinks         CajaLink[]
-  campaigns         Campaign[]
-  campaignPurchases CampaignPurchase[]
-  campaignCredits   Int                    @default(0)
-  campaignPackSubscribed Boolean           @default(false)
-  createdAt         DateTime               @default(now())
-  members           StoreMember[]
-  posItems          PosItem[]
-  posAddons         PosAddon[]
-  posTabs           PosTab[]
-  posSales          PosSale[]
-  posPaymentMethods PosPaymentMethodConfig[]
-  posSections       PosSection[]
-  posTables         PosTable[]
-  posStations       PosStation[]
-  kitchenTickets    KitchenTicket[]
-  accountingConfig  StoreAccountingConfig?
-  billingInvoices   BillingInvoice[]
+  id                     String                   @id @default(uuid())
+  name                   String
+  slug                   String                   @unique
+  category               StoreCategory            @default(RESTAURANT)
+  subcategory            StoreSubcategory
+  segment                StoreSegment?
+  googlePlaceId          String?
+  address                String?
+  googleRating           Float?
+  googleReviewCount      Int?
+  googleRatingUpdatedAt  DateTime?
+  planType               PlanType                 @default(BASIC)
+  billingStatus          String                   @default("ACTIVE")
+  billingPeriod          String                   @default("monthly")
+  whatsappUsed           Int                      @default(0)
+  maxStamps              Int                      @default(12)
+  currency               String                   @default("COP")
+  ondaValue              Float?
+  posEnabled             Boolean                  @default(true)
+  /// En el POS, los usuarios de caja ven por defecto solo lo que cada
+  /// quien crea; con este flag el admin hace que todos vean todo.
+  posSharedTabs          Boolean                  @default(false)
+  shareCartillaProgress  Boolean                  @default(false)
+  lat                    Float?
+  lng                    Float?
+  ownerName              String
+  ownerEmail             String?
+  claimToken             String?                  @unique
+  claimTokenCreatedAt    DateTime?
+  referralCode           String                   @unique
+  wompiTransactionId     String?
+  wompiPaymentSourceId   String?
+  nextBillingAt          DateTime?
+  nextUsageBillingAt     DateTime?
+  usageBalanceCop        Int                      @default(0)
+  referralBonusApplied   Boolean                  @default(false)
+  promoCodeUsed          String?
+  referredByStoreId      String?
+  freeMonthsBalance      Int                      @default(0)
+  referredBy             Store?                   @relation("StoreReferrals", fields: [referredByStoreId], references: [id])
+  referrals              Store[]                  @relation("StoreReferrals")
+  passes                 Pass[]
+  transactions           Transaction[]
+  feedbacks              Feedback[]
+  feedbackFollowUpSms    FeedbackFollowUpSms[]
+  googlePlaceSnapshots   GooglePlaceSnapshot[]
+  promotions             Promotion[]
+  cartillas              Cartilla[]
+  eventMemberships       StoreEventMembership[]
+  ownedEvents            Event[]
+  passDesign             PassDesign?
+  pendingRequests        PendingRequest[]
+  cajaLinks              CajaLink[]
+  campaigns              Campaign[]
+  campaignPurchases      CampaignPurchase[]
+  campaignCredits        Int                      @default(0)
+  campaignPackSubscribed Boolean                  @default(false)
+  createdAt              DateTime                 @default(now())
+  members                StoreMember[]
+  posItems               PosItem[]
+  posAddons              PosAddon[]
+  posTabs                PosTab[]
+  posSales               PosSale[]
+  posPaymentMethods      PosPaymentMethodConfig[]
+  posSections            PosSection[]
+  posTables              PosTable[]
+  posStations            PosStation[]
+  posUsers               PosUser[]
+  kitchenTickets         KitchenTicket[]
+  accountingConfig       StoreAccountingConfig?
+  billingInvoices        BillingInvoice[]
 
   @@index([ownerEmail])
 }
@@ -442,14 +453,14 @@ model CampaignReach {
 }
 
 model CampaignPurchase {
-  id              String               @id @default(uuid())
-  storeId         String
-  store           Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  sku             CampaignPurchaseSku
-  credits         Int
-  amountCop       Int
-  wompiReference  String?              @unique
-  createdAt       DateTime             @default(now())
+  id             String              @id @default(uuid())
+  storeId        String
+  store          Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  sku            CampaignPurchaseSku
+  credits        Int
+  amountCop      Int
+  wompiReference String?             @unique
+  createdAt      DateTime            @default(now())
 
   @@index([storeId, createdAt])
 }
@@ -540,26 +551,26 @@ model User {
 }
 
 model Pass {
-  id           String        @id @default(uuid())
-  userId       String
-  storeId      String?
-  eventId      String?
-  cartillaId   String?
-  serialNumber String        @unique
-  points       Int           @default(0)
-  cycleStartedAt DateTime    @default(now())
-  pushToken    String?
-  walletRef    String?
+  id                String                @id @default(uuid())
+  userId            String
+  storeId           String?
+  eventId           String?
+  cartillaId        String?
+  serialNumber      String                @unique
+  points            Int                   @default(0)
+  cycleStartedAt    DateTime              @default(now())
+  pushToken         String?
+  walletRef         String?
   lastFeedbackSmsAt DateTime?
-  createdAt    DateTime      @default(now())
-  user         User          @relation(fields: [userId], references: [id])
-  store        Store?        @relation(fields: [storeId], references: [id])
-  event        Event?        @relation(fields: [eventId], references: [id])
-  cartilla     Cartilla?     @relation(fields: [cartillaId], references: [id])
-  transactions Transaction[]
-  pendingRequests PendingRequest[]
-  promoAssignments PassPromoAssignment[]
-  posTabs       PosTab[]
+  createdAt         DateTime              @default(now())
+  user              User                  @relation(fields: [userId], references: [id])
+  store             Store?                @relation(fields: [storeId], references: [id])
+  event             Event?                @relation(fields: [eventId], references: [id])
+  cartilla          Cartilla?             @relation(fields: [cartillaId], references: [id])
+  transactions      Transaction[]
+  pendingRequests   PendingRequest[]
+  promoAssignments  PassPromoAssignment[]
+  posTabs           PosTab[]
 
   @@index([userId, storeId])
   @@index([userId, eventId])
@@ -568,24 +579,27 @@ model Pass {
 }
 
 model Transaction {
-  id          String          @id @default(uuid())
-  passId      String
-  storeId     String
-  type        TransactionType
-  points      Int             @default(1)
-  paymentAmount Int?
+  id               String          @id @default(uuid())
+  passId           String
+  storeId          String
+  type             TransactionType
+  points           Int             @default(1)
+  paymentAmount    Int?
   /// Snapshot COP del beneficio otorgado en REDEEM (no cuenta como venta).
-  benefitAmount Int?
-  accumulateId String?
-  promotionId String?
-  cartillaId  String?
-  createdAt   DateTime        @default(now())
-  pass        Pass            @relation(fields: [passId], references: [id])
-  store       Store           @relation(fields: [storeId], references: [id])
-  promotion   Promotion?      @relation(fields: [promotionId], references: [id])
-  cartilla    Cartilla?       @relation(fields: [cartillaId], references: [id])
-  sourceAccumulate Transaction?  @relation("RedeemFromAccumulate", fields: [accumulateId], references: [id], onDelete: SetNull)
-  linkedRedeems    Transaction[] @relation("RedeemFromAccumulate")
+  benefitAmount    Int?
+  accumulateId     String?
+  promotionId      String?
+  cartillaId       String?
+  /// Usuario de caja que registró la acumulación/redención (historial por usuario).
+  posUserId        String?
+  posUser          PosUser?        @relation(fields: [posUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now())
+  pass             Pass            @relation(fields: [passId], references: [id])
+  store            Store           @relation(fields: [storeId], references: [id])
+  promotion        Promotion?      @relation(fields: [promotionId], references: [id])
+  cartilla         Cartilla?       @relation(fields: [cartillaId], references: [id])
+  sourceAccumulate Transaction?    @relation("RedeemFromAccumulate", fields: [accumulateId], references: [id], onDelete: SetNull)
+  linkedRedeems    Transaction[]   @relation("RedeemFromAccumulate")
 
   @@index([storeId, createdAt])
   @@index([promotionId])
@@ -645,70 +659,70 @@ model GooglePlaceSnapshot {
 }
 
 model Promotion {
-  id               String               @id @default(uuid())
+  id               String                @id @default(uuid())
   storeId          String?
   eventId          String?
   title            String
   description      String?
-  imageUrl         String?              @db.Text
+  imageUrl         String?               @db.Text
   pointsRequired   Int
-  isActive         Boolean              @default(true)
-  type             PromotionType        @default(OTHER)
+  isActive         Boolean               @default(true)
+  type             PromotionType         @default(OTHER)
   value            Float?
   buyQuantity      Int?
   getQuantity      Int?
   productName      String?
-  pool             PromotionPool        @default(RETENCION)
-  intent           PromotionIntent      @default(INTERMEDIA)
+  pool             PromotionPool         @default(RETENCION)
+  intent           PromotionIntent       @default(INTERMEDIA)
   duplicatedFromId String?
-  expiryMode       PromotionExpiryMode  @default(QUANTITY)
+  expiryMode       PromotionExpiryMode   @default(QUANTITY)
   startsAt         DateTime?
   endsAt           DateTime?
   maxRedemptions   Int?
-  store            Store?               @relation(fields: [storeId], references: [id])
-  event            Event?               @relation(fields: [eventId], references: [id])
+  store            Store?                @relation(fields: [storeId], references: [id])
+  event            Event?                @relation(fields: [eventId], references: [id])
   transactions     Transaction[]
   pendingRequests  PendingRequest[]
   cartillaItems    CartillaPromo[]
   assignments      PassPromoAssignment[]
-  createdAt        DateTime             @default(now())
+  createdAt        DateTime              @default(now())
 
   @@index([storeId, pool])
 }
 
 model PassDesign {
-  id              String  @id @default(uuid())
-  storeId         String? @unique
-  eventId         String? @unique
-  cartillaId      String? @unique
-  backgroundColor String  @default("#6E5AE6")
-  foregroundColor String  @default("#FFFFFF")
-  labelColor      String? @default("#E5F6FC")
+  id              String    @id @default(uuid())
+  storeId         String?   @unique
+  eventId         String?   @unique
+  cartillaId      String?   @unique
+  backgroundColor String    @default("#6E5AE6")
+  foregroundColor String    @default("#FFFFFF")
+  labelColor      String?   @default("#E5F6FC")
   logoUrl         String?
   stripImageUrl   String?
   title           String
   subtitle        String?
   description     String?
-  updatedAt       DateTime @updatedAt
-  store           Store?  @relation(fields: [storeId], references: [id])
-  event           Event?  @relation(fields: [eventId], references: [id])
+  updatedAt       DateTime  @updatedAt
+  store           Store?    @relation(fields: [storeId], references: [id])
+  event           Event?    @relation(fields: [eventId], references: [id])
   cartilla        Cartilla? @relation(fields: [cartillaId], references: [id])
 }
 
 model Cartilla {
-  id            String         @id @default(uuid())
+  id            String                @id @default(uuid())
   storeId       String
   name          String
-  isDefault     Boolean        @default(false)
-  status        CartillaStatus @default(DRAFT)
+  isDefault     Boolean               @default(false)
+  status        CartillaStatus        @default(DRAFT)
   startsAt      DateTime?
   endsAt        DateTime?
   eventId       String?
-  maxStamps     Int            @default(12)
+  maxStamps     Int                   @default(12)
   smsRemindedAt DateTime?
-  createdAt     DateTime       @default(now())
-  store         Store          @relation(fields: [storeId], references: [id])
-  event         Event?         @relation(fields: [eventId], references: [id])
+  createdAt     DateTime              @default(now())
+  store         Store                 @relation(fields: [storeId], references: [id])
+  event         Event?                @relation(fields: [eventId], references: [id])
   passDesign    PassDesign?
   items         CartillaPromo[]
   passes        Pass[]
@@ -719,13 +733,13 @@ model Cartilla {
 }
 
 model CartillaPromo {
-  id             String         @id @default(uuid())
+  id             String        @id @default(uuid())
   cartillaId     String
   promotionId    String
   pointsRequired Int
   pool           PromotionPool
-  cartilla       Cartilla       @relation(fields: [cartillaId], references: [id], onDelete: Cascade)
-  promotion      Promotion      @relation(fields: [promotionId], references: [id])
+  cartilla       Cartilla      @relation(fields: [cartillaId], references: [id], onDelete: Cascade)
+  promotion      Promotion     @relation(fields: [promotionId], references: [id])
 
   @@unique([cartillaId, pointsRequired, pool])
   @@index([promotionId])
@@ -823,24 +837,47 @@ model PendingRequest {
 }
 
 model StoreMember {
-  id          String            @id @default(uuid())
-  storeId     String
-  store       Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  email       String
-  name        String
-  role        StoreMemberRole
-  status      StoreMemberStatus @default(PENDING)
-  inviteToken String?           @unique
-  invitedAt   DateTime          @default(now())
-  acceptedAt  DateTime?
-  revokedAt   DateTime?
-  firebaseUid String?
-  tabsOpened    PosTab[] @relation("PosTabOpenedBy")
-  tabsAttending PosTab[] @relation("PosTabAttendedBy")
+  id                   String            @id @default(uuid())
+  storeId              String
+  store                Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  email                String
+  name                 String
+  role                 StoreMemberRole
+  status               StoreMemberStatus @default(PENDING)
+  inviteToken          String?           @unique
+  invitedAt            DateTime          @default(now())
+  acceptedAt           DateTime?
+  revokedAt            DateTime?
+  firebaseUid          String?
+  tabsOpened           PosTab[]          @relation("PosTabOpenedBy")
+  tabsAttending        PosTab[]          @relation("PosTabAttendedBy")
   openedKitchenTickets KitchenTicket[]
 
   @@unique([storeId, email])
   @@index([email, status])
+}
+
+model PosUser {
+  id           String        @id @default(uuid())
+  storeId      String
+  store        Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Login en la PWA caja. Único por sede: puede haber un "jose" en cada
+  /// negocio; el ámbito lo da la URL /[store]/login.
+  username     String
+  name         String
+  /// PIN de 4 dígitos, guardado como hash scrypt (formato: salt:hash en hex).
+  pinHash      String
+  role         PosUserRole
+  isActive     Boolean       @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime      @default(now())
+  tabsOpened   PosTab[]      @relation("PosTabOpenedByPosUser")
+  tabsAttended PosTab[]      @relation("PosTabAttendedByPosUser")
+  sales        PosSale[]
+  transactions Transaction[]
+
+  @@unique([storeId, username])
+  @@index([storeId])
 }
 
 model PosItem {
@@ -870,34 +907,34 @@ model PosItem {
 }
 
 model PosItemHistory {
-  id            String   @id @default(uuid())
-  itemId        String
-  item          PosItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  storeId       String
-  field         String
-  oldValue      String?
-  newValue      String?
-  changedById   String?
+  id             String   @id @default(uuid())
+  itemId         String
+  item           PosItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  storeId        String
+  field          String
+  oldValue       String?
+  newValue       String?
+  changedById    String?
   changedByEmail String?
-  createdAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
 
   @@index([itemId, createdAt])
   @@index([storeId, createdAt])
 }
 
 model PosAddon {
-  id        String         @id @default(uuid())
+  id        String            @id @default(uuid())
   storeId   String
-  store     Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store     Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
   name      String
-  price     Int            @default(0)
-  imageUrl  String?        @db.Text
-  isActive  Boolean        @default(true)
-  sortOrder Int            @default(0)
+  price     Int               @default(0)
+  imageUrl  String?           @db.Text
+  isActive  Boolean           @default(true)
+  sortOrder Int               @default(0)
   items     PosItemAddon[]
   tabLines  PosTabLineAddon[]
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
 
   @@index([storeId, isActive])
 }
@@ -928,48 +965,52 @@ model PosItemVariant {
 }
 
 model PosTab {
-  id         String       @id @default(uuid())
-  storeId    String
-  store      Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  label      String
-  status     PosTabStatus @default(OPEN)
-  guestName  String?
-  userId     String?
-  passId     String?
-  pass       Pass?        @relation(fields: [passId], references: [id])
+  id                  String          @id @default(uuid())
+  storeId             String
+  store               Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  label               String
+  status              PosTabStatus    @default(OPEN)
+  guestName           String?
+  userId              String?
+  passId              String?
+  pass                Pass?           @relation(fields: [passId], references: [id])
   openedByMemberId    String?
-  openedByMember      StoreMember? @relation("PosTabOpenedBy", fields: [openedByMemberId], references: [id], onDelete: SetNull)
+  openedByMember      StoreMember?    @relation("PosTabOpenedBy", fields: [openedByMemberId], references: [id], onDelete: SetNull)
   attendedByMemberId  String?
-  attendedByMember    StoreMember? @relation("PosTabAttendedBy", fields: [attendedByMemberId], references: [id], onDelete: SetNull)
-  openedAt   DateTime     @default(now())
-  checkoutAt DateTime?
-  tableId    String?
-  table      PosTable?    @relation(fields: [tableId], references: [id], onDelete: SetNull)
-  guestCount Int?
-  voidedAt   DateTime?
-  voidReason String?
-  lines      PosTabLine[]
-  sale       PosSale?
-  kitchenTickets KitchenTicket[]
+  attendedByMember    StoreMember?    @relation("PosTabAttendedBy", fields: [attendedByMemberId], references: [id], onDelete: SetNull)
+  openedByPosUserId   String?
+  openedByPosUser     PosUser?        @relation("PosTabOpenedByPosUser", fields: [openedByPosUserId], references: [id], onDelete: SetNull)
+  attendedByPosUserId String?
+  attendedByPosUser   PosUser?        @relation("PosTabAttendedByPosUser", fields: [attendedByPosUserId], references: [id], onDelete: SetNull)
+  openedAt            DateTime        @default(now())
+  checkoutAt          DateTime?
+  tableId             String?
+  table               PosTable?       @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  guestCount          Int?
+  voidedAt            DateTime?
+  voidReason          String?
+  lines               PosTabLine[]
+  sale                PosSale?
+  kitchenTickets      KitchenTicket[]
 
   @@index([storeId, status])
   @@index([storeId, status, attendedByMemberId])
 }
 
 model PosTabLine {
-  id          String            @id @default(uuid())
-  tabId       String
-  tab         PosTab            @relation(fields: [tabId], references: [id], onDelete: Cascade)
-  itemId      String
-  item        PosItem           @relation(fields: [itemId], references: [id])
-  quantity    Int
-  unitPrice   Int
-  variantId   String?
-  variantName String?
-  note        String?
-  stationId   String?
-  sentAt      DateTime?
-  addons      PosTabLineAddon[]
+  id           String              @id @default(uuid())
+  tabId        String
+  tab          PosTab              @relation(fields: [tabId], references: [id], onDelete: Cascade)
+  itemId       String
+  item         PosItem             @relation(fields: [itemId], references: [id])
+  quantity     Int
+  unitPrice    Int
+  variantId    String?
+  variantName  String?
+  note         String?
+  stationId    String?
+  sentAt       DateTime?
+  addons       PosTabLineAddon[]
   kitchenItems KitchenTicketItem[]
 
   @@index([tabId])
@@ -989,21 +1030,24 @@ model PosTabLineAddon {
 }
 
 model PosSale {
-  id            String            @id @default(uuid())
-  storeId       String
-  store         Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  tabId         String            @unique
-  tab           PosTab            @relation(fields: [tabId], references: [id])
-  passId        String?
-  subtotal      Int
-  total         Int
-  status        PosSaleStatus     @default(COMPLETED)
-  completedAt   DateTime          @default(now())
-  ondasGranted  Int               @default(0)
-  loyaltyTxId   String?
-  payments      PosPayment[]
-  lines         PosSaleLine[]
-  refunds       PosRefund[]
+  id             String             @id @default(uuid())
+  storeId        String
+  store          Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tabId          String             @unique
+  tab            PosTab             @relation(fields: [tabId], references: [id])
+  passId         String?
+  /// Usuario de caja que cobró la venta (para estadísticas por usuario).
+  posUserId      String?
+  posUser        PosUser?           @relation(fields: [posUserId], references: [id], onDelete: SetNull)
+  subtotal       Int
+  total          Int
+  status         PosSaleStatus      @default(COMPLETED)
+  completedAt    DateTime           @default(now())
+  ondasGranted   Int                @default(0)
+  loyaltyTxId    String?
+  payments       PosPayment[]
+  lines          PosSaleLine[]
+  refunds        PosRefund[]
   accountingSync PosAccountingSync?
 
   @@index([storeId, completedAt])
@@ -1098,52 +1142,52 @@ model PosSection {
 }
 
 model PosTable {
-  id        String   @id @default(uuid())
+  id        String     @id @default(uuid())
   storeId   String
-  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store     Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
   sectionId String
   section   PosSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   label     String
-  sortOrder Int      @default(0)
-  isBlocked Boolean  @default(false)
+  sortOrder Int        @default(0)
+  isBlocked Boolean    @default(false)
   tabs      PosTab[]
-  createdAt DateTime @default(now())
+  createdAt DateTime   @default(now())
 
   @@index([storeId])
   @@index([sectionId])
 }
 
 model PosStation {
-  id        String    @id @default(uuid())
+  id        String          @id @default(uuid())
   storeId   String
-  store     Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store     Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
   name      String
-  sortOrder Int       @default(0)
+  sortOrder Int             @default(0)
   items     PosItem[]
   tickets   KitchenTicket[]
-  createdAt DateTime  @default(now())
+  createdAt DateTime        @default(now())
 
   @@index([storeId])
 }
 
 model KitchenTicket {
-  id              String              @id @default(uuid())
-  storeId         String
-  store           Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  tabId           String
-  tab             PosTab              @relation(fields: [tabId], references: [id], onDelete: Cascade)
-  stationId       String?
-  station         PosStation?         @relation(fields: [stationId], references: [id], onDelete: SetNull)
-  status          KitchenTicketStatus @default(PENDING)
+  id               String              @id @default(uuid())
+  storeId          String
+  store            Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tabId            String
+  tab              PosTab              @relation(fields: [tabId], references: [id], onDelete: Cascade)
+  stationId        String?
+  station          PosStation?         @relation(fields: [stationId], references: [id], onDelete: SetNull)
+  status           KitchenTicketStatus @default(PENDING)
   openedByMemberId String?
-  openedByMember  StoreMember?        @relation(fields: [openedByMemberId], references: [id], onDelete: SetNull)
-  items           KitchenTicketItem[]
-  createdAt       DateTime            @default(now())
-  acceptedAt      DateTime?
-  readyAt         DateTime?
-  deliveredAt     DateTime?
-  cancelledAt     DateTime?
-  cancelReason    String?
+  openedByMember   StoreMember?        @relation(fields: [openedByMemberId], references: [id], onDelete: SetNull)
+  items            KitchenTicketItem[]
+  createdAt        DateTime            @default(now())
+  acceptedAt       DateTime?
+  readyAt          DateTime?
+  deliveredAt      DateTime?
+  cancelledAt      DateTime?
+  cancelReason     String?
 
   @@index([storeId, status])
   @@index([tabId])

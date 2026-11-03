@@ -65,7 +65,8 @@ export function PosWorkspace({
     pathname.startsWith('/pos/inventario') ||
     pathname.startsWith('/pos/mesas') ||
     pathname.startsWith('/pos/estaciones') ||
-    pathname.startsWith('/pos/ventas')
+    pathname.startsWith('/pos/ventas') ||
+    pathname.startsWith('/pos/equipo')
   ) {
     return <PosGestionTabs storeId={storeId} memberRole={memberRole} />;
   }

@@ -5,9 +5,11 @@ import {
   UnauthorizedException,
   forwardRef,
 } from '@nestjs/common';
-import { StoreMemberRole, StoreMemberStatus } from '@prisma/client';
+import { JwtService } from '@nestjs/jwt';
+import { PosUserRole, StoreMemberRole, StoreMemberStatus } from '@prisma/client';
 import { PrismaService } from './prisma.service';
 import { FirebaseAuthService } from './firebase-auth.service';
+import type { PosUserSessionPayload } from './pos-users.service';
 
 export type StoreAccessContext = {
   storeId: string;
@@ -15,13 +17,16 @@ export type StoreAccessContext = {
   role: StoreMemberRole | null;
   memberId: string | null;
   viaCajaToken: boolean;
+  /** Usuario de caja (login usuario+PIN de la PWA). */
+  posUser: { id: string; name: string; role: PosUserRole } | null;
 };
 
 @Injectable()
 export class StoreAccessService {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
-    @Inject(FirebaseAuthService) private firebase: FirebaseAuthService
+    @Inject(FirebaseAuthService) private firebase: FirebaseAuthService,
+    @Inject(JwtService) private jwt: JwtService
   ) {}
 
   bearerToken(header?: string): string | undefined {
@@ -63,6 +68,22 @@ export class StoreAccessService {
           role: null,
           memberId: null,
           viaCajaToken: true,
+          posUser: null,
+        };
+      }
+      // JWT de usuario de caja (login usuario+PIN de la PWA).
+      const posUser = await this.tryResolvePosUser(raw);
+      if (posUser) {
+        if (posUser.storeId !== storeId) {
+          throw new ForbiddenException('Este usuario no pertenece a esta sede');
+        }
+        return {
+          storeId,
+          email: null,
+          role: null,
+          memberId: null,
+          viaCajaToken: false,
+          posUser: { id: posUser.id, name: posUser.name, role: posUser.role },
         };
       }
       // Sin Firebase no hay plan B: un ?token= que no es cajaLink es inválido.
@@ -82,6 +103,7 @@ export class StoreAccessService {
         role: StoreMemberRole.ADMIN,
         memberId: null,
         viaCajaToken: false,
+        posUser: null,
       };
     }
 
@@ -101,7 +123,28 @@ export class StoreAccessService {
       role: member.role,
       memberId: member.id,
       viaCajaToken: false,
+      posUser: null,
     };
+  }
+
+  /**
+   * Si el token es un JWT de usuario de caja (kind "pos-user") válido y el
+   * usuario sigue activo, devuelve el registro; si no, null (para seguir
+   * probando otros esquemas de auth).
+   */
+  async tryResolvePosUser(token: string) {
+    let payload: PosUserSessionPayload;
+    try {
+      payload = await this.jwt.verifyAsync<PosUserSessionPayload>(token);
+    } catch {
+      return null;
+    }
+    if (payload?.kind !== 'pos-user' || !payload.sub) return null;
+    const user = await this.prisma.posUser.findUnique({
+      where: { id: payload.sub },
+    });
+    if (!user || !user.isActive) return null;
+    return user;
   }
 
   async requireRole(

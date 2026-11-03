@@ -44,14 +44,72 @@ export class CajaController {
   ) {
     const token = queryToken || this.access.bearerToken(authHeader);
     if (!token) throw new UnauthorizedException('Falta el enlace de caja');
-    const link = await this.access.resolveCajaToken(token);
+    const link = await this.prisma.cajaLink.findUnique({
+      where: { token },
+      include: {
+        store: {
+          select: {
+            id: true,
+            slug: true,
+            name: true,
+            currency: true,
+            ondaValue: true,
+            maxStamps: true,
+            posEnabled: true,
+            posSharedTabs: true,
+          },
+        },
+      },
+    });
+    if (link && !link.revokedAt) {
+      await this.prisma.cajaLink.update({
+        where: { id: link.id },
+        data: { lastUsedAt: new Date() },
+      });
+      return {
+        storeId: link.store.id,
+        storeSlug: link.store.slug,
+        storeName: link.store.name,
+        currency: link.store.currency || 'COP',
+        ondaValue: link.store.ondaValue ?? null,
+        maxStamps: link.store.maxStamps,
+        posEnabled: Boolean(link.store.posEnabled),
+        posSharedTabs: link.store.posSharedTabs,
+      };
+    }
+    // Sesión de usuario de caja (login usuario+PIN de la PWA).
+    const posUser = await this.access.tryResolvePosUser(token);
+    if (!posUser) {
+      throw new UnauthorizedException('Enlace de caja inválido o revocado');
+    }
+    const store = await this.prisma.store.findUniqueOrThrow({
+      where: { id: posUser.storeId },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        currency: true,
+        ondaValue: true,
+        maxStamps: true,
+        posEnabled: true,
+        posSharedTabs: true,
+      },
+    });
     return {
-      storeId: link.store.id,
-      storeName: link.store.name,
-      currency: link.store.currency || 'COP',
-      ondaValue: link.store.ondaValue ?? null,
-      maxStamps: link.store.maxStamps,
-      posEnabled: Boolean(link.store.posEnabled),
+      storeId: store.id,
+      storeSlug: store.slug,
+      storeName: store.name,
+      currency: store.currency || 'COP',
+      ondaValue: store.ondaValue ?? null,
+      maxStamps: store.maxStamps,
+      posEnabled: Boolean(store.posEnabled),
+      posSharedTabs: store.posSharedTabs,
+      posUser: {
+        id: posUser.id,
+        username: posUser.username,
+        name: posUser.name,
+        role: posUser.role,
+      },
     };
   }
 
@@ -111,7 +169,42 @@ export class CajaController {
   ) {
     const token = queryToken || this.access.bearerToken(authHeader);
     if (!token) throw new UnauthorizedException('Falta el enlace de caja');
-    const link = await this.access.resolveCajaToken(token);
+    const link = await this.prisma.cajaLink.findUnique({
+      where: { token },
+      include: {
+        store: { select: { id: true, ondaValue: true, maxStamps: true } },
+      },
+    });
+    let storeId: string;
+    let ondaValue: number | null;
+    let maxStamps: number;
+    let posUserId: string | null = null;
+    if (link && !link.revokedAt) {
+      await this.prisma.cajaLink.update({
+        where: { id: link.id },
+        data: { lastUsedAt: new Date() },
+      });
+      storeId = link.storeId;
+      ondaValue = link.store.ondaValue ?? null;
+      maxStamps = link.store.maxStamps;
+    } else {
+      // Sesión de usuario de caja (login usuario+PIN de la PWA).
+      const posUser = await this.access.tryResolvePosUser(token);
+      if (!posUser) {
+        throw new UnauthorizedException('Enlace de caja inválido o revocado');
+      }
+      if (posUser.role === 'PREPARACION') {
+        throw new ForbiddenException('Tu rol no tiene acceso a acumular');
+      }
+      const store = await this.prisma.store.findUniqueOrThrow({
+        where: { id: posUser.storeId },
+        select: { ondaValue: true, maxStamps: true },
+      });
+      storeId = posUser.storeId;
+      ondaValue = store.ondaValue ?? null;
+      maxStamps = store.maxStamps;
+      posUserId = posUser.id;
+    }
     const raw = (body.payload || body.serialNumber || '').trim();
     if (!raw) throw new BadRequestException('Falta el código del pase');
 
@@ -136,7 +229,7 @@ export class CajaController {
           kind: 'claim' as const,
           pendingRequestId: scanned.pendingRequestId,
           promotion: pending?.promotion || null,
-          ondaValue: link.store.ondaValue ?? null,
+          ondaValue: ondaValue ?? null,
           needsPaymentAmount: true,
           needsBenefitAmount: false,
         };
@@ -146,17 +239,18 @@ export class CajaController {
           kind: 'claim' as const,
           pendingRequestId: scanned.pendingRequestId,
           promotion: pending?.promotion || null,
-          ondaValue: link.store.ondaValue ?? null,
+          ondaValue: ondaValue ?? null,
           needsPaymentAmount: false,
           needsBenefitAmount: true,
         };
       }
 
       return this.redeem.redeem({
-        storeId: link.storeId,
+        storeId,
         pendingRequestId: scanned.pendingRequestId,
         paymentAmount: body.paymentAmount,
         benefitAmount: body.benefitAmount,
+        ...(posUserId ? { posUserId } : {}),
       });
     }
 
@@ -165,12 +259,11 @@ export class CajaController {
       include: { user: { select: { name: true } } },
     });
     if (!pass) throw new BadRequestException('Pase no encontrado');
-    if (pass.storeId !== link.storeId) {
+    if (pass.storeId !== storeId) {
       throw new ForbiddenException('Este pase no es de esta sede');
     }
 
-    const hasOndaValue =
-      link.store.ondaValue != null && Number(link.store.ondaValue) > 0;
+    const hasOndaValue = ondaValue != null && Number(ondaValue) > 0;
     const needsManualPoints = !hasOndaValue;
     const readyToAccumulate = body.paymentAmount != null;
 
@@ -181,17 +274,18 @@ export class CajaController {
           user: { name: pass.user?.name },
           points: pass.points,
         },
-        ondaValue: link.store.ondaValue ?? null,
-        maxStamps: link.store.maxStamps,
+        ondaValue: ondaValue ?? null,
+        maxStamps,
         needsPoints: needsManualPoints,
       };
     }
 
     const result = await this.accumulate.accumulate({
-      storeId: link.storeId,
+      storeId,
       serialNumber: scanned.serialNumber,
       paymentAmount: body.paymentAmount,
       points: body.points,
+      ...(posUserId ? { posUserId } : {}),
     });
     return { kind: 'accumulated' as const, ...result };
   }

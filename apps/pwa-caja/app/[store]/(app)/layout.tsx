@@ -1,5 +1,5 @@
 import { Suspense, type ReactNode } from 'react';
-import { CajaAppShell } from '../CajaAppShell';
+import { CajaAppShell } from '../../CajaAppShell';
 import { SkeletonScreen } from '@onda/shared-ui';
 
 export default function AppLayout({ children }: { children: ReactNode }) {

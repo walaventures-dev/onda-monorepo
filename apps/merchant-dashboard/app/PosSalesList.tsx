@@ -128,6 +128,121 @@ const RANGE_PRESETS: Array<{ id: Preset; label: string }> = [
 
 const DEFAULT_CUSTOM_RANGE = rangeFromPreset('7d');
 
+type PosUserStatsRow = {
+  id: string;
+  username: string;
+  name: string;
+  role: string;
+  isActive: boolean;
+  sales: { count: number; totalCop: number };
+  accumulate: { count: number; ondas: number; salesCop: number };
+  redeem: { count: number; ondas: number };
+};
+
+function PosUserStats({
+  storeId,
+  from,
+  to,
+}: {
+  storeId: string;
+  from: string;
+  to: string;
+}) {
+  const [rows, setRows] = useState<PosUserStatsRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!storeId) return;
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    api<PosUserStatsRow[]>(
+      `/stores/${storeId}/pos-users/stats?${params.toString()}`,
+    )
+      .then((list) => {
+        setRows(
+          list.filter(
+            (r) =>
+              r.sales.count > 0 ||
+              r.accumulate.count > 0 ||
+              r.redeem.count > 0,
+          ),
+        );
+      })
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, [storeId, from, to]);
+
+  if (loading) {
+    return (
+      <p className="text-sm text-[var(--onda-muted)]">
+        Cargando estadísticas por usuario…
+      </p>
+    );
+  }
+  if (rows.length === 0) {
+    return (
+      <p className="text-sm text-[var(--onda-muted)]">
+        Sin actividad de usuarios de caja en este rango. Crea usuarios en{' '}
+        <Link href="/pos/equipo" className="font-medium text-[var(--onda-primary-700)]">
+          Usuarios
+        </Link>{' '}
+        para medir el desempeño del equipo.
+      </p>
+    );
+  }
+
+  return (
+    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      {rows.map((r) => (
+        <div key={r.id} className="onda-card space-y-1.5 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="truncate text-sm font-semibold text-[var(--onda-ink)]">
+              {r.name}
+            </p>
+            <span className="shrink-0 rounded-full bg-[var(--onda-bg)] px-2 py-0.5 text-[10px] font-medium uppercase text-[var(--onda-muted)]">
+              {r.role === 'ATENCION'
+                ? 'Atención'
+                : r.role === 'PREPARACION'
+                  ? 'Preparación'
+                  : r.role === 'ADMIN'
+                    ? 'Admin'
+                    : 'Caja'}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-1 text-center">
+            <div>
+              <p className="text-sm font-bold text-[var(--onda-ink)]">
+                {r.sales.count}
+              </p>
+              <p className="text-[10px] uppercase text-[var(--onda-muted)]">
+                Ventas
+              </p>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[var(--onda-ink)]">
+                {formatCop(r.sales.totalCop)}
+              </p>
+              <p className="text-[10px] uppercase text-[var(--onda-muted)]">
+                Total vendido
+              </p>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[var(--onda-ink)]">
+                {r.accumulate.count}
+              </p>
+              <p className="text-[10px] uppercase text-[var(--onda-muted)]">
+                Acumulaciones
+              </p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function PosSalesList({
   storeId,
   readOnly = false,
@@ -280,6 +395,13 @@ export function PosSalesList({
             ? `${total} venta${total === 1 ? '' : 's'} registrada${total === 1 ? '' : 's'}`
             : '\u00a0'}
         </p>
+      </div>
+
+      <div className="onda-card space-y-2 p-3 sm:p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--onda-muted)]">
+          Por usuario
+        </p>
+        <PosUserStats storeId={storeId} from={from} to={to} />
       </div>
 
       <div className="onda-card space-y-3 p-3 sm:p-4">

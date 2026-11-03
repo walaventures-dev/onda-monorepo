@@ -23,6 +23,8 @@ export type AccumulateInput = {
   paymentAmount?: number;
   /** Cantidad manual de ondas (si el store no tiene ondaValue; vacío → 1). */
   points?: number;
+  /** Usuario de caja que registra la acumulación (historial por usuario). */
+  posUserId?: string;
 };
 
 export function parsePaymentAmount(raw: unknown): number | undefined {
@@ -288,6 +290,7 @@ export class AccumulateService {
             points: nextDelta,
             cartillaId: current.cartillaId,
             ...(paymentAmount != null ? { paymentAmount } : {}),
+            ...(input.posUserId ? { posUserId: input.posUserId } : {}),
           },
         });
         return {

@@ -32,6 +32,8 @@ import { PendingRequestsSseService } from './pending-requests-sse.service';
 import { PendingRequestsController } from './pending-requests.controller';
 import { CajaController } from './caja.controller';
 import { PosController } from './pos.controller';
+import { PosUsersController } from './pos-users.controller';
+import { PosUsersService } from './pos-users.service';
 import { MembersController } from './members.controller';
 import { AccumulateService } from './accumulate.service';
 import { RedeemService } from './redeem.service';
@@ -99,6 +101,7 @@ import { SentimentService } from './sentiment.service';
     PendingRequestsController,
     CajaController,
     PosController,
+    PosUsersController,
     MembersController,
     ReferralsController,
     DemoOndaSpaController,
@@ -126,6 +129,7 @@ import { SentimentService } from './sentiment.service';
     CampaignsService,
     PosService,
     PosSseService,
+    PosUsersService,
     MerchantInviteService,
     OrganizerAuthService,
     StoreDraftService,

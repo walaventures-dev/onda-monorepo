@@ -1100,6 +1100,12 @@ export function MerchantWorkspace() {
                     pathname.startsWith("/pos/mesas") ||
                     pathname.startsWith("/pos/estaciones"),
                 },
+                {
+                  href: "/pos/equipo",
+                  label: "Equipo",
+                  icon: OndaIcons.users,
+                  active: pathname.startsWith("/pos/equipo"),
+                },
               ]
             : []),
           {

@@ -29,14 +29,39 @@ export class PosController {
     return this.access.resolveAccess(storeId, auth, token);
   }
 
+  /**
+   * Guard del POS. Acepta el marcador 'kitchen' como primer rol para los
+   * endpoints de cocina: los usuarios de caja (login usuario+PIN) entran a
+   * vender/acumular con rol ATENCION/CAJA, a cocina con PREPARACION y a lo
+   * demás solo con ADMIN de caja; la configuración sigue siendo de miembros.
+   */
   private async guardPos(
     storeId: string,
     auth?: string,
     token?: string,
-    ...roles: StoreMemberRole[]
+    first: 'kitchen' | StoreMemberRole = StoreMemberRole.CAJA,
+    ...rest: StoreMemberRole[]
   ) {
-    const ctx = await this.access.requireRole(storeId, auth, token, ...roles);
+    const isKitchen = first === 'kitchen';
+    const roles = (isKitchen ? rest : [first, ...rest]) as StoreMemberRole[];
+    const ctx = await this.access.resolveAccess(storeId, auth, token);
     await this.access.requirePosEnabled(storeId);
+    if (ctx.posUser) {
+      const r = ctx.posUser.role;
+      const allowed = isKitchen
+        ? r === 'ADMIN' || r === 'PREPARACION'
+        : r === 'ATENCION' || r === 'CAJA'
+          ? roles.includes(StoreMemberRole.CAJA)
+          : r === 'ADMIN' && roles.includes(StoreMemberRole.ADMIN);
+      if (!allowed) {
+        throw new ForbiddenException('Tu rol no tiene acceso a esta acción');
+      }
+      return ctx;
+    }
+    if (ctx.viaCajaToken) return ctx;
+    if (!ctx.role || !roles.includes(ctx.role)) {
+      throw new ForbiddenException('No tienes permiso para esta acción');
+    }
     return ctx;
   }
 
@@ -255,7 +280,10 @@ export class PosController {
     const statuses = status
       ? (status.split(',') as any)
       : (['OPEN', 'CHECKOUT'] as any);
-    return this.pos.listTabs(storeId, statuses, attendedBy, ctx.memberId);
+    return this.pos.listTabs(storeId, statuses, attendedBy, ctx.memberId, {
+      posUserId: ctx.posUser?.id ?? null,
+      posUserRole: ctx.posUser?.role ?? null,
+    });
   }
 
   @Post('tabs')
@@ -272,7 +300,10 @@ export class PosController {
       StoreMemberRole.ADMIN,
       StoreMemberRole.CAJA
     );
-    return this.pos.createTab(storeId, body ?? {}, ctx.memberId);
+    return this.pos.createTab(storeId, body ?? {}, ctx.memberId, {
+      posUserId: ctx.posUser?.id ?? null,
+      posUserRole: ctx.posUser?.role ?? null,
+    });
   }
 
   @Post('tabs/:tabId/table')
@@ -447,6 +478,7 @@ export class PosController {
       storeId,
       auth,
       token,
+      'kitchen',
       StoreMemberRole.ADMIN,
       StoreMemberRole.CAJA
     );
@@ -468,6 +500,7 @@ export class PosController {
       storeId,
       auth,
       token,
+      'kitchen',
       StoreMemberRole.ADMIN,
       StoreMemberRole.CAJA
     );
@@ -487,6 +520,7 @@ export class PosController {
       storeId,
       auth,
       token,
+      'kitchen',
       StoreMemberRole.ADMIN,
       StoreMemberRole.CAJA
     );
@@ -510,6 +544,7 @@ export class PosController {
       storeId,
       auth,
       token,
+      'kitchen',
       StoreMemberRole.ADMIN,
       StoreMemberRole.CAJA
     );
@@ -528,6 +563,7 @@ export class PosController {
       storeId,
       auth,
       token,
+      'kitchen',
       StoreMemberRole.ADMIN,
       StoreMemberRole.CAJA
     );
@@ -711,14 +747,14 @@ export class PosController {
     @Headers('authorization') auth?: string,
     @Query('token') token?: string
   ) {
-    await this.guardPos(
+    const ctx = await this.guardPos(
       storeId,
       auth,
       token,
       StoreMemberRole.ADMIN,
       StoreMemberRole.CAJA
     );
-    return this.pos.payTab(storeId, tabId, body);
+    return this.pos.payTab(storeId, tabId, body, ctx.posUser?.id ?? null);
   }
 
   @Get('sales')

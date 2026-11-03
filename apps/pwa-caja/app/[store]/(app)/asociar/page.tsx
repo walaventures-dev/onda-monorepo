@@ -1,13 +1,15 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { AsociarVentaList, SkeletonScreen } from '@onda/shared-ui';
 import { PlusCircleIcon as PlusCircle } from '@phosphor-icons/react/dist/csr/PlusCircle';
-import { useCajaSession } from '../../CajaAppShell';
+import { useCajaSession } from '../../../CajaAppShell';
 
 export default function AsociarPage() {
   const { session } = useCajaSession();
   const router = useRouter();
+  const params = useParams<{ store: string }>();
+  const store = decodeURIComponent(params.store || '');
   if (!session) return <SkeletonScreen />;
   return (
     <div className="flex min-h-[70dvh] flex-col gap-4">
@@ -25,7 +27,7 @@ export default function AsociarPage() {
         <AsociarVentaList
           storeId={session.storeId}
           token={session.token}
-          onSelect={(tabId) => router.push(`/asociar/${tabId}`)}
+          onSelect={(tabId) => router.push(`/${store}/asociar/${tabId}`)}
         />
       </div>
     </div>

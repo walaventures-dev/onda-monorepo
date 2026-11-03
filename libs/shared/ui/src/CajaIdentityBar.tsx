@@ -3,13 +3,16 @@
 import { OndaWordmark } from './brand';
 import { OndaIcons } from './icons';
 
-/** Barra superior de identidad de la caja: logo Onda + negocio + salir. */
+/** Barra superior de identidad de la caja: logo Onda + negocio + usuario + salir. */
 export function CajaIdentityBar({
   storeName,
+  userName,
   onLogout,
   logoutBusy,
 }: {
   storeName?: string;
+  /** Nombre del usuario de caja con sesión iniciada (opcional). */
+  userName?: string;
   onLogout?: () => void;
   logoutBusy?: boolean;
 }) {
@@ -18,7 +21,14 @@ export function CajaIdentityBar({
     <header className="flex items-center justify-between gap-3">
       <OndaWordmark className="h-4 w-auto shrink-0" />
       <p className="min-w-0 flex-1 truncate text-right text-sm font-semibold text-[var(--onda-ink)]">
-        {name}
+        {userName?.trim() ? (
+          <>
+            <span className="text-[var(--onda-muted)]">{name} · </span>
+            {userName.trim()}
+          </>
+        ) : (
+          name
+        )}
       </p>
       {onLogout ? (
         <button

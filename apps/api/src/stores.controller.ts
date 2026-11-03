@@ -505,6 +505,7 @@ export class StoresController {
       currency: string;
       ondaValue: number | null;
       posEnabled: boolean;
+      posSharedTabs: boolean;
       ownerName: string;
       shareCartillaProgress?: boolean;
     }>
@@ -574,6 +575,10 @@ export class StoresController {
     if ('posEnabled' in body && body.posEnabled != null) {
       posEnabled = Boolean(body.posEnabled);
     }
+    let posSharedTabs: boolean | undefined;
+    if ('posSharedTabs' in body && body.posSharedTabs != null) {
+      posSharedTabs = Boolean(body.posSharedTabs);
+    }
 
     const billingKeys = [
       'planType',
@@ -582,6 +587,7 @@ export class StoresController {
       'currency',
       'ondaValue',
       'posEnabled',
+      'posSharedTabs',
     ] as const;
     const hasBilling = billingKeys.some((k) => k in body);
     if (!hasBilling) {
@@ -595,6 +601,7 @@ export class StoresController {
     if (currency != null) billingData.currency = currency;
     if (ondaValue !== undefined) billingData.ondaValue = ondaValue;
     if (posEnabled !== undefined) billingData.posEnabled = posEnabled;
+    if (posSharedTabs !== undefined) billingData.posSharedTabs = posSharedTabs;
 
     return this.prisma.store.update({
       where: { id },

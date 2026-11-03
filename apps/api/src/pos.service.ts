@@ -72,6 +72,8 @@ export class PosService {
       pass: { include: { user: { select: { name: true, phone: true } } } },
       openedByMember: { select: { id: true, name: true } },
       attendedByMember: { select: { id: true, name: true } },
+      openedByPosUser: { select: { id: true, name: true } },
+      attendedByPosUser: { select: { id: true, name: true } },
       table: { include: { section: { select: { name: true } } } },
     };
   }
@@ -123,7 +125,10 @@ export class PosService {
       customerName,
       openedByMemberId: tab.openedByMemberId ?? null,
       attendedByMemberId: tab.attendedByMemberId ?? null,
-      attendedByName: tab.attendedByMember?.name ?? null,
+      attendedByName:
+        tab.attendedByPosUser?.name ?? tab.attendedByMember?.name ?? null,
+      openedByPosUser: tab.openedByPosUser ?? null,
+      attendedByPosUser: tab.attendedByPosUser ?? null,
     };
   }
 
@@ -640,7 +645,8 @@ export class PosService {
     storeId: string,
     statuses?: PosTabStatus[],
     attendedBy?: string | null,
-    viewerMemberId?: string | null
+    viewerMemberId?: string | null,
+    viewerPosUser?: { posUserId: string | null; posUserRole: string | null }
   ) {
     let attendedFilter: { attendedByMemberId?: string | null } | undefined;
     if (attendedBy && attendedBy !== 'all') {
@@ -653,11 +659,30 @@ export class PosService {
         attendedFilter = { attendedByMemberId: attendedBy };
       }
     }
+    // Visibilidad por usuario de caja: por defecto cada quien ve solo lo que
+    // abrió o atendió; el admin de caja ve todo y el flag posSharedTabs del
+    // negocio hace que todos vean lo de todos.
+    let visibilityFilter: Record<string, unknown> | undefined;
+    if (viewerPosUser?.posUserId && viewerPosUser.posUserRole !== 'ADMIN') {
+      const store = await this.prisma.store.findUnique({
+        where: { id: storeId },
+        select: { posSharedTabs: true },
+      });
+      if (!store?.posSharedTabs) {
+        visibilityFilter = {
+          OR: [
+            { openedByPosUserId: viewerPosUser.posUserId },
+            { attendedByPosUserId: viewerPosUser.posUserId },
+          ],
+        };
+      }
+    }
     const tabs = await this.prisma.posTab.findMany({
       where: {
         storeId,
         status: statuses?.length ? { in: statuses } : undefined,
         ...attendedFilter,
+        ...visibilityFilter,
       },
       include: this.tabInclude(),
       orderBy: { openedAt: 'desc' },
@@ -668,7 +693,8 @@ export class PosService {
   async createTab(
     storeId: string,
     body: { label?: string; tableId?: string | null; guestCount?: number | null },
-    memberId?: string | null
+    memberId?: string | null,
+    posUser?: { posUserId: string | null; posUserRole: string | null }
   ) {
     let table: { id: string; label: string; isBlocked: boolean } | null = null;
     if (body.tableId) {
@@ -702,6 +728,8 @@ export class PosService {
         guestCount,
         openedByMemberId: memberId || null,
         attendedByMemberId: memberId || null,
+        openedByPosUserId: posUser?.posUserId ?? null,
+        attendedByPosUserId: posUser?.posUserId ?? null,
       },
       include: this.tabInclude(),
     });
@@ -1847,7 +1875,8 @@ export class PosService {
   async payTab(
     storeId: string,
     tabId: string,
-    body: { methodKey: string; cashReceived?: number }
+    body: { methodKey: string; cashReceived?: number },
+    posUserId?: string | null
   ) {
     const tab = await this.fetchTab(tabId);
     if (tab.storeId !== storeId) throw new ForbiddenException();
@@ -1896,6 +1925,7 @@ export class PosService {
           storeId,
           tabId,
           passId: tab.passId,
+          posUserId: posUserId ?? null,
           subtotal: total,
           total,
           status: PosSaleStatus.COMPLETED,
