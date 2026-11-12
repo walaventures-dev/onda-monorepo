@@ -142,6 +142,28 @@ export const AUDIENCE_BY_OBJECTIVE: Record<ObjectiveKind, AudienceDemo> = {
       { bucket: '6+', count: 29 },
     ],
   },
+  recover: {
+    headline: 'Encontramos 37 clientes que tuvieron una mala experiencia y dejaron de venir.',
+    chips: ['Queja registrada', 'Sin regresar', 'Wallet activo'],
+    kpis: [
+      { label: 'Alcanzables', value: '37' },
+      { label: 'Días sin visita', value: '21' },
+      { label: 'Con Wallet', value: '76%' },
+    ],
+    people: [
+      { name: 'Mariana Solís', initials: 'MS', meta: 'reportó demora' },
+      { name: 'Jorge Camargo', initials: 'JC', meta: 'sin regresar' },
+      { name: 'Elena Ríos', initials: 'ER', meta: 'queja resuelta' },
+      { name: 'Andrés Peña', initials: 'AP', meta: 'visita cancelada' },
+      { name: 'Diana Torres', initials: 'DT', meta: 'Wallet activo' },
+      { name: 'Felipe Rojas', initials: 'FR', meta: 'cliente frecuente' },
+    ],
+    visitFrequency: [
+      { bucket: '1–2', count: 26 },
+      { bucket: '3–5', count: 9 },
+      { bucket: '6+', count: 2 },
+    ],
+  },
   new_reward: {
     headline: 'Encontramos 104 clientes listos para probar tu nueva recompensa.',
     chips: ['Activos 14d', 'Cerca del canje', 'Muy activos'],
