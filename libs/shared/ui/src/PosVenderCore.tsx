@@ -78,7 +78,7 @@ function tabStatusLabel(status: PosTabDto['status']) {
   return status;
 }
 
-function paymentMethodIcon(key: string): ReactNode {
+export function paymentMethodIcon(key: string): ReactNode {
   const cls = 'h-5 w-5';
   if (key === 'cash') return <Money className={cls} weight="regular" aria-hidden />;
   if (key === 'card') return <CreditCard className={cls} weight="regular" aria-hidden />;

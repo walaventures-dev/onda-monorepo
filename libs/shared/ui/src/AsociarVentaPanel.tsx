@@ -9,6 +9,7 @@ import { ReceiptIcon as Receipt } from '@phosphor-icons/react/dist/csr/Receipt';
 import { UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/csr/UserCircle';
 import { ListBulletsIcon as ListBullets } from '@phosphor-icons/react/dist/csr/ListBullets';
 import { CpuIcon as Cpu } from '@phosphor-icons/react/dist/csr/Cpu';
+import { SwapIcon as Swap } from '@phosphor-icons/react/dist/csr/Swap';
 import { api } from './api';
 import { OndaBackButton } from './BackButton';
 import { useSwipeNav } from './useSwipeNav';
@@ -347,6 +348,8 @@ export function AsociarVentaDetail({
     text: string;
   } | null>(null);
   const [mode, setMode] = useState<'qr' | 'phone'>('qr');
+  /** Cliente ya asociado: true permite reasignar/corregir escaneando de nuevo. */
+  const [correcting, setCorrecting] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useSwipeNav(rootRef, { onBack: onBack, enabled: !linking });
@@ -381,6 +384,7 @@ export function AsociarVentaDetail({
       );
       setTab(updated);
       setPhone('');
+      setCorrecting(false);
       setMessage({ tone: 'ok', text: 'Cliente asociado' });
     } catch (err) {
       setMessage({
@@ -407,6 +411,7 @@ export function AsociarVentaDetail({
           }
         );
         setTab(updated);
+        setCorrecting(false);
         setMessage({ tone: 'ok', text: 'Cliente asociado' });
       } catch (err) {
         setMessage({
@@ -468,7 +473,7 @@ export function AsociarVentaDetail({
         </p>
       ) : null}
 
-      {tab.passId ? (
+      {tab.passId && !correcting ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-[var(--onda-success)]/25 bg-[var(--onda-success)]/10 px-4 py-8 text-center">
           <UserCircle
             className="h-14 w-14 text-[var(--onda-success)]"
@@ -485,12 +490,34 @@ export function AsociarVentaDetail({
                 ? `+${previewOndas} onda${previewOndas === 1 ? '' : 's'} al cobrar`
                 : '+0 ondas al cobrar (venta registrada)'}
           </p>
-          <Button size="lg" fullWidth className="mt-2 min-h-14" onPress={onBack}>
-            Listo
-          </Button>
+          <div className="mt-2 flex w-full flex-col gap-2">
+            <Button size="lg" fullWidth className="min-h-14" onPress={onBack}>
+              Listo
+            </Button>
+            <Button
+              size="lg"
+              fullWidth
+              variant="outline"
+              className="min-h-14"
+              isDisabled={linking}
+              onPress={() => {
+                setCorrecting(true);
+                setMessage(null);
+              }}
+            >
+              <Swap className="h-5 w-5" weight="regular" aria-hidden />
+              Corregir asignación
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-3">
+          {correcting ? (
+            <p className="rounded-2xl bg-[var(--onda-primary-50)] px-4 py-2.5 text-center text-sm text-[var(--onda-primary-700)]">
+              Reescanea o ingresa otro número para reemplazar a{' '}
+              <strong>{tab.customerName || 'este cliente'}</strong>.
+            </p>
+          ) : null}
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
